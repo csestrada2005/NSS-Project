@@ -78,7 +78,7 @@ Return a JSON object with the key "modifiedFiles" containing an array of objects
     const lowerInput = input.toLowerCase();
 
     // Extract current App.tsx content from prompt
-    const appTsxMatch = prompt.match(/--- src\/App\.tsx ---\n([\s\S]*?)(\n\n---|$)/);
+    const appTsxMatch = prompt.match(/<document path="src\/App\.tsx">\n([\s\S]*?)\n<\/document>/);
     let appContent = appTsxMatch ? appTsxMatch[1] : '';
 
     if (lowerInput.includes('reset')) {
