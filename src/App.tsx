@@ -128,6 +128,26 @@ function App() {
     setSelectedElement(prev => prev ? { ...prev, className: newClassName } : null);
   };
 
+  const handleStyleUpdate = async (newStyles: Record<string, string>) => {
+      if (!selectedElement) return;
+
+      let currentClass = selectedElement.className || '';
+      const newClassSegment = Object.values(newStyles).join(' ');
+
+      if (newStyles.transform) {
+          // Remove existing translate classes to avoid buildup
+          currentClass = currentClass.replace(/\btranslate-[xy]-[^\s]+\s?/g, '');
+      }
+      if (newStyles.dimensions) {
+          // Remove existing width/height classes
+          currentClass = currentClass.replace(/\bw-[^\s]+\s?/g, '').replace(/\bh-[^\s]+\s?/g, '');
+      }
+
+      const finalClass = `${currentClass} ${newClassSegment}`.trim();
+
+      await handleClassUpdate(finalClass);
+  };
+
   const handleCodeUpdate = async (newTree: FileSystemTree) => {
     setFileTree(newTree);
     if (container) {
@@ -289,7 +309,8 @@ function App() {
                     <PreviewOverlay
                         iframeRef={iframeRef}
                         onElementSelect={handleElementSelect}
-                        editMode={editMode as 'interaction' | 'visual'}
+                        editMode={editMode}
+                        onUpdateStyle={handleStyleUpdate}
                     />
                     {editMode === 'visual' && selectedElement && (
                         <InspectorPanel selectedElement={selectedElement} onUpdateStyle={handleClassUpdate} />

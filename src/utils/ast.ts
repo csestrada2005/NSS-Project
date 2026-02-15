@@ -3,13 +3,12 @@ export interface TargetElement {
   className?: string;
 }
 
-export const updateCode = (fileContent: string, target: TargetElement, updates: { className: string }): string => {
+export const updateCode = (fileContent: string, target: TargetElement, updates: { className?: string; textContent?: string }): string => {
   const { tagName, className } = target;
   const { className: newClassName } = updates;
 
   // Regex to find the opening tag.
   // We use a non-greedy capture for attributes to handle the tag content.
-  // Note: This simple regex might fail on tags with '>' in attribute values.
   const tagRegex = new RegExp(`<${tagName}(\\s+[^>]*)?>`, 'g');
 
   let updated = false;
@@ -36,21 +35,30 @@ export const updateCode = (fileContent: string, target: TargetElement, updates: 
     }
 
     updated = true;
+    let newTag = match;
 
-    // Apply update
-    if (currentClassMatch) {
-      // Replace existing className
-      return match.replace(/className=(["'])(.*?)\1/, `className="${newClassName}"`);
-    } else {
-      // Inject className
-      const hasSpace = attributes && attributes.length > 0;
-      const prefix = hasSpace ? '' : ' ';
-
-      if (match.endsWith('/>')) {
-        return match.replace('/>', `${prefix}className="${newClassName}" />`);
+    // Apply className update
+    if (newClassName !== undefined) {
+      if (currentClassMatch) {
+        // Replace existing className
+        newTag = newTag.replace(/className=(["'])(.*?)\1/, `className="${newClassName}"`);
       } else {
-        return match.replace('>', `${prefix}className="${newClassName}">`);
+        // Inject className
+        const hasSpace = attributes && attributes.length > 0;
+        const prefix = hasSpace ? '' : ' ';
+
+        if (newTag.endsWith('/>')) {
+          newTag = newTag.replace('/>', `${prefix}className="${newClassName}" />`);
+        } else {
+          newTag = newTag.replace('>', `${prefix}className="${newClassName}">`);
+        }
       }
     }
+
+    // Note: Text content update is not fully supported with this Regex approach
+    // as it requires matching the closing tag which might be far away or nested.
+    // The structure is here for future expansion (e.g. using Babel).
+
+    return newTag;
   });
 };
