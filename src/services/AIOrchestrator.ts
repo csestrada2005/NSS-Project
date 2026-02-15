@@ -21,7 +21,15 @@ export class AIOrchestrator {
     try {
       const rawResponse = await this.callLLM(userMessage, systemPrompt);
       const cleanJson = this.cleanJsonOutput(rawResponse);
-      const response: LLMResponse = JSON.parse(cleanJson);
+
+      let response: LLMResponse;
+      try {
+        response = JSON.parse(cleanJson);
+      } catch (parseError) {
+        console.error('Failed to parse JSON:', parseError);
+        console.error('Raw output:', cleanJson);
+        throw parseError;
+      }
 
       const newTree = JSON.parse(JSON.stringify(currentFileTree));
 
@@ -38,7 +46,7 @@ export class AIOrchestrator {
 
   private static cleanJsonOutput(text: string): string {
     const match = text.match(/```json([\s\S]*?)```/);
-    return match ? match[1].trim() : text;
+    return match ? match[1].trim() : text.trim();
   }
 
   private static updateFileInTree(tree: FileSystemTree, filePath: string, newContent: string) {

@@ -8,9 +8,12 @@ import { ChatInterface } from './components/ChatInterface';
 import { PreviewOverlay } from './components/PreviewOverlay';
 import { InspectorPanel } from './components/InspectorPanel';
 import { FileExplorer } from './components/FileExplorer';
+import { AIOrchestrator } from './services/AIOrchestrator';
 import type { FileSystemTree } from '@webcontainer/api';
 import { webContainerService } from './services/WebContainerService';
 import { locateElement, updateCode, type TargetElement } from './utils/ast';
+import JSZip from 'jszip';
+import { Download } from 'lucide-react';
 
 function App() {
   const { container } = useWebContainer();
@@ -19,6 +22,7 @@ function App() {
   const [terminalOutput, setTerminalOutput] = useState<string[]>([]);
   const [selectedElement, setSelectedElement] = useState<TargetElement | null>(null);
   const [activeFile, setActiveFile] = useState<{ path: string; content: string } | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const initialized = useRef(false);
   const terminalEndRef = useRef<HTMLDivElement>(null);
@@ -156,6 +160,53 @@ function App() {
     }
   };
 
+  const handleSendMessage = async (message: string) => {
+    setIsGenerating(true);
+    try {
+      const result = await AIOrchestrator.parseUserCommand(message, fileTree);
+      if (result) {
+        await handleCodeUpdate(result);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error processing message:', error);
+      return false;
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const downloadProject = async () => {
+    const zip = new JSZip();
+
+    const addFilesToZip = (tree: FileSystemTree, currentPath: string) => {
+      for (const [name, node] of Object.entries(tree)) {
+        if ('file' in node) {
+          const file = node.file;
+          if ('contents' in file) {
+            const content = file.contents;
+            zip.file(`${currentPath}${name}`, content);
+          }
+        } else if ('directory' in node) {
+          addFilesToZip(node.directory, `${currentPath}${name}/`);
+        }
+      }
+    };
+
+    addFilesToZip(fileTree, '');
+
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'project.zip';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const handleEditorChange = (value: string | undefined) => {
     if (value === undefined || !activeFile) return;
 
@@ -210,79 +261,93 @@ function App() {
   }, [container]);
 
   return (
-    <div className="flex h-screen w-screen bg-gray-900 text-white overflow-hidden">
-      <Group orientation="horizontal" className="flex-1">
-        <Panel defaultSize={20} minSize={15}>
-          <Group orientation="vertical">
-            <Panel defaultSize={40} minSize={20}>
-                <FileExplorer fileTree={fileTree} onSelectFile={(path, content) => setActiveFile({ path, content })} />
-            </Panel>
-            <Separator className="h-1 bg-gray-800 hover:bg-blue-500 transition-colors cursor-row-resize" />
-            <Panel defaultSize={30} minSize={20}>
-              <ChatInterface fileTree={fileTree} onCodeUpdate={handleCodeUpdate} />
-            </Panel>
-            <Separator className="h-1 bg-gray-800 hover:bg-blue-500 transition-colors cursor-row-resize" />
-            <Panel defaultSize={30} minSize={20}>
-              <InspectorPanel selectedElement={selectedElement} onUpdateClass={handleClassUpdate} />
-            </Panel>
-          </Group>
-        </Panel>
-        <Separator className="w-1 bg-gray-800 hover:bg-blue-500 transition-colors cursor-col-resize" />
-        <Panel defaultSize={40} minSize={20}>
-          <Group orientation="vertical">
-            <Panel defaultSize={70} minSize={20}>
-              <Editor
-                height="100%"
-                defaultLanguage="javascript"
-                path={activeFile?.path}
-                value={activeFile?.content || ''}
-                onChange={handleEditorChange}
-                onMount={(editor) => (editorRef.current = editor)}
-                theme="vs-dark"
-                options={{ minimap: { enabled: false } }}
-              />
-            </Panel>
-            <Separator className="h-1 bg-gray-800 hover:bg-blue-500 transition-colors cursor-row-resize" />
-            <Panel defaultSize={30} minSize={20}>
-              <div className="h-full flex flex-col bg-black text-white p-2 overflow-hidden">
-                <div className="font-bold border-b border-gray-700 pb-1 mb-1">Terminal Output</div>
-                <div className="flex-1 overflow-y-auto font-mono text-sm whitespace-pre-wrap">
-                  {terminalOutput.map((line, i) => (
-                    <span key={i}>{line}</span>
-                  ))}
-                  <div ref={terminalEndRef} />
+    <div className="flex flex-col h-screen w-screen bg-gray-900 text-white overflow-hidden">
+      <header className="flex items-center justify-between px-4 py-2 bg-gray-900 border-b border-gray-800">
+        <h1 className="text-lg font-semibold flex items-center gap-2">
+          WebContainer React App
+        </h1>
+        <button
+          onClick={downloadProject}
+          className="flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 rounded-md transition-colors text-white"
+        >
+          <Download className="w-4 h-4" />
+          Download Project
+        </button>
+      </header>
+      <div className="flex-1 overflow-hidden">
+        <Group orientation="horizontal" className="flex-1 h-full">
+          <Panel defaultSize={20} minSize={15}>
+            <Group orientation="vertical">
+              <Panel defaultSize={40} minSize={20}>
+                  <FileExplorer fileTree={fileTree} onSelectFile={(path, content) => setActiveFile({ path, content })} />
+              </Panel>
+              <Separator className="h-1 bg-gray-800 hover:bg-blue-500 transition-colors cursor-row-resize" />
+              <Panel defaultSize={30} minSize={20}>
+                <ChatInterface isLoading={isGenerating} onSendMessage={handleSendMessage} />
+              </Panel>
+              <Separator className="h-1 bg-gray-800 hover:bg-blue-500 transition-colors cursor-row-resize" />
+              <Panel defaultSize={30} minSize={20}>
+                <InspectorPanel selectedElement={selectedElement} onUpdateClass={handleClassUpdate} />
+              </Panel>
+            </Group>
+          </Panel>
+          <Separator className="w-1 bg-gray-800 hover:bg-blue-500 transition-colors cursor-col-resize" />
+          <Panel defaultSize={40} minSize={20}>
+            <Group orientation="vertical">
+              <Panel defaultSize={70} minSize={20}>
+                <Editor
+                  height="100%"
+                  defaultLanguage="javascript"
+                  path={activeFile?.path}
+                  value={activeFile?.content || ''}
+                  onChange={handleEditorChange}
+                  onMount={(editor) => (editorRef.current = editor)}
+                  theme="vs-dark"
+                  options={{ minimap: { enabled: false } }}
+                />
+              </Panel>
+              <Separator className="h-1 bg-gray-800 hover:bg-blue-500 transition-colors cursor-row-resize" />
+              <Panel defaultSize={30} minSize={20}>
+                <div className="h-full flex flex-col bg-black text-white p-2 overflow-hidden">
+                  <div className="font-bold border-b border-gray-700 pb-1 mb-1">Terminal Output</div>
+                  <div className="flex-1 overflow-y-auto font-mono text-sm whitespace-pre-wrap">
+                    {terminalOutput.map((line, i) => (
+                      <span key={i}>{line}</span>
+                    ))}
+                    <div ref={terminalEndRef} />
+                  </div>
                 </div>
+              </Panel>
+            </Group>
+          </Panel>
+          <Separator className="w-1 bg-gray-800 hover:bg-blue-500 transition-colors cursor-col-resize" />
+          <Panel defaultSize={40} minSize={20}>
+            <div className="h-full w-full bg-white flex flex-col">
+              <div className="h-10 px-4 bg-gray-100 border-b border-gray-300 flex items-center text-gray-700 text-sm flex-shrink-0">
+                <span className="truncate">Preview {url ? `(${url})` : ''}</span>
               </div>
-            </Panel>
-          </Group>
-        </Panel>
-        <Separator className="w-1 bg-gray-800 hover:bg-blue-500 transition-colors cursor-col-resize" />
-        <Panel defaultSize={40} minSize={20}>
-          <div className="h-full w-full bg-white flex flex-col">
-            <div className="h-10 px-4 bg-gray-100 border-b border-gray-300 flex items-center text-gray-700 text-sm flex-shrink-0">
-              <span className="truncate">Preview {url ? `(${url})` : ''}</span>
+              <div className="flex-1 relative w-full">
+                {url ? (
+                  <>
+                    <iframe
+                      ref={iframeRef}
+                      src={url}
+                      className="w-full h-full border-none"
+                      title="Preview"
+                    />
+                    <PreviewOverlay iframeRef={iframeRef} onElementSelect={handleElementSelect} />
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-4">
+                    <div className="spinner"></div>
+                    <div>Loading...</div>
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="flex-1 relative w-full">
-              {url ? (
-                <>
-                  <iframe
-                    ref={iframeRef}
-                    src={url}
-                    className="w-full h-full border-none"
-                    title="Preview"
-                  />
-                  <PreviewOverlay iframeRef={iframeRef} onElementSelect={handleElementSelect} />
-                </>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-4">
-                  <div className="spinner"></div>
-                  <div>Loading...</div>
-                </div>
-              )}
-            </div>
-          </div>
-        </Panel>
-      </Group>
+          </Panel>
+        </Group>
+      </div>
     </div>
   );
 }

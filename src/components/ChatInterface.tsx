@@ -1,7 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, Loader2 } from 'lucide-react';
-import { AIOrchestrator } from '../services/AIOrchestrator';
-import type { FileSystemTree } from '@webcontainer/api';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -9,16 +7,15 @@ interface Message {
 }
 
 interface ChatInterfaceProps {
-  fileTree: FileSystemTree;
-  onCodeUpdate: (tree: FileSystemTree) => void;
+  isLoading: boolean;
+  onSendMessage: (message: string) => Promise<boolean>;
 }
 
-export function ChatInterface({ fileTree, onCodeUpdate }: ChatInterfaceProps) {
+export function ChatInterface({ isLoading, onSendMessage }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', content: 'Hello! How can I help you today?' }
   ]);
   const [input, setInput] = useState('');
-  const [isThinking, setIsThinking] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -27,36 +24,35 @@ export function ChatInterface({ fileTree, onCodeUpdate }: ChatInterfaceProps) {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isThinking]);
+  }, [messages, isLoading]);
 
   const handleSend = async () => {
-    if (!input.trim() || isThinking) return;
+    if (!input.trim() || isLoading) return;
 
     const userMessage = input.trim();
     setInput('');
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
-    setIsThinking(true);
 
     try {
-      const result = await AIOrchestrator.parseUserCommand(userMessage, fileTree);
+      const success = await onSendMessage(userMessage);
 
-      if (result) {
-        console.log('AI generated new file tree:', result);
-        onCodeUpdate(result);
+      if (success) {
+        setMessages(prev => [
+          ...prev,
+          { role: 'assistant', content: `I received your request: ${userMessage}` }
+        ]);
+      } else {
+        setMessages(prev => [
+          ...prev,
+          { role: 'assistant', content: `Sorry, something went wrong processing your request.` }
+        ]);
       }
-
-      setMessages(prev => [
-        ...prev,
-        { role: 'assistant', content: `I received your request: ${userMessage}` }
-      ]);
     } catch (error) {
-      console.error('Error processing command:', error);
+      console.error('Error in chat:', error);
       setMessages(prev => [
         ...prev,
-        { role: 'assistant', content: `Sorry, something went wrong processing your request.` }
+        { role: 'assistant', content: `Sorry, an unexpected error occurred.` }
       ]);
-    } finally {
-      setIsThinking(false);
     }
   };
 
@@ -93,7 +89,7 @@ export function ChatInterface({ fileTree, onCodeUpdate }: ChatInterfaceProps) {
             </div>
           </div>
         ))}
-        {isThinking && (
+        {isLoading && (
           <div className="flex justify-start w-full">
              <div className="bg-gray-800 text-gray-200 rounded-lg p-3 text-sm flex items-center gap-1">
                <Loader2 className="w-4 h-4 animate-spin" />
@@ -112,15 +108,15 @@ export function ChatInterface({ fileTree, onCodeUpdate }: ChatInterfaceProps) {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type a message..."
-            className="flex-1 bg-gray-800 text-white border border-gray-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-500"
-            disabled={isThinking}
+            className="flex-1 bg-gray-800 text-white border border-gray-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isLoading}
           />
           <button
             onClick={handleSend}
-            disabled={!input.trim() || isThinking}
+            disabled={!input.trim() || isLoading}
             className="bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            <Send className="w-4 h-4" />
+            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           </button>
         </div>
       </div>
