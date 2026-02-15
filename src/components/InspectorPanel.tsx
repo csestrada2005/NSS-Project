@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 interface InspectorPanelProps {
   selectedElement: { tagName: string; className?: string } | null;
@@ -6,7 +6,7 @@ interface InspectorPanelProps {
 }
 
 export function InspectorPanel({ selectedElement, onUpdateClass }: InspectorPanelProps) {
-  const [className, setClassName] = useState('');
+  const [className, setClassName] = useState(selectedElement?.className || '');
   const [prevSelectedElement, setPrevSelectedElement] = useState<InspectorPanelProps['selectedElement']>(selectedElement);
 
   // Update local state when selectedElement changes
@@ -15,19 +15,9 @@ export function InspectorPanel({ selectedElement, onUpdateClass }: InspectorPane
     setPrevSelectedElement(selectedElement);
   }
 
-  // Debounced update handler
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      // Only call update if there's a selected element and the class name has changed from the initial value
-      if (selectedElement && className !== (selectedElement.className || '')) {
-        onUpdateClass(className);
-      }
-    }, 500);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [className, selectedElement, onUpdateClass]);
+  const handleUpdate = () => {
+    onUpdateClass(className);
+  };
 
   if (!selectedElement) {
     return (
@@ -36,6 +26,8 @@ export function InspectorPanel({ selectedElement, onUpdateClass }: InspectorPane
       </div>
     );
   }
+
+  const isUnchanged = className === (selectedElement.className || '');
 
   return (
     <div className="h-full flex flex-col bg-gray-900 border-l border-gray-800">
@@ -57,6 +49,17 @@ export function InspectorPanel({ selectedElement, onUpdateClass }: InspectorPane
             placeholder="e.g. flex items-center justify-center..."
             spellCheck={false}
           />
+          <button
+            onClick={handleUpdate}
+            disabled={isUnchanged}
+            className={`w-full py-2 rounded-md text-white font-medium transition-colors ${
+              isUnchanged
+                ? 'bg-blue-600/50 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-500'
+            }`}
+          >
+            Update
+          </button>
         </div>
       </div>
     </div>
