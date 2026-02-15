@@ -106,5 +106,21 @@ export function useWebContainer() {
     }
   };
 
-  return { container, isLoading, error, uploadZip };
+  const installDependency = async (packageName: string, onOutput?: (data: string) => void) => {
+    if (!container) return;
+    try {
+      const process = await container.spawn('npm', ['install', packageName]);
+      process.output.pipeTo(new WritableStream({
+        write(data) {
+          if (onOutput) onOutput(data);
+        }
+      }));
+      await process.exit;
+    } catch (err) {
+      console.error('Failed to install dependency:', err);
+      if (onOutput) onOutput(`\r\nError installing ${packageName}: ${err}\r\n`);
+    }
+  };
+
+  return { container, isLoading, error, uploadZip, installDependency };
 }

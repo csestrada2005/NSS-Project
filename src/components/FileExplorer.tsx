@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { File, Folder, ChevronRight, ChevronDown } from 'lucide-react';
+import { File, Folder, ChevronRight, ChevronDown, Plus } from 'lucide-react';
 import type { FileSystemTree, DirectoryNode, FileNode, SymlinkNode } from '@webcontainer/api';
 
 interface FileExplorerProps {
   fileTree: FileSystemTree;
   onSelect: (path: string) => void;
+  onAddPackage?: (packageName: string) => void;
 }
 
 interface FileNodeProps {
@@ -71,11 +72,28 @@ const FileSystemNode: React.FC<FileNodeProps> = ({ name, node, path, depth, onSe
   );
 };
 
-export const FileExplorer: React.FC<FileExplorerProps> = ({ fileTree, onSelect }) => {
+export const FileExplorer: React.FC<FileExplorerProps> = ({ fileTree, onSelect, onAddPackage }) => {
+  const handleAddPackage = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const pkg = window.prompt('Enter npm package name (e.g. framer-motion):');
+    if (pkg && onAddPackage) {
+        onAddPackage(pkg);
+    }
+  };
+
   return (
     <div className="h-full bg-gray-900 overflow-y-auto border-r border-gray-800 flex flex-col">
-      <div className="p-3 font-semibold text-xs text-gray-500 uppercase tracking-wider border-b border-gray-800">
-        Explorer
+      <div className="p-3 font-semibold text-xs text-gray-500 uppercase tracking-wider border-b border-gray-800 flex justify-between items-center">
+        <span>Explorer</span>
+        {onAddPackage && (
+            <button
+                onClick={handleAddPackage}
+                className="hover:text-white transition-colors p-1 rounded hover:bg-gray-800"
+                title="Install npm package"
+            >
+                <Plus size={14} />
+            </button>
+        )}
       </div>
       <div className="flex-1 py-2">
         {Object.entries(fileTree).map(([name, node]) => (

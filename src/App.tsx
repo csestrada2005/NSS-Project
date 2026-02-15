@@ -7,6 +7,7 @@ import './App.css';
 import { ChatInterface } from './components/ChatInterface';
 import { PreviewOverlay } from './components/PreviewOverlay';
 import { InspectorPanel } from './components/InspectorPanel';
+import { Terminal, type TerminalRef } from './components/Terminal';
 import { FileExplorer } from './components/FileExplorer';
 import { AIOrchestrator } from './services/AIOrchestrator';
 import type { FileSystemTree } from '@webcontainer/api';
@@ -17,7 +18,7 @@ import { Download, Upload, Edit3, Loader2, Code, LayoutTemplate, Undo, Redo } fr
 import { TEMPLATES } from './templates';
 
 function App() {
-  const { container, uploadZip, isLoading: isContainerLoading } = useWebContainer();
+  const { container, uploadZip, isLoading: isContainerLoading, installDependency } = useWebContainer();
   const [url, setUrl] = useState('');
   const history = useHistory<FileSystemTree>(files);
   const fileTree = history.state;
@@ -27,12 +28,14 @@ function App() {
   const [editMode, setEditMode] = useState<'interaction' | 'visual' | 'code'>('interaction');
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [selectedFileContent, setSelectedFileContent] = useState<string>('');
+  const [activeBottomTab, setActiveBottomTab] = useState<'chat' | 'terminal'>('chat');
 
   // We keep track of the active file for AST updates (Inspector)
   // Assuming single-page app or main file is src/App.tsx for now
   const activeFilePath = 'src/App.tsx';
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const terminalRef = useRef<TerminalRef>(null);
 
   // Helper to get content from tree
   const getFileContent = (tree: FileSystemTree, path: string): string | null => {
@@ -234,23 +237,38 @@ function App() {
 
   const triggerBuild = async () => {
       if (!container) return;
+      setActiveBottomTab('terminal');
 
       try {
         // Install
         const installProcess = await container.spawn('npm', ['install']);
         installProcess.output.pipeTo(new WritableStream({
-            write(data) { console.log('[install]', data); }
+            write(data) {
+                console.log('[install]', data);
+                terminalRef.current?.write(data);
+            }
         }));
         await installProcess.exit;
 
         // Start Dev Server
         const startProcess = await container.spawn('npm', ['run', 'dev']);
         startProcess.output.pipeTo(new WritableStream({
-            write(data) { console.log('[run dev]', data); }
+            write(data) {
+                console.log('[run dev]', data);
+                terminalRef.current?.write(data);
+            }
         }));
       } catch (err) {
         console.error('Build failed', err);
+        terminalRef.current?.write(`\r\nBuild failed: ${err}\r\n`);
       }
+  };
+
+  const handleInstallPackage = async (packageName: string) => {
+      setActiveBottomTab('terminal');
+      await installDependency(packageName, (data) => {
+          terminalRef.current?.write(data);
+      });
   };
 
   useEffect(() => {
@@ -342,7 +360,11 @@ function App() {
              {editMode === 'code' ? (
                 <div className="flex w-full h-full bg-gray-900">
                    <div className="w-64 border-r border-gray-800 h-full overflow-hidden">
-                      <FileExplorer fileTree={fileTree} onSelect={handleFileSelect} />
+                      <FileExplorer
+                          fileTree={fileTree}
+                          onSelect={handleFileSelect}
+                          onAddPackage={handleInstallPackage}
+                      />
                    </div>
                    <div className="flex-1 flex flex-col h-full overflow-hidden">
                       <div className="h-10 border-b border-gray-800 flex items-center justify-between px-4 bg-gray-900 shrink-0">
@@ -471,12 +493,32 @@ function App() {
                 </div>
 
                 {/* Right: Chat (80%) */}
-                <div className="flex-1 h-full">
-                    <ChatInterface
-                        isLoading={isGenerating}
-                        onSendMessage={handleSendMessage}
-                        selectedElement={selectedElement}
-                    />
+                <div className="flex-1 h-full relative">
+                    <div className="absolute top-2 right-2 flex bg-gray-900 rounded-lg p-1 z-10 border border-gray-700">
+                        <button
+                            onClick={() => setActiveBottomTab('chat')}
+                            className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${activeBottomTab === 'chat' ? 'bg-gray-800 text-white' : 'text-gray-400 hover:text-white'}`}
+                        >
+                            Chat
+                        </button>
+                        <button
+                            onClick={() => setActiveBottomTab('terminal')}
+                            className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${activeBottomTab === 'terminal' ? 'bg-gray-800 text-white' : 'text-gray-400 hover:text-white'}`}
+                        >
+                            Terminal
+                        </button>
+                    </div>
+
+                    <div className={`w-full h-full ${activeBottomTab === 'chat' ? 'block' : 'hidden'}`}>
+                        <ChatInterface
+                            isLoading={isGenerating}
+                            onSendMessage={handleSendMessage}
+                            selectedElement={selectedElement}
+                        />
+                    </div>
+                    <div className={`w-full h-full ${activeBottomTab === 'terminal' ? 'block' : 'hidden'}`}>
+                        <Terminal ref={terminalRef} />
+                    </div>
                 </div>
              </div>
         </Panel>
