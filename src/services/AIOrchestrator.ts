@@ -11,12 +11,21 @@ interface LLMResponse {
 }
 
 export class AIOrchestrator {
-  static async parseUserCommand(input: string, currentFileTree: FileSystemTree): Promise<FileSystemTree | null> {
+  static async parseUserCommand(
+    input: string,
+    currentFileTree: FileSystemTree,
+    selectedElement: { tagName: string; className?: string } | null = null
+  ): Promise<FileSystemTree | null> {
     const context = flattenFileTree(currentFileTree);
 
     const systemPrompt = "You are an expert Senior React Engineer. You must output a valid JSON object containing a 'modifiedFiles' array. Do not include markdown formatting (```json) or conversational text. JSON only.";
 
-    const userMessage = `User request: ${input}\n\nThe current file structure is:\n${context}`;
+    let userMessage = "";
+    if (selectedElement) {
+        userMessage += `CONTEXT: The user has selected this HTML element: <${selectedElement.tagName} className='${selectedElement.className || ''}' />. If their request is ambiguous (e.g., 'change color'), apply it to this element.\n\n`;
+    }
+
+    userMessage += `User request: ${input}\n\nThe current file structure is:\n${context}`;
 
     try {
       const rawResponse = await this.callLLM(userMessage, systemPrompt);
