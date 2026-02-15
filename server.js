@@ -8,6 +8,8 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+app.use(express.json());
+
 // 1. Force HTTPs (Optional but good for Render)
 app.use((req, res, next) => {
   if (req.headers['x-forwarded-proto'] === 'http') {
@@ -21,6 +23,26 @@ app.use((req, res, next) => {
   res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
   next();
+});
+
+app.post('/api/chat', async (req, res) => {
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': req.headers['x-api-key'],
+        'anthropic-version': req.headers['anthropic-version'],
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(req.body),
+    });
+
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (error) {
+    console.error('Error proxying to Anthropic:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
 });
 
 // 3. Serve Static Files from 'dist'

@@ -219,7 +219,7 @@ function App() {
             </Panel>
             <Separator className="h-1 bg-gray-800 hover:bg-blue-500 transition-colors cursor-row-resize" />
             <Panel defaultSize={30} minSize={20}>
-              <ChatInterface onCodeUpdate={handleCodeUpdate} />
+              <ChatInterface fileTree={fileTree} onCodeUpdate={handleCodeUpdate} />
             </Panel>
             <Separator className="h-1 bg-gray-800 hover:bg-blue-500 transition-colors cursor-row-resize" />
             <Panel defaultSize={30} minSize={20}>

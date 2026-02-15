@@ -13,18 +13,13 @@ interface LLMResponse {
 export class AIOrchestrator {
   static async parseUserCommand(input: string, currentFileTree: FileSystemTree): Promise<FileSystemTree | null> {
     const context = flattenFileTree(currentFileTree);
-    const systemPrompt = `
-You are an expert software engineer.
-The current file structure is:
-${context}
 
-User request: ${input}
+    const systemPrompt = "You are an expert Senior React Engineer. You must output a valid JSON object containing a 'modifiedFiles' array. Do not include markdown formatting (```json) or conversational text. JSON only.";
 
-Return a JSON object with the key "modifiedFiles" containing an array of objects with "path" and "newContent" for the files that need to be changed.
-    `.trim();
+    const userMessage = `User request: ${input}\n\nThe current file structure is:\n${context}`;
 
     try {
-      const responseJson = await this.callLLM(input, systemPrompt);
+      const responseJson = await this.callLLM(userMessage, systemPrompt);
       const response: LLMResponse = JSON.parse(responseJson);
 
       const newTree = JSON.parse(JSON.stringify(currentFileTree));
@@ -71,107 +66,45 @@ Return a JSON object with the key "modifiedFiles" containing an array of objects
     }
   }
 
-  static async callLLM(input: string, prompt: string): Promise<string> {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 500));
+  static async callLLM(userMessage: string, systemPrompt: string): Promise<string> {
+    const apiKey = localStorage.getItem('anthropic_key');
 
-    const lowerInput = input.toLowerCase();
-
-    // Extract current App.tsx content from prompt
-    const appTsxMatch = prompt.match(/<document path="src\/App\.tsx">\n([\s\S]*?)\n<\/document>/);
-    let appContent = appTsxMatch ? appTsxMatch[1] : '';
-
-    if (lowerInput.includes('reset')) {
-        return JSON.stringify({
-            modifiedFiles: [{
-                path: 'src/App.tsx',
-                newContent: `
-import { useState } from 'react'
-import './App.css'
-
-function App() {
-  const [count, setCount] = useState(0)
-
-  return (
-    <>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-    </>
-  )
-}
-
-export default App
-`.trim()
-            }]
-        });
+    if (!apiKey) {
+      console.warn('No Anthropic API key found in localStorage. Please set "anthropic_key".');
+      return JSON.stringify({ modifiedFiles: [] });
     }
 
-    if (!appContent) {
-        return JSON.stringify({ modifiedFiles: [] });
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: 'claude-3-5-sonnet-20240620',
+          max_tokens: 4096,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userMessage }]
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.error) {
+        throw new Error(data.error.message || JSON.stringify(data.error));
+      }
+
+      if (!data.content || !data.content[0] || !data.content[0].text) {
+          console.error('Unexpected response format:', data);
+          return JSON.stringify({ modifiedFiles: [] });
+      }
+
+      return data.content[0].text;
+    } catch (error) {
+      console.error('Error calling LLM:', error);
+      return JSON.stringify({ modifiedFiles: [] });
     }
-
-    if (lowerInput.includes('navbar')) {
-        if (!appContent.includes('function Navbar')) {
-            const navbarComponent = `
-function Navbar() {
-  return (
-    <nav style={{ background: '#333', padding: '1rem', color: 'white', display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
-      <a href="#" style={{color: 'white', textDecoration: 'none'}}>Home</a>
-      <a href="#" style={{color: 'white', textDecoration: 'none'}}>About</a>
-      <a href="#" style={{color: 'white', textDecoration: 'none'}}>Contact</a>
-    </nav>
-  )
-}
-`;
-            // Insert component before App function
-            appContent = appContent.replace(/function App\(\) \{/, `${navbarComponent}\nfunction App() {`);
-
-            // Insert JSX inside App
-            appContent = appContent.replace(/(return \(\s*<>)/, '$1\n      <Navbar />');
-        }
-    }
-
-    if (lowerInput.includes('footer')) {
-        if (!appContent.includes('function Footer')) {
-             const footerComponent = `
-function Footer() {
-  return (
-    <footer style={{ background: '#eee', padding: '2rem', marginTop: '2rem', color: '#333' }}>
-      <p>&copy; {new Date().getFullYear()} My App. All rights reserved.</p>
-    </footer>
-  )
-}
-`;
-            // Insert component before App function
-            appContent = appContent.replace(/function App\(\) \{/, `${footerComponent}\nfunction App() {`);
-
-            // Insert JSX inside App
-            // Try to append before closing fragment
-            appContent = appContent.replace(/(<\/div>\s*<\/>)/, '</div>\n      <Footer />\n    </>');
-            // Fallback if the previous regex fails (e.g. slight formatting differences)
-            if (!appContent.includes('<Footer />')) {
-                appContent = appContent.replace(/(\s*<\/>)/, '\n      <Footer />$1');
-            }
-        }
-    }
-
-    if (lowerInput.includes('navbar') || lowerInput.includes('footer')) {
-        return JSON.stringify({
-            modifiedFiles: [{
-                path: 'src/App.tsx',
-                newContent: appContent
-            }]
-        });
-    }
-
-    // Default: return empty
-    return JSON.stringify({ modifiedFiles: [] });
   }
 }
