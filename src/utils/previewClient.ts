@@ -1,5 +1,6 @@
 export const PREVIEW_CLIENT_SCRIPT = `
 (function() {
+  console.log('Preview Client Active');
   let currentMode = 'interaction';
 
   window.addEventListener('message', (event) => {
@@ -23,6 +24,40 @@ export const PREVIEW_CLIENT_SCRIPT = `
                  break;
              }
         }
+      }
+    } else if (event.data.type === 'get-element-at') {
+      const { x, y } = event.data;
+      const element = document.elementFromPoint(x, y);
+      if (element) {
+        const rect = element.getBoundingClientRect();
+        window.parent.postMessage({
+          type: 'element-response',
+          tagName: element.tagName.toLowerCase(),
+          className: element.className,
+          rect: {
+            top: rect.top,
+            left: rect.left,
+            width: rect.width,
+            height: rect.height
+          }
+        }, '*');
+      }
+    } else if (event.data.type === 'select-element-at') {
+      const { x, y } = event.data;
+      const element = document.elementFromPoint(x, y);
+      if (element) {
+        const rect = element.getBoundingClientRect();
+        window.parent.postMessage({
+          type: 'element-selected-response',
+          tagName: element.tagName.toLowerCase(),
+          className: element.className,
+          rect: {
+            top: rect.top,
+            left: rect.left,
+            width: rect.width,
+            height: rect.height
+          }
+        }, '*');
       }
     }
   });
