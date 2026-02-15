@@ -45,7 +45,7 @@ export function PreviewOverlay({ iframeRef, onElementSelect, editMode, onUpdateS
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       // Handle click (selection)
-      if (event.data?.type === 'element-clicked') {
+      if (event.data?.type === 'element-clicked' || event.data?.type === 'element-selected-response') {
         setSelectedRect(event.data.rect);
         onElementSelect({
           tagName: event.data.tagName,
@@ -54,7 +54,7 @@ export function PreviewOverlay({ iframeRef, onElementSelect, editMode, onUpdateS
       }
 
       // Handle hover
-      if (event.data?.type === 'element-hovered') {
+      if (event.data?.type === 'element-hovered' || event.data?.type === 'element-response') {
         setHoveredRect(event.data.rect);
         setHoveredElement({
             tagName: event.data.tagName,
@@ -93,10 +93,43 @@ export function PreviewOverlay({ iframeRef, onElementSelect, editMode, onUpdateS
     }
   };
 
+  const handleOverlayMouseMove = (e: React.MouseEvent) => {
+    if (editMode !== 'visual' || !iframeRef.current) return;
+    const rect = iframeRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    iframeRef.current.contentWindow?.postMessage({
+      type: 'get-element-at',
+      x,
+      y
+    }, '*');
+  };
+
+  const handleOverlayClick = (e: React.MouseEvent) => {
+    if (editMode !== 'visual' || !iframeRef.current) return;
+    const rect = iframeRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    iframeRef.current.contentWindow?.postMessage({
+      type: 'select-element-at',
+      x,
+      y
+    }, '*');
+  };
+
   if (editMode !== 'visual') return null;
 
   return (
     <div className="absolute inset-0 z-50 pointer-events-none overflow-hidden">
+      {/* Glass Pane for Interaction Interception */}
+      <div
+        className="absolute inset-0 pointer-events-auto bg-transparent cursor-crosshair"
+        onMouseMove={handleOverlayMouseMove}
+        onClick={handleOverlayClick}
+      />
+
       {/* Hover Effect */}
       {hoveredRect && !selectedRect && (
         <div

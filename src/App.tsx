@@ -14,7 +14,7 @@ import type { FileSystemTree } from '@webcontainer/api';
 import { webContainerService } from './services/WebContainerService';
 import { updateCode, type TargetElement } from './utils/ast';
 import JSZip from 'jszip';
-import { Download, Upload, Edit3, Loader2, Code, LayoutTemplate, Undo, Redo } from 'lucide-react';
+import { Download, Upload, Loader2, LayoutTemplate, Undo, Redo, RefreshCw } from 'lucide-react'; // Added RefreshCw
 import { TEMPLATES } from './templates';
 
 function App() {
@@ -235,22 +235,38 @@ function App() {
       }
   };
 
-  const triggerBuild = async () => {
+  const triggerBuild = async (force: boolean = false) => {
       if (!container) return;
       setActiveBottomTab('terminal');
 
       try {
-        // Install
-        const installProcess = await container.spawn('npm', ['install']);
-        installProcess.output.pipeTo(new WritableStream({
-            write(data) {
-                console.log('[install]', data);
-                terminalRef.current?.write(data);
+        let shouldInstall = force;
+        if (!shouldInstall) {
+            try {
+                await container.fs.readdir('node_modules');
+                console.log('node_modules exists, skipping install');
+                terminalRef.current?.write('Skipping npm install (node_modules exists)...\r\n');
+            } catch (error) {
+                shouldInstall = true;
             }
-        }));
-        await installProcess.exit;
+        }
+
+        if (shouldInstall) {
+            // Install
+            const installProcess = await container.spawn('npm', ['install']);
+            installProcess.output.pipeTo(new WritableStream({
+                write(data) {
+                    console.log('[install]', data);
+                    terminalRef.current?.write(data);
+                }
+            }));
+            await installProcess.exit;
+        }
 
         // Start Dev Server
+        // We probably should kill existing server if running, but for now assuming one instance.
+        // WebContainer might handle port conflict or multiple spawns automatically, but usually we need to be careful.
+        // The previous code didn't kill it. I'll stick to existing pattern for now.
         const startProcess = await container.spawn('npm', ['run', 'dev']);
         startProcess.output.pipeTo(new WritableStream({
             write(data) {
@@ -314,46 +330,24 @@ function App() {
         {/* Top Section (70%) */}
         <Panel defaultSize={70} minSize={30}>
           <div className="relative w-full h-full bg-white">
-             {/* Edit Mode Toggle */}
-             <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-gray-900/90 rounded-full p-1 shadow-lg flex items-center border border-gray-700 gap-1">
-                 <div className="flex items-center gap-1 pr-2 border-r border-gray-700 mr-1">
-                     <button
-                        onClick={handleUndo}
-                        disabled={!history.canUndo}
-                        className="p-1.5 text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors rounded-full hover:bg-gray-800"
-                        title="Undo (Ctrl+Z)"
-                     >
-                         <Undo size={14} />
-                     </button>
-                     <button
-                        onClick={handleRedo}
-                        disabled={!history.canRedo}
-                        className="p-1.5 text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors rounded-full hover:bg-gray-800"
-                        title="Redo (Ctrl+Shift+Z)"
-                     >
-                         <Redo size={14} />
-                     </button>
-                 </div>
-                <button
-                    onClick={() => setEditMode('interaction')}
-                    className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${editMode === 'interaction' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                >
-                    Interact
-                </button>
-                <button
-                    onClick={() => setEditMode('visual')}
-                    className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${editMode === 'visual' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                >
-                    <Edit3 size={14} />
-                    Visual
-                </button>
-                <button
-                    onClick={() => setEditMode('code')}
-                    className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${editMode === 'code' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                >
-                    <Code size={14} />
-                    Code
-                </button>
+             {/* Undo/Redo Controls - Moved to Top Left */}
+             <div className="absolute top-4 left-4 z-50 bg-gray-900/90 rounded-full p-1 shadow-lg flex items-center border border-gray-700 gap-1">
+                 <button
+                    onClick={handleUndo}
+                    disabled={!history.canUndo}
+                    className="p-1.5 text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors rounded-full hover:bg-gray-800"
+                    title="Undo (Ctrl+Z)"
+                 >
+                     <Undo size={14} />
+                 </button>
+                 <button
+                    onClick={handleRedo}
+                    disabled={!history.canRedo}
+                    className="p-1.5 text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors rounded-full hover:bg-gray-800"
+                    title="Redo (Ctrl+Shift+Z)"
+                 >
+                     <Redo size={14} />
+                 </button>
              </div>
 
              {/* Main Content Area */}
@@ -369,13 +363,23 @@ function App() {
                    <div className="flex-1 flex flex-col h-full overflow-hidden">
                       <div className="h-10 border-b border-gray-800 flex items-center justify-between px-4 bg-gray-900 shrink-0">
                           <span className="text-sm text-gray-400">{selectedFilePath || 'No file selected'}</span>
-                          <button
-                              onClick={saveAndRun}
-                              disabled={!selectedFilePath}
-                              className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                              Save & Run
-                          </button>
+                          <div className="flex gap-2">
+                              <button
+                                  onClick={() => triggerBuild(true)}
+                                  className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded disabled:opacity-50 flex items-center gap-1"
+                                  title="Force Reinstall Dependencies"
+                              >
+                                  <RefreshCw size={12} />
+                                  Reinstall
+                              </button>
+                              <button
+                                  onClick={saveAndRun}
+                                  disabled={!selectedFilePath}
+                                  className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                  Save & Run
+                              </button>
+                          </div>
                       </div>
                       <textarea
                           value={selectedFileContent}
@@ -514,6 +518,8 @@ function App() {
                             isLoading={isGenerating}
                             onSendMessage={handleSendMessage}
                             selectedElement={selectedElement}
+                            editMode={editMode}
+                            setEditMode={setEditMode}
                         />
                     </div>
                     <div className={`w-full h-full ${activeBottomTab === 'terminal' ? 'block' : 'hidden'}`}>

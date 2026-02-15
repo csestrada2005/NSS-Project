@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, Loader2 } from 'lucide-react';
+import { Send, Bot, Loader2, MousePointer2, Edit3, Code as CodeIcon } from 'lucide-react';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -10,9 +10,11 @@ interface ChatInterfaceProps {
   isLoading: boolean;
   onSendMessage: (message: string) => Promise<boolean>;
   selectedElement: { tagName: string; className?: string } | null;
+  editMode: 'interaction' | 'visual' | 'code';
+  setEditMode: (mode: 'interaction' | 'visual' | 'code') => void;
 }
 
-export function ChatInterface({ isLoading, onSendMessage, selectedElement }: ChatInterfaceProps) {
+export function ChatInterface({ isLoading, onSendMessage, selectedElement, editMode, setEditMode }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', content: 'Hello! How can I help you today?' }
   ]);
@@ -66,11 +68,34 @@ export function ChatInterface({ isLoading, onSendMessage, selectedElement }: Cha
 
   return (
     <div className="flex flex-col h-full w-full bg-gray-900">
-      <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-          <Bot className="w-5 h-5 text-blue-400" />
-          AI Assistant
+      <div className="p-4 border-b border-gray-800 flex items-center gap-4">
+        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+          <Bot className="w-6 h-6 text-blue-500" />
+          Ares Project
         </h2>
+        <div className="flex items-center bg-gray-800 p-1 rounded-lg border border-gray-700">
+            <button
+                onClick={() => setEditMode('interaction')}
+                className={`p-1.5 rounded-md transition-all ${editMode === 'interaction' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
+                title="Interact Mode"
+            >
+                <MousePointer2 size={16} />
+            </button>
+            <button
+                onClick={() => setEditMode('visual')}
+                className={`p-1.5 rounded-md transition-all ${editMode === 'visual' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
+                title="Visual Mode"
+            >
+                <Edit3 size={16} />
+            </button>
+            <button
+                onClick={() => setEditMode('code')}
+                className={`p-1.5 rounded-md transition-all ${editMode === 'code' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
+                title="Code Mode"
+            >
+                <CodeIcon size={16} />
+            </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
