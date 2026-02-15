@@ -9,9 +9,10 @@ interface Message {
 interface ChatInterfaceProps {
   isLoading: boolean;
   onSendMessage: (message: string) => Promise<boolean>;
+  selectedElement: { tagName: string; className?: string } | null;
 }
 
-export function ChatInterface({ isLoading, onSendMessage }: ChatInterfaceProps) {
+export function ChatInterface({ isLoading, onSendMessage, selectedElement }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', content: 'Hello! How can I help you today?' }
   ]);
@@ -101,6 +102,13 @@ export function ChatInterface({ isLoading, onSendMessage }: ChatInterfaceProps) 
       </div>
 
       <div className="p-4 border-t border-gray-800 bg-gray-900">
+        {selectedElement && (
+          <div className="mb-2 px-3 py-1.5 bg-blue-900/30 border border-blue-500/30 rounded text-xs text-blue-200 flex items-center justify-between">
+            <span>
+              Selected: <span className="font-mono text-blue-100">&lt;{selectedElement.tagName.toLowerCase()}{selectedElement.className ? `.${selectedElement.className.split(' ')[0]}` : ''}&gt;</span>
+            </span>
+          </div>
+        )}
         <div className="flex gap-2">
           <input
             type="text"

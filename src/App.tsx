@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Panel, Group, Separator } from 'react-resizable-panels';
 import { useWebContainer } from './hooks/useWebContainer';
+import { useHistory } from './hooks/useHistory';
 import { files } from './files';
 import './App.css';
 import { ChatInterface } from './components/ChatInterface';
@@ -12,12 +13,15 @@ import type { FileSystemTree } from '@webcontainer/api';
 import { webContainerService } from './services/WebContainerService';
 import { updateCode, type TargetElement } from './utils/ast';
 import JSZip from 'jszip';
-import { Download, Upload, Edit3, Loader2, Code } from 'lucide-react';
+import { Download, Upload, Edit3, Loader2, Code, LayoutTemplate, Undo, Redo } from 'lucide-react';
+import { TEMPLATES } from './templates';
 
 function App() {
   const { container, uploadZip, isLoading: isContainerLoading } = useWebContainer();
   const [url, setUrl] = useState('');
-  const [fileTree, setFileTree] = useState<FileSystemTree>(files);
+  const history = useHistory<FileSystemTree>(files);
+  const fileTree = history.state;
+  const [showTemplateSelector, setShowTemplateSelector] = useState(true);
   const [selectedElement, setSelectedElement] = useState<TargetElement | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [editMode, setEditMode] = useState<'interaction' | 'visual' | 'code'>('interaction');
@@ -97,7 +101,7 @@ function App() {
   const saveAndRun = async () => {
     if (!selectedFilePath) return;
     const newTree = updateFileContent(fileTree, selectedFilePath, selectedFileContent);
-    setFileTree(newTree);
+    history.set(newTree);
     if (container) {
       await webContainerService.mount(newTree);
     }
@@ -119,7 +123,7 @@ function App() {
     const newCode = updateCode(code, selectedElement, { className: newClassName });
     const newTree = updateFileContent(fileTree, activeFilePath, newCode);
 
-    setFileTree(newTree);
+    history.set(newTree);
     if (container) {
       await webContainerService.mount(newTree);
     }
@@ -149,16 +153,48 @@ function App() {
   };
 
   const handleCodeUpdate = async (newTree: FileSystemTree) => {
-    setFileTree(newTree);
+    history.set(newTree);
     if (container) {
       await webContainerService.mount(newTree);
     }
   };
 
+  const handleUndo = async () => {
+    if (history.canUndo) {
+        history.undo();
+    }
+  };
+
+  const handleRedo = async () => {
+      if (history.canRedo) {
+          history.redo();
+      }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+        if (e.shiftKey) {
+          handleRedo();
+        } else {
+          handleUndo();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [history]);
+
+  useEffect(() => {
+    if (container && fileTree && Object.keys(fileTree).length > 0) {
+        webContainerService.mount(fileTree).catch(console.error);
+    }
+  }, [fileTree, container]);
+
   const handleSendMessage = async (message: string) => {
     setIsGenerating(true);
     try {
-      const result = await AIOrchestrator.parseUserCommand(message, fileTree);
+      const result = await AIOrchestrator.parseUserCommand(message, fileTree, selectedElement);
       if (result) {
         await handleCodeUpdate(result);
         return true;
@@ -176,10 +212,24 @@ function App() {
     if (e.target.files && e.target.files[0]) {
        const tree = await uploadZip(e.target.files[0]);
        if (tree) {
-           setFileTree(tree);
+           history.set(tree);
+           setShowTemplateSelector(false);
            triggerBuild();
        }
     }
+  };
+
+  const handleLoadTemplate = async (templateKey: string) => {
+      const template = TEMPLATES[templateKey];
+      if (!template) return;
+
+      history.set(template);
+      setShowTemplateSelector(false);
+
+      if (container) {
+          await webContainerService.mount(template);
+          triggerBuild();
+      }
   };
 
   const triggerBuild = async () => {
@@ -247,7 +297,25 @@ function App() {
         <Panel defaultSize={70} minSize={30}>
           <div className="relative w-full h-full bg-white">
              {/* Edit Mode Toggle */}
-             <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-gray-900/90 rounded-full p-1 shadow-lg flex items-center border border-gray-700">
+             <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-gray-900/90 rounded-full p-1 shadow-lg flex items-center border border-gray-700 gap-1">
+                 <div className="flex items-center gap-1 pr-2 border-r border-gray-700 mr-1">
+                     <button
+                        onClick={handleUndo}
+                        disabled={!history.canUndo}
+                        className="p-1.5 text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors rounded-full hover:bg-gray-800"
+                        title="Undo (Ctrl+Z)"
+                     >
+                         <Undo size={14} />
+                     </button>
+                     <button
+                        onClick={handleRedo}
+                        disabled={!history.canRedo}
+                        className="p-1.5 text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors rounded-full hover:bg-gray-800"
+                        title="Redo (Ctrl+Shift+Z)"
+                     >
+                         <Redo size={14} />
+                     </button>
+                 </div>
                 <button
                     onClick={() => setEditMode('interaction')}
                     className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${editMode === 'interaction' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
@@ -324,10 +392,55 @@ function App() {
                               <div>Initializing WebContainer...</div>
                           </>
                      ) : (
-                          <div className="text-center">
-                              <div className="mb-2">Ready to Code</div>
-                              <div className="text-sm">Upload a project zip to start</div>
-                          </div>
+                          showTemplateSelector && Object.keys(fileTree).length === 0 ? (
+                              <div className="flex flex-col items-center gap-6 max-w-2xl w-full px-8">
+                                  <div className="text-center">
+                                      <h2 className="text-2xl font-bold text-gray-300 mb-2">Start a New Project</h2>
+                                      <p className="text-gray-500">Choose a template to get started quickly or upload your own.</p>
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-4 w-full">
+                                      <button
+                                          onClick={() => handleLoadTemplate('landing-page')}
+                                          className="flex flex-col items-center p-6 bg-gray-800 border-2 border-gray-700 hover:border-blue-500 rounded-xl transition-all group text-left"
+                                      >
+                                          <div className="p-3 rounded-full bg-blue-900/30 text-blue-400 mb-4 group-hover:scale-110 transition-transform">
+                                              <LayoutTemplate className="w-8 h-8" />
+                                          </div>
+                                          <h3 className="text-lg font-semibold text-gray-200 mb-1">Landing Page</h3>
+                                          <p className="text-sm text-gray-500 text-center">Modern hero section with features grid and responsive navbar.</p>
+                                      </button>
+
+                                      <button
+                                          onClick={() => handleLoadTemplate('dashboard')}
+                                          className="flex flex-col items-center p-6 bg-gray-800 border-2 border-gray-700 hover:border-blue-500 rounded-xl transition-all group text-left"
+                                      >
+                                          <div className="p-3 rounded-full bg-purple-900/30 text-purple-400 mb-4 group-hover:scale-110 transition-transform">
+                                              <LayoutTemplate className="w-8 h-8" />
+                                          </div>
+                                          <h3 className="text-lg font-semibold text-gray-200 mb-1">Dashboard</h3>
+                                          <p className="text-sm text-gray-500 text-center">Admin layout with sidebar, header, and stats cards.</p>
+                                      </button>
+                                  </div>
+
+                                  <div className="relative w-full flex items-center gap-4 my-4">
+                                      <div className="h-px bg-gray-800 flex-1"></div>
+                                      <span className="text-xs text-gray-600 uppercase font-medium">Or</span>
+                                      <div className="h-px bg-gray-800 flex-1"></div>
+                                  </div>
+
+                                  <label className="cursor-pointer text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-2">
+                                      <Upload className="w-4 h-4" />
+                                      Upload a .zip file
+                                      <input type="file" accept=".zip" onChange={handleUploadZip} className="hidden" />
+                                  </label>
+                              </div>
+                          ) : (
+                            <div className="text-center">
+                                <div className="mb-2">Ready to Code</div>
+                                <div className="text-sm">Waiting for server...</div>
+                            </div>
+                          )
                      )}
                    </div>
                 )
@@ -359,7 +472,11 @@ function App() {
 
                 {/* Right: Chat (80%) */}
                 <div className="flex-1 h-full">
-                    <ChatInterface isLoading={isGenerating} onSendMessage={handleSendMessage} />
+                    <ChatInterface
+                        isLoading={isGenerating}
+                        onSendMessage={handleSendMessage}
+                        selectedElement={selectedElement}
+                    />
                 </div>
              </div>
         </Panel>
