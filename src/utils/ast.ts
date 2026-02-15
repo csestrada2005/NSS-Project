@@ -1,165 +1,56 @@
-import { parse } from '@babel/parser';
-import traverse from '@babel/traverse';
-import generate from '@babel/generator';
-import * as t from '@babel/types';
-
 export interface TargetElement {
   tagName: string;
   className?: string;
-  innerText?: string;
 }
 
-export interface ElementUpdate {
-  className?: string;
-}
+export const updateCode = (fileContent: string, target: TargetElement, updates: { className: string }): string => {
+  const { tagName, className } = target;
+  const { className: newClassName } = updates;
 
-export const updateCode = (code: string, target: TargetElement, update: ElementUpdate): string => {
-    try {
-        const ast = parse(code, {
-            sourceType: 'module',
-            plugins: ['jsx', 'typescript'],
-        });
+  // Regex to find the opening tag.
+  // We use a non-greedy capture for attributes to handle the tag content.
+  // Note: This simple regex might fail on tags with '>' in attribute values.
+  const tagRegex = new RegExp(`<${tagName}(\\s+[^>]*)?>`, 'g');
 
-        // Handle inconsistent module exports in browser environments
-        const traverseFn = (traverse as any).default || traverse;
-        const generateFn = (generate as any).default || generate;
+  let updated = false;
 
-        let found = false;
+  return fileContent.replace(tagRegex, (match, attributes) => {
+    if (updated) return match;
 
-        traverseFn(ast, {
-            JSXElement(path: any) {
-                if (found) return;
+    // Extract existing className
+    const currentClassMatch = attributes ? attributes.match(/className=(["'])(.*?)\1/) : null;
+    const currentClass = currentClassMatch ? currentClassMatch[2] : '';
 
-                const openingElement = path.node.openingElement;
+    const normalize = (s: string) => s.split(/\s+/).filter(Boolean).sort().join(' ');
 
-                // Match Tag Name
-                let tagName = '';
-                if (t.isJSXIdentifier(openingElement.name)) {
-                    tagName = openingElement.name.name;
-                } else {
-                   // Skip member expressions or namespaced names for simplicity
-                   return;
-                }
-
-                if (tagName.toLowerCase() !== target.tagName.toLowerCase()) return;
-
-                // Match Class Name
-                const classNameAttr = openingElement.attributes.find(
-                    (attr: any) => t.isJSXAttribute(attr) && attr.name.name === 'className'
-                );
-
-                let sourceClassName = '';
-                if (classNameAttr && t.isStringLiteral(classNameAttr.value)) {
-                    sourceClassName = classNameAttr.value.value;
-                }
-
-                // Normalize classes for comparison
-                const normalize = (cls: string) => cls.split(/\s+/).filter(Boolean).sort().join(' ');
-
-                const targetClass = normalize(target.className || '');
-                const sourceClass = normalize(sourceClassName);
-
-                if (targetClass !== sourceClass) {
-                     return;
-                }
-
-                found = true;
-
-                // Apply Updates
-                if (update.className !== undefined) {
-                    if (classNameAttr) {
-                         classNameAttr.value = t.stringLiteral(update.className);
-                    } else {
-                        openingElement.attributes.push(
-                            t.jsxAttribute(
-                                t.jsxIdentifier('className'),
-                                t.stringLiteral(update.className)
-                            )
-                        );
-                    }
-                }
-            }
-        });
-
-        if (!found) {
-            console.warn('Could not find matching element in AST');
-            return code;
-        }
-
-        const output = generateFn(ast, {}, code);
-        return output.code;
-
-    } catch (error) {
-        console.error('Error parsing/updating code:', error);
-        return code;
+    // Check if this is the target element
+    if (className) {
+      if (normalize(currentClass) !== normalize(className)) {
+        return match;
+      }
+    } else {
+      // If target has no className, we look for a tag that also has no className
+      if (currentClass) {
+        return match;
+      }
     }
-};
 
-export const locateElement = (code: string, target: TargetElement): { line: number; column: number } | null => {
-    try {
-        const ast = parse(code, {
-            sourceType: 'module',
-            plugins: ['jsx', 'typescript'],
-        });
+    updated = true;
 
-        // Handle inconsistent module exports in browser environments
-        const traverseFn = (traverse as any).default || traverse;
+    // Apply update
+    if (currentClassMatch) {
+      // Replace existing className
+      return match.replace(/className=(["'])(.*?)\1/, `className="${newClassName}"`);
+    } else {
+      // Inject className
+      const hasSpace = attributes && attributes.length > 0;
+      const prefix = hasSpace ? '' : ' ';
 
-        let foundLoc: { line: number; column: number } | null = null;
-
-        traverseFn(ast, {
-            JSXOpeningElement(path: any) {
-                if (foundLoc) return;
-
-                const openingElement = path.node;
-
-                // Match Tag Name
-                let tagName = '';
-                if (t.isJSXIdentifier(openingElement.name)) {
-                    tagName = openingElement.name.name;
-                } else {
-                   // Skip member expressions or namespaced names
-                   return;
-                }
-
-                if (tagName.toLowerCase() !== target.tagName.toLowerCase()) return;
-
-                // Match Class Name
-                if (target.className) {
-                    const classNameAttr = openingElement.attributes.find(
-                        (attr: any) => t.isJSXAttribute(attr) && attr.name.name === 'className'
-                    );
-
-                    let sourceClassName = '';
-                    if (classNameAttr && t.isStringLiteral(classNameAttr.value)) {
-                        sourceClassName = classNameAttr.value.value;
-                    }
-
-                    // Normalize classes for comparison
-                    const normalize = (cls: string) => cls.split(/\s+/).filter(Boolean).sort().join(' ');
-
-                    const targetClass = normalize(target.className);
-                    const sourceClass = normalize(sourceClassName);
-
-                    if (targetClass !== sourceClass) {
-                         return;
-                    }
-                }
-
-                if (openingElement.loc) {
-                    foundLoc = {
-                        line: openingElement.loc.start.line,
-                        column: openingElement.loc.start.column
-                    };
-                    path.stop();
-                }
-            }
-        });
-
-        return foundLoc;
-
-    } catch (error) {
-        console.error('Error locating element:', error);
-        return null;
+      if (match.endsWith('/>')) {
+        return match.replace('/>', `${prefix}className="${newClassName}" />`);
+      } else {
+        return match.replace('>', `${prefix}className="${newClassName}">`);
+      }
     }
+  });
 };

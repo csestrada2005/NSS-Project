@@ -6,12 +6,13 @@ import './App.css';
 import { ChatInterface } from './components/ChatInterface';
 import { PreviewOverlay } from './components/PreviewOverlay';
 import { InspectorPanel } from './components/InspectorPanel';
+import { FileExplorer } from './components/FileExplorer';
 import { AIOrchestrator } from './services/AIOrchestrator';
 import type { FileSystemTree } from '@webcontainer/api';
 import { webContainerService } from './services/WebContainerService';
 import { updateCode, type TargetElement } from './utils/ast';
 import JSZip from 'jszip';
-import { Download, Upload, Edit3, Loader2 } from 'lucide-react';
+import { Download, Upload, Edit3, Loader2, Code } from 'lucide-react';
 
 function App() {
   const { container, uploadZip, isLoading: isContainerLoading } = useWebContainer();
@@ -19,7 +20,9 @@ function App() {
   const [fileTree, setFileTree] = useState<FileSystemTree>(files);
   const [selectedElement, setSelectedElement] = useState<TargetElement | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [editMode, setEditMode] = useState<'interaction' | 'visual'>('interaction');
+  const [editMode, setEditMode] = useState<'interaction' | 'visual' | 'code'>('interaction');
+  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
+  const [selectedFileContent, setSelectedFileContent] = useState<string>('');
 
   // We keep track of the active file for AST updates (Inspector)
   // Assuming single-page app or main file is src/App.tsx for now
@@ -79,6 +82,25 @@ function App() {
       }
     }
     return newTree;
+  };
+
+  const handleFileSelect = (path: string) => {
+    setSelectedFilePath(path);
+    const content = getFileContent(fileTree, path);
+    setSelectedFileContent(content || '');
+  };
+
+  const handleCodeEdit = (newContent: string) => {
+    setSelectedFileContent(newContent);
+  };
+
+  const saveAndRun = async () => {
+    if (!selectedFilePath) return;
+    const newTree = updateFileContent(fileTree, selectedFilePath, selectedFileContent);
+    setFileTree(newTree);
+    if (container) {
+      await webContainerService.mount(newTree);
+    }
   };
 
   const handleElementSelect = (element: { tagName: string; className?: string }) => {
@@ -219,40 +241,75 @@ function App() {
                     <Edit3 size={14} />
                     Visual
                 </button>
+                <button
+                    onClick={() => setEditMode('code')}
+                    className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${editMode === 'code' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                >
+                    <Code size={14} />
+                    Code
+                </button>
              </div>
 
-             {/* Preview */}
-             {url ? (
-                <>
-                  <iframe
-                    ref={iframeRef}
-                    src={url}
-                    className="w-full h-full border-none"
-                    title="Preview"
-                  />
-                  <PreviewOverlay
-                      iframeRef={iframeRef}
-                      onElementSelect={handleElementSelect}
-                      editMode={editMode}
-                  />
-                  {editMode === 'visual' && selectedElement && (
-                      <InspectorPanel selectedElement={selectedElement} onUpdateStyle={handleClassUpdate} />
-                  )}
-                </>
-             ) : (
-                <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-4">
-                  {isContainerLoading ? (
-                       <>
-                           <Loader2 className="animate-spin w-8 h-8" />
-                           <div>Initializing WebContainer...</div>
-                       </>
-                  ) : (
-                       <div className="text-center">
-                           <div className="mb-2">Ready to Code</div>
-                           <div className="text-sm">Upload a project zip to start</div>
-                       </div>
-                  )}
+             {/* Main Content Area */}
+             {editMode === 'code' ? (
+                <div className="flex w-full h-full bg-gray-900">
+                   <div className="w-64 border-r border-gray-800 h-full overflow-hidden">
+                      <FileExplorer fileTree={fileTree} onSelect={handleFileSelect} />
+                   </div>
+                   <div className="flex-1 flex flex-col h-full overflow-hidden">
+                      <div className="h-10 border-b border-gray-800 flex items-center justify-between px-4 bg-gray-900 shrink-0">
+                          <span className="text-sm text-gray-400">{selectedFilePath || 'No file selected'}</span>
+                          <button
+                              onClick={saveAndRun}
+                              disabled={!selectedFilePath}
+                              className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                              Save & Run
+                          </button>
+                      </div>
+                      <textarea
+                          value={selectedFileContent}
+                          onChange={(e) => handleCodeEdit(e.target.value)}
+                          className="flex-1 w-full bg-gray-950 text-gray-300 p-4 font-mono text-sm resize-none focus:outline-none"
+                          spellCheck={false}
+                          disabled={!selectedFilePath}
+                      />
+                   </div>
                 </div>
+             ) : (
+                // Existing Preview Logic
+                url ? (
+                  <>
+                    <iframe
+                      ref={iframeRef}
+                      src={url}
+                      className="w-full h-full border-none"
+                      title="Preview"
+                    />
+                    <PreviewOverlay
+                        iframeRef={iframeRef}
+                        onElementSelect={handleElementSelect}
+                        editMode={editMode as 'interaction' | 'visual'}
+                    />
+                    {editMode === 'visual' && selectedElement && (
+                        <InspectorPanel selectedElement={selectedElement} onUpdateStyle={handleClassUpdate} />
+                    )}
+                  </>
+                ) : (
+                   <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-4">
+                     {isContainerLoading ? (
+                          <>
+                              <Loader2 className="animate-spin w-8 h-8" />
+                              <div>Initializing WebContainer...</div>
+                          </>
+                     ) : (
+                          <div className="text-center">
+                              <div className="mb-2">Ready to Code</div>
+                              <div className="text-sm">Upload a project zip to start</div>
+                          </div>
+                     )}
+                   </div>
+                )
              )}
           </div>
         </Panel>
