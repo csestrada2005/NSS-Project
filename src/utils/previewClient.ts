@@ -5,6 +5,25 @@ export const PREVIEW_CLIENT_SCRIPT = `
   window.addEventListener('message', (event) => {
     if (event.data.type === 'set-mode') {
       currentMode = event.data.mode;
+    } else if (event.data.type === 'scroll-element') {
+      const { tagName, className } = event.data;
+      if (!tagName) return;
+
+      const elements = document.getElementsByTagName(tagName);
+      for (const el of elements) {
+        if (className) {
+            const normalize = (s) => s.split(/\\s+/).filter(Boolean).sort().join(' ');
+            if (normalize(el.className) === normalize(className)) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                break;
+            }
+        } else {
+             if (!el.className) {
+                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                 break;
+             }
+        }
+      }
     }
   });
 

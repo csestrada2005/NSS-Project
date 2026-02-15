@@ -43,11 +43,11 @@ def verify_code_mode():
 
             print("Code mode verified successfully!")
 
-            page.screenshot(path="/home/jules/verification/code_mode.png")
+            page.screenshot(path="code_mode.png")
 
         except Exception as e:
             print(f"Verification failed: {e}")
-            page.screenshot(path="/home/jules/verification/error.png")
+            page.screenshot(path="error.png")
             raise e
         finally:
             browser.close()

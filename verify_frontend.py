@@ -8,6 +8,13 @@ def verify_frontend():
             print("Navigating to http://localhost:5173/")
             page.goto("http://localhost:5173/")
 
+            # Click Code button if present
+            try:
+                page.get_by_role("button", name="Code").click()
+                print("Clicked Code button.")
+            except:
+                print("Code button not found, assuming already in code mode or unavailable.")
+
             # Wait for explorer to be visible
             print("Waiting for 'Explorer' text...")
             page.wait_for_selector("text=Explorer", timeout=30000)
