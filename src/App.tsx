@@ -282,6 +282,9 @@ function App() {
       setActiveBottomTab('terminal');
 
       try {
+        terminalRef.current?.write('Configuring Shadcn/UI...\r\n');
+        await webContainerService.configureShadcn();
+
         let shouldInstall = force;
         if (!shouldInstall) {
             try {
