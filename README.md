@@ -1,97 +1,45 @@
-# The Open-Lovable Builder 🚀
+# 🔴 Ares Project
 
-> **Build software at the speed of thought. Own the engine.**
+> **The "Lovable-alike" for Developers.** > *Build React applications with the speed of a visual builder and the flexibility of raw code.*
 
-The Open-Lovable Builder is an open-source, browser-based "Full-Stack IDE" designed to bridge the gap between AI code generation and visual manipulation. Unlike standard chat-bots, this project implements a **Visual-to-Code** engine that allows users to interact directly with the live preview, programmatically updating the underlying source code (AST) in real-time.
+![Project Status](https://img.shields.io/badge/Status-Alpha-red) ![Tech Stack](https://img.shields.io/badge/Tech-React_%7C_Vite_%7C_WebContainers-black)
 
-Running entirely in the browser using **WebContainers**, it eliminates server costs and keeps your code local and secure.
+## 🚀 Mission
+Ares Project is designed to solve the biggest problem in low-code tools: **The "Eject" Penalty.** Usually, visual builders generate messy code that you can't maintain. Ares is different. It is a **bi-directional editor**:
+1.  **AI Writes Code:** You prompt, it builds.
+2.  **You Drag & Drop:** We update the *actual* Tailwind classes in real-time.
+3.  **You Write Code:** The visual preview updates instantly.
 
-![Project Status](https://img.shields.io/badge/Status-Phase_3_Active-success)
-![Tech Stack](https://img.shields.io/badge/Stack-React_|_Vite_|_WebContainers-blue)
+## ✨ The "Killer Feature": True Visual Editing
+Unlike other AI wrappers that just "append code," Ares features a custom-built **Visual Engine** that bridges the gap between pixels and AST (Abstract Syntax Tree).
 
----
+* **Drag & Drop Persistence:** When you drag a button 50px to the right, we don't just change the CSS inline. We calculate the exact Tailwind class (e.g., `translate-x-[50px]`) and **write it back to your source code** file.
+* **Deep Selection:** Click any element to edit its properties. Use `Esc` to select parents.
+* **Zero-Lockin:** You can download the `zip` at any time and it's just a standard Vite + React project.
 
-## 🌟 The "Killer Feature": Visual-to-Code
-Most AI builders are "Chat-Only." You ask for a change, wait 10 seconds, and hope it works.
-We are building a **Bi-Directional Engine**:
-1.  **X-Ray Overlay**: Hover over any element in the live preview to identify its component structure.
-2.  **Click-to-Jump**: Click an element to instantly scroll the code editor to that exact line (AST-powered location).
-3.  **Inspector Panel**: Edit Tailwind classes visually (e.g., change `bg-blue-500` to `bg-red-500`) and watch the source code rewrite itself instantly.
+## 🛠 Features
 
-## 🛠️ Tech Stack
-* **Core**: React + TypeScript + Vite
-* **Runtime**: [WebContainers API](https://webcontainers.io/) (Node.js in the browser)
-* **Editor**: Monaco Editor (VS Code core)
-* **AST Engine**: Babel (Parser/Generator/Traverse) for safe code manipulation.
-* **Styling**: Tailwind CSS
+### 🎨 Visual & Interactive
+* **Glass Pane Engine:** A sophisticated overlay system that intercepts clicks to allow editing without breaking the website's interactivity.
+* **Moveable Integration:** Resize, rotate, and drag elements with professional-grade handles.
+* **Context-Aware AI:** Select a specific button and tell the AI "Make this red," and it knows exactly which component to modify.
 
-## ⚡ Getting Started
+### ⚡ Powered by WebContainers
+* **In-Browser Node.js:** The entire development environment runs inside your browser. No cloud servers required for the build process.
+* **Instant Feedback:** Changes compile in milliseconds using Vite.
+* **Terminal Access:** Real-time access to the build logs and npm process.
 
-### Prerequisites
-* Node.js 18+
-* A modern browser (Chrome/Edge recommended for WebContainer support)
+### 🧠 Intelligence
+* **Anthropic Integration:** Powered by **Claude 3.5 Sonnet** (via backend proxy) for high-quality React code generation.
+* **Heuristic Fallbacks:** "Dumb" logic for instant updates (color changes, text edits) without waiting for the LLM.
 
-### Installation
-1.  **Clone the repository**
-    ```bash
-    git clone [https://github.com/your-username/open-lovable-builder.git](https://github.com/your-username/open-lovable-builder.git)
-    cd open-lovable-builder
-    ```
-
-2.  **Install dependencies**
-    ```bash
-    npm install
-    ```
-
-3.  **Run the Development Server**
-    ```bash
-    npm run dev
-    ```
-    *Open http://localhost:5173 to see the builder.*
-
-### Deployment (Render/Vercel)
-**Critical:** WebContainers require the site to be served in a "Secure Context" with specific COOP/COEP headers.
-* We use a custom `server.js` (Express) to serve these headers in production.
-* **Build Command:** `npm install && npm run build`
-* **Start Command:** `npm start` (Runs `node server.js`)
-
-## 🗺️ Roadmap & Vision
-
-### ✅ Phase 1: The Foundation 
-- [x] WebContainer integration (Boot React/Vite in browser).
-- [x] Split-pane layout (Monaco Editor + Live Preview).
-- [x] Bi-directional communication (iframe <-> host).
-
-### 🚧 Phase 2: The Visual Engine
-- [x] **The Scanner**: Hover overlay to highlight DOM elements.
-- [x] **The Surgeon**: Click-to-locate code (AST traversal).
-- [x] **The Inspector**: Visual panel to edit Tailwind classes.
-- [ ] **Drag-and-Drop**: Resizing and moving elements via mouse interactions.
-
-### 🔮 Phase 3: The Brain 
-- [ ] **Google Jules Integration**: Connect the Chat Interface to a real LLM.
-- [ ] **Context Awareness**: Feed the current file tree and AST to the AI for accurate edits.
-- [ ] **File Management**: Create/Delete files and directories via the UI.
-
-### 🚀 Phase 4: Production Ready
-- [ ] **Supabase Integration**: One-click backend scaffolding.
-- [ ] **Project Export**: Download as ZIP or push to GitHub.
-
-## 📂 Architecture Overview
+## 📦 Architecture
 
 ```mermaid
 graph TD
-    User[User] -->|Interacts| UI[Main UI (Host)]
-    UI -->|Edits Code| Editor[Monaco Editor]
-    UI -->|Mounts Files| WC[WebContainer (In-Browser Node)]
-    
-    subgraph "Visual Engine"
-        Overlay[Preview Overlay] -->|Scans| Iframe[Preview Iframe]
-        Iframe -->|PostMessage| Overlay
-        Overlay -->|Selects Element| AST[AST Engine (Babel)]
-        AST -->|Locates Line #| Editor
-        Inspector[Inspector Panel] -->|Updates Props| AST
-        AST -->|Writes Code| WC
-    end
-    
-    WC -->|Serves App| Iframe
+    A[User Action] -->|Drag/Resize| B(Visual Overlay)
+    B -->|Calculate Delta| C{AST Engine}
+    A -->|Chat Prompt| D(AI Orchestrator)
+    D -->|Generate Component| C
+    C -->|Update String| E[Virtual File System]
+    E -->|HMR Update| F[WebContainer Preview]
