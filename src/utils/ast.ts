@@ -1,5 +1,6 @@
 import * as Babel from '@babel/standalone';
 import type { FileSystemTree } from '@webcontainer/api';
+import type { Node, Edge } from '@xyflow/react';
 
 export interface PropDef {
   name: string;
@@ -11,6 +12,11 @@ export interface TargetElement {
   tagName: string;
   className?: string;
   dataOid?: string;
+}
+
+export interface GraphData {
+    nodes: Node[];
+    edges: Edge[];
 }
 
 export const injectDataIds = (code: string): string => {
@@ -383,7 +389,7 @@ export const updateJSXProp = (
 
         // Find prop
         const propAttrIndex = openingElement.attributes.findIndex(
-            (attr: any) => t.isJSXAttribute(attr) && attr.name && attr.name.name === propName
+            (attr: any) => t.isJSXAttribute(attr) && attr.name && attr.name.name === 'className'
         );
         const propAttr = propAttrIndex !== -1 ? openingElement.attributes[propAttrIndex] : null;
 
@@ -426,4 +432,105 @@ export const updateJSXProp = (
       console.error('Babel transform failed in updateJSXProp:', e);
       return fileContent;
   }
+};
+
+export const analyzeDependencyGraph = (tree: FileSystemTree): GraphData => {
+    const nodes: Node[] = [];
+    const edges: Edge[] = [];
+    const componentMap = new Map<string, string>(); // ComponentName -> FilePath
+
+    // 1. Identify all components
+    const traverseTree = (path: string, node: any) => {
+        if (node.file) {
+            if (path.endsWith('.tsx') || path.endsWith('.jsx')) {
+                // Heuristic: Component name is filename without extension
+                const parts = path.split('/');
+                const fileName = parts[parts.length - 1];
+                const componentName = fileName.replace(/\.(tsx|jsx)$/, '');
+
+                nodes.push({
+                    id: componentName,
+                    position: { x: 0, y: 0 }, // Will be laid out later
+                    data: { label: componentName, path },
+                    type: 'default' // or custom
+                });
+                componentMap.set(componentName, path);
+            }
+        } else if (node.directory) {
+            for (const [name, child] of Object.entries(node.directory)) {
+                traverseTree(path ? `${path}/${name}` : name, child);
+            }
+        }
+    };
+    traverseTree('', tree);
+
+    // 2. Analyze imports and usage
+    // We need to read file content again.
+    const getFileContent = (p: string): string | null => {
+        const parts = p.split('/');
+        let current: any = tree;
+        for (const part of parts) {
+            if (!current) return null;
+            if (current[part]) {
+                current = current[part];
+            } else if (current.directory && current.directory[part]) {
+                current = current.directory[part];
+            } else {
+                return null;
+            }
+        }
+        if (current && current.file && 'contents' in current.file) {
+            return typeof current.file.contents === 'string'
+                ? current.file.contents
+                : new TextDecoder().decode(current.file.contents);
+        }
+        return null;
+    };
+
+    nodes.forEach(node => {
+        const filePath = node.data.path as string;
+        const content = getFileContent(filePath);
+        if (!content) return;
+
+        const plugin = ({ types: t }: any) => ({
+            visitor: {
+                // Check Usage
+                JSXElement(path: any) {
+                    const openingElement = path.node.openingElement;
+                    if (t.isJSXIdentifier(openingElement.name)) {
+                        const name = openingElement.name.name;
+                        // If this name matches a known component, add an edge
+                        // Exclude HTML tags (lowercase usually)
+                        if (name[0] === name[0].toUpperCase() && componentMap.has(name)) {
+                            // Avoid self-references or duplicates
+                             if (name !== node.id) {
+                                 const edgeId = `${node.id}-${name}`;
+                                 if (!edges.some(e => e.id === edgeId)) {
+                                     edges.push({
+                                         id: edgeId,
+                                         source: node.id,
+                                         target: name,
+                                         animated: true,
+                                     });
+                                 }
+                             }
+                        }
+                    }
+                }
+            }
+        });
+
+        try {
+            Babel.transform(content, {
+                filename: 'file.tsx',
+                parserOpts: { plugins: ['typescript', 'jsx'], isTSX: true } as any,
+                plugins: [plugin],
+                presets: [],
+            });
+        } catch (e) {
+            // ignore
+        }
+    });
+
+    return { nodes, edges };
 };

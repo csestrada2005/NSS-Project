@@ -14,11 +14,101 @@ interface LLMResponse {
 }
 
 export class AIOrchestrator {
+  static async generatePlan(userGoal: string, currentFileTree: FileSystemTree): Promise<FileSystemTree> {
+      const systemPrompt = "You are a Senior Technical Project Manager. Create a detailed implementation plan for the user's request. Output ONLY the content of a PLAN.md file. The format must be a markdown checklist.\n\n" +
+      "Example:\n" +
+      "- [ ] 1. Setup Database Schema\n" +
+      "- [ ] 2. Create API Endpoints\n" +
+      "- [ ] 3. Implement Frontend Components\n\n" +
+      "Keep steps atomic, clear, and focused on code implementation.";
+
+      const planContent = await this.callLLM(userGoal, systemPrompt);
+
+      const newTree = JSON.parse(JSON.stringify(currentFileTree));
+      this.updateFileInTree(newTree, 'PLAN.md', planContent);
+      return newTree;
+  }
+
+  static async executeNextStep(currentFileTree: FileSystemTree): Promise<FileSystemTree | null> {
+      const planContent = this.getFileContent(currentFileTree, 'PLAN.md');
+      if (!planContent) return null;
+
+      const lines = planContent.split('\n');
+      let nextStepIndex = -1;
+      let nextStepDescription = '';
+
+      for (let i = 0; i < lines.length; i++) {
+          if (lines[i].includes('- [ ]')) {
+              nextStepIndex = i;
+              nextStepDescription = lines[i].replace('- [ ]', '').trim();
+              break;
+          }
+      }
+
+      if (nextStepIndex === -1) return null; // All done
+
+      // Execute the step
+      const context = flattenFileTree(currentFileTree);
+      const systemPrompt = "You are an expert Senior React Engineer. Implement the following step from the plan. Output a valid JSON object containing a 'modifiedFiles' array. Do not include markdown formatting (```json) or conversational text. JSON only.\n\n" +
+      `Task: ${nextStepDescription}\n\n` +
+      "When the user asks for backend features (e.g., 'save this to the database' or 'create a user profile table'):\n" +
+      "1. Generate a valid PostgreSQL CREATE TABLE statement.\n" +
+      "2. Wrap this SQL in a generic file block named supabase/migrations/<timestamp>_create_table.sql.\n" +
+      "3. Do NOT try to execute the SQL directly.\n" +
+      "4. If the user asks to 'Mock' the data, generate a src/data.json file instead of SQL.\n" +
+      "5. Always prefer using the src/services/data abstraction layer when fetching data in React components.\n" +
+      "6. Use the `cn()` utility from `src/lib/utils` for merging Tailwind classes dynamically.\n" +
+      "7. If the user asks for backend logic (e.g., 'handle Stripe payments' or 'Edge Function'), generate a Deno-compatible TypeScript file at `supabase/functions/<name>/index.ts`.";
+
+      const userMessage = `Current File Structure:\n${context}\n\nPlease implement: ${nextStepDescription}`;
+
+      try {
+          const rawResponse = await this.callLLM(userMessage, systemPrompt);
+          const cleanJson = this.cleanJsonOutput(rawResponse);
+          const response: LLMResponse = JSON.parse(cleanJson);
+
+          const newTree = JSON.parse(JSON.stringify(currentFileTree));
+
+          // Apply changes
+          for (const file of response.modifiedFiles) {
+              this.updateFileInTree(newTree, file.path, file.newContent);
+              if (file.path.startsWith('supabase/functions/') && file.path.endsWith('index.ts')) {
+                    const parts = file.path.split('/');
+                    if (parts.length === 4) {
+                        const funcName = parts[2];
+                        SupabaseService.getInstance().deployEdgeFunction(funcName, file.newContent);
+                    }
+                }
+          }
+
+          // Update PLAN.md
+          lines[nextStepIndex] = lines[nextStepIndex].replace('- [ ]', '- [x]');
+          this.updateFileInTree(newTree, 'PLAN.md', lines.join('\n'));
+
+          return newTree;
+
+      } catch (error) {
+          console.error('Error executing step:', error);
+          return null;
+      }
+  }
+
   static async parseUserCommand(
     input: string,
     currentFileTree: FileSystemTree,
     selectedElement: { tagName: string; className?: string } | null = null
   ): Promise<FileSystemTree | null> {
+    // Check for "Plan: ..."
+    if (input.toLowerCase().startsWith('plan:')) {
+        const goal = input.substring(5).trim();
+        return this.generatePlan(goal, currentFileTree);
+    }
+
+    // Check for "Execute Next Step"
+    if (input.toLowerCase().trim() === 'execute next step' || input.toLowerCase().trim() === 'continue plan') {
+        return this.executeNextStep(currentFileTree);
+    }
+
     // Fast Lane: If element selected, use backend API
     if (selectedElement) {
         const filePath = 'src/App.tsx'; // Hardcoded active file for now
@@ -91,8 +181,6 @@ export class AIOrchestrator {
         }
     }
 
-    // Removed selectedElement context from here as it's handled above, but keeping fallback just in case?
-    // Actually, if selectedElement was passed but fileContent wasn't found (rare), we fall through here.
     if (selectedElement) {
         userMessage += `CONTEXT: The user has selected this HTML element: <${selectedElement.tagName} className='${selectedElement.className || ''}' />. If their request is ambiguous (e.g., 'change color'), apply it to this element.\n\n`;
     }
