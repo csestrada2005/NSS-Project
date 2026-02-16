@@ -1,5 +1,5 @@
 import { SupabaseService } from '../SupabaseService';
-import { Item, Profile } from '../../types';
+import type { Item, Profile } from '../../types';
 
 const supabase = SupabaseService.getInstance().client;
 

@@ -1,28 +1,39 @@
 import { useState, useEffect } from 'react';
 import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight } from 'lucide-react';
-import type { TargetElement } from '../utils/ast';
+import { type TargetElement, extractComponentProps, type PropDef } from '../utils/ast';
+import type { FileSystemTree } from '@webcontainer/api';
 
 interface InspectorPanelProps {
   selectedElement: TargetElement | null;
   onUpdateStyle: (newClassName: string) => void;
   onUpdateProp?: (name: string, value: string | boolean | number) => void;
+  fileTree?: FileSystemTree;
 }
 
-export function InspectorPanel({ selectedElement, onUpdateStyle, onUpdateProp }: InspectorPanelProps) {
+export function InspectorPanel({ selectedElement, onUpdateStyle, onUpdateProp, fileTree }: InspectorPanelProps) {
   const [className, setClassName] = useState('');
-  const [variant, setVariant] = useState('default');
-  const [size, setSize] = useState('default');
-  const [disabled, setDisabled] = useState(false);
+  const [propValues, setPropValues] = useState<Record<string, any>>({});
+  const [availableProps, setAvailableProps] = useState<PropDef[]>([]);
 
   useEffect(() => {
     if (selectedElement) {
       setClassName(selectedElement.className || '');
-      // Reset props as we don't read them yet
-      setVariant('default');
-      setSize('default');
-      setDisabled(false);
+
+      if (fileTree) {
+          const props = extractComponentProps(fileTree, selectedElement.tagName);
+          setAvailableProps(props);
+          // Initialize values to default for now (can be improved to read from code)
+          const initialValues: Record<string, any> = {};
+          props.forEach(p => {
+              if (p.type === 'boolean') initialValues[p.name] = false;
+              if (p.type === 'string') initialValues[p.name] = '';
+              if (p.type === 'number') initialValues[p.name] = 0;
+              if (p.type === 'enum' && p.options && p.options.length > 0) initialValues[p.name] = p.options[0];
+          });
+          setPropValues(initialValues);
+      }
     }
-  }, [selectedElement]);
+  }, [selectedElement, fileTree]);
 
   const updateClass = (newClass: string) => {
     setClassName(newClass);
@@ -30,16 +41,12 @@ export function InspectorPanel({ selectedElement, onUpdateStyle, onUpdateProp }:
   };
 
   const handlePropChange = (name: string, value: string | boolean | number) => {
-      if (name === 'variant') setVariant(value as string);
-      if (name === 'size') setSize(value as string);
-      if (name === 'disabled') setDisabled(value as boolean);
-
+      setPropValues(prev => ({ ...prev, [name]: value }));
       onUpdateProp?.(name, value);
   };
 
   const handleColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const color = e.target.value;
-    // Append arbitrary value class
     const newCls = `${className} text-[${color}]`.trim();
     updateClass(newCls);
   };
@@ -68,56 +75,50 @@ export function InspectorPanel({ selectedElement, onUpdateStyle, onUpdateProp }:
       </div>
 
       {/* Component Properties */}
-      <div className="space-y-3 border-b pb-4">
-        <label className="text-xs font-medium text-gray-500 uppercase tracking-wider block">Properties</label>
-
-        <div className="grid grid-cols-2 gap-2">
-            <div className="flex flex-col gap-1">
-                <span className="text-[10px] text-gray-400">Variant</span>
-                <select
-                    value={variant}
-                    onChange={(e) => handlePropChange('variant', e.target.value)}
-                    className="w-full text-xs p-1 border border-gray-200 rounded bg-white text-gray-700 focus:outline-none focus:border-red-500"
-                >
-                    <option value="default">Default</option>
-                    <option value="destructive">Destructive</option>
-                    <option value="outline">Outline</option>
-                    <option value="secondary">Secondary</option>
-                    <option value="ghost">Ghost</option>
-                    <option value="link">Link</option>
-                </select>
+      {availableProps.length > 0 && (
+          <div className="space-y-3 border-b pb-4">
+            <label className="text-xs font-medium text-gray-500 uppercase tracking-wider block">Properties</label>
+            <div className="flex flex-col gap-3">
+                {availableProps.map(prop => (
+                    <div key={prop.name} className="flex flex-col gap-1">
+                        <span className="text-[10px] text-gray-400 capitalize">{prop.name}</span>
+                        {prop.type === 'enum' && prop.options ? (
+                             <select
+                                value={propValues[prop.name] as string || ''}
+                                onChange={(e) => handlePropChange(prop.name, e.target.value)}
+                                className="w-full text-xs p-1 border border-gray-200 rounded bg-white text-gray-700 focus:outline-none focus:border-red-500"
+                            >
+                                {prop.options.map(opt => (
+                                    <option key={opt} value={opt}>{opt}</option>
+                                ))}
+                            </select>
+                        ) : prop.type === 'boolean' ? (
+                             <div className="flex items-center justify-between">
+                                <span className="text-xs text-gray-600">{prop.name}</span>
+                                <input
+                                    type="checkbox"
+                                    checked={propValues[prop.name] as boolean || false}
+                                    onChange={(e) => handlePropChange(prop.name, e.target.checked)}
+                                    className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer"
+                                />
+                            </div>
+                        ) : (
+                             <input
+                                type={prop.type === 'number' ? 'number' : 'text'}
+                                value={propValues[prop.name] as string | number || ''}
+                                onChange={(e) => handlePropChange(prop.name, prop.type === 'number' ? Number(e.target.value) : e.target.value)}
+                                className="w-full text-xs p-1 border border-gray-200 rounded bg-white text-gray-700 focus:outline-none focus:border-red-500"
+                            />
+                        )}
+                    </div>
+                ))}
             </div>
-
-            <div className="flex flex-col gap-1">
-                <span className="text-[10px] text-gray-400">Size</span>
-                <select
-                    value={size}
-                    onChange={(e) => handlePropChange('size', e.target.value)}
-                    className="w-full text-xs p-1 border border-gray-200 rounded bg-white text-gray-700 focus:outline-none focus:border-red-500"
-                >
-                    <option value="default">Default</option>
-                    <option value="sm">Small</option>
-                    <option value="lg">Large</option>
-                    <option value="icon">Icon</option>
-                </select>
-            </div>
-        </div>
-
-        <div className="flex items-center justify-between">
-            <span className="text-xs text-gray-600">Disabled</span>
-            <input
-                type="checkbox"
-                checked={disabled}
-                onChange={(e) => handlePropChange('disabled', e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer"
-            />
-        </div>
-      </div>
+          </div>
+      )}
 
       {/* Styles Header */}
-      <div className="space-y-2">
+       <div className="space-y-2">
          <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Styles</label>
-
          {/* Colors */}
          <div className="flex gap-2">
             <div className="flex flex-col gap-1 w-1/2">

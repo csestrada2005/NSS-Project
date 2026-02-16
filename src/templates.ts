@@ -18,7 +18,6 @@ const commonFiles = {
         dependencies: {
           react: "^18.3.1",
           "react-dom": "^18.3.1",
-          "lucide-react": "^0.446.0",
           ...SHADCN_DEPENDENCIES
         },
         devDependencies: {

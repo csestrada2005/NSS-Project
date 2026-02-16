@@ -1,4 +1,4 @@
-import { Item, Profile } from '../../types';
+import type { Item, Profile } from '../../types';
 import data from '../../data.json';
 
 export const fetchItems = async (): Promise<Item[]> => {

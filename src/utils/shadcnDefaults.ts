@@ -3,7 +3,8 @@ export const SHADCN_DEPENDENCIES = {
   "clsx": "^2.1.1",
   "tailwind-merge": "^2.5.2",
   "tailwindcss-animate": "^1.0.7",
-  "lucide-react": "^0.446.0"
+  "lucide-react": "^0.446.0",
+  "@radix-ui/react-slot": "^1.0.2"
 };
 
 export const SHADCN_FILES = {

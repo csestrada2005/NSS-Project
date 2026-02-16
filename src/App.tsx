@@ -456,6 +456,7 @@ function App() {
                             selectedElement={selectedElement}
                             onUpdateStyle={handleClassUpdate}
                             onUpdateProp={handlePropUpdate}
+                            fileTree={fileTree}
                         />
                     )}
                   </>

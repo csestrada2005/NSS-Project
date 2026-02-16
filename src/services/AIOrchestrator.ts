@@ -62,7 +62,8 @@ export class AIOrchestrator {
     "2. Wrap this SQL in a generic file block named supabase/migrations/<timestamp>_create_table.sql.\n" +
     "3. Do NOT try to execute the SQL directly.\n" +
     "4. If the user asks to 'Mock' the data, generate a src/data.json file instead of SQL.\n" +
-    "5. Always prefer using the src/services/data abstraction layer when fetching data in React components.";
+    "5. Always prefer using the src/services/data abstraction layer when fetching data in React components.\n" +
+    "6. Use the `cn()` utility from `src/lib/utils` for merging Tailwind classes dynamically.";
 
     let userMessage = "";
     // Removed selectedElement context from here as it's handled above, but keeping fallback just in case?

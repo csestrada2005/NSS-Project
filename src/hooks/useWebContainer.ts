@@ -37,7 +37,7 @@ export function useWebContainer() {
     const injectIds = (node: FileSystemTree) => {
       for (const key in node) {
         const entry = node[key];
-        if ('file' in entry) {
+        if ('file' in entry && 'contents' in entry.file) {
           const contents = entry.file.contents;
           if (typeof contents === 'string' && (key.endsWith('.tsx') || key.endsWith('.jsx'))) {
             entry.file.contents = injectDataIds(contents);

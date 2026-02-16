@@ -1,4 +1,11 @@
 import * as Babel from '@babel/standalone';
+import type { FileSystemTree } from '@webcontainer/api';
+
+export interface PropDef {
+  name: string;
+  type: 'string' | 'boolean' | 'number' | 'enum';
+  options?: string[];
+}
 
 export interface TargetElement {
   tagName: string;
@@ -184,6 +191,158 @@ export const updateCode = (
       console.error('Babel transform failed:', e);
       return fileContent;
   }
+};
+
+export const extractComponentProps = (
+  tree: FileSystemTree,
+  tagName: string
+): PropDef[] => {
+  let fileContent: string | null = null;
+  // Heuristic: check standard paths
+  const pathsToCheck = [
+    `src/components/${tagName}.tsx`,
+    `src/components/ui/${tagName}.tsx`,
+    `src/${tagName}.tsx`
+  ];
+
+  const getFileContent = (path: string): string | null => {
+    const parts = path.split('/');
+    let current: any = tree;
+    for (const part of parts) {
+      if (!current) return null;
+      if (current[part]) {
+        current = current[part];
+      } else if (current.directory && current.directory[part]) {
+        current = current.directory[part];
+      } else {
+        return null;
+      }
+    }
+    if (current && current.file && 'contents' in current.file) {
+      return typeof current.file.contents === 'string'
+        ? current.file.contents
+        : new TextDecoder().decode(current.file.contents);
+    }
+    return null;
+  };
+
+  for (const path of pathsToCheck) {
+    const content = getFileContent(path);
+    if (content) {
+      fileContent = content;
+      break;
+    }
+  }
+
+  if (!fileContent) return [];
+
+  const props: PropDef[] = [];
+  let propTypeName: string | null = null;
+  let propTypeDefinition: any = null;
+
+  const extractFromTypeLiteral = (typeLiteral: any) => {
+      // typeLiteral might be TSTypeLiteral or TSInterfaceBody
+      const members = typeLiteral.members || typeLiteral.body;
+      if (!members) return;
+
+      members.forEach((member: any) => {
+          if (member.type === 'TSPropertySignature' && member.key.type === 'Identifier') {
+              const name = member.key.name;
+              // Ignore standard react props
+              if (['className', 'children', 'style', 'key', 'ref'].includes(name)) return;
+
+              const typeAnn = member.typeAnnotation?.typeAnnotation;
+              if (!typeAnn) return;
+
+              if (typeAnn.type === 'TSStringKeyword') {
+                  props.push({ name, type: 'string' });
+              } else if (typeAnn.type === 'TSBooleanKeyword') {
+                  props.push({ name, type: 'boolean' });
+              } else if (typeAnn.type === 'TSNumberKeyword') {
+                  props.push({ name, type: 'number' });
+              } else if (typeAnn.type === 'TSUnionType') {
+                  // Check for string literals
+                  const options = typeAnn.types
+                      .filter((t: any) => t.type === 'TSLiteralType' && t.literal.type === 'StringLiteral')
+                      .map((t: any) => t.literal.value);
+
+                  if (options.length > 0) {
+                      props.push({ name, type: 'enum', options });
+                  }
+              }
+          }
+      });
+  };
+
+  const analysisPlugin = ({ types: t }: any) => ({
+      visitor: {
+          // Find Component
+          VariableDeclarator(path: any) {
+              if (t.isIdentifier(path.node.id) && path.node.id.name === tagName) {
+                 const init = path.node.init;
+                 if (t.isArrowFunctionExpression(init) || t.isFunctionExpression(init)) {
+                     const params = init.params;
+                     if (params.length > 0 && params[0].typeAnnotation) {
+                         const typeRef = params[0].typeAnnotation.typeAnnotation;
+                         if (t.isTSTypeReference(typeRef) && t.isIdentifier(typeRef.typeName)) {
+                             propTypeName = typeRef.typeName.name;
+                         } else if (t.isTSTypeLiteral(typeRef)) {
+                             propTypeDefinition = typeRef;
+                         }
+                     }
+                 }
+              }
+          },
+          FunctionDeclaration(path: any) {
+              if (t.isIdentifier(path.node.id) && path.node.id.name === tagName) {
+                  const params = path.node.params;
+                  if (params.length > 0 && params[0].typeAnnotation) {
+                         const typeRef = params[0].typeAnnotation.typeAnnotation;
+                         if (t.isTSTypeReference(typeRef) && t.isIdentifier(typeRef.typeName)) {
+                             propTypeName = typeRef.typeName.name;
+                         } else if (t.isTSTypeLiteral(typeRef)) {
+                             propTypeDefinition = typeRef;
+                         }
+                  }
+              }
+          },
+          // Find Type/Interface
+          TSInterfaceDeclaration(path: any) {
+              if (propTypeName && path.node.id.name === propTypeName) {
+                  propTypeDefinition = path.node.body;
+              }
+              if (!propTypeName && (path.node.id.name === 'Props' || path.node.id.name === `${tagName}Props`)) {
+                  propTypeDefinition = path.node.body;
+              }
+          },
+          TSTypeAliasDeclaration(path: any) {
+              if (propTypeName && path.node.id.name === propTypeName) {
+                  propTypeDefinition = path.node.typeAnnotation;
+              }
+              if (!propTypeName && (path.node.id.name === 'Props' || path.node.id.name === `${tagName}Props`)) {
+                  propTypeDefinition = path.node.typeAnnotation;
+              }
+          }
+      }
+  });
+
+  try {
+      Babel.transform(fileContent, {
+          filename: 'file.tsx',
+          parserOpts: { plugins: ['typescript', 'jsx'], isTSX: true } as any,
+          plugins: [analysisPlugin],
+          presets: [],
+      });
+
+      if (propTypeDefinition) {
+          extractFromTypeLiteral(propTypeDefinition);
+      }
+
+  } catch (e) {
+      console.error('Prop extraction failed:', e);
+  }
+
+  return props;
 };
 
 export const updateJSXProp = (
