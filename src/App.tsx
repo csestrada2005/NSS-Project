@@ -18,7 +18,7 @@ import { Download, Upload, Loader2, LayoutTemplate, Undo, Redo, RefreshCw } from
 import { TEMPLATES } from './templates';
 
 function App() {
-  const { container, uploadZip, isLoading: isContainerLoading, installDependency } = useWebContainer();
+  const { container, uploadZip, isLoading: isContainerLoading, installDependency, mountFileTree } = useWebContainer();
   const [url, setUrl] = useState('');
   const history = useHistory<FileSystemTree>(files);
   const fileTree = history.state;
@@ -106,11 +106,11 @@ function App() {
     const newTree = updateFileContent(fileTree, selectedFilePath, selectedFileContent);
     history.set(newTree);
     if (container) {
-      await webContainerService.mount(newTree);
+      await mountFileTree(newTree);
     }
   };
 
-  const handleElementSelect = (element: { tagName: string; className?: string; innerText?: string; hasChildren?: boolean }) => {
+  const handleElementSelect = (element: { tagName: string; className?: string; innerText?: string; hasChildren?: boolean; dataOid?: string }) => {
     setSelectedElement(element);
   };
 
@@ -128,7 +128,7 @@ function App() {
 
     history.set(newTree);
     if (container) {
-      await webContainerService.mount(newTree);
+      await mountFileTree(newTree);
     }
   };
 
@@ -141,12 +141,12 @@ function App() {
         return;
     }
 
-    const newCode = updateCode(code, selectedElement, { className: newClassName });
+    const newCode = updateCode(code, selectedElement, { className: newClassName }, { classNameMode: 'replace' });
     const newTree = updateFileContent(fileTree, activeFilePath, newCode);
 
     history.set(newTree);
     if (container) {
-      await webContainerService.mount(newTree);
+      await mountFileTree(newTree);
     }
 
     // Update local selection state so the inspector reflects the change immediately
@@ -176,7 +176,7 @@ function App() {
   const handleCodeUpdate = async (newTree: FileSystemTree) => {
     history.set(newTree);
     if (container) {
-      await webContainerService.mount(newTree);
+      await mountFileTree(newTree);
     }
   };
 
@@ -208,7 +208,7 @@ function App() {
 
   useEffect(() => {
     if (container && fileTree && Object.keys(fileTree).length > 0) {
-        webContainerService.mount(fileTree).catch(console.error);
+        mountFileTree(fileTree).catch(console.error);
     }
   }, [fileTree, container]);
 
@@ -244,12 +244,18 @@ function App() {
       const template = TEMPLATES[templateKey];
       if (!template) return;
 
-      history.set(template);
       setShowTemplateSelector(false);
 
       if (container) {
-          await webContainerService.mount(template);
+          const treeWithIds = await mountFileTree(template);
+          if (treeWithIds) {
+              history.set(treeWithIds);
+          } else {
+              history.set(template);
+          }
           triggerBuild();
+      } else {
+          history.set(template);
       }
   };
 
@@ -282,9 +288,6 @@ function App() {
         }
 
         // Start Dev Server
-        // We probably should kill existing server if running, but for now assuming one instance.
-        // WebContainer might handle port conflict or multiple spawns automatically, but usually we need to be careful.
-        // The previous code didn't kill it. I'll stick to existing pattern for now.
         const startProcess = await container.spawn('npm', ['run', 'dev']);
         startProcess.output.pipeTo(new WritableStream({
             write(data) {

@@ -1,12 +1,13 @@
 import { useEffect, useState, useRef, type RefObject } from 'react';
 import Moveable from 'react-moveable';
-import { Edit2 } from 'lucide-react';
+import { Edit2, ArrowUp } from 'lucide-react';
 
 interface ElementInfo {
   tagName: string;
   className?: string;
   innerText?: string;
   hasChildren?: boolean;
+  dataOid?: string;
 }
 
 interface PreviewOverlayProps {
@@ -23,6 +24,19 @@ interface Rect {
   width: number;
   height: number;
 }
+
+// Helper to extract translation values from Tailwind classes
+const getTranslateFromClass = (className?: string): { x: number, y: number } => {
+    if (!className) return { x: 0, y: 0 };
+
+    const xMatch = className.match(/translate-x-\[(-?\d+)px\]/);
+    const yMatch = className.match(/translate-y-\[(-?\d+)px\]/);
+
+    let x = xMatch ? parseInt(xMatch[1], 10) : 0;
+    let y = yMatch ? parseInt(yMatch[1], 10) : 0;
+
+    return { x, y };
+};
 
 export function PreviewOverlay({ iframeRef, onElementSelect, editMode, onUpdateStyle, onUpdateText }: PreviewOverlayProps) {
   const [selectedRect, setSelectedRect] = useState<Rect | null>(null);
@@ -59,7 +73,8 @@ export function PreviewOverlay({ iframeRef, onElementSelect, editMode, onUpdateS
             tagName: event.data.tagName,
             className: event.data.className,
             innerText: event.data.innerText,
-            hasChildren: event.data.hasChildren
+            hasChildren: event.data.hasChildren,
+            dataOid: event.data.dataOid
         };
         setSelectedElementInfo(info);
         onElementSelect(info);
@@ -71,7 +86,8 @@ export function PreviewOverlay({ iframeRef, onElementSelect, editMode, onUpdateS
         setHoveredRect(event.data.rect);
         setHoveredElement({
             tagName: event.data.tagName,
-            className: event.data.className
+            className: event.data.className,
+            dataOid: event.data.dataOid
         });
       }
     };
@@ -80,17 +96,36 @@ export function PreviewOverlay({ iframeRef, onElementSelect, editMode, onUpdateS
     return () => window.removeEventListener('message', handleMessage);
   }, [onElementSelect]);
 
+  // Handle Parent Selection via Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape' && selectedRect && iframeRef.current && !isEditingText) {
+            iframeRef.current.contentWindow?.postMessage({
+                type: 'select-parent'
+            }, '*');
+        }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedRect, iframeRef, isEditingText]);
+
   const handleDragEnd = (e: any) => {
     const { lastEvent } = e;
     if (lastEvent) {
         const { translate } = lastEvent;
-        const [x, y] = translate;
-        const tx = Math.round(x);
-        const ty = Math.round(y);
+        const [dx, dy] = translate;
+        const tdx = Math.round(dx);
+        const tdy = Math.round(dy);
 
-        if (tx !== 0 || ty !== 0) {
+        if (tdx !== 0 || tdy !== 0) {
+             // Get existing translate from class to add delta
+             const { x: currentX, y: currentY } = getTranslateFromClass(selectedElementInfo?.className);
+
+             const newX = currentX + tdx;
+             const newY = currentY + tdy;
+
              onUpdateStyle({
-                 transform: `translate-x-[${tx}px] translate-y-[${ty}px]`
+                 transform: `translate-x-[${newX}px] translate-y-[${newY}px]`
              });
         }
     }
@@ -233,6 +268,19 @@ export function PreviewOverlay({ iframeRef, onElementSelect, editMode, onUpdateS
                                  <Edit2 size={12} />
                              </button>
                          )}
+
+                         {/* Parent Selection UI Hint */}
+                         <button
+                             onClick={(e) => {
+                                 e.stopPropagation();
+                                 iframeRef.current?.contentWindow?.postMessage({ type: 'select-parent' }, '*');
+                             }}
+                             className="absolute -bottom-6 left-0 flex items-center gap-1 bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded shadow hover:bg-red-700 transition-colors pointer-events-auto z-[60] opacity-0 group-hover:opacity-100"
+                             title="Select Parent (Esc)"
+                         >
+                             <ArrowUp size={10} />
+                             Parent (Esc)
+                         </button>
                     </div>
                     <Moveable
                         target={proxyRef.current}

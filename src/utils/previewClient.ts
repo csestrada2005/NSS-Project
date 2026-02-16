@@ -2,6 +2,7 @@ export const PREVIEW_CLIENT_SCRIPT = `
 (function() {
   console.log('Preview Client Active');
   let currentMode = 'interaction';
+  let selectedElement = null;
 
   window.addEventListener('message', (event) => {
     if (event.data.type === 'set-mode') {
@@ -25,6 +26,30 @@ export const PREVIEW_CLIENT_SCRIPT = `
              }
         }
       }
+    } else if (event.data.type === 'select-parent') {
+      if (selectedElement && selectedElement.parentElement) {
+        const parent = selectedElement.parentElement;
+        // Don't select body or html if possible, but let's allow traversing up
+        if (parent.tagName === 'HTML') return;
+
+        selectedElement = parent;
+        const rect = parent.getBoundingClientRect();
+
+        window.parent.postMessage({
+          type: 'element-clicked',
+          tagName: parent.tagName.toLowerCase(),
+          className: parent.className,
+          innerText: parent.innerText,
+          hasChildren: parent.children.length > 0,
+          dataOid: parent.getAttribute('data-oid'),
+          rect: {
+            top: rect.top,
+            left: rect.left,
+            width: rect.width,
+            height: rect.height
+          }
+        }, '*');
+      }
     } else if (event.data.type === 'get-element-at') {
       const { x, y } = event.data;
       const element = document.elementFromPoint(x, y);
@@ -36,6 +61,7 @@ export const PREVIEW_CLIENT_SCRIPT = `
           className: element.className,
           innerText: element.innerText,
           hasChildren: element.children.length > 0,
+          dataOid: element.getAttribute('data-oid'),
           rect: {
             top: rect.top,
             left: rect.left,
@@ -48,6 +74,7 @@ export const PREVIEW_CLIENT_SCRIPT = `
       const { x, y } = event.data;
       const element = document.elementFromPoint(x, y);
       if (element) {
+        selectedElement = element;
         const rect = element.getBoundingClientRect();
         window.parent.postMessage({
           type: 'element-clicked',
@@ -55,6 +82,7 @@ export const PREVIEW_CLIENT_SCRIPT = `
           className: element.className,
           innerText: element.innerText,
           hasChildren: element.children.length > 0,
+          dataOid: element.getAttribute('data-oid'),
           rect: {
             top: rect.top,
             left: rect.left,
@@ -78,6 +106,7 @@ export const PREVIEW_CLIENT_SCRIPT = `
         className: element.className,
         innerText: element.innerText,
         hasChildren: element.children.length > 0,
+        dataOid: element.getAttribute('data-oid'),
         rect: {
           top: rect.top,
           left: rect.left,
@@ -94,6 +123,7 @@ export const PREVIEW_CLIENT_SCRIPT = `
       event.stopPropagation();
 
       const element = event.target;
+      selectedElement = element;
       const rect = element.getBoundingClientRect();
 
       window.parent.postMessage({
@@ -102,6 +132,7 @@ export const PREVIEW_CLIENT_SCRIPT = `
         className: element.className,
         innerText: element.innerText,
         hasChildren: element.children.length > 0,
+        dataOid: element.getAttribute('data-oid'),
         rect: {
           top: rect.top,
           left: rect.left,

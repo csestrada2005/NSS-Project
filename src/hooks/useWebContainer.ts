@@ -3,6 +3,7 @@ import { WebContainer, type FileSystemTree } from '@webcontainer/api';
 import { webContainerService } from '../services/WebContainerService';
 import JSZip from 'jszip';
 import { PREVIEW_CLIENT_SCRIPT } from '../utils/previewClient';
+import { injectDataIds } from '../utils/ast';
 
 export function useWebContainer() {
   const [container, setContainer] = useState<WebContainer | null>(null);
@@ -29,6 +30,33 @@ export function useWebContainer() {
     boot();
   }, []);
 
+  const mountFileTree = async (tree: FileSystemTree) => {
+    if (!container) return;
+
+    // Helper to traverse and inject IDs
+    const injectIds = (node: FileSystemTree) => {
+      for (const key in node) {
+        const entry = node[key];
+        if ('file' in entry) {
+          const contents = entry.file.contents;
+          if (typeof contents === 'string' && (key.endsWith('.tsx') || key.endsWith('.jsx'))) {
+            entry.file.contents = injectDataIds(contents);
+          }
+        } else if ('directory' in entry) {
+          injectIds(entry.directory);
+        }
+      }
+    };
+
+    // Deep clone to avoid mutating the original tree reference unexpectedly
+    // Use structuredClone to safely handle binary data (Uint8Array)
+    const treeClone = structuredClone(tree);
+    injectIds(treeClone);
+
+    await container.mount(treeClone);
+    return treeClone;
+  };
+
   const uploadZip = async (file: File): Promise<FileSystemTree | undefined> => {
     if (!container) return;
 
@@ -50,8 +78,6 @@ export function useWebContainer() {
                 current = node.directory;
             } else {
                 // If it's a file, we can't create a directory here.
-                // This might happen if zip has 'folder' (file) and 'folder/file'.
-                // Assuming zip is well-formed for now.
                 throw new Error(`Path collision: ${part} is already a file`);
             }
         }
@@ -79,6 +105,11 @@ export function useWebContainer() {
              } else {
                  fileContent += '\n<script type="module" src="/preview-client.js"></script>';
              }
+        }
+
+        // Injection: Add IDs to TSX/JSX
+        if (fileName.endsWith('.tsx') || fileName.endsWith('.jsx')) {
+            fileContent = injectDataIds(fileContent);
         }
 
         dir[fileName] = {
@@ -122,5 +153,5 @@ export function useWebContainer() {
     }
   };
 
-  return { container, isLoading, error, uploadZip, installDependency };
+  return { container, isLoading, error, uploadZip, installDependency, mountFileTree };
 }
