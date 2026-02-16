@@ -45,7 +45,7 @@ export function InspectorPanel({ selectedElement, onUpdateStyle }: InspectorPane
     <div className="absolute top-20 right-4 w-64 bg-white rounded-lg shadow-xl border border-gray-200 p-4 flex flex-col gap-4 z-50 animate-in fade-in zoom-in-95 duration-200">
       <div className="flex justify-between items-center border-b pb-2">
         <h3 className="font-semibold text-sm text-gray-700">Inspector</h3>
-        <span className="text-xs font-mono bg-blue-100 text-blue-700 px-2 py-1 rounded uppercase">
+        <span className="text-xs font-mono bg-red-100 text-red-700 px-2 py-1 rounded uppercase">
             {selectedElement.tagName}
         </span>
       </div>
@@ -94,7 +94,7 @@ export function InspectorPanel({ selectedElement, onUpdateStyle }: InspectorPane
         <textarea
             value={className}
             onChange={(e) => updateClass(e.target.value)}
-            className="w-full h-24 text-xs p-2 border border-gray-300 rounded font-mono bg-white resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-gray-800"
+            className="w-full h-24 text-xs p-2 border border-gray-300 rounded font-mono bg-white resize-none focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none text-gray-800"
             placeholder="Tailwind classes..."
         />
       </div>

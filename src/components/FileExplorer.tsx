@@ -46,7 +46,7 @@ const FileSystemNode: React.FC<FileNodeProps> = ({ name, node, path, depth, onSe
         {!isDirectory && <span className="w-3.5" />} {/* Spacer for alignment */}
 
         {isDirectory ? (
-          <Folder size={14} className="text-blue-400" />
+          <Folder size={14} className="text-red-400" />
         ) : (
           <File size={14} className="text-gray-400" />
         )}

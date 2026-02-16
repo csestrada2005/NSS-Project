@@ -210,12 +210,12 @@ function App() {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-blue-600">Landify</h1>
+          <h1 className="text-2xl font-bold text-red-600">Landify</h1>
           <nav>
             <ul className="flex space-x-6 text-gray-600">
-              <li className="hover:text-blue-600 cursor-pointer">Features</li>
-              <li className="hover:text-blue-600 cursor-pointer">Pricing</li>
-              <li className="hover:text-blue-600 cursor-pointer">About</li>
+              <li className="hover:text-red-600 cursor-pointer">Features</li>
+              <li className="hover:text-red-600 cursor-pointer">Pricing</li>
+              <li className="hover:text-red-600 cursor-pointer">About</li>
             </ul>
           </nav>
         </div>
@@ -228,19 +228,19 @@ function App() {
             <div className="text-center">
               <h2 className="text-4xl tracking-tight font-extrabold text-gray-900 sm:text-5xl md:text-6xl">
                 <span className="block">Build your next idea</span>
-                <span className="block text-blue-600">faster than ever</span>
+                <span className="block text-red-600">faster than ever</span>
               </h2>
               <p className="mt-4 max-w-md mx-auto text-base text-gray-500 sm:text-lg md:mt-5 md:text-xl md:max-w-3xl">
                 The ultimate starter kit for your next React project. Includes Tailwind CSS, Lucide icons, and a beautiful landing page layout.
               </p>
               <div className="mt-5 max-w-md mx-auto sm:flex sm:justify-center md:mt-8">
                 <div className="rounded-md shadow">
-                  <a href="#" className="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 md:py-4 md:text-lg md:px-10">
+                  <a href="#" className="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-red-600 hover:bg-red-700 md:py-4 md:text-lg md:px-10">
                     Get Started
                   </a>
                 </div>
                 <div className="mt-3 rounded-md shadow sm:mt-0 sm:ml-3">
-                  <a href="#" className="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-blue-600 bg-white hover:bg-gray-50 md:py-4 md:text-lg md:px-10">
+                  <a href="#" className="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-red-600 bg-white hover:bg-gray-50 md:py-4 md:text-lg md:px-10">
                     Learn More
                   </a>
                 </div>
@@ -253,7 +253,7 @@ function App() {
         <div className="py-12 bg-gray-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="lg:text-center">
-              <h2 className="text-base text-blue-600 font-semibold tracking-wide uppercase">Features</h2>
+              <h2 className="text-base text-red-600 font-semibold tracking-wide uppercase">Features</h2>
               <p className="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-gray-900 sm:text-4xl">
                 Everything you need
               </p>
@@ -263,7 +263,7 @@ function App() {
               <dl className="space-y-10 md:space-y-0 md:grid md:grid-cols-3 md:gap-x-8 md:gap-y-10">
                 <div className="relative">
                   <dt>
-                    <div className="absolute flex items-center justify-center h-12 w-12 rounded-md bg-blue-500 text-white">
+                    <div className="absolute flex items-center justify-center h-12 w-12 rounded-md bg-red-500 text-white">
                       <Zap className="h-6 w-6" />
                     </div>
                     <p className="ml-16 text-lg leading-6 font-medium text-gray-900">Lightning Fast</p>
@@ -275,7 +275,7 @@ function App() {
 
                 <div className="relative">
                   <dt>
-                    <div className="absolute flex items-center justify-center h-12 w-12 rounded-md bg-blue-500 text-white">
+                    <div className="absolute flex items-center justify-center h-12 w-12 rounded-md bg-red-500 text-white">
                       <CheckCircle className="h-6 w-6" />
                     </div>
                     <p className="ml-16 text-lg leading-6 font-medium text-gray-900">Production Ready</p>
@@ -287,7 +287,7 @@ function App() {
 
                 <div className="relative">
                   <dt>
-                    <div className="absolute flex items-center justify-center h-12 w-12 rounded-md bg-blue-500 text-white">
+                    <div className="absolute flex items-center justify-center h-12 w-12 rounded-md bg-red-500 text-white">
                       <Shield className="h-6 w-6" />
                     </div>
                     <p className="ml-16 text-lg leading-6 font-medium text-gray-900">Secure by Design</p>
@@ -331,7 +331,7 @@ function App() {
       {/* Sidebar */}
       <aside className={\`bg-gray-800 text-white w-64 space-y-6 py-7 px-2 absolute inset-y-0 left-0 transform \${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 transition duration-200 ease-in-out z-20\`}>
         <div className="flex items-center space-x-2 px-4">
-          <BarChart2 className="w-8 h-8 text-blue-500" />
+          <BarChart2 className="w-8 h-8 text-red-500" />
           <span className="text-2xl font-extrabold">DashBoard</span>
         </div>
 
@@ -367,15 +367,15 @@ function App() {
               <span className="absolute inset-y-0 left-0 pl-3 flex items-center">
                 <Search className="h-5 w-5 text-gray-500" />
               </span>
-              <input className="form-input w-32 sm:w-64 rounded-md pl-10 pr-4 py-2 border border-gray-300 focus:border-blue-500" type="text" placeholder="Search" />
+              <input className="form-input w-32 sm:w-64 rounded-md pl-10 pr-4 py-2 border border-gray-300 focus:border-red-500" type="text" placeholder="Search" />
             </div>
           </div>
 
           <div className="flex items-center space-x-4">
-            <button className="text-gray-500 hover:text-blue-500">
+            <button className="text-gray-500 hover:text-red-500">
               <Bell className="w-6 h-6" />
             </button>
-            <button className="flex items-center space-x-2 text-gray-700 hover:text-blue-500">
+            <button className="flex items-center space-x-2 text-gray-700 hover:text-red-500">
               <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center">
                 <User className="w-5 h-5 text-gray-600" />
               </div>
@@ -391,7 +391,7 @@ function App() {
             {[1, 2, 3, 4].map((item) => (
               <div key={item} className="bg-white rounded-lg shadow-sm p-6">
                 <div className="flex items-center">
-                  <div className="p-3 rounded-full bg-blue-100 text-blue-500">
+                  <div className="p-3 rounded-full bg-red-100 text-red-500">
                     <Users className="h-6 w-6" />
                   </div>
                   <div className="ml-4">

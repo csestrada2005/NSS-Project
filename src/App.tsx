@@ -110,8 +110,26 @@ function App() {
     }
   };
 
-  const handleElementSelect = (element: { tagName: string; className?: string }) => {
+  const handleElementSelect = (element: { tagName: string; className?: string; innerText?: string; hasChildren?: boolean }) => {
     setSelectedElement(element);
+  };
+
+  const handleTextUpdate = async (newText: string) => {
+    if (!selectedElement) return;
+
+    const code = getFileContent(fileTree, activeFilePath);
+    if (!code) {
+        console.warn(`Could not find active file: ${activeFilePath}`);
+        return;
+    }
+
+    const newCode = updateCode(code, selectedElement, { textContent: newText });
+    const newTree = updateFileContent(fileTree, activeFilePath, newCode);
+
+    history.set(newTree);
+    if (container) {
+      await webContainerService.mount(newTree);
+    }
   };
 
   const handleClassUpdate = async (newClassName: string) => {
@@ -375,7 +393,7 @@ function App() {
                               <button
                                   onClick={saveAndRun}
                                   disabled={!selectedFilePath}
-                                  className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="px-3 py-1 bg-red-600 hover:bg-red-500 text-white text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                   Save & Run
                               </button>
@@ -405,6 +423,7 @@ function App() {
                         onElementSelect={handleElementSelect}
                         editMode={editMode}
                         onUpdateStyle={handleStyleUpdate}
+                        onUpdateText={handleTextUpdate}
                     />
                     {editMode === 'visual' && selectedElement && (
                         <InspectorPanel selectedElement={selectedElement} onUpdateStyle={handleClassUpdate} />
@@ -428,9 +447,9 @@ function App() {
                                   <div className="grid grid-cols-2 gap-4 w-full">
                                       <button
                                           onClick={() => handleLoadTemplate('landing-page')}
-                                          className="flex flex-col items-center p-6 bg-gray-800 border-2 border-gray-700 hover:border-blue-500 rounded-xl transition-all group text-left"
+                                          className="flex flex-col items-center p-6 bg-gray-800 border-2 border-gray-700 hover:border-red-500 rounded-xl transition-all group text-left"
                                       >
-                                          <div className="p-3 rounded-full bg-blue-900/30 text-blue-400 mb-4 group-hover:scale-110 transition-transform">
+                                          <div className="p-3 rounded-full bg-red-900/30 text-red-400 mb-4 group-hover:scale-110 transition-transform">
                                               <LayoutTemplate className="w-8 h-8" />
                                           </div>
                                           <h3 className="text-lg font-semibold text-gray-200 mb-1">Landing Page</h3>
@@ -439,9 +458,9 @@ function App() {
 
                                       <button
                                           onClick={() => handleLoadTemplate('dashboard')}
-                                          className="flex flex-col items-center p-6 bg-gray-800 border-2 border-gray-700 hover:border-blue-500 rounded-xl transition-all group text-left"
+                                          className="flex flex-col items-center p-6 bg-gray-800 border-2 border-gray-700 hover:border-red-500 rounded-xl transition-all group text-left"
                                       >
-                                          <div className="p-3 rounded-full bg-purple-900/30 text-purple-400 mb-4 group-hover:scale-110 transition-transform">
+                                          <div className="p-3 rounded-full bg-red-900/30 text-red-400 mb-4 group-hover:scale-110 transition-transform">
                                               <LayoutTemplate className="w-8 h-8" />
                                           </div>
                                           <h3 className="text-lg font-semibold text-gray-200 mb-1">Dashboard</h3>
@@ -474,16 +493,16 @@ function App() {
           </div>
         </Panel>
 
-        <Separator className="h-1 bg-gray-800 hover:bg-blue-500 transition-colors cursor-row-resize" />
+        <Separator className="h-1 bg-gray-800 hover:bg-red-500 transition-colors cursor-row-resize" />
 
         {/* Bottom Section (30%) */}
         <Panel defaultSize={30} minSize={10}>
              <div className="flex h-full w-full bg-gray-900">
                 {/* Left: Upload/Export (20%) */}
                 <div className="w-[20%] p-4 border-r border-gray-800 flex flex-col gap-4">
-                    <label className="flex flex-col items-center justify-center h-24 border-2 border-dashed border-gray-700 rounded-lg hover:border-blue-500 hover:bg-gray-800 transition-all cursor-pointer group">
-                        <Upload className="w-6 h-6 text-gray-400 group-hover:text-blue-500 mb-2" />
-                        <span className="text-sm text-gray-400 group-hover:text-blue-400">Upload Zip</span>
+                    <label className="flex flex-col items-center justify-center h-24 border-2 border-dashed border-gray-700 rounded-lg hover:border-red-500 hover:bg-gray-800 transition-all cursor-pointer group">
+                        <Upload className="w-6 h-6 text-gray-400 group-hover:text-red-500 mb-2" />
+                        <span className="text-sm text-gray-400 group-hover:text-red-400">Upload Zip</span>
                         <input type="file" accept=".zip" onChange={handleUploadZip} className="hidden" />
                     </label>
 

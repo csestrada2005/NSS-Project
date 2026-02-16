@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import Anthropic from '@anthropic-ai/sdk';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,6 +25,39 @@ app.use((req, res, next) => {
   res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
   next();
+});
+
+app.post('/api/ai-action', async (req, res) => {
+  try {
+    const { userPrompt, selectedElementContext } = req.body;
+    const anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    });
+
+    const msg = await anthropic.messages.create({
+      model: "claude-3-5-sonnet-latest",
+      max_tokens: 1024,
+      system: "You are an expert React/Tailwind developer. You receive a user command and a selected HTML element. Return ONLY a JSON object with: { 'action': 'update-style' | 'update-text', 'className': '...', 'text': '...' }. Do not return markdown.",
+      messages: [
+        { role: "user", content: `Context: ${selectedElementContext}. Command: ${userPrompt}` }
+      ],
+    });
+
+    const contentBlock = msg.content.find(c => c.type === 'text');
+    if (!contentBlock) {
+      throw new Error('No text content in response');
+    }
+
+    let content = contentBlock.text;
+    // Clean potential markdown
+    content = content.replace(/```json/g, '').replace(/```/g, '').trim();
+
+    const json = JSON.parse(content);
+    res.json(json);
+  } catch (error) {
+    console.error('Error in /api/ai-action:', error);
+    res.status(500).json({ error: 'Failed to process AI action' });
+  }
 });
 
 app.post('/api/chat', async (req, res) => {

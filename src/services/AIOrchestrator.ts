@@ -1,5 +1,6 @@
 import type { FileSystemTree, DirectoryNode, FileNode } from '@webcontainer/api';
 import { flattenFileTree } from '../utils/context';
+import { updateCode } from '../utils/ast';
 
 interface ModifiedFile {
   path: string;
@@ -16,11 +17,50 @@ export class AIOrchestrator {
     currentFileTree: FileSystemTree,
     selectedElement: { tagName: string; className?: string } | null = null
   ): Promise<FileSystemTree | null> {
+    // Fast Lane: If element selected, use backend API
+    if (selectedElement) {
+        const filePath = 'src/App.tsx'; // Hardcoded active file for now
+        const fileContent = this.getFileContent(currentFileTree, filePath);
+
+        if (fileContent) {
+            try {
+                const response = await fetch('/api/ai-action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userPrompt: input,
+                        selectedElementContext: `<${selectedElement.tagName} className='${selectedElement.className || ''}' />`
+                    })
+                });
+
+                const data = await response.json();
+
+                let newContent = fileContent;
+                if (data.action === 'update-style') {
+                    newContent = updateCode(fileContent, selectedElement, { className: data.className });
+                } else if (data.action === 'update-text') {
+                     // Cast to any to bypass potential TS error until ast.ts is updated
+                     newContent = updateCode(fileContent, selectedElement, { textContent: data.text } as any);
+                }
+
+                const newTree = JSON.parse(JSON.stringify(currentFileTree));
+                this.updateFileInTree(newTree, filePath, newContent);
+                return newTree;
+            } catch (e) {
+                console.error('Fast lane error:', e);
+                return null;
+            }
+        }
+    }
+
+    // Heavy Lane (Original Logic)
     const context = flattenFileTree(currentFileTree);
 
     const systemPrompt = "You are an expert Senior React Engineer. You must output a valid JSON object containing a 'modifiedFiles' array. Do not include markdown formatting (```json) or conversational text. JSON only.";
 
     let userMessage = "";
+    // Removed selectedElement context from here as it's handled above, but keeping fallback just in case?
+    // Actually, if selectedElement was passed but fileContent wasn't found (rare), we fall through here.
     if (selectedElement) {
         userMessage += `CONTEXT: The user has selected this HTML element: <${selectedElement.tagName} className='${selectedElement.className || ''}' />. If their request is ambiguous (e.g., 'change color'), apply it to this element.\n\n`;
     }
@@ -51,6 +91,27 @@ export class AIOrchestrator {
       console.error('Error parsing AI response:', error);
       return null;
     }
+  }
+
+  private static getFileContent(tree: FileSystemTree, path: string): string | null {
+    const parts = path.split('/');
+    let current: any = tree;
+    for (const part of parts) {
+      if (!current) return null;
+      if (current[part]) {
+        current = current[part];
+      } else if (current.directory && current.directory[part]) {
+        current = current.directory[part];
+      } else {
+        return null;
+      }
+    }
+    if (current && current.file && 'contents' in current.file) {
+      return typeof current.file.contents === 'string'
+        ? current.file.contents
+        : new TextDecoder().decode(current.file.contents);
+    }
+    return null;
   }
 
   private static cleanJsonOutput(text: string): string {

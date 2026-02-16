@@ -70,27 +70,27 @@ export function ChatInterface({ isLoading, onSendMessage, selectedElement, editM
     <div className="flex flex-col h-full w-full bg-gray-900">
       <div className="p-4 border-b border-gray-800 flex items-center gap-4">
         <h2 className="text-xl font-bold text-white flex items-center gap-2">
-          <Bot className="w-6 h-6 text-blue-500" />
+          <Bot className="w-6 h-6 text-red-500" />
           Ares Project
         </h2>
         <div className="flex items-center bg-gray-800 p-1 rounded-lg border border-gray-700">
             <button
                 onClick={() => setEditMode('interaction')}
-                className={`p-1.5 rounded-md transition-all ${editMode === 'interaction' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
+                className={`p-1.5 rounded-md transition-all ${editMode === 'interaction' ? 'bg-red-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
                 title="Interact Mode"
             >
                 <MousePointer2 size={16} />
             </button>
             <button
                 onClick={() => setEditMode('visual')}
-                className={`p-1.5 rounded-md transition-all ${editMode === 'visual' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
+                className={`p-1.5 rounded-md transition-all ${editMode === 'visual' ? 'bg-red-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
                 title="Visual Mode"
             >
                 <Edit3 size={16} />
             </button>
             <button
                 onClick={() => setEditMode('code')}
-                className={`p-1.5 rounded-md transition-all ${editMode === 'code' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
+                className={`p-1.5 rounded-md transition-all ${editMode === 'code' ? 'bg-red-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
                 title="Code Mode"
             >
                 <CodeIcon size={16} />
@@ -107,7 +107,7 @@ export function ChatInterface({ isLoading, onSendMessage, selectedElement, editM
             <div
               className={`max-w-[85%] rounded-lg p-3 text-sm ${
                 msg.role === 'user'
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-red-600 text-white'
                   : 'bg-gray-800 text-gray-200'
               }`}
             >
@@ -128,9 +128,9 @@ export function ChatInterface({ isLoading, onSendMessage, selectedElement, editM
 
       <div className="p-4 border-t border-gray-800 bg-gray-900">
         {selectedElement && (
-          <div className="mb-2 px-3 py-1.5 bg-blue-900/30 border border-blue-500/30 rounded text-xs text-blue-200 flex items-center justify-between">
+          <div className="mb-2 px-3 py-1.5 bg-red-900/30 border border-red-500/30 rounded text-xs text-red-200 flex items-center justify-between">
             <span>
-              Selected: <span className="font-mono text-blue-100">&lt;{selectedElement.tagName.toLowerCase()}{selectedElement.className ? `.${selectedElement.className.split(' ')[0]}` : ''}&gt;</span>
+              Selected: <span className="font-mono text-red-100">&lt;{selectedElement.tagName.toLowerCase()}{selectedElement.className ? `.${selectedElement.className.split(' ')[0]}` : ''}&gt;</span>
             </span>
           </div>
         )}
@@ -141,13 +141,13 @@ export function ChatInterface({ isLoading, onSendMessage, selectedElement, editM
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type a message..."
-            className="flex-1 bg-gray-800 text-white border border-gray-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 bg-gray-800 text-white border border-gray-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 placeholder-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={isLoading}
           />
           <button
             onClick={handleSend}
             disabled={!input.trim() || isLoading}
-            className="bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="bg-red-600 text-white p-2 rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           </button>

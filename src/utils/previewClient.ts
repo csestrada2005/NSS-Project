@@ -34,6 +34,8 @@ export const PREVIEW_CLIENT_SCRIPT = `
           type: 'element-response',
           tagName: element.tagName.toLowerCase(),
           className: element.className,
+          innerText: element.innerText,
+          hasChildren: element.children.length > 0,
           rect: {
             top: rect.top,
             left: rect.left,
@@ -42,15 +44,17 @@ export const PREVIEW_CLIENT_SCRIPT = `
           }
         }, '*');
       }
-    } else if (event.data.type === 'select-element-at') {
+    } else if (event.data.type === 'find-element-at-point') {
       const { x, y } = event.data;
       const element = document.elementFromPoint(x, y);
       if (element) {
         const rect = element.getBoundingClientRect();
         window.parent.postMessage({
-          type: 'element-selected-response',
+          type: 'element-clicked',
           tagName: element.tagName.toLowerCase(),
           className: element.className,
+          innerText: element.innerText,
+          hasChildren: element.children.length > 0,
           rect: {
             top: rect.top,
             left: rect.left,
@@ -72,6 +76,8 @@ export const PREVIEW_CLIENT_SCRIPT = `
         type: 'element-hovered',
         tagName: element.tagName.toLowerCase(),
         className: element.className,
+        innerText: element.innerText,
+        hasChildren: element.children.length > 0,
         rect: {
           top: rect.top,
           left: rect.left,
@@ -94,6 +100,8 @@ export const PREVIEW_CLIENT_SCRIPT = `
         type: 'element-clicked',
         tagName: element.tagName.toLowerCase(),
         className: element.className,
+        innerText: element.innerText,
+        hasChildren: element.children.length > 0,
         rect: {
           top: rect.top,
           left: rect.left,
