@@ -56,7 +56,13 @@ export class AIOrchestrator {
     // Heavy Lane (Original Logic)
     const context = flattenFileTree(currentFileTree);
 
-    const systemPrompt = "You are an expert Senior React Engineer. You must output a valid JSON object containing a 'modifiedFiles' array. Do not include markdown formatting (```json) or conversational text. JSON only.";
+    const systemPrompt = "You are an expert Senior React Engineer. You must output a valid JSON object containing a 'modifiedFiles' array. Do not include markdown formatting (```json) or conversational text. JSON only.\n\n" +
+    "When the user asks for backend features (e.g., 'save this to the database' or 'create a user profile table'):\n" +
+    "1. Generate a valid PostgreSQL CREATE TABLE statement.\n" +
+    "2. Wrap this SQL in a generic file block named supabase/migrations/<timestamp>_create_table.sql.\n" +
+    "3. Do NOT try to execute the SQL directly.\n" +
+    "4. If the user asks to 'Mock' the data, generate a src/data.json file instead of SQL.\n" +
+    "5. Always prefer using the src/services/data abstraction layer when fetching data in React components.";
 
     let userMessage = "";
     // Removed selectedElement context from here as it's handled above, but keeping fallback just in case?

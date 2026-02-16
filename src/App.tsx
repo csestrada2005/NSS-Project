@@ -16,6 +16,7 @@ import { updateCode, updateJSXProp, type TargetElement } from './utils/ast';
 import JSZip from 'jszip';
 import { Download, Upload, Loader2, LayoutTemplate, Undo, Redo, RefreshCw } from 'lucide-react'; // Added RefreshCw
 import { TEMPLATES } from './templates';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
 
 function App() {
   const { container, uploadZip, isLoading: isContainerLoading, installDependency, mountFileTree } = useWebContainer();
@@ -367,9 +368,10 @@ function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-gray-900 text-white overflow-hidden">
-      <Group orientation="vertical">
-        {/* Top Section (70%) */}
+    <ProtectedRoute>
+      <div className="flex flex-col h-screen w-screen bg-gray-900 text-white overflow-hidden">
+        <Group orientation="vertical">
+          {/* Top Section (70%) */}
         <Panel defaultSize={70} minSize={30}>
           <div className="relative w-full h-full bg-white">
              {/* Undo/Redo Controls - Moved to Top Left */}
@@ -523,60 +525,61 @@ function App() {
 
         <Separator className="h-1 bg-gray-800 hover:bg-red-500 transition-colors cursor-row-resize" />
 
-        {/* Bottom Section (30%) */}
-        <Panel defaultSize={30} minSize={10}>
-             <div className="flex h-full w-full bg-gray-900">
-                {/* Left: Upload/Export (20%) */}
-                <div className="w-[20%] p-4 border-r border-gray-800 flex flex-col gap-4">
-                    <label className="flex flex-col items-center justify-center h-24 border-2 border-dashed border-gray-700 rounded-lg hover:border-red-500 hover:bg-gray-800 transition-all cursor-pointer group">
-                        <Upload className="w-6 h-6 text-gray-400 group-hover:text-red-500 mb-2" />
-                        <span className="text-sm text-gray-400 group-hover:text-red-400">Upload Zip</span>
-                        <input type="file" accept=".zip" onChange={handleUploadZip} className="hidden" />
-                    </label>
+          {/* Bottom Section (30%) */}
+          <Panel defaultSize={30} minSize={10}>
+              <div className="flex h-full w-full bg-gray-900">
+                  {/* Left: Upload/Export (20%) */}
+                  <div className="w-[20%] p-4 border-r border-gray-800 flex flex-col gap-4">
+                      <label className="flex flex-col items-center justify-center h-24 border-2 border-dashed border-gray-700 rounded-lg hover:border-red-500 hover:bg-gray-800 transition-all cursor-pointer group">
+                          <Upload className="w-6 h-6 text-gray-400 group-hover:text-red-500 mb-2" />
+                          <span className="text-sm text-gray-400 group-hover:text-red-400">Upload Zip</span>
+                          <input type="file" accept=".zip" onChange={handleUploadZip} className="hidden" />
+                      </label>
 
-                    <button
-                        onClick={downloadProject}
-                        className="flex items-center justify-center gap-2 w-full py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-sm"
-                    >
-                        <Download className="w-4 h-4" />
-                        Export Zip
-                    </button>
-                </div>
+                      <button
+                          onClick={downloadProject}
+                          className="flex items-center justify-center gap-2 w-full py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-sm"
+                      >
+                          <Download className="w-4 h-4" />
+                          Export Zip
+                      </button>
+                  </div>
 
-                {/* Right: Chat (80%) */}
-                <div className="flex-1 h-full relative">
-                    <div className="absolute top-2 right-2 flex bg-gray-900 rounded-lg p-1 z-10 border border-gray-700">
-                        <button
-                            onClick={() => setActiveBottomTab('chat')}
-                            className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${activeBottomTab === 'chat' ? 'bg-gray-800 text-white' : 'text-gray-400 hover:text-white'}`}
-                        >
-                            Chat
-                        </button>
-                        <button
-                            onClick={() => setActiveBottomTab('terminal')}
-                            className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${activeBottomTab === 'terminal' ? 'bg-gray-800 text-white' : 'text-gray-400 hover:text-white'}`}
-                        >
-                            Terminal
-                        </button>
-                    </div>
+                  {/* Right: Chat (80%) */}
+                  <div className="flex-1 h-full relative">
+                      <div className="absolute top-2 right-2 flex bg-gray-900 rounded-lg p-1 z-10 border border-gray-700">
+                          <button
+                              onClick={() => setActiveBottomTab('chat')}
+                              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${activeBottomTab === 'chat' ? 'bg-gray-800 text-white' : 'text-gray-400 hover:text-white'}`}
+                          >
+                              Chat
+                          </button>
+                          <button
+                              onClick={() => setActiveBottomTab('terminal')}
+                              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${activeBottomTab === 'terminal' ? 'bg-gray-800 text-white' : 'text-gray-400 hover:text-white'}`}
+                          >
+                              Terminal
+                          </button>
+                      </div>
 
-                    <div className={`w-full h-full ${activeBottomTab === 'chat' ? 'block' : 'hidden'}`}>
-                        <ChatInterface
-                            isLoading={isGenerating}
-                            onSendMessage={handleSendMessage}
-                            selectedElement={selectedElement}
-                            editMode={editMode}
-                            setEditMode={setEditMode}
-                        />
-                    </div>
-                    <div className={`w-full h-full ${activeBottomTab === 'terminal' ? 'block' : 'hidden'}`}>
-                        <Terminal ref={terminalRef} />
-                    </div>
-                </div>
-             </div>
-        </Panel>
-      </Group>
-    </div>
+                      <div className={`w-full h-full ${activeBottomTab === 'chat' ? 'block' : 'hidden'}`}>
+                          <ChatInterface
+                              isLoading={isGenerating}
+                              onSendMessage={handleSendMessage}
+                              selectedElement={selectedElement}
+                              editMode={editMode}
+                              setEditMode={setEditMode}
+                          />
+                      </div>
+                      <div className={`w-full h-full ${activeBottomTab === 'terminal' ? 'block' : 'hidden'}`}>
+                          <Terminal ref={terminalRef} />
+                      </div>
+                  </div>
+              </div>
+          </Panel>
+        </Group>
+      </div>
+    </ProtectedRoute>
   );
 }
 
