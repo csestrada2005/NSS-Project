@@ -3,6 +3,7 @@ import { flattenFileTree } from '../utils/context';
 import { updateCode } from '../utils/ast';
 import { contextService } from './ContextService';
 import { SupabaseService } from './SupabaseService';
+import { webContainerService } from './WebContainerService';
 
 interface ModifiedFile {
   path: string;
@@ -23,6 +24,8 @@ export class AIOrchestrator {
       "Keep steps atomic, clear, and focused on code implementation.";
 
       const planContent = await this.callLLM(userGoal, systemPrompt);
+
+      await webContainerService.writeFile('PLAN.md', planContent);
 
       const newTree = JSON.parse(JSON.stringify(currentFileTree));
       this.updateFileInTree(newTree, 'PLAN.md', planContent);
@@ -83,7 +86,9 @@ export class AIOrchestrator {
 
           // Update PLAN.md
           lines[nextStepIndex] = lines[nextStepIndex].replace('- [ ]', '- [x]');
-          this.updateFileInTree(newTree, 'PLAN.md', lines.join('\n'));
+          const newPlanContent = lines.join('\n');
+          await webContainerService.writeFile('PLAN.md', newPlanContent);
+          this.updateFileInTree(newTree, 'PLAN.md', newPlanContent);
 
           return newTree;
 
@@ -102,6 +107,11 @@ export class AIOrchestrator {
     if (input.toLowerCase().startsWith('plan:')) {
         const goal = input.substring(5).trim();
         return this.generatePlan(goal, currentFileTree);
+    }
+
+    // Check for "Build a..."
+    if (input.toLowerCase().startsWith('build a')) {
+        return this.generatePlan(input, currentFileTree);
     }
 
     // Check for "Execute Next Step"
