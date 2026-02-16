@@ -86,6 +86,26 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
+app.get('/api/proxy', async (req, res) => {
+  const { url } = req.query;
+
+  if (!url) {
+    return res.status(400).json({ error: 'URL is required' });
+  }
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+    }
+    const text = await response.text();
+    res.send(text);
+  } catch (error) {
+    console.error('Error fetching URL:', error);
+    res.status(500).json({ error: 'Failed to fetch URL' });
+  }
+});
+
 // 3. Serve Static Files from 'dist'
 app.use(express.static(path.join(__dirname, 'dist')));
 

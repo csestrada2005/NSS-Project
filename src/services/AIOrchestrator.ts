@@ -1,6 +1,8 @@
 import type { FileSystemTree, DirectoryNode, FileNode } from '@webcontainer/api';
 import { flattenFileTree } from '../utils/context';
 import { updateCode } from '../utils/ast';
+import { contextService } from './ContextService';
+import { SupabaseService } from './SupabaseService';
 
 interface ModifiedFile {
   path: string;
@@ -63,9 +65,32 @@ export class AIOrchestrator {
     "3. Do NOT try to execute the SQL directly.\n" +
     "4. If the user asks to 'Mock' the data, generate a src/data.json file instead of SQL.\n" +
     "5. Always prefer using the src/services/data abstraction layer when fetching data in React components.\n" +
-    "6. Use the `cn()` utility from `src/lib/utils` for merging Tailwind classes dynamically.";
+    "6. Use the `cn()` utility from `src/lib/utils` for merging Tailwind classes dynamically.\n" +
+    "7. If the user asks for backend logic (e.g., 'handle Stripe payments' or 'Edge Function'), generate a Deno-compatible TypeScript file at `supabase/functions/<name>/index.ts`."
 
     let userMessage = "";
+
+    // Check for "Read [URL]" commands
+    const readUrlRegex = /Read \[(.*?)\]/g;
+    let match;
+    const urlsToFetch: string[] = [];
+    while ((match = readUrlRegex.exec(input)) !== null) {
+        urlsToFetch.push(match[1]);
+    }
+
+    if (urlsToFetch.length > 0) {
+        userMessage += "EXTERNAL DOCUMENTATION:\n";
+        for (const url of urlsToFetch) {
+            userMessage += `Fetching ${url}...\n`;
+            try {
+                const content = await contextService.fetchDocumentation(url);
+                userMessage += `--- START CONTENT FROM ${url} ---\n${content}\n--- END CONTENT FROM ${url} ---\n\n`;
+            } catch (e) {
+                userMessage += `Failed to fetch ${url}.\n`;
+            }
+        }
+    }
+
     // Removed selectedElement context from here as it's handled above, but keeping fallback just in case?
     // Actually, if selectedElement was passed but fileContent wasn't found (rare), we fall through here.
     if (selectedElement) {
@@ -91,6 +116,16 @@ export class AIOrchestrator {
 
       for (const file of response.modifiedFiles) {
         this.updateFileInTree(newTree, file.path, file.newContent);
+
+        // Check for Edge Function deployment
+        if (file.path.startsWith('supabase/functions/') && file.path.endsWith('index.ts')) {
+            const parts = file.path.split('/');
+            // supabase/functions/<name>/index.ts
+            if (parts.length === 4) {
+                const funcName = parts[2];
+                SupabaseService.getInstance().deployEdgeFunction(funcName, file.newContent);
+            }
+        }
       }
 
       return newTree;

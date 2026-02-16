@@ -6,6 +6,7 @@ class WebContainerService {
   private static instance: WebContainerService;
   private webContainerInstance: WebContainer | null = null;
   private bootPromise: Promise<void> | null = null;
+  private env: Record<string, string> = {};
 
   private constructor() {
     // Private constructor to enforce singleton
@@ -51,9 +52,17 @@ class WebContainerService {
     await this.webContainerInstance.mount(fileTree);
   }
 
+  public setEnv(env: Record<string, string>) {
+    this.env = env;
+  }
+
+  public getEnv() {
+    return this.env;
+  }
+
   public async installDependencies(callback?: (data: string) => void) {
     if (!this.webContainerInstance) throw new Error('WebContainer not booted');
-    const installProcess = await this.webContainerInstance.spawn('npm', ['install']);
+    const installProcess = await this.webContainerInstance.spawn('npm', ['install'], { env: this.env });
 
     installProcess.output.pipeTo(new WritableStream({
       write(data) {
@@ -67,7 +76,7 @@ class WebContainerService {
 
   public async startDevServer(callback?: (data: string) => void) {
     if (!this.webContainerInstance) throw new Error('WebContainer not booted');
-    const devProcess = await this.webContainerInstance.spawn('npm', ['run', 'dev']);
+    const devProcess = await this.webContainerInstance.spawn('npm', ['run', 'dev'], { env: this.env });
 
     devProcess.output.pipeTo(new WritableStream({
       write(data) {

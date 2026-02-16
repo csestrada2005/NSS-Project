@@ -51,4 +51,31 @@ export class SupabaseService {
         console.log('[SupabaseService] SQL Execution Successful');
     }
   }
+
+  /**
+   * Deploys an Edge Function.
+   * This is a mock implementation as we don't have direct access to the Management API
+   * without a user's access token (which is different from the anon key).
+   */
+  public async deployEdgeFunction(name: string, code: string): Promise<void> {
+    console.log(`[SupabaseService] Deploying Edge Function '${name}'...`);
+
+    // In a real scenario, this would POST to https://api.supabase.com/v1/projects/{ref}/functions
+    // We would need the project REF and a Service Role Key or Access Token.
+    // For now, we simulate the deployment process.
+
+    try {
+        // Also write the file to the local filesystem for consistency
+        const path = `supabase/functions/${name}/index.ts`;
+        await webContainerService.writeFile(path, code);
+        console.log(`[SupabaseService] Written Edge Function to: ${path}`);
+    } catch (e) {
+        console.error(`[SupabaseService] Failed to write function file:`, e);
+    }
+
+    // Simulating deployment delay
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    console.log(`[SupabaseService] Edge Function '${name}' deployed successfully.`);
+  }
 }

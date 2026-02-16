@@ -14,9 +14,10 @@ import type { FileSystemTree } from '@webcontainer/api';
 import { webContainerService } from './services/WebContainerService';
 import { updateCode, updateJSXProp, type TargetElement } from './utils/ast';
 import JSZip from 'jszip';
-import { Download, Upload, Loader2, LayoutTemplate, Undo, Redo, RefreshCw } from 'lucide-react'; // Added RefreshCw
+import { Download, Upload, Loader2, LayoutTemplate, Undo, Redo, RefreshCw, Settings } from 'lucide-react'; // Added RefreshCw
 import { TEMPLATES } from './templates';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { SecretsManager } from './components/settings/SecretsManager';
 
 function App() {
   const { container, uploadZip, isLoading: isContainerLoading, installDependency, mountFileTree } = useWebContainer();
@@ -24,6 +25,7 @@ function App() {
   const history = useHistory<FileSystemTree>(files);
   const fileTree = history.state;
   const [showTemplateSelector, setShowTemplateSelector] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
   const [selectedElement, setSelectedElement] = useState<TargetElement | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [editMode, setEditMode] = useState<'interaction' | 'visual' | 'code'>('interaction');
@@ -231,6 +233,23 @@ function App() {
     }
   }, [fileTree, container]);
 
+  useEffect(() => {
+    // Load secrets on mount
+    const stored = localStorage.getItem('secrets');
+    if (stored) {
+      try {
+        const secrets = JSON.parse(stored);
+        const env: Record<string, string> = {};
+        secrets.forEach((s: any) => {
+          if (s.key) env[s.key] = s.value;
+        });
+        webContainerService.setEnv(env);
+      } catch (e) {
+        console.error('Failed to load secrets', e);
+      }
+    }
+  }, []);
+
   const handleSendMessage = async (message: string) => {
     setIsGenerating(true);
     try {
@@ -299,7 +318,8 @@ function App() {
 
         if (shouldInstall) {
             // Install
-            const installProcess = await container.spawn('npm', ['install']);
+            const env = webContainerService.getEnv();
+            const installProcess = await container.spawn('npm', ['install'], { env });
             installProcess.output.pipeTo(new WritableStream({
                 write(data) {
                     console.log('[install]', data);
@@ -310,7 +330,8 @@ function App() {
         }
 
         // Start Dev Server
-        const startProcess = await container.spawn('npm', ['run', 'dev']);
+        const env = webContainerService.getEnv();
+        const startProcess = await container.spawn('npm', ['run', 'dev'], { env });
         startProcess.output.pipeTo(new WritableStream({
             write(data) {
                 console.log('[run dev]', data);
@@ -544,6 +565,14 @@ function App() {
                           <Download className="w-4 h-4" />
                           Export Zip
                       </button>
+
+                      <button
+                          onClick={() => setShowSettings(true)}
+                          className="flex items-center justify-center gap-2 w-full py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-sm"
+                      >
+                          <Settings className="w-4 h-4" />
+                          Settings
+                      </button>
                   </div>
 
                   {/* Right: Chat (80%) */}
@@ -579,6 +608,7 @@ function App() {
               </div>
           </Panel>
         </Group>
+        {showSettings && <SecretsManager onClose={() => setShowSettings(false)} />}
       </div>
     </ProtectedRoute>
   );
