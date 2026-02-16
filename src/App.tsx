@@ -14,10 +14,11 @@ import type { FileSystemTree } from '@webcontainer/api';
 import { webContainerService } from './services/WebContainerService';
 import { updateCode, updateJSXProp, type TargetElement } from './utils/ast';
 import JSZip from 'jszip';
-import { Download, Upload, Loader2, LayoutTemplate, Undo, Redo, RefreshCw, Settings } from 'lucide-react'; // Added RefreshCw
+import { Download, Upload, Loader2, LayoutTemplate, Undo, Redo, RefreshCw, Settings, Activity } from 'lucide-react';
 import { TEMPLATES } from './templates';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
-import { SecretsManager } from './components/settings/SecretsManager';
+import { SettingsModal } from './components/settings/SettingsModal';
+import { StateGraph } from './components/debug/StateGraph';
 
 function App() {
   const { container, uploadZip, isLoading: isContainerLoading, installDependency, mountFileTree } = useWebContainer();
@@ -26,6 +27,7 @@ function App() {
   const fileTree = history.state;
   const [showTemplateSelector, setShowTemplateSelector] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
+  const [showGraph, setShowGraph] = useState(false);
   const [selectedElement, setSelectedElement] = useState<TargetElement | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [editMode, setEditMode] = useState<'interaction' | 'visual' | 'code'>('interaction');
@@ -573,6 +575,14 @@ function App() {
                           <Settings className="w-4 h-4" />
                           Settings
                       </button>
+
+                      <button
+                          onClick={() => setShowGraph(true)}
+                          className="flex items-center justify-center gap-2 w-full py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-sm"
+                      >
+                          <Activity className="w-4 h-4" />
+                          Visual Graph
+                      </button>
                   </div>
 
                   {/* Right: Chat (80%) */}
@@ -608,7 +618,8 @@ function App() {
               </div>
           </Panel>
         </Group>
-        {showSettings && <SecretsManager onClose={() => setShowSettings(false)} />}
+        {showSettings && <SettingsModal onClose={() => setShowSettings(false)} fileTree={fileTree} />}
+        {showGraph && <StateGraph fileTree={fileTree} onClose={() => setShowGraph(false)} />}
       </div>
     </ProtectedRoute>
   );
