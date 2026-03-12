@@ -22,8 +22,7 @@ export const Topbar = ({ onToggleSidebar }: TopbarProps) => {
 
   const pageName =
     PAGE_NAMES[location.pathname]?.[lang] ??
-    location.pathname.replace("/", "").replace(/-/g, " ") ||
-    "Dashboard";
+    (location.pathname.replace("/", "").replace(/-/g, " ") || "Dashboard");
 
   return (
     <header className="h-14 border-b border-border bg-background flex items-center justify-between px-4 sticky top-0 z-30 shrink-0">
