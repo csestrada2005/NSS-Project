@@ -6,6 +6,8 @@ import DashboardPage from './pages/DashboardPage';
 import ContactsPage from './pages/ContactsPage';
 import ProjectsPage from './pages/ProjectsPage';
 import FinancePage from './pages/FinancePage';
+import MetricsPage from './pages/MetricsPage';
+import SettingsPage from './pages/SettingsPage';
 
 function App() {
   return (
@@ -17,6 +19,8 @@ function App() {
           <Route path="contacts" element={<ContactsPage />} />
           <Route path="projects" element={<ProjectsPage />} />
           <Route path="finance" element={<FinancePage />} />
+          <Route path="metrics" element={<MetricsPage />} />
+          <Route path="settings" element={<SettingsPage />} />
         </Route>
 
         {/* AI Web-Builder Studio — full-screen, no business chrome */}
