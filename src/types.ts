@@ -8,8 +8,12 @@ export interface Item {
 
 export interface Profile {
   id: string;
-  username: string;
-  avatar_url: string;
+  full_name: string | null;
+  role: 'admin' | 'dev' | 'vendedor' | 'cliente';
+  email: string | null;
+  avatar_url: string | null;
+  last_seen: string | null;
+  created_at: string;
 }
 
 export interface DataInterface {
@@ -20,6 +24,7 @@ export interface DataInterface {
 export interface Project {
   id: string;
   user_id: string;
+  client_profile_id: string | null;
   title: string;
   description: string | null;
   status: 'active' | 'completed' | 'paused' | 'cancelled';
@@ -32,6 +37,9 @@ export interface Payment {
   project_id: string | null;
   amount: number;
   status: 'pending' | 'paid' | 'overdue';
+  description: string | null;
+  invoice_number: string | null;
+  due_date?: string | null;
   created_at: string;
 }
 
@@ -49,4 +57,11 @@ export interface DashboardKPIs {
   monthlyRevenue: number;
   pendingPayments: number;
   pipelineLeads: number;
+}
+
+export interface AdminKPIs {
+  totalUsers: number;
+  activeProjects: number;
+  monthlyRevenue: number;
+  pendingPayments: number;
 }

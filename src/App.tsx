@@ -9,11 +9,15 @@ import FinancePage from './pages/FinancePage';
 import MetricsPage from './pages/MetricsPage';
 import SettingsPage from './pages/SettingsPage';
 import AIStudioPage from './pages/AIStudioPage';
+import { Login } from './components/auth/Login';
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Public routes */}
+        <Route path="login" element={<Login />} />
+
         {/* Business OS — wrapped in the sidebar + top-nav shell */}
         <Route element={<WorkspaceLayout />}>
           <Route index element={<DashboardPage />} />
