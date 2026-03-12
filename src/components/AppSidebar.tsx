@@ -39,7 +39,7 @@ const routeMapping: Record<Page, string> = {
   proyectos: "/projects",
   pagos: "/finance",
   metricas: "/metrics",
-  "ai-studio": "/studio",
+  "ai-studio": "/ai-studio",
   settings: "/settings",
 };
 
