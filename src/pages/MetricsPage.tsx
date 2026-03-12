@@ -1,107 +1,59 @@
-import { BarChart, TrendingUp, Users, Activity, Download } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { useState } from 'react';
+import WebAnalytics from './metrics/WebAnalytics';
+
+const TABS = [
+  'Website Analytics',
+  'Meta Ads',
+  'Performance',
+  'Forecast',
+  'Reports',
+] as const;
+
+type Tab = (typeof TABS)[number];
+
+const ComingSoon = ({ label }: { label: string }) => (
+  <div className="bg-zinc-800 rounded-xl p-12 flex flex-col items-center justify-center text-center gap-3">
+    <p className="text-zinc-400 font-medium">{label}</p>
+    <p className="text-zinc-600 text-sm">Coming soon</p>
+  </div>
+);
 
 const MetricsPage = () => {
+  const [activeTab, setActiveTab] = useState<Tab>('Website Analytics');
+
   return (
-    <div className="space-y-8 max-w-6xl mx-auto w-full pb-10">
+    <div className="space-y-6 max-w-6xl mx-auto w-full pb-10">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Metrics & Analytics</h1>
-          <p className="text-muted-foreground mt-1">Deep dive into your business performance and insights.</p>
-        </div>
-        <Button variant="outline" className="gap-2">
-          <Download className="w-4 h-4" />
-          Export Report
-        </Button>
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Metrics</h1>
+        <p className="text-muted-foreground mt-1">Track performance across all your channels</p>
       </div>
 
-      {/* KPI Stat Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <TrendingUp className="h-4 w-4 text-emerald-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">$45,231.89</div>
-            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-              <span className="text-emerald-500">+20.1%</span> from last month
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Users</CardTitle>
-            <Users className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">+2,350</div>
-            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-              <span className="text-emerald-500">+180</span> since last week
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Sales</CardTitle>
-            <BarChart className="h-4 w-4 text-purple-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">+12,234</div>
-            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-              <span className="text-emerald-500">+19%</span> from last month
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Now</CardTitle>
-            <Activity className="h-4 w-4 text-amber-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">+573</div>
-            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-              <span className="text-red-500">-201</span> since last hour
-            </p>
-          </CardContent>
-        </Card>
+      {/* Tab bar */}
+      <div className="border-b border-zinc-800">
+        <nav className="flex gap-1 -mb-px overflow-x-auto">
+          {TABS.map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
+                activeTab === tab
+                  ? 'border-emerald-500 text-white'
+                  : 'border-transparent text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </nav>
       </div>
 
-      {/* Chart Placeholders */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card className="col-span-1">
-          <CardHeader>
-            <CardTitle>Revenue Over Time</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-64 flex items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted/20">
-              <div className="flex flex-col items-center text-muted-foreground">
-                <BarChart className="h-8 w-8 mb-2 opacity-50" />
-                <span className="text-sm font-medium">Chart Area Placeholder</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="col-span-1">
-          <CardHeader>
-            <CardTitle>User Acquisition</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-64 flex items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted/20">
-              <div className="flex flex-col items-center text-muted-foreground">
-                <TrendingUp className="h-8 w-8 mb-2 opacity-50" />
-                <span className="text-sm font-medium">Chart Area Placeholder</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Tab content */}
+      {activeTab === 'Website Analytics' && <WebAnalytics />}
+      {activeTab === 'Meta Ads' && <ComingSoon label="Meta Ads" />}
+      {activeTab === 'Performance' && <ComingSoon label="Performance" />}
+      {activeTab === 'Forecast' && <ComingSoon label="Forecast" />}
+      {activeTab === 'Reports' && <ComingSoon label="Reports" />}
     </div>
   );
 };
