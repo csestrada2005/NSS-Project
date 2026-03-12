@@ -389,3 +389,174 @@ export const deleteProject = async (id: string): Promise<boolean> => {
   }
   return true;
 };
+
+// ─── Finance / Payments ───────────────────────────────────────────────────────
+
+type PaymentWithProject = Payment & { projects: { title: string } | null };
+
+export const getPayments = async (): Promise<PaymentWithProject[]> => {
+  const { data, error } = await supabase
+    .from('payments')
+    .select('*, projects(title)')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching payments:', error);
+    return [];
+  }
+  return (data ?? []) as PaymentWithProject[];
+};
+
+export const getPaymentsForClient = async (): Promise<PaymentWithProject[]> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data: projectData, error: projectError } = await supabase
+    .from('projects')
+    .select('id')
+    .eq('client_profile_id', user.id);
+
+  if (projectError) {
+    console.error('Error fetching client projects for payments:', projectError);
+    return [];
+  }
+
+  const projectIds = (projectData ?? []).map((p: { id: string }) => p.id);
+  if (projectIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('payments')
+    .select('*, projects(title)')
+    .in('project_id', projectIds)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching client payments:', error);
+    return [];
+  }
+  return (data ?? []) as PaymentWithProject[];
+};
+
+export const getProjectsForPaymentDropdown = async (): Promise<{ id: string; title: string }[]> => {
+  const { data, error } = await supabase
+    .from('projects')
+    .select('id, title')
+    .order('title', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching projects for payment dropdown:', error);
+    return [];
+  }
+  return (data ?? []) as { id: string; title: string }[];
+};
+
+export const getStaffFinanceKPIs = async (): Promise<{
+  totalCollected: number;
+  pending: number;
+  overdue: number;
+  monthlyRevenue: number;
+}> => {
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+  const [collectedRes, pendingRes, overdueRes, monthlyRes] = await Promise.all([
+    supabase.from('payments').select('amount').eq('status', 'paid'),
+    supabase.from('payments').select('amount').eq('status', 'pending'),
+    supabase.from('payments').select('amount').eq('status', 'overdue'),
+    supabase.from('payments').select('amount').eq('status', 'paid').gte('created_at', startOfMonth),
+  ]);
+
+  if (collectedRes.error) console.error('Error fetching total collected:', collectedRes.error);
+  if (pendingRes.error) console.error('Error fetching pending total:', pendingRes.error);
+  if (overdueRes.error) console.error('Error fetching overdue total:', overdueRes.error);
+  if (monthlyRes.error) console.error('Error fetching monthly revenue:', monthlyRes.error);
+
+  const sum = (rows: { amount: number }[] | null) =>
+    (rows ?? []).reduce((acc, r) => acc + (r.amount ?? 0), 0);
+
+  return {
+    totalCollected: sum(collectedRes.data),
+    pending: sum(pendingRes.data),
+    overdue: sum(overdueRes.data),
+    monthlyRevenue: sum(monthlyRes.data),
+  };
+};
+
+export const getClientFinanceKPIs = async (
+  projectIds: string[]
+): Promise<{ totalBilled: number; paid: number; pending: number }> => {
+  if (projectIds.length === 0) return { totalBilled: 0, paid: 0, pending: 0 };
+
+  const [billedRes, paidRes, pendingRes] = await Promise.all([
+    supabase.from('payments').select('amount').in('project_id', projectIds),
+    supabase.from('payments').select('amount').in('project_id', projectIds).eq('status', 'paid'),
+    supabase.from('payments').select('amount').in('project_id', projectIds).eq('status', 'pending'),
+  ]);
+
+  if (billedRes.error) console.error('Error fetching total billed:', billedRes.error);
+  if (paidRes.error) console.error('Error fetching paid total:', paidRes.error);
+  if (pendingRes.error) console.error('Error fetching pending total:', pendingRes.error);
+
+  const sum = (rows: { amount: number }[] | null) =>
+    (rows ?? []).reduce((acc, r) => acc + (r.amount ?? 0), 0);
+
+  return {
+    totalBilled: sum(billedRes.data),
+    paid: sum(paidRes.data),
+    pending: sum(pendingRes.data),
+  };
+};
+
+export const createPayment = async (data: {
+  invoice_number?: string;
+  description?: string;
+  amount: number;
+  status: Payment['status'];
+  due_date?: string | null;
+  project_id?: string | null;
+}): Promise<PaymentWithProject | null> => {
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const { data: created, error } = await supabase
+    .from('payments')
+    .insert({ ...data, user_id: user?.id })
+    .select('*, projects(title)')
+    .single();
+
+  if (error) {
+    console.error('Error creating payment:', error);
+    return null;
+  }
+  return created as PaymentWithProject;
+};
+
+export const updatePayment = async (
+  id: string,
+  data: Partial<Pick<Payment, 'invoice_number' | 'description' | 'amount' | 'status' | 'due_date'> & { project_id?: string | null }>
+): Promise<PaymentWithProject | null> => {
+  const { data: updated, error } = await supabase
+    .from('payments')
+    .update(data)
+    .eq('id', id)
+    .select('*, projects(title)')
+    .single();
+
+  if (error) {
+    console.error('Error updating payment:', error);
+    return null;
+  }
+  return updated as PaymentWithProject;
+};
+
+export const deletePayment = async (id: string): Promise<boolean> => {
+  const { error } = await supabase
+    .from('payments')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error deleting payment:', error);
+    return false;
+  }
+  return true;
+};
