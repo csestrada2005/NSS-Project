@@ -1,5 +1,5 @@
 import { SupabaseService } from '../SupabaseService';
-import type { Item, Profile, Project, Payment, DashboardKPIs, AdminKPIs, Contact } from '../../types';
+import type { Item, Profile, Project, Payment, DashboardKPIs, AdminKPIs, Contact, Report } from '../../types';
 
 const supabase = SupabaseService.getInstance().client;
 
@@ -559,4 +559,52 @@ export const deletePayment = async (id: string): Promise<boolean> => {
     return false;
   }
   return true;
+};
+
+// ─── Reports ──────────────────────────────────────────────────────────────────
+
+export const getReports = async (userId: string): Promise<Report[]> => {
+  const { data, error } = await supabase
+    .from('reports')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching reports:', error);
+    return [];
+  }
+  return (data ?? []) as Report[];
+};
+
+export const createReport = async (data: {
+  user_id: string;
+  title: string;
+  prompt: string;
+}): Promise<Report | null> => {
+  const { data: created, error } = await supabase
+    .from('reports')
+    .insert({ ...data, status: 'pending' })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating report:', error);
+    return null;
+  }
+  return created as Report;
+};
+
+export const getReportById = async (id: string): Promise<Report | null> => {
+  const { data, error } = await supabase
+    .from('reports')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    console.error('Error fetching report:', error);
+    return null;
+  }
+  return data as Report;
 };
