@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import WebAnalytics from './metrics/WebAnalytics';
+import MetaAds from './metrics/MetaAds';
 
 const TABS = [
   'Website Analytics',
@@ -50,7 +51,7 @@ const MetricsPage = () => {
 
       {/* Tab content */}
       {activeTab === 'Website Analytics' && <WebAnalytics />}
-      {activeTab === 'Meta Ads' && <ComingSoon label="Meta Ads" />}
+      {activeTab === 'Meta Ads' && <MetaAds />}
       {activeTab === 'Performance' && <ComingSoon label="Performance" />}
       {activeTab === 'Forecast' && <ComingSoon label="Forecast" />}
       {activeTab === 'Reports' && <ComingSoon label="Reports" />}

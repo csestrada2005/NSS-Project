@@ -1,18 +1,82 @@
-import { Save, User, Bell, Shield, Mail, Key, Smartphone } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Save, User, Bell, Mail, Smartphone } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { SupabaseService } from '@/services/SupabaseService';
+
+const supabase = SupabaseService.getInstance().client;
+
+const labels = {
+  settings: { en: 'Settings', es: 'Configuración' },
+  manageAccount: { en: 'Manage your account settings and preferences.', es: 'Gestiona la configuración de tu cuenta y preferencias.' },
+  profile: { en: 'Profile', es: 'Perfil' },
+  notifications: { en: 'Notifications', es: 'Notificaciones' },
+  profileInfo: { en: 'Profile Information', es: 'Información de Perfil' },
+  profileDesc: { en: 'Update your personal details and public profile.', es: 'Actualiza tus datos personales y perfil público.' },
+  fullName: { en: 'Full Name', es: 'Nombre Completo' },
+  email: { en: 'Email Address', es: 'Correo Electrónico' },
+  avatarUrl: { en: 'Avatar URL', es: 'URL del Avatar' },
+  avatarPlaceholder: { en: 'https://example.com/avatar.png', es: 'https://ejemplo.com/avatar.png' },
+  saveChanges: { en: 'Save Changes', es: 'Guardar Cambios' },
+  saving: { en: 'Saving…', es: 'Guardando…' },
+  saved: { en: 'Saved!', es: '¡Guardado!' },
+  saveError: { en: 'Failed to save. Try again.', es: 'Error al guardar. Intenta de nuevo.' },
+  notifPrefs: { en: 'Notification Preferences', es: 'Preferencias de Notificación' },
+  notifDesc: { en: 'Choose how and when you want to be notified.', es: 'Elige cómo y cuándo quieres recibir notificaciones.' },
+  emailAlerts: { en: 'Email Alerts', es: 'Alertas por Correo' },
+  emailAlertsDesc: { en: 'Receive daily summaries and critical alerts via email.', es: 'Recibe resúmenes diarios y alertas críticas por correo.' },
+  pushNotifs: { en: 'Push Notifications', es: 'Notificaciones Push' },
+  pushNotifsDesc: { en: 'Get instant notifications on your mobile device.', es: 'Recibe notificaciones instantáneas en tu dispositivo móvil.' },
+  language: { en: 'Language', es: 'Idioma' },
+  languageDesc: { en: 'Switch between English and Spanish.', es: 'Cambia entre inglés y español.' },
+};
 
 const SettingsPage = () => {
+  const { user, profile } = useAuth();
+  const { lang, setLang } = useLanguage();
+
+  const [fullName, setFullName] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  // Seed fields from loaded profile
+  useEffect(() => {
+    if (profile) {
+      setFullName(profile.full_name ?? '');
+      setAvatarUrl(profile.avatar_url ?? '');
+    }
+  }, [profile]);
+
+  const handleSaveProfile = async () => {
+    if (!user) return;
+    setSaveState('saving');
+    const { error } = await supabase
+      .from('profiles')
+      .update({ full_name: fullName.trim(), avatar_url: avatarUrl.trim() || null })
+      .eq('id', user.id);
+
+    if (error) {
+      console.error('[SettingsPage] Failed to update profile:', error);
+      setSaveState('error');
+      setTimeout(() => setSaveState('idle'), 3000);
+    } else {
+      setSaveState('saved');
+      setTimeout(() => setSaveState('idle'), 2500);
+    }
+  };
+
   return (
     <div className="space-y-8 max-w-6xl mx-auto w-full pb-10">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Settings</h1>
-        <p className="text-muted-foreground mt-1">Manage your account settings and preferences.</p>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">{labels.settings[lang]}</h1>
+        <p className="text-muted-foreground mt-1">{labels.manageAccount[lang]}</p>
       </div>
 
       <Tabs defaultValue="profile" className="flex flex-col md:flex-row gap-6">
@@ -23,21 +87,14 @@ const SettingsPage = () => {
             className="w-full justify-start gap-2 data-[state=active]:bg-muted data-[state=active]:shadow-none hover:bg-muted/50 rounded-lg px-4 py-2"
           >
             <User className="h-4 w-4" />
-            Profile
+            {labels.profile[lang]}
           </TabsTrigger>
           <TabsTrigger
             value="notifications"
             className="w-full justify-start gap-2 data-[state=active]:bg-muted data-[state=active]:shadow-none hover:bg-muted/50 rounded-lg px-4 py-2"
           >
             <Bell className="h-4 w-4" />
-            Notifications
-          </TabsTrigger>
-          <TabsTrigger
-            value="security"
-            className="w-full justify-start gap-2 data-[state=active]:bg-muted data-[state=active]:shadow-none hover:bg-muted/50 rounded-lg px-4 py-2"
-          >
-            <Shield className="h-4 w-4" />
-            Security
+            {labels.notifications[lang]}
           </TabsTrigger>
         </TabsList>
 
@@ -47,29 +104,71 @@ const SettingsPage = () => {
           <TabsContent value="profile" className="m-0 focus-visible:outline-none focus-visible:ring-0">
             <Card>
               <CardHeader>
-                <CardTitle>Profile Information</CardTitle>
-                <CardDescription>
-                  Update your personal details and public profile.
-                </CardDescription>
+                <CardTitle>{labels.profileInfo[lang]}</CardTitle>
+                <CardDescription>{labels.profileDesc[lang]}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid gap-2">
-                  <Label htmlFor="fullName">Full Name</Label>
-                  <Input id="fullName" placeholder="Jane Doe" defaultValue="Alex Smith" />
+                  <Label htmlFor="fullName">{labels.fullName[lang]}</Label>
+                  <Input
+                    id="fullName"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder={labels.fullName[lang]}
+                  />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="email">Email Address</Label>
-                  <Input id="email" type="email" placeholder="jane.doe@example.com" defaultValue="alex@acmecorp.com" />
+                  <Label htmlFor="email">{labels.email[lang]}</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={user?.email ?? ''}
+                    disabled
+                    className="opacity-60"
+                  />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="bio">Bio</Label>
-                  <Input id="bio" placeholder="Tell us a little bit about yourself" defaultValue="Senior Product Manager" />
+                  <Label htmlFor="avatarUrl">{labels.avatarUrl[lang]}</Label>
+                  <Input
+                    id="avatarUrl"
+                    value={avatarUrl}
+                    onChange={(e) => setAvatarUrl(e.target.value)}
+                    placeholder={labels.avatarPlaceholder[lang]}
+                  />
+                  {avatarUrl && (
+                    <img
+                      src={avatarUrl}
+                      alt="Avatar preview"
+                      className="w-14 h-14 rounded-full object-cover border border-border mt-1"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  )}
                 </div>
               </CardContent>
-              <CardFooter className="border-t border-border pt-6 flex justify-end">
-                <Button className="gap-2">
-                  <Save className="h-4 w-4" />
-                  Save Changes
+              <CardFooter className="border-t border-border pt-6 flex items-center justify-between">
+                {saveState === 'error' && (
+                  <p className="text-sm text-rose-500">{labels.saveError[lang]}</p>
+                )}
+                {saveState === 'saved' && (
+                  <p className="text-sm text-emerald-500">{labels.saved[lang]}</p>
+                )}
+                {saveState === 'idle' && <span />}
+                <Button
+                  className="gap-2"
+                  onClick={handleSaveProfile}
+                  disabled={saveState === 'saving'}
+                >
+                  {saveState === 'saving' ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                      {labels.saving[lang]}
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" />
+                      {labels.saveChanges[lang]}
+                    </>
+                  )}
                 </Button>
               </CardFooter>
             </Card>
@@ -79,90 +178,54 @@ const SettingsPage = () => {
           <TabsContent value="notifications" className="m-0 focus-visible:outline-none focus-visible:ring-0">
             <Card>
               <CardHeader>
-                <CardTitle>Notification Preferences</CardTitle>
-                <CardDescription>
-                  Choose how and when you want to be notified.
-                </CardDescription>
+                <CardTitle>{labels.notifPrefs[lang]}</CardTitle>
+                <CardDescription>{labels.notifDesc[lang]}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="flex items-center justify-between space-x-2">
                   <div className="flex flex-col space-y-1">
                     <span className="flex items-center gap-2 font-medium">
                       <Mail className="h-4 w-4 text-muted-foreground" />
-                      Email Alerts
+                      {labels.emailAlerts[lang]}
                     </span>
-                    <span className="text-sm text-muted-foreground">Receive daily summaries and critical alerts via email.</span>
+                    <span className="text-sm text-muted-foreground">{labels.emailAlertsDesc[lang]}</span>
                   </div>
                   <Switch defaultChecked id="email-alerts" />
                 </div>
 
-                <div className="h-px bg-border my-4" />
+                <div className="h-px bg-border" />
 
                 <div className="flex items-center justify-between space-x-2">
                   <div className="flex flex-col space-y-1">
                     <span className="flex items-center gap-2 font-medium">
                       <Smartphone className="h-4 w-4 text-muted-foreground" />
-                      Push Notifications
+                      {labels.pushNotifs[lang]}
                     </span>
-                    <span className="text-sm text-muted-foreground">Get instant notifications on your mobile device.</span>
+                    <span className="text-sm text-muted-foreground">{labels.pushNotifsDesc[lang]}</span>
                   </div>
                   <Switch id="push-notifications" />
                 </div>
 
-                <div className="h-px bg-border my-4" />
+                <div className="h-px bg-border" />
 
                 <div className="flex items-center justify-between space-x-2">
                   <div className="flex flex-col space-y-1">
                     <span className="flex items-center gap-2 font-medium">
-                      <Bell className="h-4 w-4 text-muted-foreground" />
-                      Marketing Updates
+                      {labels.language[lang]}
                     </span>
-                    <span className="text-sm text-muted-foreground">Receive news, updates, and promotional offers.</span>
+                    <span className="text-sm text-muted-foreground">{labels.languageDesc[lang]}</span>
                   </div>
-                  <Switch id="marketing-updates" />
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Security Tab */}
-          <TabsContent value="security" className="m-0 focus-visible:outline-none focus-visible:ring-0">
-            <Card>
-              <CardHeader>
-                <CardTitle>Security Settings</CardTitle>
-                <CardDescription>
-                  Manage your password and security preferences.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                 <div className="flex items-center justify-between space-x-2">
-                  <div className="flex flex-col space-y-1">
-                    <span className="flex items-center gap-2 font-medium">
-                      <Key className="h-4 w-4 text-muted-foreground" />
-                      Two-Factor Authentication (2FA)
-                    </span>
-                    <span className="text-sm text-muted-foreground">Add an extra layer of security to your account.</span>
-                  </div>
-                  <Button variant="outline">Enable</Button>
-                </div>
-
-                <div className="h-px bg-border my-4" />
-
-                <div className="space-y-4">
-                  <h4 className="font-medium">Change Password</h4>
-                  <div className="grid gap-2">
-                    <Label htmlFor="current-password">Current Password</Label>
-                    <Input id="current-password" type="password" />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="new-password">New Password</Label>
-                    <Input id="new-password" type="password" />
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm ${lang === 'en' ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>EN</span>
+                    <Switch
+                      checked={lang === 'es'}
+                      onCheckedChange={(checked) => setLang(checked ? 'es' : 'en')}
+                      id="language-toggle"
+                    />
+                    <span className={`text-sm ${lang === 'es' ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>ES</span>
                   </div>
                 </div>
               </CardContent>
-              <CardFooter className="border-t border-border pt-6 flex justify-end">
-                <Button>Update Password</Button>
-              </CardFooter>
             </Card>
           </TabsContent>
         </div>
