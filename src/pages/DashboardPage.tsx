@@ -1,9 +1,70 @@
-import { Briefcase, DollarSign, Clock, Users, FolderOpen, ListChecks, Activity, Bot, ArrowRight } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Briefcase, DollarSign, Clock, Users, FolderOpen, ListChecks, Activity, Bot, ArrowRight, Loader2 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import EmptyState from "@/components/EmptyState";
+import { getRecentProjects, getDashboardKPIs } from "@/services/data/supabaseData";
+import type { Project, DashboardKPIs } from "@/types";
+
+const STATUS_LABELS: Record<Project["status"], { es: string; en: string }> = {
+  active:    { es: "Activo",     en: "Active" },
+  completed: { es: "Completado", en: "Completed" },
+  paused:    { es: "Pausado",    en: "Paused" },
+  cancelled: { es: "Cancelado",  en: "Cancelled" },
+};
+
+const STATUS_COLORS: Record<Project["status"], string> = {
+  active:    "bg-emerald-500/10 text-emerald-500",
+  completed: "bg-blue-500/10 text-blue-500",
+  paused:    "bg-amber-500/10 text-amber-500",
+  cancelled: "bg-rose-500/10 text-rose-500",
+};
+
+const formatCurrency = (amount: number, locale: string) =>
+  new Intl.NumberFormat(locale === "es" ? "es-MX" : "en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(amount);
+
+const DEFAULT_KPIS: DashboardKPIs = {
+  activeProjects: 0,
+  monthlyRevenue: 0,
+  pendingPayments: 0,
+  pipelineLeads: 0,
+};
 
 const DashboardPage = () => {
   const { lang } = useLanguage();
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [kpis, setKpis] = useState<DashboardKPIs>(DEFAULT_KPIS);
+  const [recentProjects, setRecentProjects] = useState<Project[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      setIsLoading(true);
+      try {
+        const [kpiData, projectsData] = await Promise.all([
+          getDashboardKPIs(),
+          getRecentProjects(),
+        ]);
+        if (!cancelled) {
+          setKpis(kpiData);
+          setRecentProjects(projectsData);
+        }
+      } catch (err) {
+        console.error("Dashboard data fetch failed:", err);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+
+    load();
+    return () => { cancelled = true; };
+  }, []);
 
   const now = new Date();
   const hour = now.getHours();
@@ -15,11 +76,27 @@ const DashboardPage = () => {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
 
-  const kpis = [
-    { label: { es: "Proyectos activos", en: "Active projects" }, value: "0", icon: Briefcase },
-    { label: { es: "Ingresos del mes", en: "Monthly revenue" }, value: "$0", icon: DollarSign },
-    { label: { es: "Pagos pendientes", en: "Pending payments" }, value: "$0", icon: Clock },
-    { label: { es: "Leads en pipeline", en: "Pipeline leads" }, value: "0", icon: Users },
+  const kpiCards = [
+    {
+      label: { es: "Proyectos activos", en: "Active projects" },
+      value: isLoading ? "—" : String(kpis.activeProjects),
+      icon: Briefcase,
+    },
+    {
+      label: { es: "Ingresos del mes", en: "Monthly revenue" },
+      value: isLoading ? "—" : formatCurrency(kpis.monthlyRevenue, lang),
+      icon: DollarSign,
+    },
+    {
+      label: { es: "Pagos pendientes", en: "Pending payments" },
+      value: isLoading ? "—" : formatCurrency(kpis.pendingPayments, lang),
+      icon: Clock,
+    },
+    {
+      label: { es: "Leads en pipeline", en: "Pipeline leads" },
+      value: isLoading ? "—" : String(kpis.pipelineLeads),
+      icon: Users,
+    },
   ];
 
   return (
@@ -34,7 +111,7 @@ const DashboardPage = () => {
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map((kpi) => (
+        {kpiCards.map((kpi) => (
           <div key={kpi.label.es} className="rounded-xl p-5 bg-card border border-border group hover:border-primary/20 transition-colors">
             <div className="flex items-center justify-between mb-3">
               <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -42,7 +119,11 @@ const DashboardPage = () => {
               </span>
               <kpi.icon size={15} strokeWidth={1.5} className="text-muted-foreground group-hover:text-primary transition-colors" />
             </div>
-            <p className="text-2xl font-bold text-foreground">{kpi.value}</p>
+            {isLoading ? (
+              <Loader2 size={20} className="animate-spin text-muted-foreground" />
+            ) : (
+              <p className="text-2xl font-bold text-foreground">{kpi.value}</p>
+            )}
           </div>
         ))}
       </div>
@@ -60,11 +141,36 @@ const DashboardPage = () => {
             </button>
           </div>
           <div className="p-2">
-            <EmptyState
-              icon={FolderOpen}
-              title={{ es: "Sin proyectos aún", en: "No projects yet" }}
-              subtitle={{ es: "Crea tu primer proyecto para verlo aquí.", en: "Create your first project to see it here." }}
-            />
+            {isLoading ? (
+              <div className="flex items-center justify-center py-10">
+                <Loader2 size={22} className="animate-spin text-muted-foreground" />
+              </div>
+            ) : recentProjects.length === 0 ? (
+              <EmptyState
+                icon={FolderOpen}
+                title={{ es: "Sin proyectos aún", en: "No projects yet" }}
+                subtitle={{ es: "Crea tu primer proyecto para verlo aquí.", en: "Create your first project to see it here." }}
+              />
+            ) : (
+              <ul className="divide-y divide-border">
+                {recentProjects.map((project) => (
+                  <li key={project.id} className="flex items-center justify-between px-3 py-3 rounded-lg hover:bg-muted/40 transition-colors">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{project.title}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        {new Date(project.created_at).toLocaleDateString(
+                          lang === "es" ? "es-MX" : "en-US",
+                          { day: "numeric", month: "short", year: "numeric" }
+                        )}
+                      </p>
+                    </div>
+                    <span className={`ml-3 shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[project.status]}`}>
+                      {STATUS_LABELS[project.status][lang]}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
 
