@@ -291,3 +291,101 @@ export const deleteContact = async (id: string): Promise<boolean> => {
   }
   return true;
 };
+
+// Used internally by project queries
+type ProjectWithClient = Project & { contacts: { name: string } | null };
+
+export const getProjects = async (): Promise<ProjectWithClient[]> => {
+  const { data, error } = await supabase
+    .from('projects')
+    .select('*, contacts(name)')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching projects:', error);
+    return [];
+  }
+  return (data ?? []) as ProjectWithClient[];
+};
+
+export const getProjectsForClient = async (): Promise<ProjectWithClient[]> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from('projects')
+    .select('*, contacts(name)')
+    .eq('client_profile_id', user.id)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching client projects:', error);
+    return [];
+  }
+  return (data ?? []) as ProjectWithClient[];
+};
+
+export const getContactsForDropdown = async (): Promise<{ id: string; name: string }[]> => {
+  const { data, error } = await supabase
+    .from('contacts')
+    .select('id, name')
+    .order('name', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching contacts for dropdown:', error);
+    return [];
+  }
+  return (data ?? []) as { id: string; name: string }[];
+};
+
+export const createProject = async (data: {
+  title: string;
+  description?: string;
+  status: Project['status'];
+  client_id?: string | null;
+}): Promise<ProjectWithClient | null> => {
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const { data: created, error } = await supabase
+    .from('projects')
+    .insert({ ...data, user_id: user?.id })
+    .select('*, contacts(name)')
+    .single();
+
+  if (error) {
+    console.error('Error creating project:', error);
+    return null;
+  }
+  return created as ProjectWithClient;
+};
+
+export const updateProject = async (
+  id: string,
+  data: Partial<Pick<Project, 'title' | 'description' | 'status'> & { client_id?: string | null }>
+): Promise<ProjectWithClient | null> => {
+  const { data: updated, error } = await supabase
+    .from('projects')
+    .update(data)
+    .eq('id', id)
+    .select('*, contacts(name)')
+    .single();
+
+  if (error) {
+    console.error('Error updating project:', error);
+    return null;
+  }
+  return updated as ProjectWithClient;
+};
+
+export const deleteProject = async (id: string): Promise<boolean> => {
+  const { error } = await supabase
+    .from('projects')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error deleting project:', error);
+    return false;
+  }
+  return true;
+};
