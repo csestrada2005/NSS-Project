@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import WebAnalytics from './metrics/WebAnalytics';
 import MetaAds from './metrics/MetaAds';
+import Performance from './metrics/Performance';
+import Forecast from './metrics/Forecast';
+import AIReports from './metrics/AIReports';
 
 const TABS = [
   'Website Analytics',
   'Meta Ads',
   'Performance',
   'Forecast',
-  'Reports',
+  'AI Reports',
 ] as const;
 
 type Tab = (typeof TABS)[number];
@@ -52,9 +55,9 @@ const MetricsPage = () => {
       {/* Tab content */}
       {activeTab === 'Website Analytics' && <WebAnalytics />}
       {activeTab === 'Meta Ads' && <MetaAds />}
-      {activeTab === 'Performance' && <ComingSoon label="Performance" />}
-      {activeTab === 'Forecast' && <ComingSoon label="Forecast" />}
-      {activeTab === 'Reports' && <ComingSoon label="Reports" />}
+      {activeTab === 'Performance' && <Performance />}
+      {activeTab === 'Forecast' && <Forecast />}
+      {activeTab === 'AI Reports' && <AIReports />}
     </div>
   );
 };

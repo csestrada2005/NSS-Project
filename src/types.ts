@@ -67,3 +67,14 @@ export interface AdminKPIs {
   monthlyRevenue: number;
   pendingPayments: number;
 }
+
+export interface Report {
+  id: string;
+  user_id: string;
+  title: string;
+  prompt: string;
+  content: string | null;
+  status: 'pending' | 'generating' | 'done' | 'error';
+  error_msg: string | null;
+  created_at: string;
+}
