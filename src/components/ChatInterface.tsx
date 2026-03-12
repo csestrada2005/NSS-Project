@@ -134,6 +134,41 @@ export function ChatInterface({ isLoading, onSendMessage, selectedElement, editM
             </span>
           </div>
         )}
+        {!isLoading && input === '' && (
+          <div className="mb-3 flex flex-wrap gap-2">
+            {[
+              '✨ Build a Pipeline View for Leads',
+              '✨ Create a Paid Payments Bar Chart',
+              '✨ Build an Active Projects Dashboard',
+            ].map((suggestion) => (
+              <button
+                key={suggestion}
+                onClick={() => {
+                  setInput(suggestion);
+                  setTimeout(() => {
+                    const trimmed = suggestion.trim();
+                    setInput('');
+                    setMessages(prev => [...prev, { role: 'user', content: trimmed }]);
+                    onSendMessage(trimmed).then((success) => {
+                      setMessages(prev => [
+                        ...prev,
+                        {
+                          role: 'assistant',
+                          content: success
+                            ? `I received your request: ${trimmed}`
+                            : 'Sorry, something went wrong processing your request.',
+                        },
+                      ]);
+                    });
+                  }, 0);
+                }}
+                className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-red-500/50 text-gray-300 hover:text-white rounded-full text-xs transition-colors truncate max-w-full"
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="flex gap-2">
           <input
             type="text"

@@ -5,6 +5,7 @@ import { contextService } from './ContextService';
 import { SupabaseService } from './SupabaseService';
 import { webContainerService } from './WebContainerService';
 import { CodebaseKnowledgeService } from './CodebaseKnowledgeService';
+import { NEBU_SCHEMA_CONTEXT } from '../utils/schemaContext';
 
 interface ModifiedFile {
   path: string;
@@ -87,7 +88,8 @@ export class AIOrchestrator {
           relevantContext += `--- START ${doc.path} ---\n${doc.content}\n--- END ${doc.path} ---\n`;
       }
 
-      const systemPrompt = "You are an expert Senior React Engineer. Implement the following step from the plan. Output a valid JSON object containing a 'modifiedFiles' array. Do not include markdown formatting (```json) or conversational text. JSON only.\n\n" +
+      const systemPrompt = NEBU_SCHEMA_CONTEXT + "\n\n" +
+      "You are an expert Senior React Engineer. Implement the following step from the plan. Output a valid JSON object containing a 'modifiedFiles' array. Do not include markdown formatting (```json) or conversational text. JSON only.\n\n" +
       `Task: ${nextStepDescription}\n\n` +
       "When the user asks for backend features (e.g., 'save this to the database' or 'create a user profile table'), you must perform a 3-step process:\n" +
       "1. Generate a valid PostgreSQL CREATE TABLE statement wrapped in a file named `supabase/migrations/<timestamp>_create_<table_name>.sql`.\n" +
@@ -248,7 +250,8 @@ export class AIOrchestrator {
         relevantContext += `--- START ${doc.path} ---\n${doc.content}\n--- END ${doc.path} ---\n`;
     }
 
-    const systemPrompt = "You are an expert Senior React Engineer. You must output a valid JSON object containing a 'modifiedFiles' array. Do not include markdown formatting (```json) or conversational text. JSON only.\n\n" +
+    const systemPrompt = NEBU_SCHEMA_CONTEXT + "\n\n" +
+    "You are an expert Senior React Engineer. You must output a valid JSON object containing a 'modifiedFiles' array. Do not include markdown formatting (```json) or conversational text. JSON only.\n\n" +
     "When the user asks for backend features (e.g., 'save this to the database' or 'create a user profile table'), you must perform a 3-step process:\n" +
     "1. Generate a valid PostgreSQL CREATE TABLE statement wrapped in a file named `supabase/migrations/<timestamp>_create_<table_name>.sql`.\n" +
     "2. Update or create `src/integrations/supabase/types.ts` to include the TypeScript interface for the new table.\n" +
