@@ -4,22 +4,22 @@ import { LanguageProvider } from '@/contexts/LanguageContext';
 import { AuthProvider } from '@/contexts/AuthContext';
 import AppSidebar from '@/components/AppSidebar';
 import { Topbar } from '@/components/Topbar';
-import { BottomNav } from '@/components/BottomNav';
 
 export function WorkspaceLayout() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
     <LanguageProvider>
       <AuthProvider>
-        <div className="flex h-screen w-screen bg-background text-foreground overflow-hidden">
+        <div className="h-screen flex overflow-hidden bg-background">
           <AppSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-          <div className="flex flex-col flex-1 overflow-hidden min-w-0">
-            <Topbar onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
-            <main className="flex-1 overflow-auto">
-              <Outlet />
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <Topbar onToggleSidebar={() => setSidebarOpen((p) => !p)} />
+            <main className="flex-1 overflow-y-auto p-6 md:p-8 pb-20 lg:pb-8">
+              <div className="animate-fade-in">
+                <Outlet />
+              </div>
             </main>
-            <BottomNav />
           </div>
         </div>
       </AuthProvider>
