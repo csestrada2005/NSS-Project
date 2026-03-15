@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { FolderOpen, CreditCard, Loader2 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getClientProjects, getClientPayments } from "@/services/data/supabaseData";
@@ -43,6 +44,7 @@ const formatCurrency = (amount: number, locale: string) =>
 
 const ClientDashboard = () => {
   const { lang } = useLanguage();
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -116,7 +118,8 @@ const ClientDashboard = () => {
         {projects.map((project) => (
           <div
             key={project.id}
-            className="rounded-xl p-5 bg-card border border-border hover:border-primary/20 transition-colors"
+            onClick={() => navigate('/projects')}
+            className="rounded-xl p-5 bg-card border border-border hover:border-primary/20 transition-colors cursor-pointer"
           >
             <div className="flex items-start justify-between gap-3 mb-2">
               <h3 className="text-sm font-semibold text-foreground leading-snug">

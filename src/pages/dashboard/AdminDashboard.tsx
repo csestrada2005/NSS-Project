@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Users, Briefcase, DollarSign, Clock, Loader2 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getAdminKPIs, getRecentSignups, getActiveProjects } from "@/services/data/supabaseData";
@@ -42,6 +43,7 @@ const DEFAULT_KPIS: AdminKPIs = {
 
 const AdminDashboard = () => {
   const { lang } = useLanguage();
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [kpis, setKpis] = useState<AdminKPIs>(DEFAULT_KPIS);
   const [recentSignups, setRecentSignups] = useState<Profile[]>([]);
@@ -213,7 +215,8 @@ const AdminDashboard = () => {
                 {activeProjects.map((project) => (
                   <li
                     key={project.id}
-                    className="flex items-center justify-between px-3 py-3 rounded-lg hover:bg-muted/40 transition-colors"
+                    onClick={() => navigate('/projects')}
+                    className="flex items-center justify-between px-3 py-3 rounded-lg hover:bg-muted/40 transition-colors cursor-pointer"
                   >
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">

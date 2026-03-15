@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Briefcase,
   DollarSign,
@@ -47,6 +48,7 @@ const DEFAULT_KPIS: DashboardKPIs = {
 
 const DevDashboard = () => {
   const { lang } = useLanguage();
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [kpis, setKpis] = useState<DashboardKPIs>(DEFAULT_KPIS);
   const [recentProjects, setRecentProjects] = useState<Project[]>([]);
@@ -165,7 +167,7 @@ const DevDashboard = () => {
             <h2 className="text-sm font-semibold text-foreground">
               {lang === "es" ? "Proyectos recientes" : "Recent projects"}
             </h2>
-            <button className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+            <button onClick={() => navigate('/projects')} className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
               {lang === "es" ? "Ver todos" : "View all"}{" "}
               <ArrowRight size={12} />
             </button>
@@ -232,7 +234,7 @@ const DevDashboard = () => {
               ? "Pregúntale por el estado de tus proyectos, genera cotizaciones o redacta mensajes."
               : "Ask about your project status, generate quotes or draft messages."}
           </p>
-          <button className="w-full py-2.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/15 transition-colors flex items-center justify-center gap-2">
+          <button onClick={() => navigate('/ai-studio')} className="w-full py-2.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/15 transition-colors flex items-center justify-center gap-2">
             <Bot size={14} />
             {lang === "es" ? "Abrir AI Studio" : "Open AI Studio"}
           </button>
