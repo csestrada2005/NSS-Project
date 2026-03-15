@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { DollarSign, TrendingUp, Clock, AlertCircle, Receipt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +14,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import EmptyState from '@/components/EmptyState';
+import Pagination from '@/components/Pagination';
 import { useLanguage } from '@/contexts/LanguageContext';
 import {
   getPayments,
@@ -22,6 +24,7 @@ import {
   updatePayment,
   deletePayment,
 } from '@/services/data/supabaseData';
+import { usePagination } from '@/hooks/usePagination';
 import type { Payment } from '@/types';
 import PaymentDetailPanel from './PaymentDetailPanel';
 import PaymentForm from './PaymentForm';
@@ -56,9 +59,12 @@ const statusBadgeClass: Record<Payment['status'], string> = {
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
 
+const PAGE_SIZE = 20;
+
 const StaffFinance = () => {
   const { lang } = useLanguage();
   const [payments, setPayments] = useState<PaymentWithProject[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [projects, setProjects] = useState<{ id: string; title: string }[]>([]);
   const [kpis, setKpis] = useState({ totalCollected: 0, pending: 0, overdue: 0, monthlyRevenue: 0 });
   const [selectedPayment, setSelectedPayment] = useState<PaymentWithProject | null>(null);
@@ -68,35 +74,47 @@ const StaffFinance = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [kpisLoading, setKpisLoading] = useState(true);
 
+  const { currentPage, totalPages, goToPage } = usePagination(totalCount, PAGE_SIZE);
+
   const refreshKpis = async () => {
     const data = await getStaffFinanceKPIs();
     setKpis(data);
   };
 
+  const loadPayments = async (page: number, search: string) => {
+    setIsLoading(true);
+    const { data, count } = await getPayments(page, PAGE_SIZE, search);
+    setPayments(data);
+    setTotalCount(count);
+    setIsLoading(false);
+  };
+
   useEffect(() => {
     Promise.all([
-      getPayments(),
       getProjectsForPaymentDropdown(),
       getStaffFinanceKPIs(),
-    ]).then(([paymentData, projectData, kpiData]) => {
-      setPayments(paymentData);
+    ]).then(([projectData, kpiData]) => {
       setProjects(projectData);
       setKpis(kpiData);
-      setIsLoading(false);
       setKpisLoading(false);
     });
+    loadPayments(1, '');
   }, []);
 
-  const filtered = useMemo(() => {
-    const q = searchQuery.toLowerCase();
-    if (!q) return payments;
-    return payments.filter(
-      (p) =>
-        (p.invoice_number ?? '').toLowerCase().includes(q) ||
-        (p.projects?.title ?? '').toLowerCase().includes(q) ||
-        (p.description ?? '').toLowerCase().includes(q)
-    );
-  }, [payments, searchQuery]);
+  useEffect(() => {
+    goToPage(1);
+    loadPayments(1, searchQuery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
+
+  useEffect(() => {
+    loadPayments(currentPage, searchQuery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage]);
+
+  const handlePageChange = (n: number) => {
+    goToPage(n);
+  };
 
   const handleCreate = async (data: {
     invoice_number: string;
@@ -109,9 +127,12 @@ const StaffFinance = () => {
     setIsSubmitting(true);
     const created = await createPayment(data);
     if (created) {
-      setPayments((prev) => [created, ...prev]);
       setShowAddModal(false);
       await refreshKpis();
+      toast.success('Pago creado');
+      loadPayments(currentPage, searchQuery);
+    } else {
+      toast.error('Error al crear pago');
     }
     setIsSubmitting(false);
   };
@@ -125,15 +146,21 @@ const StaffFinance = () => {
       setPayments((prev) => prev.map((p) => (p.id === id ? updated : p)));
       if (selectedPayment?.id === id) setSelectedPayment(updated);
       await refreshKpis();
+      toast.success('Pago actualizado');
+    } else {
+      toast.error('Error al actualizar pago');
     }
   };
 
   const handleDelete = async (id: string) => {
     const ok = await deletePayment(id);
     if (ok) {
-      setPayments((prev) => prev.filter((p) => p.id !== id));
       setSelectedPayment(null);
       await refreshKpis();
+      toast.success('Pago eliminado');
+      loadPayments(currentPage, searchQuery);
+    } else {
+      toast.error('Error al eliminar pago');
     }
   };
 
@@ -143,6 +170,9 @@ const StaffFinance = () => {
       setPayments((prev) => prev.map((p) => (p.id === id ? updated : p)));
       if (selectedPayment?.id === id) setSelectedPayment(updated);
       await refreshKpis();
+      toast.success('Pago marcado como pagado');
+    } else {
+      toast.error('Error al marcar como pagado');
     }
   };
 
@@ -230,7 +260,7 @@ const StaffFinance = () => {
           <div className="flex items-center justify-center py-16">
             <span className="w-6 h-6 border-2 border-muted border-t-muted-foreground rounded-full animate-spin" />
           </div>
-        ) : filtered.length === 0 ? (
+        ) : payments.length === 0 ? (
           <EmptyState
             icon={Receipt}
             title={labels.emptyTitle}
@@ -249,7 +279,7 @@ const StaffFinance = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((payment) => (
+              {payments.map((payment) => (
                 <TableRow
                   key={payment.id}
                   className="cursor-pointer hover:bg-muted/40"
@@ -287,6 +317,8 @@ const StaffFinance = () => {
           </Table>
         )}
       </div>
+
+      <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} />
 
       {/* Add payment modal */}
       {showAddModal && (

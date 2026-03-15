@@ -212,17 +212,29 @@ export const getClientPayments = async (projectIds: string[]): Promise<Payment[]
   return (data ?? []) as Payment[];
 };
 
-export const getContacts = async (): Promise<Contact[]> => {
-  const { data, error } = await supabase
+export const getContacts = async (
+  page: number = 1,
+  pageSize: number = 20,
+  search: string = ''
+): Promise<{ data: Contact[]; count: number }> => {
+  const offset = (page - 1) * pageSize;
+  let query = supabase
     .from('contacts')
-    .select('*')
-    .order('created_at', { ascending: false });
+    .select('*', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(offset, offset + pageSize - 1);
+
+  if (search) {
+    query = query.ilike('name', `%${search}%`);
+  }
+
+  const { data, error, count } = await query;
 
   if (error) {
     console.error('Error fetching contacts:', error);
-    return [];
+    return { data: [], count: 0 };
   }
-  return (data ?? []) as Contact[];
+  return { data: (data ?? []) as Contact[], count: count ?? 0 };
 };
 
 export const getMyContactRecord = async (email: string): Promise<Contact | null> => {
@@ -295,17 +307,29 @@ export const deleteContact = async (id: string): Promise<boolean> => {
 // Used internally by project queries
 type ProjectWithClient = Project & { contacts: { name: string } | null };
 
-export const getProjects = async (): Promise<ProjectWithClient[]> => {
-  const { data, error } = await supabase
+export const getProjects = async (
+  page: number = 1,
+  pageSize: number = 20,
+  search: string = ''
+): Promise<{ data: ProjectWithClient[]; count: number }> => {
+  const offset = (page - 1) * pageSize;
+  let query = supabase
     .from('projects')
-    .select('*, contacts(name)')
-    .order('created_at', { ascending: false });
+    .select('*, contacts(name)', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(offset, offset + pageSize - 1);
+
+  if (search) {
+    query = query.ilike('title', `%${search}%`);
+  }
+
+  const { data, error, count } = await query;
 
   if (error) {
     console.error('Error fetching projects:', error);
-    return [];
+    return { data: [], count: 0 };
   }
-  return (data ?? []) as ProjectWithClient[];
+  return { data: (data ?? []) as ProjectWithClient[], count: count ?? 0 };
 };
 
 export const getProjectsForClient = async (): Promise<ProjectWithClient[]> => {
@@ -394,17 +418,29 @@ export const deleteProject = async (id: string): Promise<boolean> => {
 
 type PaymentWithProject = Payment & { projects: { title: string } | null };
 
-export const getPayments = async (): Promise<PaymentWithProject[]> => {
-  const { data, error } = await supabase
+export const getPayments = async (
+  page: number = 1,
+  pageSize: number = 20,
+  search: string = ''
+): Promise<{ data: PaymentWithProject[]; count: number }> => {
+  const offset = (page - 1) * pageSize;
+  let query = supabase
     .from('payments')
-    .select('*, projects(title)')
-    .order('created_at', { ascending: false });
+    .select('*, projects(title)', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(offset, offset + pageSize - 1);
+
+  if (search) {
+    query = query.ilike('invoice_number', `%${search}%`);
+  }
+
+  const { data, error, count } = await query;
 
   if (error) {
     console.error('Error fetching payments:', error);
-    return [];
+    return { data: [], count: 0 };
   }
-  return (data ?? []) as PaymentWithProject[];
+  return { data: (data ?? []) as PaymentWithProject[], count: count ?? 0 };
 };
 
 export const getPaymentsForClient = async (): Promise<PaymentWithProject[]> => {

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { Save, User, Bell, Mail, Smartphone } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -43,7 +44,7 @@ const SettingsPage = () => {
 
   const [fullName, setFullName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [isSaving, setIsSaving] = useState(false);
 
   // Seed fields from loaded profile
   useEffect(() => {
@@ -55,7 +56,7 @@ const SettingsPage = () => {
 
   const handleSaveProfile = async () => {
     if (!user) return;
-    setSaveState('saving');
+    setIsSaving(true);
     const { error } = await supabase
       .from('profiles')
       .update({ full_name: fullName.trim(), avatar_url: avatarUrl.trim() || null })
@@ -63,12 +64,11 @@ const SettingsPage = () => {
 
     if (error) {
       console.error('[SettingsPage] Failed to update profile:', error);
-      setSaveState('error');
-      setTimeout(() => setSaveState('idle'), 3000);
+      toast.error(labels.saveError[lang]);
     } else {
-      setSaveState('saved');
-      setTimeout(() => setSaveState('idle'), 2500);
+      toast.success(labels.saved[lang]);
     }
+    setIsSaving(false);
   };
 
   return (
@@ -145,20 +145,13 @@ const SettingsPage = () => {
                   )}
                 </div>
               </CardContent>
-              <CardFooter className="border-t border-border pt-6 flex items-center justify-between">
-                {saveState === 'error' && (
-                  <p className="text-sm text-rose-500">{labels.saveError[lang]}</p>
-                )}
-                {saveState === 'saved' && (
-                  <p className="text-sm text-emerald-500">{labels.saved[lang]}</p>
-                )}
-                {saveState === 'idle' && <span />}
+              <CardFooter className="border-t border-border pt-6 flex items-center justify-end">
                 <Button
                   className="gap-2"
                   onClick={handleSaveProfile}
-                  disabled={saveState === 'saving'}
+                  disabled={isSaving}
                 >
-                  {saveState === 'saving' ? (
+                  {isSaving ? (
                     <>
                       <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
                       {labels.saving[lang]}

@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { FolderPlus, Folders } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,6 +13,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import EmptyState from '@/components/EmptyState';
+import Pagination from '@/components/Pagination';
 import { useLanguage } from '@/contexts/LanguageContext';
 import {
   getProjects,
@@ -20,6 +22,7 @@ import {
   updateProject,
   deleteProject,
 } from '@/services/data/supabaseData';
+import { usePagination } from '@/hooks/usePagination';
 import type { Project } from '@/types';
 import ProjectDetailPanel from './ProjectDetailPanel';
 import ProjectForm from './ProjectForm';
@@ -47,9 +50,12 @@ const statusBadgeClass: Record<Project['status'], string> = {
   cancelled: 'bg-rose-500/10 text-rose-500 border-rose-500/20 hover:bg-rose-500/20',
 };
 
+const PAGE_SIZE = 20;
+
 const StaffProjects = () => {
   const { lang } = useLanguage();
   const [projects, setProjects] = useState<ProjectWithClient[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [contacts, setContacts] = useState<{ id: string; name: string }[]>([]);
   const [selectedProject, setSelectedProject] = useState<ProjectWithClient | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -57,23 +63,34 @@ const StaffProjects = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const { currentPage, totalPages, goToPage } = usePagination(totalCount, PAGE_SIZE);
+
+  const loadProjects = async (page: number, search: string) => {
+    setIsLoading(true);
+    const { data, count } = await getProjects(page, PAGE_SIZE, search);
+    setProjects(data);
+    setTotalCount(count);
+    setIsLoading(false);
+  };
+
   useEffect(() => {
-    Promise.all([getProjects(), getContactsForDropdown()]).then(([projectData, contactData]) => {
-      setProjects(projectData);
-      setContacts(contactData);
-      setIsLoading(false);
-    });
+    getContactsForDropdown().then(setContacts);
   }, []);
 
-  const filtered = useMemo(() => {
-    const q = searchQuery.toLowerCase();
-    if (!q) return projects;
-    return projects.filter(
-      (p) =>
-        p.title.toLowerCase().includes(q) ||
-        (p.contacts?.name ?? '').toLowerCase().includes(q)
-    );
-  }, [projects, searchQuery]);
+  useEffect(() => {
+    goToPage(1);
+    loadProjects(1, searchQuery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
+
+  useEffect(() => {
+    loadProjects(currentPage, searchQuery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage]);
+
+  const handlePageChange = (n: number) => {
+    goToPage(n);
+  };
 
   const handleCreate = async (data: {
     title: string;
@@ -84,8 +101,11 @@ const StaffProjects = () => {
     setIsSubmitting(true);
     const created = await createProject(data);
     if (created) {
-      setProjects((prev) => [created, ...prev]);
       setShowAddModal(false);
+      toast.success('Proyecto creado');
+      loadProjects(currentPage, searchQuery);
+    } else {
+      toast.error('Error al crear proyecto');
     }
     setIsSubmitting(false);
   };
@@ -95,14 +115,20 @@ const StaffProjects = () => {
     if (updated) {
       setProjects((prev) => prev.map((p) => (p.id === id ? updated : p)));
       if (selectedProject?.id === id) setSelectedProject(updated);
+      toast.success('Proyecto actualizado');
+    } else {
+      toast.error('Error al actualizar proyecto');
     }
   };
 
   const handleDelete = async (id: string) => {
     const ok = await deleteProject(id);
     if (ok) {
-      setProjects((prev) => prev.filter((p) => p.id !== id));
       setSelectedProject(null);
+      toast.success('Proyecto eliminado');
+      loadProjects(currentPage, searchQuery);
+    } else {
+      toast.error('Error al eliminar proyecto');
     }
   };
 
@@ -134,7 +160,7 @@ const StaffProjects = () => {
           <div className="flex items-center justify-center py-16">
             <span className="w-6 h-6 border-2 border-muted border-t-muted-foreground rounded-full animate-spin" />
           </div>
-        ) : filtered.length === 0 ? (
+        ) : projects.length === 0 ? (
           <EmptyState
             icon={Folders}
             title={labels.emptyTitle}
@@ -152,7 +178,7 @@ const StaffProjects = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((project) => (
+              {projects.map((project) => (
                 <TableRow
                   key={project.id}
                   className="cursor-pointer hover:bg-muted/40"
@@ -181,6 +207,8 @@ const StaffProjects = () => {
           </Table>
         )}
       </div>
+
+      <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} />
 
       {/* Add project modal */}
       {showAddModal && (

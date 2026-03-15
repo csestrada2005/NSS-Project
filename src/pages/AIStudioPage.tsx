@@ -1,8 +1,11 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { Bot, Send, Image, Code, MessageSquare, Plus, Settings, Wand2, PanelLeftClose } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 type Tab = "chat" | "images" | "builder";
+type Message = { role: 'user' | 'assistant'; content: string };
+type HistoryEntry = { role: string; content: string };
 
 const AIStudioPage = () => {
   const [activeTab, setActiveTab] = useState<Tab>("chat");
@@ -11,6 +14,54 @@ const AIStudioPage = () => {
   const [builderPrompt, setBuilderPrompt] = useState("");
   const [showConfig, setShowConfig] = useState(false);
   const navigate = useNavigate();
+
+  // Chat states
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isSending, setIsSending] = useState(false);
+  const [assistantName, setAssistantName] = useState('NOVY');
+  const [assistantPersonality, setAssistantPersonality] = useState('');
+  const [selectedModel, setSelectedModel] = useState('gpt-4o');
+  const [apiKey, setApiKey] = useState('');
+  const [conversationHistory, setConversationHistory] = useState<HistoryEntry[]>([]);
+
+  const handleSendChat = async () => {
+    if (!chatInput.trim() || isSending) return;
+
+    const userContent = chatInput;
+    const userMessage: Message = { role: 'user', content: userContent };
+    const newHistory: HistoryEntry = { role: 'user', content: userContent };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setConversationHistory((prev) => [...prev, newHistory]);
+    setChatInput('');
+    setIsSending(true);
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: selectedModel,
+          max_tokens: 1000,
+          system: assistantPersonality || `Eres un asistente útil llamado ${assistantName}`,
+          messages: [...conversationHistory, { role: 'user', content: userContent }],
+          apiKey,
+        }),
+      });
+
+      const data = await response.json();
+      const assistantContent = data.content?.[0]?.text ?? 'Sin respuesta';
+      const assistantMessage: Message = { role: 'assistant', content: assistantContent };
+      const assistantHistory: HistoryEntry = { role: 'assistant', content: assistantContent };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+      setConversationHistory((prev) => [...prev, assistantHistory]);
+    } catch {
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Error al conectar con el asistente. Verifica tu API key.' }]);
+    } finally {
+      setIsSending(false);
+    }
+  };
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "chat", label: "Chat", icon: <MessageSquare size={16} /> },
@@ -50,7 +101,10 @@ const AIStudioPage = () => {
           {/* Conversations sidebar */}
           <div className="hidden lg:flex flex-col w-64 shrink-0 bg-muted/50 border border-border rounded-xl">
             <div className="p-3 border-b border-border">
-              <button className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+              <button
+                onClick={() => { setMessages([]); setConversationHistory([]); setChatInput(''); }}
+                className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+              >
                 <Plus size={16} />
                 Nueva conversación
               </button>
@@ -80,48 +134,102 @@ const AIStudioPage = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs text-muted-foreground block mb-1">Nombre del asistente</label>
-                    <input className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-ring" placeholder="NOVY" />
+                    <input
+                      value={assistantName}
+                      onChange={(e) => setAssistantName(e.target.value)}
+                      className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-ring"
+                      placeholder="NOVY"
+                    />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground block mb-1">Modelo de IA</label>
-                    <select className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-ring">
-                      <option>GPT-4o</option>
-                      <option>Claude 3.5 Sonnet</option>
-                      <option>Gemini Pro</option>
+                    <select
+                      value={selectedModel}
+                      onChange={(e) => setSelectedModel(e.target.value)}
+                      className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-ring"
+                    >
+                      <option value="gpt-4o">GPT-4o</option>
+                      <option value="claude-sonnet-4-6">Claude 3.5 Sonnet</option>
+                      <option value="gemini-pro">Gemini Pro</option>
                     </select>
                   </div>
                   <div className="md:col-span-2">
                     <label className="text-xs text-muted-foreground block mb-1">Personalidad / Instrucciones</label>
-                    <textarea className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-ring resize-none h-16" placeholder="Eres un asistente especializado en..." />
+                    <textarea
+                      value={assistantPersonality}
+                      onChange={(e) => setAssistantPersonality(e.target.value)}
+                      className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-ring resize-none h-16"
+                      placeholder="Eres un asistente especializado en..."
+                    />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground block mb-1">API Key</label>
-                    <input type="password" className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-ring" placeholder="sk-..." />
+                    <input
+                      type="password"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-ring"
+                      placeholder="sk-..."
+                    />
                   </div>
                   <div className="flex items-end">
-                    <button className="bg-primary hover:bg-primary/90 text-primary-foreground text-sm px-4 py-2 rounded-lg transition-colors">Guardar</button>
+                    <button
+                      onClick={() => toast.success('Configuración guardada')}
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground text-sm px-4 py-2 rounded-lg transition-colors"
+                    >
+                      Guardar
+                    </button>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Empty chat state */}
-            <div className="flex-1 flex flex-col items-center justify-center p-8">
-              <div className="w-20 h-20 bg-gradient-to-br from-primary/20 to-accent/20 rounded-3xl flex items-center justify-center mb-6 border border-primary/20">
-                <Bot size={36} className="text-primary" />
+            {/* Chat messages / empty state */}
+            {messages.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center p-8">
+                <div className="w-20 h-20 bg-gradient-to-br from-primary/20 to-accent/20 rounded-3xl flex items-center justify-center mb-6 border border-primary/20">
+                  <Bot size={36} className="text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground mb-2">Tu asistente IA</h3>
+                <p className="text-sm text-muted-foreground max-w-md text-center mb-8">
+                  Configura tu asistente con tu propia API key. Pregunta sobre tus proyectos, genera cotizaciones, analiza métricas y más.
+                </p>
+                <div className="flex flex-wrap gap-2 justify-center max-w-lg">
+                  {["Resumen del día", "Nueva cotización", "Analizar sitio web", "Ideas de contenido", "Redactar email"].map((action) => (
+                    <button
+                      key={action}
+                      onClick={() => setChatInput(action)}
+                      className="text-xs bg-secondary hover:bg-secondary/80 text-muted-foreground px-3 py-1.5 rounded-full border border-border transition-colors"
+                    >
+                      {action}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <h3 className="text-xl font-semibold text-foreground mb-2">Tu asistente IA</h3>
-              <p className="text-sm text-muted-foreground max-w-md text-center mb-8">
-                Configura tu asistente con tu propia API key. Pregunta sobre tus proyectos, genera cotizaciones, analiza métricas y más.
-              </p>
-              <div className="flex flex-wrap gap-2 justify-center max-w-lg">
-                {["Resumen del día", "Nueva cotización", "Analizar sitio web", "Ideas de contenido", "Redactar email"].map((action) => (
-                  <button key={action} className="text-xs bg-secondary hover:bg-secondary/80 text-muted-foreground px-3 py-1.5 rounded-full border border-border transition-colors">
-                    {action}
-                  </button>
+            ) : (
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {messages.map((msg, i) => (
+                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div
+                      className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
+                        msg.role === 'user'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-foreground'
+                      }`}
+                    >
+                      {msg.content}
+                    </div>
+                  </div>
                 ))}
+                {isSending && (
+                  <div className="flex justify-start">
+                    <div className="bg-muted text-foreground rounded-2xl px-4 py-2.5 text-sm">
+                      <span className="animate-pulse">...</span>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
+            )}
 
             {/* Input */}
             <div className="p-4 border-t border-border">
@@ -129,10 +237,16 @@ const AIStudioPage = () => {
                 <input
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
-                  className="flex-1 bg-secondary border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-ring"
+                  onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendChat()}
+                  disabled={isSending}
+                  className="flex-1 bg-secondary border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-ring disabled:opacity-50"
                   placeholder="Pregunta lo que necesites..."
                 />
-                <button className="bg-primary hover:bg-primary/90 text-primary-foreground p-3 rounded-xl transition-colors">
+                <button
+                  onClick={handleSendChat}
+                  disabled={isSending || !chatInput.trim()}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground p-3 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   <Send size={18} />
                 </button>
               </div>
@@ -233,7 +347,6 @@ const AIStudioPage = () => {
             <p className="text-sm text-muted-foreground max-w-md text-center mb-6">
               Ares es nuestro entorno de desarrollo funcional. Describe el sitio que necesitas y genera un prototipo funcional en segundos.
             </p>
-            {/* INSTRUCTION FOR CLAUDE: The button below is the key functionality change for the Web Builder tab */}
             <button
               onClick={() => navigate('/studio')}
               className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2 shadow-lg"

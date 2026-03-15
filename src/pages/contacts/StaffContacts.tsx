@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { UserPlus, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,8 +13,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import EmptyState from '@/components/EmptyState';
+import Pagination from '@/components/Pagination';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getContacts, createContact, updateContact, deleteContact } from '@/services/data/supabaseData';
+import { usePagination } from '@/hooks/usePagination';
 import type { Contact } from '@/types';
 import ContactDetailPanel from './ContactDetailPanel';
 import ContactForm from './ContactForm';
@@ -39,38 +42,52 @@ const typeBadgeClass: Record<Contact['type'], string> = {
   partner: 'bg-blue-500/10 text-blue-500 border-blue-500/20 hover:bg-blue-500/20',
 };
 
+const PAGE_SIZE = 20;
+
 const StaffContacts = () => {
   const { lang } = useLanguage();
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    getContacts().then((data) => {
-      setContacts(data);
-      setIsLoading(false);
-    });
-  }, []);
+  const { currentPage, totalPages, goToPage } = usePagination(totalCount, PAGE_SIZE);
 
-  const filtered = useMemo(() => {
-    const q = searchQuery.toLowerCase();
-    if (!q) return contacts;
-    return contacts.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        (c.email ?? '').toLowerCase().includes(q)
-    );
-  }, [contacts, searchQuery]);
+  const loadContacts = async (page: number, search: string) => {
+    setIsLoading(true);
+    const { data, count } = await getContacts(page, PAGE_SIZE, search);
+    setContacts(data);
+    setTotalCount(count);
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    goToPage(1);
+    loadContacts(1, searchQuery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
+
+  useEffect(() => {
+    loadContacts(currentPage, searchQuery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage]);
+
+  const handlePageChange = (n: number) => {
+    goToPage(n);
+  };
 
   const handleCreate = async (data: { name: string; email: string; phone: string; type: Contact['type']; status: string }) => {
     setIsSubmitting(true);
     const created = await createContact(data);
     if (created) {
-      setContacts((prev) => [created, ...prev]);
       setShowAddModal(false);
+      toast.success('Contacto creado');
+      loadContacts(currentPage, searchQuery);
+    } else {
+      toast.error('Error al crear contacto');
     }
     setIsSubmitting(false);
   };
@@ -80,14 +97,20 @@ const StaffContacts = () => {
     if (updated) {
       setContacts((prev) => prev.map((c) => (c.id === id ? updated : c)));
       if (selectedContact?.id === id) setSelectedContact(updated);
+      toast.success('Contacto actualizado');
+    } else {
+      toast.error('Error al actualizar contacto');
     }
   };
 
   const handleDelete = async (id: string) => {
     const ok = await deleteContact(id);
     if (ok) {
-      setContacts((prev) => prev.filter((c) => c.id !== id));
       setSelectedContact(null);
+      toast.success('Contacto eliminado');
+      loadContacts(currentPage, searchQuery);
+    } else {
+      toast.error('Error al eliminar contacto');
     }
   };
 
@@ -119,7 +142,7 @@ const StaffContacts = () => {
           <div className="flex items-center justify-center py-16">
             <span className="w-6 h-6 border-2 border-muted border-t-muted-foreground rounded-full animate-spin" />
           </div>
-        ) : filtered.length === 0 ? (
+        ) : contacts.length === 0 ? (
           <EmptyState
             icon={Users}
             title={labels.emptyTitle}
@@ -138,7 +161,7 @@ const StaffContacts = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((contact) => (
+              {contacts.map((contact) => (
                 <TableRow
                   key={contact.id}
                   className="cursor-pointer hover:bg-muted/40"
@@ -166,6 +189,8 @@ const StaffContacts = () => {
           </Table>
         )}
       </div>
+
+      <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} />
 
       {/* Add contact modal */}
       {showAddModal && (
