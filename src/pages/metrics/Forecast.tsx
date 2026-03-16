@@ -266,7 +266,7 @@ const Forecast = () => {
                 <Tooltip
                   contentStyle={{ background: '#27272a', border: '1px solid #3f3f46', borderRadius: 8, color: '#e4e4e7' }}
                   labelStyle={{ color: '#a1a1aa', marginBottom: 4 }}
-                  formatter={(value: number) => fmtCurrency(value)}
+                  formatter={(value: any) => fmtCurrency(value)}
                 />
                 <Legend wrapperStyle={{ fontSize: 12, color: '#a1a1aa', paddingTop: 8 }} />
                 <Bar dataKey="actual" fill="#10b981" name={l('actual')} radius={[3, 3, 0, 0]} />

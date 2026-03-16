@@ -15,13 +15,6 @@ const TABS = [
 
 type Tab = (typeof TABS)[number];
 
-const ComingSoon = ({ label }: { label: string }) => (
-  <div className="bg-zinc-800 rounded-xl p-12 flex flex-col items-center justify-center text-center gap-3">
-    <p className="text-zinc-400 font-medium">{label}</p>
-    <p className="text-zinc-600 text-sm">Coming soon</p>
-  </div>
-);
-
 const MetricsPage = () => {
   const [activeTab, setActiveTab] = useState<Tab>('Website Analytics');
 

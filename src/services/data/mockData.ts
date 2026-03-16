@@ -10,5 +10,5 @@ export const fetchItems = async (): Promise<Item[]> => {
 export const fetchProfile = async (id: string): Promise<Profile | null> => {
   await new Promise(resolve => setTimeout(resolve, 300));
   const profile = data.profiles.find(p => p.id === id);
-  return (profile as Profile) || null;
+  return (profile as unknown as Profile) || null;
 };

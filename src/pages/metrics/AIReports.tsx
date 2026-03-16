@@ -17,9 +17,9 @@ const fmtDate = (iso: string): string => {
 
 // ── Markdown renderer ─────────────────────────────────────────────────────────
 
-const renderMarkdown = (text: string): JSX.Element[] => {
+const renderMarkdown = (text: string) => {
   const lines = text.split('\n');
-  const elements: JSX.Element[] = [];
+  const elements = [];
   let ulBuffer: string[] = [];
   let key = 0;
 
@@ -36,8 +36,8 @@ const renderMarkdown = (text: string): JSX.Element[] => {
     }
   };
 
-  const renderInline = (raw: string): JSX.Element => {
-    const parts: (string | JSX.Element)[] = [];
+  const renderInline = (raw: string) => {
+    const parts = [];
     const boldRegex = /\*\*(.+?)\*\*/g;
     let last = 0;
     let match;
