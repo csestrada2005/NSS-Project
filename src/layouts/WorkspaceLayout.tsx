@@ -9,9 +9,12 @@ import SetupPage from '@/pages/SetupPage';
 
 export function WorkspaceLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { user, loading, profile, profileSettled } = useAuth();
+  const { user, loading, profile } = useAuth();
 
-  if (loading || (user && !profileSettled)) {
+  // Safe to use plain `loading` here because AuthContext guarantees that
+  // loading stays true until BOTH user AND profile are fully resolved.
+  // The old `(user && !profileSettled)` guard is no longer needed.
+  if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
         <Loader2 size={28} className="animate-spin text-muted-foreground" />
@@ -23,6 +26,9 @@ export function WorkspaceLayout() {
     return <Navigate to="/login" replace />;
   }
 
+  // At this point loading is false AND user is set, so profile has been
+  // fetched (or confirmed absent).  A missing role means the account is
+  // genuinely not configured — not a race condition.
   if (!profile?.role) {
     return (
       <LanguageProvider>
