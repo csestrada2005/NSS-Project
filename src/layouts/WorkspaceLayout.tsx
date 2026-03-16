@@ -9,9 +9,9 @@ import SetupPage from '@/pages/SetupPage';
 
 export function WorkspaceLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { user, loading, profile } = useAuth();
+  const { user, loading, profile, profileSettled } = useAuth();
 
-  if (loading || (user && profile === null)) {
+  if (loading || (user && !profileSettled)) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
         <Loader2 size={28} className="animate-spin text-muted-foreground" />

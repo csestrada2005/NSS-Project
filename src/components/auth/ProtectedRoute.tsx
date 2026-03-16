@@ -8,7 +8,7 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const [canRedirect, setCanRedirect] = useState(false);
 
   useEffect(() => {
-    const t = setTimeout(() => setCanRedirect(true), 600)
+    const t = setTimeout(() => setCanRedirect(true), 1200)
     return () => clearTimeout(t)
   }, [])
 

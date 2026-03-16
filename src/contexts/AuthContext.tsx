@@ -7,6 +7,7 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  profileSettled: boolean;
   signOut: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   isAdmin: boolean;
@@ -19,6 +20,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   profile: null,
   loading: true,
+  profileSettled: false,
   signOut: async () => {},
   signInWithGoogle: async () => {},
   isAdmin: false,
@@ -31,6 +33,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profileSettled, setProfileSettled] = useState(false);
   const initDone = useRef(false);
 
   const supabase = SupabaseService.getInstance().client;
@@ -73,6 +76,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           const p = await fetchProfile(session.user.id);
           setProfile(p);
         }
+        setProfileSettled(true);
         setTimeout(() => setLoading(false), 0);
       } catch (err) {
         console.error('Auth init error:', err);
@@ -100,9 +104,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           } else {
             setProfile(null);
           }
+          setProfileSettled(true);
         } catch (err) {
           console.error('Auth state change error:', err);
           setProfile(null);
+          setProfileSettled(true);
         } finally {
           if (initDone.current) { setLoading(false); }
         }
@@ -129,6 +135,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         user,
         profile,
         loading,
+        profileSettled,
         signOut,
         signInWithGoogle,
         isAdmin: role === "admin",

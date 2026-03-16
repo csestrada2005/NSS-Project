@@ -85,10 +85,12 @@ export const WyrdForgeIntro = () => {
   const { user, loading } = useAuth();
 
   useEffect(() => {
-    if (!loading && !user) {
+    // Only check auth after the loading animation has finished
+    // The ~2.5s animation gives auth plenty of time to resolve
+    if (!showLoading && !loading && !user) {
       navigate('/login')
     }
-  }, [loading, user, navigate])
+  }, [showLoading, loading, user, navigate])
 
   if (showLoading) {
     return <LoadingScreen onComplete={() => setShowLoading(false)} />;
