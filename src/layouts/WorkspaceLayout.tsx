@@ -5,10 +5,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import AppSidebar from '@/components/AppSidebar';
 import { Topbar } from '@/components/Topbar';
 import { Loader2 } from 'lucide-react';
+import SetupPage from '@/pages/SetupPage';
 
 export function WorkspaceLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { user, loading } = useAuth();
+  const { user, loading, profile } = useAuth();
 
   if (loading) {
     return (
@@ -20,6 +21,14 @@ export function WorkspaceLayout() {
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (!profile?.role) {
+    return (
+      <LanguageProvider>
+        <SetupPage />
+      </LanguageProvider>
+    );
   }
 
   return (
