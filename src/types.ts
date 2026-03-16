@@ -14,6 +14,8 @@ export interface Profile {
   avatar_url: string | null;
   last_seen: string | null;
   created_at: string;
+  email_alerts?: boolean;
+  push_notifications?: boolean;
 }
 
 export interface DataInterface {

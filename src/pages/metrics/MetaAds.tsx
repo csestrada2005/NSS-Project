@@ -97,7 +97,7 @@ const MetaAds = () => {
   }, []);
 
   const loadData = useCallback(
-    async (conn: MetaConnection, range: { start: string; end: string }) => {
+    async (range: { start: string; end: string }) => {
       if (!user) return;
       setError(null);
       try {
@@ -121,7 +121,7 @@ const MetaAds = () => {
         const conn = await getMetaConnection(user.id);
         setConnection(conn);
         if (conn) {
-          await loadData(conn, dateRange);
+          await loadData(dateRange);
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Failed to load connection';
@@ -166,7 +166,7 @@ const MetaAds = () => {
     if (!user || !connection) return;
     setDateRange(pendingRange);
     setLoading(true);
-    await loadData(connection, pendingRange);
+    await loadData(pendingRange);
     setLoading(false);
   };
 
