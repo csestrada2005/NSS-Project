@@ -11,7 +11,7 @@ export function WorkspaceLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, loading, profile } = useAuth();
 
-  if (loading) {
+  if (loading || (user && profile === null)) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
         <Loader2 size={28} className="animate-spin text-muted-foreground" />

@@ -73,12 +73,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           const p = await fetchProfile(session.user.id);
           setProfile(p);
         }
+        setTimeout(() => setLoading(false), 0);
       } catch (err) {
         console.error('Auth init error:', err);
         setLoading(false);
         await supabase.auth.signOut();
       } finally {
-        setLoading(false);
         initDone.current = true;
       }
     };
@@ -114,6 +114,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    window.location.href = '/login';
   };
 
   const signInWithGoogle = async () => {
