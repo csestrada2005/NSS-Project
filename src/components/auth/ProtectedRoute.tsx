@@ -1,5 +1,5 @@
-import { useAuth } from './AuthProvider';
-import { Login } from './Login';
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 
 export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -14,8 +14,7 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   }
 
   if (!user) {
-    // Redirect to login (simulated by rendering login component)
-    return <Login />;
+    return <Navigate to="/login" replace />;
   }
 
   return <>{children}</>;
