@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { User } from "@supabase/supabase-js";
 import { SupabaseService } from "@/services/SupabaseService";
 import type { Profile } from "@/types";
@@ -31,6 +31,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const initDone = useRef(false);
 
   const supabase = SupabaseService.getInstance().client;
 
@@ -74,13 +75,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       } catch (err) {
         console.error('Auth init error:', err);
+        setLoading(false);
         await supabase.auth.signOut();
       } finally {
         setLoading(false);
+        initDone.current = true;
       }
     };
 
     init();
+    const safetyTimer = setTimeout(() => setLoading(false), 8000);
 
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
@@ -100,12 +104,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           console.error('Auth state change error:', err);
           setProfile(null);
         } finally {
-          setLoading(false);
+          if (initDone.current) { setLoading(false); }
         }
       }
     );
 
-    return () => listener.subscription.unsubscribe();
+    return () => { clearTimeout(safetyTimer); listener.subscription.unsubscribe(); };
   }, []);
 
   const signOut = async () => {

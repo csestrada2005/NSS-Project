@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, useMotionValue, useSpring, useReducedMotion } from 'framer-motion';
 import { LoadingScreen } from '@/components/auth/LoadingScreen';
+import { useAuth } from '@/contexts/AuthContext';
 
 const MagneticOpenBtn = ({ onClick }: { onClick: () => void }) => {
   const ref = useRef<HTMLButtonElement>(null);
@@ -81,6 +82,13 @@ const ForgeReveal = () => {
 export const WyrdForgeIntro = () => {
   const [showLoading, setShowLoading] = useState(true);
   const navigate = useNavigate();
+  const { user, loading } = useAuth();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate('/login')
+    }
+  }, [loading, user, navigate])
 
   if (showLoading) {
     return <LoadingScreen onComplete={() => setShowLoading(false)} />;
