@@ -1,5 +1,5 @@
 /**
- * StudioEngine — the full Ares AI web-builder IDE.
+ * StudioEngine — the full Wyrd Forge AI web-builder IDE.
  *
  * This component was extracted from src/App.tsx so that it can be mounted
  * under /studio via React Router while keeping the routing entry-point

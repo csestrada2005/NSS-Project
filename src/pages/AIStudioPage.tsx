@@ -344,7 +344,7 @@ const AIStudioPage = () => {
                   return;
                 }
                 sessionStorage.setItem('studio_initial_prompt', builderPrompt.trim());
-                navigate('/studio');
+                window.open('/forge', '_blank');
               }}
               className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-3 rounded-xl transition-colors"
             >
@@ -360,14 +360,14 @@ const AIStudioPage = () => {
             </div>
             <h3 className="text-xl font-semibold text-foreground mb-2">Construye sitios web con IA</h3>
             <p className="text-sm text-muted-foreground max-w-md text-center mb-6">
-              Ares es nuestro entorno de desarrollo funcional. Describe el sitio que necesitas y genera un prototipo funcional en segundos.
+              Wyrd Forge es nuestro entorno de desarrollo funcional. Describe el sitio que necesitas y genera un prototipo funcional en segundos.
             </p>
             <button
-              onClick={() => navigate('/studio')}
+              onClick={() => window.open('/forge', '_blank')}
               className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2 shadow-lg"
             >
               <Code size={18} />
-              Abrir Web Builder (Ares)
+              Abrir Web Builder (Wyrd Forge)
             </button>
           </div>
         </div>

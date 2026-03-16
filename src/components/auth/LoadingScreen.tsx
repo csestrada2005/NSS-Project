@@ -47,7 +47,7 @@ export const LoadingScreen = ({ onComplete }: { onComplete: () => void }) => {
       <AnimatePresence>{phase === "exiting" && <EnsoCircle key="enso" />}</AnimatePresence>
       <AnimatePresence>
         {phase === "loading" && (
-          <motion.div className="fixed inset-0 z-[250] overflow-hidden bg-[#0A0A0A]" exit={{ opacity: 0 }} transition={{ duration: 0.45 }}>
+          <motion.div className="fixed inset-0 z-[250] overflow-hidden bg-[#0A0A0A] text-white/70" exit={{ opacity: 0 }} transition={{ duration: 0.45 }}>
             <div className="absolute left-8 sm:left-12 top-1/2 -translate-y-[180%]">
               {RITUAL_LINES.slice(0, visibleCount).map((line, i) => (
                 <motion.div key={i} className="flex items-center gap-3 mb-2" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}>
