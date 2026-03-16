@@ -45,14 +45,27 @@ const SettingsPage = () => {
   const [fullName, setFullName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [emailAlerts, setEmailAlerts] = useState<boolean>(true);
+  const [pushNotifications, setPushNotifications] = useState<boolean>(false);
 
   // Seed fields from loaded profile
   useEffect(() => {
     if (profile) {
       setFullName(profile.full_name ?? '');
       setAvatarUrl(profile.avatar_url ?? '');
+      setEmailAlerts(profile.email_alerts ?? true);
+      setPushNotifications(profile.push_notifications ?? false);
     }
   }, [profile]);
+
+  const handleNotifChange = async (field: 'email_alerts' | 'push_notifications', value: boolean) => {
+    if (!user) return;
+    if (field === 'email_alerts') setEmailAlerts(value);
+    else setPushNotifications(value);
+    const { error } = await supabase.from('profiles').update({ [field]: value }).eq('id', user.id);
+    if (error) toast.error(labels.saveError[lang]);
+    else toast.success(labels.saved[lang]);
+  };
 
   const handleSaveProfile = async () => {
     if (!user) return;
@@ -183,7 +196,7 @@ const SettingsPage = () => {
                     </span>
                     <span className="text-sm text-muted-foreground">{labels.emailAlertsDesc[lang]}</span>
                   </div>
-                  <Switch defaultChecked id="email-alerts" />
+                  <Switch checked={emailAlerts} onCheckedChange={(v) => handleNotifChange('email_alerts', v)} id="email-alerts" />
                 </div>
 
                 <div className="h-px bg-border" />
@@ -196,7 +209,7 @@ const SettingsPage = () => {
                     </span>
                     <span className="text-sm text-muted-foreground">{labels.pushNotifsDesc[lang]}</span>
                   </div>
-                  <Switch id="push-notifications" />
+                  <Switch checked={pushNotifications} onCheckedChange={(v) => handleNotifChange('push_notifications', v)} id="push-notifications" />
                 </div>
 
                 <div className="h-px bg-border" />

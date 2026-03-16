@@ -225,7 +225,7 @@ export const getContacts = async (
     .range(offset, offset + pageSize - 1);
 
   if (search) {
-    query = query.ilike('name', `%${search}%`);
+    query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
   }
 
   const { data, error, count } = await query;
@@ -431,7 +431,7 @@ export const getPayments = async (
     .range(offset, offset + pageSize - 1);
 
   if (search) {
-    query = query.ilike('invoice_number', `%${search}%`);
+    query = query.or(`invoice_number.ilike.%${search}%,description.ilike.%${search}%`);
   }
 
   const { data, error, count } = await query;
