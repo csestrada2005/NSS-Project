@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Bot, Send, Image, Code, MessageSquare, Plus, Settings, Wand2, PanelLeftClose } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -20,9 +20,22 @@ const AIStudioPage = () => {
   const [isSending, setIsSending] = useState(false);
   const [assistantName, setAssistantName] = useState('NOVY');
   const [assistantPersonality, setAssistantPersonality] = useState('');
-  const [selectedModel, setSelectedModel] = useState('gpt-4o');
-  const [apiKey, setApiKey] = useState('');
+  const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-6');
   const [conversationHistory, setConversationHistory] = useState<HistoryEntry[]>([]);
+
+  useEffect(() => {
+    const savedMessages = sessionStorage.getItem('ai_studio_messages');
+    const savedHistory = sessionStorage.getItem('ai_studio_history');
+    if (savedMessages) { try { setMessages(JSON.parse(savedMessages)); } catch {} }
+    if (savedHistory) { try { setConversationHistory(JSON.parse(savedHistory)); } catch {} }
+  }, []);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      sessionStorage.setItem('ai_studio_messages', JSON.stringify(messages));
+      sessionStorage.setItem('ai_studio_history', JSON.stringify(conversationHistory));
+    }
+  }, [messages, conversationHistory]);
 
   const handleSendChat = async () => {
     if (!chatInput.trim() || isSending) return;
@@ -45,7 +58,6 @@ const AIStudioPage = () => {
           max_tokens: 1000,
           system: assistantPersonality || `Eres un asistente útil llamado ${assistantName}`,
           messages: [...conversationHistory, { role: 'user', content: userContent }],
-          apiKey,
         }),
       });
 
@@ -102,7 +114,7 @@ const AIStudioPage = () => {
           <div className="hidden lg:flex flex-col w-64 shrink-0 bg-muted/50 border border-border rounded-xl">
             <div className="p-3 border-b border-border">
               <button
-                onClick={() => { setMessages([]); setConversationHistory([]); setChatInput(''); }}
+                onClick={() => { setMessages([]); setConversationHistory([]); setChatInput(''); sessionStorage.removeItem('ai_studio_messages'); sessionStorage.removeItem('ai_studio_history'); }}
                 className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium px-4 py-2 rounded-lg transition-colors"
               >
                 <Plus size={16} />
@@ -148,9 +160,9 @@ const AIStudioPage = () => {
                       onChange={(e) => setSelectedModel(e.target.value)}
                       className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-ring"
                     >
-                      <option value="gpt-4o">GPT-4o</option>
-                      <option value="claude-sonnet-4-6">Claude 3.5 Sonnet</option>
-                      <option value="gemini-pro">Gemini Pro</option>
+                      <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
+                      <option value="claude-opus-4-6">Claude Opus 4.6</option>
+                      <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
                     </select>
                   </div>
                   <div className="md:col-span-2">
@@ -160,16 +172,6 @@ const AIStudioPage = () => {
                       onChange={(e) => setAssistantPersonality(e.target.value)}
                       className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-ring resize-none h-16"
                       placeholder="Eres un asistente especializado en..."
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground block mb-1">API Key</label>
-                    <input
-                      type="password"
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-ring"
-                      placeholder="sk-..."
                     />
                   </div>
                   <div className="flex items-end">
@@ -289,7 +291,10 @@ const AIStudioPage = () => {
                 <option>Custom</option>
               </select>
             </div>
-            <button className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-3 rounded-xl transition-colors">
+            <button
+              onClick={() => toast.info('Image generation coming soon. Connect an image model to enable this feature.')}
+              className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-3 rounded-xl transition-colors"
+            >
               <Wand2 size={18} />
               Generar imagen
             </button>
@@ -332,7 +337,17 @@ const AIStudioPage = () => {
                 ))}
               </div>
             </div>
-            <button className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-3 rounded-xl transition-colors">
+            <button
+              onClick={() => {
+                if (!builderPrompt.trim()) {
+                  toast.warning('Describe tu sitio antes de continuar');
+                  return;
+                }
+                sessionStorage.setItem('studio_initial_prompt', builderPrompt.trim());
+                navigate('/studio');
+              }}
+              className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-3 rounded-xl transition-colors"
+            >
               <Wand2 size={18} />
               Generar sitio
             </button>

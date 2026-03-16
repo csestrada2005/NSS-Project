@@ -224,6 +224,20 @@ export function StudioEngine() {
   };
 
   useEffect(() => {
+    const prompt = sessionStorage.getItem('studio_initial_prompt');
+    if (prompt) {
+      sessionStorage.removeItem('studio_initial_prompt');
+      // Wait for WebContainer to be ready before sending
+      const timer = setTimeout(() => {
+        if (!isContainerLoading) {
+          handleSendMessage(prompt);
+        }
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
         if (e.shiftKey) {
