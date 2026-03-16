@@ -47,7 +47,7 @@ export const disconnectAnalytics = async (userId: string): Promise<void> => {
 };
 
 export const initiateGAOAuth = async (userId: string): Promise<void> => {
-  const { data, error } = await supabase.functions.invoke('ga-oauth-init', {
+  const { data, error } = await supabase.functions.invoke('go-oauth-init', {
     body: { user_id: userId },
   });
 
@@ -59,7 +59,7 @@ export const initiateGAOAuth = async (userId: string): Promise<void> => {
   if (data?.url) {
     window.location.href = data.url;
   } else {
-    throw new Error('No redirect URL returned from ga-oauth-init');
+    throw new Error('No redirect URL returned from go-oauth-init');
   }
 };
 
