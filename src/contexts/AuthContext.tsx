@@ -61,29 +61,61 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     mountedRef.current = true;
 
-    // Safety valve: never leave the app stuck in loading state indefinitely.
+    // Safety valve
     const safetyTimer = setTimeout(() => {
       if (mountedRef.current) setLoading(false);
     }, 10000);
 
-    // onAuthStateChange fires INITIAL_SESSION on mount (covers the init case),
-    // SIGNED_IN after OAuth redirect, SIGNED_OUT after sign-out, etc.
-    // We keep loading=true until BOTH user and profile (or confirmed absence)
-    // are resolved inside the handler — never before.
+    const initAuth = async () => {
+      try {
+        // getSession espera de forma segura a que se refresque el token si es necesario
+        // lo que evita el falso negativo (redirección a /login) en la nueva pestaña.
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+
+        if (session?.user) {
+          const p = await fetchProfile(session.user.id);
+          if (!mountedRef.current) return;
+          setUser(session.user);
+          if (p) setProfile(p);
+
+          updateLastSeen(session.user.id).catch(console.error);
+        }
+      } catch (err) {
+        console.error("Error al obtener la sesión inicial:", err);
+        // Si la sesión local está corrupta tras un deploy en Render, la cerramos forzosamente
+        // para evitar el loop infinito de carga y devolverte limpiamente al login.
+        await supabase.auth.signOut().catch(console.error);
+      } finally {
+        if (mountedRef.current) setLoading(false);
+      }
+    };
+
+    initAuth();
+
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        // Ignoramos INITIAL_SESSION porque ya lo manejamos robustamente en initAuth
+        if (event === "INITIAL_SESSION") return;
+
         try {
           const currentUser = session?.user ?? null;
           if (currentUser) {
-            const p = await fetchProfile(currentUser.id);
             if (!mountedRef.current) return;
             setUser(currentUser);
-            setProfile(p);
+
+            const p = await fetchProfile(currentUser.id);
+            if (!mountedRef.current) return;
+
+            // SOLUCIÓN CLAVE: Si p es null (por un fallo transitorio al
+            // refrescar el token entre pestañas), NO sobreescribimos el perfil existente.
+            // Esto elimina el error de "Account Being Configured".
+            if (p) {
+              setProfile(p);
+            }
+
             if (event === "SIGNED_IN") {
-              // Fire-and-forget; last_seen update should not block auth flow.
-              updateLastSeen(currentUser.id).catch((err) =>
-                console.error("Error updating last_seen:", err)
-              );
+              updateLastSeen(currentUser.id).catch(console.error);
             }
           } else {
             if (!mountedRef.current) return;
@@ -91,13 +123,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setProfile(null);
           }
         } catch (err) {
-          console.error("Auth state change error:", err);
-          if (!mountedRef.current) return;
-          setUser(session?.user ?? null);
-          setProfile(null);
-        } finally {
-          // Only set loading=false here, after everything above has settled.
-          if (mountedRef.current) setLoading(false);
+          console.error("Error en el cambio de estado de auth:", err);
         }
       }
     );
