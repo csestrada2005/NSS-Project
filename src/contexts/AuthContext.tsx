@@ -33,8 +33,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [profileSettled, setProfileSettled] = useState(false);
-  const initDone = useRef(false);
+  const mountedRef = useRef(true);
 
   const supabase = SupabaseService.getInstance().client;
 
@@ -60,67 +59,62 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    const init = async () => {
-      try {
-        const {
-          data: { session },
-          error: sessionError,
-        } = await supabase.auth.getSession();
-        if (sessionError) {
-          await supabase.auth.signOut();
-          setLoading(false);
-          return;
-        }
-        if (session?.user) {
-          setUser(session.user);
-          const p = await fetchProfile(session.user.id);
-          setProfile(p);
-        }
-        setProfileSettled(true);
-        setTimeout(() => setLoading(false), 0);
-      } catch (err) {
-        console.error('Auth init error:', err);
-        setLoading(false);
-        await supabase.auth.signOut();
-      } finally {
-        initDone.current = true;
-      }
-    };
+    mountedRef.current = true;
 
-    init();
-    const safetyTimer = setTimeout(() => setLoading(false), 8000);
+    // Safety valve: never leave the app stuck in loading state indefinitely.
+    const safetyTimer = setTimeout(() => {
+      if (mountedRef.current) setLoading(false);
+    }, 10000);
 
+    // onAuthStateChange fires INITIAL_SESSION on mount (covers the init case),
+    // SIGNED_IN after OAuth redirect, SIGNED_OUT after sign-out, etc.
+    // We keep loading=true until BOTH user and profile (or confirmed absence)
+    // are resolved inside the handler — never before.
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         try {
           const currentUser = session?.user ?? null;
-          setUser(currentUser);
           if (currentUser) {
             const p = await fetchProfile(currentUser.id);
+            if (!mountedRef.current) return;
+            setUser(currentUser);
             setProfile(p);
             if (event === "SIGNED_IN") {
-              await updateLastSeen(currentUser.id);
+              // Fire-and-forget; last_seen update should not block auth flow.
+              updateLastSeen(currentUser.id).catch((err) =>
+                console.error("Error updating last_seen:", err)
+              );
             }
           } else {
+            if (!mountedRef.current) return;
+            setUser(null);
             setProfile(null);
           }
-          setProfileSettled(true);
         } catch (err) {
-          console.error('Auth state change error:', err);
+          console.error("Auth state change error:", err);
+          if (!mountedRef.current) return;
+          setUser(session?.user ?? null);
           setProfile(null);
-          setProfileSettled(true);
         } finally {
-          if (initDone.current) { setLoading(false); }
+          // Only set loading=false here, after everything above has settled.
+          if (mountedRef.current) setLoading(false);
         }
       }
     );
 
-    return () => { clearTimeout(safetyTimer); listener.subscription.unsubscribe(); };
+    return () => {
+      mountedRef.current = false;
+      clearTimeout(safetyTimer);
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
   const signOut = async () => {
+    // Clear local state first to avoid any flicker on the way out.
+    setUser(null);
+    setProfile(null);
     await supabase.auth.signOut();
-    window.location.href = '/login';
+    window.location.href = "/login";
   };
 
   const signInWithGoogle = async () => {
@@ -135,7 +129,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         user,
         profile,
         loading,
-        profileSettled,
+        // profileSettled is kept for backward compatibility with any consumers
+        // that still reference it.  It is always true once loading is false.
+        profileSettled: !loading,
         signOut,
         signInWithGoogle,
         isAdmin: role === "admin",
