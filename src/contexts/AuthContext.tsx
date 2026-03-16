@@ -57,33 +57,51 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const init = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session?.user) {
-        setUser(session.user);
-        const p = await fetchProfile(session.user.id);
-        setProfile(p);
+      try {
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+        if (sessionError) {
+          await supabase.auth.signOut();
+          setLoading(false);
+          return;
+        }
+        if (session?.user) {
+          setUser(session.user);
+          const p = await fetchProfile(session.user.id);
+          setProfile(p);
+        }
+      } catch (err) {
+        console.error('Auth init error:', err);
+        await supabase.auth.signOut();
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     init();
 
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        const currentUser = session?.user ?? null;
-        setUser(currentUser);
-        if (currentUser) {
-          const p = await fetchProfile(currentUser.id);
-          setProfile(p);
-          if (event === "SIGNED_IN") {
-            await updateLastSeen(currentUser.id);
+        try {
+          const currentUser = session?.user ?? null;
+          setUser(currentUser);
+          if (currentUser) {
+            const p = await fetchProfile(currentUser.id);
+            setProfile(p);
+            if (event === "SIGNED_IN") {
+              await updateLastSeen(currentUser.id);
+            }
+          } else {
+            setProfile(null);
           }
-        } else {
+        } catch (err) {
+          console.error('Auth state change error:', err);
           setProfile(null);
+        } finally {
+          setLoading(false);
         }
-        setLoading(false);
       }
     );
 
