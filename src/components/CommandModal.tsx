@@ -1,6 +1,6 @@
-import { X, MessageSquare, MousePointer2, Code2, Edit3, Terminal as TerminalIcon } from "lucide-react";
+import { X, MessageSquare, MousePointer2, Code2, Edit3 } from "lucide-react";
 
-type TabType = "chat" | "visual" | "code" | "terminal";
+type TabType = "chat" | "visual" | "code";
 
 interface CommandModalProps {
   onClose: () => void;
@@ -40,13 +40,6 @@ export const CommandModal = ({ onClose, visualEditMode, onToggleVisualEdit, chil
              >
                <Code2 size={16} />
                Code
-             </button>
-             <button
-               onClick={() => setActiveTab('terminal')}
-               className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'terminal' ? 'bg-red-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
-             >
-               <TerminalIcon size={16} />
-               Terminal
              </button>
           </div>
           <button onClick={onClose} className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors">

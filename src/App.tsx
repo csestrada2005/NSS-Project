@@ -11,7 +11,7 @@ import SettingsPage from './pages/SettingsPage';
 import AIStudioPage from './pages/AIStudioPage';
 import DealsPage from './pages/DealsPage';
 import { Login } from './components/auth/Login';
-import { WyrdForgeIntro } from './pages/WyrdForgeIntro';
+import ForgeDashboard from './pages/ForgeDashboard';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 
 function App() {
@@ -35,7 +35,7 @@ function App() {
 
         {/* AI Web-Builder Studio — full-screen, no business chrome */}
         <Route element={<StudioLayout />}>
-          <Route path="forge" element={<ProtectedRoute><WyrdForgeIntro /></ProtectedRoute>} />
+          <Route path="forge" element={<ProtectedRoute><ForgeDashboard /></ProtectedRoute>} />
           <Route path="studio" element={<StudioEngine />} />
         </Route>
       </Routes>
