@@ -1,6 +1,6 @@
-import { X, MessageSquare, MousePointer2, Code2, Edit3 } from "lucide-react";
+import { X, MessageSquare, MousePointer2, Edit3 } from "lucide-react";
 
-type TabType = "chat" | "visual" | "code";
+type TabType = "chat" | "visual";
 
 interface CommandModalProps {
   onClose: () => void;
@@ -33,13 +33,6 @@ export const CommandModal = ({ onClose, visualEditMode, onToggleVisualEdit, chil
              >
                <MousePointer2 size={16} />
                Visual
-             </button>
-             <button
-               onClick={() => setActiveTab('code')}
-               className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'code' ? 'bg-red-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
-             >
-               <Code2 size={16} />
-               Code
              </button>
           </div>
           <button onClick={onClose} className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors">

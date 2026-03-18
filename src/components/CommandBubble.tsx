@@ -1,12 +1,29 @@
-import { Flame } from "lucide-react";
+import { Flame, Clock } from "lucide-react";
 
-export const CommandBubble = ({ onClick }: { onClick: () => void }) => {
+interface CommandBubbleProps {
+  onClick: () => void;
+  onHistoryClick: () => void;
+}
+
+export const CommandBubble = ({ onClick, onHistoryClick }: CommandBubbleProps) => {
   return (
-    <button
-      onClick={onClick}
-      className="fixed top-[4.5rem] right-6 z-[60] h-12 w-12 rounded-full flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-transform bg-red-600 border-2 border-red-500/50"
-    >
-      <Flame size={20} color="#fff" />
-    </button>
+    <div className="fixed top-[4.5rem] right-6 z-[60]">
+      {/* History button — small, top-left of the main bubble */}
+      <button
+        onClick={onHistoryClick}
+        title="Version History"
+        className="absolute -top-2 -left-2 w-6 h-6 rounded-full bg-gray-800 border border-gray-600 hover:bg-gray-700 flex items-center justify-center z-[61] transition-colors"
+      >
+        <Clock size={12} className="text-gray-300" />
+      </button>
+
+      {/* Main command bubble */}
+      <button
+        onClick={onClick}
+        className="h-11 w-11 rounded-full flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-transform bg-red-600 border-2 border-red-500/50"
+      >
+        <Flame size={18} color="#fff" />
+      </button>
+    </div>
   );
 };

@@ -19,6 +19,7 @@ import { FileExplorer } from '../components/FileExplorer';
 import { AIOrchestrator } from '../services/AIOrchestrator';
 import type { FileSystemTree } from '@webcontainer/api';
 import { webContainerService } from '../services/WebContainerService';
+import { SupabaseService } from '../services/SupabaseService';
 import { updateCode, updateJSXProp, type TargetElement } from '../utils/ast';
 import JSZip from 'jszip';
 import {
@@ -38,8 +39,12 @@ import { SettingsModal } from '../components/settings/SettingsModal';
 import { StateGraph } from '../components/debug/StateGraph';
 import { CommandBubble } from '../components/CommandBubble';
 import { CommandModal } from '../components/CommandModal';
+import { HistoryDrawer } from '../components/HistoryDrawer';
 
-type TabType = 'chat' | 'visual' | 'code';
+type TabType = 'chat' | 'visual';
+
+// Module-level debounce ref for auto-save
+let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function StudioEngine() {
   const { container, uploadZip, isLoading: isContainerLoading, installDependency, mountFileTree } = useWebContainer();
@@ -57,6 +62,8 @@ export function StudioEngine() {
   const [selectedFileContent, setSelectedFileContent] = useState<string>('');
   const [activeBottomTab, setActiveBottomTab] = useState<TabType>('chat');
   const [isCommandModalOpen, setIsCommandModalOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isHydrating, setIsHydrating] = useState(false);
 
   const uploadZipRef = useRef<HTMLInputElement>(null);
 
@@ -120,6 +127,41 @@ export function StudioEngine() {
     return newTree;
   };
 
+  // Save snapshot to Supabase
+  const saveSnapshot = async (tree: FileSystemTree, trigger: string, label?: string) => {
+    try {
+      const projectId = sessionStorage.getItem('forge_project_id');
+      if (!projectId) return;
+
+      const supabase = SupabaseService.getInstance().client;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const doSave = async () => {
+        try {
+          await supabase.from('forge_snapshots').insert({
+            project_id: projectId,
+            user_id: user.id,
+            label: label ?? null,
+            file_tree: tree,
+            trigger,
+          });
+        } catch (e) {
+          console.error('[saveSnapshot] Failed to save snapshot:', e);
+        }
+      };
+
+      if (trigger === 'ai_action') {
+        if (autoSaveTimer) clearTimeout(autoSaveTimer);
+        autoSaveTimer = setTimeout(doSave, 2000);
+      } else {
+        await doSave();
+      }
+    } catch (e) {
+      console.error('[saveSnapshot] Error:', e);
+    }
+  };
+
   const handleFileSelect = (path: string) => {
     setSelectedFilePath(path);
     const content = getFileContent(fileTree, path);
@@ -136,6 +178,7 @@ export function StudioEngine() {
     history.set(newTree);
     if (container) {
       await mountFileTree(newTree);
+      await saveSnapshot(newTree, 'manual_save');
     }
   };
 
@@ -290,18 +333,54 @@ export function StudioEngine() {
     }
   }, []);
 
-  const handleSendMessage = async (message: string) => {
+  // Hydrate file tree from last snapshot when container becomes available
+  useEffect(() => {
+    if (!container) return;
+
+    const projectId = sessionStorage.getItem('forge_project_id');
+    if (!projectId) return;
+
+    const hydrate = async () => {
+      setIsHydrating(true);
+      try {
+        const supabase = SupabaseService.getInstance().client;
+        const { data } = await supabase
+          .from('forge_snapshots')
+          .select('file_tree, created_at')
+          .eq('project_id', projectId)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (data && data.length > 0 && data[0].file_tree) {
+          const parsedTree: FileSystemTree = typeof data[0].file_tree === 'string'
+            ? JSON.parse(data[0].file_tree)
+            : data[0].file_tree;
+          history.set(parsedTree);
+          await mountFileTree(parsedTree);
+        }
+      } catch (e) {
+        console.error('[hydrate] Failed to load snapshot:', e);
+      } finally {
+        setIsHydrating(false);
+      }
+    };
+
+    hydrate();
+  }, [container]);
+
+  const handleSendMessage = async (message: string): Promise<{ success: boolean; modifiedFiles: string[] }> => {
     setIsGenerating(true);
     try {
       const result = await AIOrchestrator.parseUserCommand(message, fileTree, selectedElement);
-      if (result) {
-        await handleCodeUpdate(result);
-        return true;
+      if (result.tree) {
+        await handleCodeUpdate(result.tree);
+        await saveSnapshot(result.tree, 'ai_action');
+        return { success: true, modifiedFiles: result.modifiedFiles };
       }
-      return false;
+      return { success: false, modifiedFiles: [] };
     } catch (error) {
       console.error('Error processing message:', error);
-      return false;
+      return { success: false, modifiedFiles: [] };
     } finally {
       setIsGenerating(false);
     }
@@ -314,6 +393,7 @@ export function StudioEngine() {
            history.set(tree);
            setShowTemplateSelector(false);
            triggerBuild();
+           await saveSnapshot(tree, 'zip_upload');
        }
     }
     // Reset so the same file can be re-uploaded if needed
@@ -330,8 +410,10 @@ export function StudioEngine() {
           const treeWithIds = await mountFileTree(template);
           if (treeWithIds) {
               history.set(treeWithIds);
+              await saveSnapshot(treeWithIds, 'template_load');
           } else {
               history.set(template);
+              await saveSnapshot(template, 'template_load');
           }
           triggerBuild();
       } else {
@@ -565,8 +647,34 @@ export function StudioEngine() {
                 </div>
              ) : (
                 // Preview Logic
-                url ? (
-                  <>
+                isHydrating ? (
+                  <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-4">
+                    <Loader2 className="animate-spin w-8 h-8" />
+                    <div>Restoring your project...</div>
+                  </div>
+                ) : url ? (
+                  <div className="relative w-full h-full">
+                    {/* Canvas Edit Mode Toolbar */}
+                    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-gray-900 border border-gray-700 rounded-lg flex overflow-hidden shadow-lg">
+                      <button
+                        onClick={() => setEditMode('interaction')}
+                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${editMode === 'interaction' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                      >
+                        Interaction
+                      </button>
+                      <button
+                        onClick={() => setEditMode('visual')}
+                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${editMode === 'visual' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                      >
+                        Visual
+                      </button>
+                      <button
+                        onClick={() => setEditMode('code')}
+                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${editMode === 'code' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                      >
+                        Code
+                      </button>
+                    </div>
                     <iframe
                       ref={iframeRef}
                       src={url}
@@ -588,7 +696,7 @@ export function StudioEngine() {
                             fileTree={fileTree}
                         />
                     )}
-                  </>
+                  </div>
                 ) : (
                    <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-4">
                      {isContainerLoading ? (
@@ -655,7 +763,10 @@ export function StudioEngine() {
 
         </Group>
 
-        <CommandBubble onClick={() => setIsCommandModalOpen(true)} />
+        <CommandBubble
+          onClick={() => setIsCommandModalOpen(true)}
+          onHistoryClick={() => setIsHistoryOpen(true)}
+        />
 
         {isCommandModalOpen && (
           <CommandModal
@@ -665,8 +776,6 @@ export function StudioEngine() {
             activeTab={activeBottomTab}
             setActiveTab={(tab) => {
               setActiveBottomTab(tab);
-              // Switching to code tab also activates code edit mode
-              if (tab === 'code') setEditMode('code');
             }}
           >
              <div className="h-full w-full flex flex-col">
@@ -679,16 +788,24 @@ export function StudioEngine() {
                 </div>
                 {/* Visual tab content is handled entirely inside CommandModal (toggle switch) */}
                 <div className={`w-full h-full ${activeBottomTab === 'visual' ? 'block' : 'hidden'}`} />
-                {/* Code tab — code editing happens in the main canvas area */}
-                <div className={`w-full h-full flex items-center justify-center bg-gray-900 ${activeBottomTab === 'code' ? 'block' : 'hidden'}`}>
-                  <p className="text-sm text-gray-500">Code editor is open in the canvas. Close this panel to use it.</p>
-                </div>
              </div>
           </CommandModal>
         )}
 
         {showSettings && <SettingsModal onClose={() => setShowSettings(false)} fileTree={fileTree} />}
         {showGraph && <StateGraph fileTree={fileTree} onClose={() => setShowGraph(false)} />}
+
+        <HistoryDrawer
+          projectId={sessionStorage.getItem('forge_project_id')}
+          isOpen={isHistoryOpen}
+          onClose={() => setIsHistoryOpen(false)}
+          onRestore={async (tree) => {
+            history.set(tree);
+            if (container) await mountFileTree(tree);
+            setIsHistoryOpen(false);
+          }}
+          currentTree={fileTree}
+        />
       </div>
     </ProtectedRoute>
   );

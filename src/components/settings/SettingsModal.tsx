@@ -1,9 +1,21 @@
 import { useState, useEffect } from 'react';
-import { X, Save, Lock, Github, Rocket, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
+import { X, Lock, Github, Rocket, Eye, EyeOff, Plus, Trash2, Save, Database } from 'lucide-react';
 import { webContainerService } from '../../services/WebContainerService';
 import { DeployManager } from '../deploy/DeployManager';
 import { gitHubService } from '../../services/GitHubService';
 import type { FileSystemTree } from '@webcontainer/api';
+import { DatabaseOverview } from './db/DatabaseOverview';
+import { SchemaViewer } from './db/SchemaViewer';
+import { UsersManager } from './db/UsersManager';
+import { SQLEditor } from './db/SQLEditor';
+import { EdgeFunctionsPanel } from './db/EdgeFunctionsPanel';
+import { LogsViewer } from './db/LogsViewer';
+import { SecretsPanel } from './db/SecretsPanel';
+import { UsagePanel } from './db/UsagePanel';
+import { TrafficCharts } from './analytics/TrafficCharts';
+import { LighthousePanel } from './analytics/LighthousePanel';
+import { TopPagesTable } from './analytics/TopPagesTable';
+import { BarChart3 } from 'lucide-react';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -15,10 +27,40 @@ interface Secret {
   value: string;
 }
 
-export function SettingsModal({ onClose, fileTree }: SettingsModalProps) {
-  const [activeTab, setActiveTab] = useState<'secrets' | 'github' | 'deploy'>('secrets');
+type MainTab = 'secrets' | 'github' | 'deploy' | 'database' | 'analytics';
+type DbSubTab = 'overview' | 'schema' | 'users' | 'sql' | 'functions' | 'logs' | 'secrets' | 'usage';
 
-  // Secrets State
+const DB_SUB_TABS: { id: DbSubTab; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'schema', label: 'Schema' },
+  { id: 'users', label: 'Users' },
+  { id: 'sql', label: 'SQL' },
+  { id: 'functions', label: 'Functions' },
+  { id: 'logs', label: 'Logs' },
+  { id: 'secrets', label: 'Secrets' },
+  { id: 'usage', label: 'Usage' },
+];
+
+export function SettingsModal({ onClose, fileTree }: SettingsModalProps) {
+  const [activeTab, setActiveTab] = useState<MainTab>('secrets');
+  const [dbSubTab, setDbSubTab] = useState<DbSubTab>('overview');
+
+  const projectId = sessionStorage.getItem('forge_project_id');
+
+  // Analytics date range state
+  const [dateRange, setDateRange] = useState(() => {
+    const end = new Date().toISOString().slice(0, 10);
+    const start = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    return { start, end };
+  });
+
+  const setQuickRange = (days: number) => {
+    const end = new Date().toISOString().slice(0, 10);
+    const start = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    setDateRange({ start, end });
+  };
+
+  // Secrets State (legacy localStorage tab kept for secrets main tab)
   const [secrets, setSecrets] = useState<Secret[]>([]);
   const [newKey, setNewKey] = useState('');
   const [newValue, setNewValue] = useState('');
@@ -79,16 +121,15 @@ export function SettingsModal({ onClose, fileTree }: SettingsModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-gray-900 border border-gray-800 rounded-xl shadow-2xl w-full max-w-3xl p-6 flex flex-col max-h-[85vh]">
+      <div className="bg-gray-900 border border-gray-800 rounded-xl shadow-2xl w-full max-w-4xl p-6 flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            Settings
-          </h2>
+          <h2 className="text-xl font-bold text-white">Settings</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
             <X size={20} />
           </button>
         </div>
 
+        {/* Main tabs */}
         <div className="flex gap-2 mb-6 border-b border-gray-800 pb-1">
             <button
                 onClick={() => setActiveTab('secrets')}
@@ -110,6 +151,20 @@ export function SettingsModal({ onClose, fileTree }: SettingsModalProps) {
             >
                 <Rocket size={16} />
                 Deploy
+            </button>
+            <button
+                onClick={() => setActiveTab('database')}
+                className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 ${activeTab === 'database' ? 'bg-gray-800 text-white border-b-2 border-blue-500' : 'text-gray-400 hover:text-white hover:bg-gray-800/50'}`}
+            >
+                <Database size={16} />
+                Database
+            </button>
+            <button
+                onClick={() => setActiveTab('analytics')}
+                className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 ${activeTab === 'analytics' ? 'bg-gray-800 text-white border-b-2 border-blue-500' : 'text-gray-400 hover:text-white hover:bg-gray-800/50'}`}
+            >
+                <BarChart3 size={16} />
+                Analytics
             </button>
         </div>
 
@@ -249,6 +304,87 @@ export function SettingsModal({ onClose, fileTree }: SettingsModalProps) {
 
             {activeTab === 'deploy' && (
                 <DeployManager />
+            )}
+
+            {activeTab === 'analytics' && (
+                <div className="space-y-6">
+                    {/* Date range picker */}
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <div className="flex items-center gap-2">
+                            <label className="text-xs text-zinc-500">From</label>
+                            <input
+                                type="date"
+                                value={dateRange.start}
+                                onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                                className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200 focus:outline-none"
+                            />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <label className="text-xs text-zinc-500">To</label>
+                            <input
+                                type="date"
+                                value={dateRange.end}
+                                onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                                className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200 focus:outline-none"
+                            />
+                        </div>
+                        <div className="flex gap-1">
+                            {[7, 30, 90].map(d => (
+                                <button
+                                    key={d}
+                                    onClick={() => setQuickRange(d)}
+                                    className="px-2 py-1 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 rounded transition-colors"
+                                >
+                                    {d}D
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Traffic charts */}
+                    <TrafficCharts projectId={projectId} dateRange={dateRange} />
+
+                    {/* Lighthouse + Top Pages */}
+                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                        <div className="lg:col-span-3">
+                            <h3 className="text-sm font-medium text-zinc-300 mb-3">Performance Audit</h3>
+                            <LighthousePanel projectId={projectId} />
+                        </div>
+                        <div className="lg:col-span-2">
+                            <h3 className="text-sm font-medium text-zinc-300 mb-3">Top Pages & Speed</h3>
+                            <TopPagesTable projectId={projectId} dateRange={dateRange} />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'database' && (
+                <div>
+                    {/* Sub-tab bar */}
+                    <div className="flex gap-1 border-b border-zinc-700 mb-4 overflow-x-auto pb-px">
+                        {DB_SUB_TABS.map((tab) => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setDbSubTab(tab.id)}
+                                className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${dbSubTab === tab.id ? 'border-blue-500 text-white' : 'border-transparent text-zinc-400 hover:text-zinc-200'}`}
+                            >
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Sub-tab content */}
+                    <div>
+                        {dbSubTab === 'overview' && <DatabaseOverview projectId={projectId} />}
+                        {dbSubTab === 'schema' && <SchemaViewer />}
+                        {dbSubTab === 'users' && <UsersManager />}
+                        {dbSubTab === 'sql' && <SQLEditor />}
+                        {dbSubTab === 'functions' && <EdgeFunctionsPanel fileTree={fileTree} />}
+                        {dbSubTab === 'logs' && <LogsViewer />}
+                        {dbSubTab === 'secrets' && <SecretsPanel projectId={projectId} />}
+                        {dbSubTab === 'usage' && <UsagePanel />}
+                    </div>
+                </div>
             )}
         </div>
 
