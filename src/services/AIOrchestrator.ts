@@ -43,11 +43,13 @@ function selectRelevantFiles(
           name.endsWith('.jsx') ||
           name.endsWith('.js')
         ) {
-          const raw = entry.file.contents;
-          const content = typeof raw === 'string'
-            ? raw
-            : new TextDecoder().decode(raw);
-          files.push({ path: entryPath, content });
+          if ('contents' in entry.file) {
+            const raw = entry.file.contents;
+            const content = typeof raw === 'string'
+              ? raw
+              : new TextDecoder().decode(raw);
+            files.push({ path: entryPath, content });
+          }
         }
       }
     }

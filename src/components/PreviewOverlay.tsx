@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, type RefObject } from 'react';
 import Moveable from 'react-moveable';
 import { Edit2, ArrowUp } from 'lucide-react';
 import { classNamesForLayout, type LayoutContext } from '../utils/ast';
+import { ElementEditPopover } from './ElementEditPopover';
 
 interface ElementInfo {
   tagName: string;
@@ -198,6 +199,17 @@ export function PreviewOverlay({ iframeRef, onElementSelect, editMode, onUpdateS
       setIsEditingText(false);
   };
 
+      const [showPopover, setShowPopover] = useState(false);
+
+      // Effect to manage popover visibility on element selection
+      useEffect(() => {
+        if (selectedRect && selectedElementInfo) {
+          setShowPopover(true);
+        } else {
+          setShowPopover(false);
+        }
+      }, [selectedRect, selectedElementInfo]);
+
   if (editMode !== 'visual') return null;
 
   return (
@@ -314,6 +326,25 @@ export function PreviewOverlay({ iframeRef, onElementSelect, editMode, onUpdateS
                         keepRatio={false}
                         renderDirections={["nw", "n", "ne", "w", "e", "sw", "s", "se"]}
                     />
+
+                    {/* Popover specifically rendered when there is a selected element and it's not being inline edited */}
+                    {showPopover && !isEditingText && selectedElementInfo && (
+                        <div className="pointer-events-auto">
+                            <ElementEditPopover
+                                element={selectedElementInfo}
+                                onUpdateText={(newText) => {
+                                    if (onUpdateText) onUpdateText(newText);
+                                    setSelectedElementInfo({ ...selectedElementInfo, tagName: selectedElementInfo.tagName, innerText: newText });
+                                }}
+                                onUpdateStyle={onUpdateStyle}
+                                onClose={() => setShowPopover(false)}
+                                position={{
+                                    top: selectedRect.top + selectedRect.height,
+                                    left: selectedRect.left
+                                }}
+                            />
+                        </div>
+                    )}
                 </>
             )}
           </>

@@ -7,7 +7,7 @@
  * preserved exactly as they were.
  */
 import { useEffect, useState, useRef } from 'react';
-import { Panel, Group, Separator } from 'react-resizable-panels';
+import { Panel, Group } from 'react-resizable-panels';
 import { useWebContainer } from '../hooks/useWebContainer';
 import { useHistory } from '../hooks/useHistory';
 import { files } from '../files';
@@ -27,6 +27,8 @@ import { TEMPLATES } from '../templates';
 import { ProtectedRoute } from '../components/auth/ProtectedRoute';
 import { SettingsModal } from '../components/settings/SettingsModal';
 import { StateGraph } from '../components/debug/StateGraph';
+import { CommandBubble } from '../components/CommandBubble';
+import { CommandModal } from '../components/CommandModal';
 
 export function StudioEngine() {
   const { container, uploadZip, isLoading: isContainerLoading, installDependency, mountFileTree } = useWebContainer();
@@ -41,7 +43,8 @@ export function StudioEngine() {
   const [editMode, setEditMode] = useState<'interaction' | 'visual' | 'code'>('interaction');
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [selectedFileContent, setSelectedFileContent] = useState<string>('');
-  const [activeBottomTab, setActiveBottomTab] = useState<'chat' | 'terminal'>('chat');
+  const [activeBottomTab, setActiveBottomTab] = useState<'chat' | 'visual' | 'code' | 'terminal'>('chat');
+  const [isCommandModalOpen, setIsCommandModalOpen] = useState(false);
 
   // We keep track of the active file for AST updates (Inspector)
   // Assuming single-page app or main file is src/App.tsx for now
@@ -416,8 +419,8 @@ export function StudioEngine() {
     <ProtectedRoute>
       <div className="flex flex-col h-screen w-screen bg-gray-900 text-white overflow-hidden">
         <Group orientation="vertical">
-          {/* Top Section (70%) */}
-        <Panel defaultSize={70} minSize={30}>
+          {/* Main Section */}
+        <Panel defaultSize={100} minSize={30}>
           <div className="relative w-full h-full bg-white">
              {/* Undo/Redo Controls - Moved to Top Left */}
              <div className="absolute top-4 left-4 z-50 bg-gray-900/90 rounded-full p-1 shadow-lg flex items-center border border-gray-700 gap-1">
@@ -569,77 +572,69 @@ export function StudioEngine() {
           </div>
         </Panel>
 
-        <Separator className="h-1 bg-gray-800 hover:bg-red-500 transition-colors cursor-row-resize" />
-
-          {/* Bottom Section (30%) */}
-          <Panel defaultSize={30} minSize={10}>
-              <div className="flex h-full w-full bg-gray-900">
-                  {/* Left: Upload/Export (20%) */}
-                  <div className="w-[20%] p-4 border-r border-gray-800 flex flex-col gap-4">
-                      <label className="flex flex-col items-center justify-center h-24 border-2 border-dashed border-gray-700 rounded-lg hover:border-red-500 hover:bg-gray-800 transition-all cursor-pointer group">
-                          <Upload className="w-6 h-6 text-gray-400 group-hover:text-red-500 mb-2" />
-                          <span className="text-sm text-gray-400 group-hover:text-red-400">Upload Zip</span>
-                          <input type="file" accept=".zip" onChange={handleUploadZip} className="hidden" />
-                      </label>
-
-                      <button
-                          onClick={downloadProject}
-                          className="flex items-center justify-center gap-2 w-full py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-sm"
-                      >
-                          <Download className="w-4 h-4" />
-                          Export Zip
-                      </button>
-
-                      <button
-                          onClick={() => setShowSettings(true)}
-                          className="flex items-center justify-center gap-2 w-full py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-sm"
-                      >
-                          <Settings className="w-4 h-4" />
-                          Settings
-                      </button>
-
-                      <button
-                          onClick={() => setShowGraph(true)}
-                          className="flex items-center justify-center gap-2 w-full py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-sm"
-                      >
-                          <Activity className="w-4 h-4" />
-                          Visual Graph
-                      </button>
-                  </div>
-
-                  {/* Right: Chat (80%) */}
-                  <div className="flex-1 h-full relative">
-                      <div className="absolute top-2 right-2 flex bg-gray-900 rounded-lg p-1 z-10 border border-gray-700">
-                          <button
-                              onClick={() => setActiveBottomTab('chat')}
-                              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${activeBottomTab === 'chat' ? 'bg-gray-800 text-white' : 'text-gray-400 hover:text-white'}`}
-                          >
-                              Chat
-                          </button>
-                          <button
-                              onClick={() => setActiveBottomTab('terminal')}
-                              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${activeBottomTab === 'terminal' ? 'bg-gray-800 text-white' : 'text-gray-400 hover:text-white'}`}
-                          >
-                              Terminal
-                          </button>
-                      </div>
-
-                      <div className={`w-full h-full ${activeBottomTab === 'chat' ? 'block' : 'hidden'}`}>
-                          <ChatInterface
-                              isLoading={isGenerating}
-                              onSendMessage={handleSendMessage}
-                              selectedElement={selectedElement}
-                              editMode={editMode}
-                              setEditMode={setEditMode}
-                          />
-                      </div>
-                      <div className={`w-full h-full ${activeBottomTab === 'terminal' ? 'block' : 'hidden'}`}>
-                          <Terminal ref={terminalRef} />
-                      </div>
-                  </div>
-              </div>
-          </Panel>
         </Group>
+
+        <CommandBubble onClick={() => setIsCommandModalOpen(true)} />
+
+        {isCommandModalOpen && (
+          <CommandModal
+            onClose={() => setIsCommandModalOpen(false)}
+            visualEditMode={editMode === 'visual'}
+            onToggleVisualEdit={(active) => setEditMode(active ? 'visual' : 'interaction')}
+            activeTab={activeBottomTab}
+            setActiveTab={setActiveBottomTab}
+          >
+             <div className="h-full w-full flex flex-col">
+                <div className={`w-full h-full ${activeBottomTab === 'chat' ? 'block' : 'hidden'}`}>
+                    <ChatInterface
+                        isLoading={isGenerating}
+                        onSendMessage={handleSendMessage}
+                        selectedElement={selectedElement}
+                        editMode={editMode}
+                        setEditMode={setEditMode}
+                    />
+                </div>
+                <div className={`w-full h-full ${activeBottomTab === 'terminal' ? 'block' : 'hidden'}`}>
+                    <Terminal ref={terminalRef} />
+                </div>
+                <div className={`w-full h-full flex items-center justify-center p-4 bg-gray-900 ${activeBottomTab === 'visual' ? 'block' : 'hidden'}`}>
+                     <div className="flex flex-col gap-4 w-full max-w-sm">
+                        <label className="flex flex-col items-center justify-center h-24 border-2 border-dashed border-gray-700 rounded-lg hover:border-red-500 hover:bg-gray-800 transition-all cursor-pointer group">
+                            <Upload className="w-6 h-6 text-gray-400 group-hover:text-red-500 mb-2" />
+                            <span className="text-sm text-gray-400 group-hover:text-red-400">Upload Zip</span>
+                            <input type="file" accept=".zip" onChange={handleUploadZip} className="hidden" />
+                        </label>
+
+                        <button
+                            onClick={downloadProject}
+                            className="flex items-center justify-center gap-2 w-full py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-sm"
+                        >
+                            <Download className="w-4 h-4" />
+                            Export Zip
+                        </button>
+
+                        <button
+                            onClick={() => setShowSettings(true)}
+                            className="flex items-center justify-center gap-2 w-full py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-sm"
+                        >
+                            <Settings className="w-4 h-4" />
+                            Settings
+                        </button>
+
+                        <button
+                            onClick={() => setShowGraph(true)}
+                            className="flex items-center justify-center gap-2 w-full py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-sm"
+                        >
+                            <Activity className="w-4 h-4" />
+                            Visual Graph
+                        </button>
+                     </div>
+                </div>
+                {/* Code mode is handled directly in StudioEngine as a full overlay, so no separate block needed here for code editing, unless we want to move FileExplorer here */}
+             </div>
+          </CommandModal>
+        )}
+
         {showSettings && <SettingsModal onClose={() => setShowSettings(false)} fileTree={fileTree} />}
         {showGraph && <StateGraph fileTree={fileTree} onClose={() => setShowGraph(false)} />}
       </div>

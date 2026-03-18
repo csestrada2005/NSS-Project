@@ -11,6 +11,7 @@ import {
   Bot,
   ArrowRight,
   Loader2,
+  Code,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import EmptyState from "@/components/EmptyState";
@@ -216,28 +217,55 @@ const DevDashboard = () => {
           </div>
         </div>
 
-        {/* NOVY card */}
-        <div className="rounded-xl bg-card border border-border p-5 flex flex-col">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-primary/10">
-              <Bot size={18} className="text-primary" />
+        {/* NOVY & Wyrd Forge cards stack */}
+        <div className="flex flex-col gap-6">
+          {/* Wyrd Forge card */}
+          <div className="rounded-xl bg-card border border-border p-5 flex flex-col flex-1">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-red-500/10">
+                <Code size={18} className="text-red-500" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Wyrd Forge</h3>
+                <p className="text-[11px] text-muted-foreground">
+                  {lang === "es" ? "Web Builder" : "Web Builder"}
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-sm font-semibold text-foreground">NOVY</h3>
-              <p className="text-[11px] text-muted-foreground">
-                {lang === "es" ? "Tu asistente IA" : "Your AI assistant"}
-              </p>
-            </div>
+            <p className="text-xs text-muted-foreground mb-4 flex-1">
+              {lang === "es"
+                ? "Construye sitios web funcionales con la ayuda de IA."
+                : "Build functional websites with the help of AI."}
+            </p>
+            <button onClick={() => navigate('/forge')} className="w-full py-2.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-500 hover:bg-red-500/15 transition-colors flex items-center justify-center gap-2">
+              <Code size={14} />
+              {lang === "es" ? "Abrir Wyrd Forge" : "Open Wyrd Forge"}
+            </button>
           </div>
-          <p className="text-xs text-muted-foreground mb-4 flex-1">
-            {lang === "es"
-              ? "Pregúntale por el estado de tus proyectos, genera cotizaciones o redacta mensajes."
-              : "Ask about your project status, generate quotes or draft messages."}
-          </p>
-          <button onClick={() => navigate('/ai-studio')} className="w-full py-2.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/15 transition-colors flex items-center justify-center gap-2">
-            <Bot size={14} />
-            {lang === "es" ? "Abrir AI Studio" : "Open AI Studio"}
-          </button>
+
+          {/* NOVY card */}
+          <div className="rounded-xl bg-card border border-border p-5 flex flex-col flex-1">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-primary/10">
+                <Bot size={18} className="text-primary" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">NOVY</h3>
+                <p className="text-[11px] text-muted-foreground">
+                  {lang === "es" ? "Tu asistente IA" : "Your AI assistant"}
+                </p>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mb-4 flex-1">
+              {lang === "es"
+                ? "Pregúntale por el estado de tus proyectos, genera cotizaciones o redacta mensajes."
+                : "Ask about your project status, generate quotes or draft messages."}
+            </p>
+            <button onClick={() => navigate('/ai-studio')} className="w-full py-2.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/15 transition-colors flex items-center justify-center gap-2">
+              <Bot size={14} />
+              {lang === "es" ? "Abrir AI Studio" : "Open AI Studio"}
+            </button>
+          </div>
         </div>
       </div>
 
