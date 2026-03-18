@@ -34,16 +34,17 @@ export function useWebContainer() {
     if (!container) return;
 
     // Helper to traverse and inject IDs
-    const injectIds = (node: FileSystemTree) => {
+    const injectIds = (node: FileSystemTree, currentPath: string = '') => {
       for (const key in node) {
         const entry = node[key];
+        const filePath = currentPath ? `${currentPath}/${key}` : key;
         if ('file' in entry && 'contents' in entry.file) {
           const contents = entry.file.contents;
           if (typeof contents === 'string' && (key.endsWith('.tsx') || key.endsWith('.jsx'))) {
-            entry.file.contents = injectDataIds(contents);
+            entry.file.contents = injectDataIds(contents, filePath);
           }
         } else if ('directory' in entry) {
-          injectIds(entry.directory);
+          injectIds(entry.directory, filePath);
         }
       }
     };
@@ -110,7 +111,7 @@ export function useWebContainer() {
 
         // Injection: Add IDs to TSX/JSX
         if (fileName.endsWith('.tsx') || fileName.endsWith('.jsx')) {
-            fileContent = injectDataIds(fileContent);
+            fileContent = injectDataIds(fileContent, path);
         }
 
         dir[fileName] = {

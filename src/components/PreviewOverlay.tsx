@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, type RefObject } from 'react';
 import Moveable from 'react-moveable';
 import { Edit2, ArrowUp } from 'lucide-react';
+import { classNamesForLayout, type LayoutContext } from '../utils/ast';
 
 interface ElementInfo {
   tagName: string;
@@ -8,6 +9,12 @@ interface ElementInfo {
   innerText?: string;
   hasChildren?: boolean;
   dataOid?: string;
+  layoutContext?: LayoutContext & {
+    offsetTop: number;
+    offsetLeft: number;
+    offsetWidth: number;
+    offsetHeight: number;
+  };
 }
 
 interface PreviewOverlayProps {
@@ -32,10 +39,17 @@ const getTranslateFromClass = (className?: string): { x: number, y: number } => 
     const xMatch = className.match(/translate-x-\[(-?\d+)px\]/);
     const yMatch = className.match(/translate-y-\[(-?\d+)px\]/);
 
-    let x = xMatch ? parseInt(xMatch[1], 10) : 0;
-    let y = yMatch ? parseInt(yMatch[1], 10) : 0;
+    const x = xMatch ? parseInt(xMatch[1], 10) : 0;
+    const y = yMatch ? parseInt(yMatch[1], 10) : 0;
 
     return { x, y };
+};
+
+const DEFAULT_LAYOUT_CONTEXT: LayoutContext = {
+  display: 'block',
+  position: 'static',
+  parentDisplay: 'block',
+  parentPosition: 'static',
 };
 
 export function PreviewOverlay({ iframeRef, onElementSelect, editMode, onUpdateStyle, onUpdateText }: PreviewOverlayProps) {
@@ -69,12 +83,13 @@ export function PreviewOverlay({ iframeRef, onElementSelect, editMode, onUpdateS
       // Handle click (selection)
       if (event.data?.type === 'element-clicked' || event.data?.type === 'element-selected-response') {
         setSelectedRect(event.data.rect);
-        const info = {
+        const info: ElementInfo = {
             tagName: event.data.tagName,
             className: event.data.className,
             innerText: event.data.innerText,
             hasChildren: event.data.hasChildren,
-            dataOid: event.data.dataOid
+            dataOid: event.data.dataOid,
+            layoutContext: event.data.layoutContext,
         };
         setSelectedElementInfo(info);
         onElementSelect(info);
@@ -87,7 +102,8 @@ export function PreviewOverlay({ iframeRef, onElementSelect, editMode, onUpdateS
         setHoveredElement({
             tagName: event.data.tagName,
             className: event.data.className,
-            dataOid: event.data.dataOid
+            dataOid: event.data.dataOid,
+            layoutContext: event.data.layoutContext,
         });
       }
     };
@@ -113,20 +129,18 @@ export function PreviewOverlay({ iframeRef, onElementSelect, editMode, onUpdateS
     const { lastEvent } = e;
     if (lastEvent) {
         const { translate } = lastEvent;
-        const [dx, dy] = translate;
-        const tdx = Math.round(dx);
-        const tdy = Math.round(dy);
+        const [tdx, tdy] = translate;
+        const dx = Math.round(tdx);
+        const dy = Math.round(tdy);
 
-        if (tdx !== 0 || tdy !== 0) {
-             // Get existing translate from class to add delta
+        if (dx !== 0 || dy !== 0) {
              const { x: currentX, y: currentY } = getTranslateFromClass(selectedElementInfo?.className);
+             const newX = currentX + dx;
+             const newY = currentY + dy;
 
-             const newX = currentX + tdx;
-             const newY = currentY + tdy;
-
-             onUpdateStyle({
-                 transform: `translate-x-[${newX}px] translate-y-[${newY}px]`
-             });
+             const layoutCtx: LayoutContext = selectedElementInfo?.layoutContext ?? DEFAULT_LAYOUT_CONTEXT;
+             const classes = classNamesForLayout({ dx: newX, dy: newY }, layoutCtx);
+             onUpdateStyle({ transform: classes });
         }
     }
   };
@@ -135,9 +149,9 @@ export function PreviewOverlay({ iframeRef, onElementSelect, editMode, onUpdateS
     const { lastEvent } = e;
     if (lastEvent) {
          const { width, height } = lastEvent;
-         onUpdateStyle({
-             dimensions: `w-[${Math.round(width)}px] h-[${Math.round(height)}px]`
-         });
+         const layoutCtx: LayoutContext = selectedElementInfo?.layoutContext ?? DEFAULT_LAYOUT_CONTEXT;
+         const classes = classNamesForLayout({ dx: 0, dy: 0, dw: Math.round(width), dh: Math.round(height) }, layoutCtx);
+         onUpdateStyle({ dimensions: classes });
     }
   };
 
@@ -156,7 +170,7 @@ export function PreviewOverlay({ iframeRef, onElementSelect, editMode, onUpdateS
 
   const handleOverlayClick = (e: React.MouseEvent) => {
     if (editMode !== 'visual' || !iframeRef.current) return;
-    if (isEditingText) return; // Don't trigger selection if editing text
+    if (isEditingText) return;
 
     const rect = iframeRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -179,7 +193,6 @@ export function PreviewOverlay({ iframeRef, onElementSelect, editMode, onUpdateS
   const handleTextSave = () => {
       if (onUpdateText && selectedElementInfo) {
           onUpdateText(textValue);
-          // Optimistically update
           setSelectedElementInfo({ ...selectedElementInfo, innerText: textValue });
       }
       setIsEditingText(false);

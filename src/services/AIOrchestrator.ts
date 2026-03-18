@@ -4,7 +4,6 @@ import { updateCode } from '../utils/ast';
 import { contextService } from './ContextService';
 import { SupabaseService } from './SupabaseService';
 import { webContainerService } from './WebContainerService';
-import { CodebaseKnowledgeService } from './CodebaseKnowledgeService';
 import { NEBU_SCHEMA_CONTEXT } from '../utils/schemaContext';
 
 interface ModifiedFile {
@@ -15,7 +14,114 @@ interface ModifiedFile {
 interface LLMResponse {
   modifiedFiles: ModifiedFile[];
   installCommands?: string[];
+  error?: string;
 }
+
+function selectRelevantFiles(
+  userMessage: string,
+  fileTree: FileSystemTree
+): { path: string; content: string }[] {
+  // Extract keywords: split on spaces/punctuation, filter words > 3 chars, lowercase
+  const keywords = userMessage
+    .split(/[\s\p{P}]+/u)
+    .map(w => w.toLowerCase())
+    .filter(w => w.length > 3);
+
+  // Walk the file tree and collect all .tsx/.ts/.jsx/.js files
+  const files: { path: string; content: string }[] = [];
+
+  const walk = (node: FileSystemTree, currentPath: string) => {
+    for (const [name, entry] of Object.entries(node)) {
+      const entryPath = currentPath ? `${currentPath}/${name}` : name;
+      if ('directory' in entry) {
+        if (name === 'node_modules' || name === 'dist') continue;
+        walk(entry.directory, entryPath);
+      } else if ('file' in entry) {
+        if (
+          name.endsWith('.tsx') ||
+          name.endsWith('.ts') ||
+          name.endsWith('.jsx') ||
+          name.endsWith('.js')
+        ) {
+          const raw = entry.file.contents;
+          const content = typeof raw === 'string'
+            ? raw
+            : new TextDecoder().decode(raw);
+          files.push({ path: entryPath, content });
+        }
+      }
+    }
+  };
+
+  walk(fileTree, '');
+
+  // Score each file
+  const scored = files.map(f => {
+    const nameLower = f.path.toLowerCase();
+    const contentSnippet = f.content.slice(0, 2000).toLowerCase();
+    let score = 0;
+    for (const kw of keywords) {
+      if (nameLower.includes(kw)) score += 3;
+      if (contentSnippet.includes(kw)) score += 1;
+    }
+    return { ...f, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+
+  return scored.slice(0, 5).map(f => ({
+    path: f.path,
+    content: f.content.slice(0, 3000),
+  }));
+}
+
+const FORMAT_INSTRUCTION = `
+CRITICAL OUTPUT FORMAT: Respond with ONLY a raw JSON object. No markdown. No code fences. No explanation before or after. The object must have this exact shape:
+{"modifiedFiles":[{"path":"src/components/Foo.tsx","newContent":"...full file content..."}],"installCommands":[]}
+If you cannot fulfill the request, respond with: {"modifiedFiles":[],"installCommands":[],"error":"reason"}
+Never truncate file content. Never use placeholder comments like "// rest of file here".
+`;
+
+const REACT_TAILWIND_RULES = `
+REACT/TAILWIND RULES:
+- Always write complete file contents, never partial updates
+- Use data-oid attributes exactly as they exist in the source — never add, remove, or change them
+- Prefer Tailwind utility classes; avoid inline styles unless position:absolute math requires it
+- For new components, follow the existing file structure and import patterns visible in the provided context
+- Supabase queries: import via \`import { SupabaseService } from '@/services/SupabaseService'; const supabase = SupabaseService.getInstance().client;\`
+`;
+
+const BACKEND_RULES = `When the user asks for backend features (e.g., 'save this to the database' or 'create a user profile table'), you must perform a 3-step process:
+1. Generate a valid PostgreSQL CREATE TABLE statement wrapped in a file named \`supabase/migrations/<timestamp>_create_<table_name>.sql\`.
+2. Update or create \`src/integrations/supabase/types.ts\` to include the TypeScript interface for the new table.
+   Example for types.ts:
+   export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
+   export interface Database {
+     public: {
+       Tables: {
+         profiles: {
+           Row: { id: string; created_at: string; username: string | null; }
+           Insert: { id: string; created_at?: string; username?: string | null; }
+           Update: { id?: string; created_at?: string; username?: string | null; }
+         }
+       }
+     }
+   }
+3. Create a custom hook \`src/hooks/use<Entity>.ts\` that encapsulates the Supabase client logic (select, insert, update, delete) using the generated types.
+   Example for useTodos.ts:
+   import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+   import { supabase } from '../integrations/supabase/client';
+   export const useTodos = () => {
+     const queryClient = useQueryClient();
+     const fetchTodos = async () => { const { data, error } = await supabase.from('todos').select('*'); if (error) throw error; return data; };
+     const addTodo = async (todo: any) => { const { data, error } = await supabase.from('todos').insert(todo).select(); if (error) throw error; return data; };
+     return { todos: useQuery({ queryKey: ['todos'], queryFn: fetchTodos }), addTodo: useMutation({ mutationFn: addTodo, onSuccess: () => queryClient.invalidateQueries({ queryKey: ['todos'] }) }) };
+   };
+4. Do NOT try to execute the SQL directly.
+5. If the user asks to 'Mock' the data, generate a src/data.json file instead of SQL.
+6. Use the \`cn()\` utility from \`src/lib/utils\` for merging Tailwind classes dynamically.
+7. If the user asks for backend logic (e.g., 'handle Stripe payments' or 'Edge Function'), generate a Deno-compatible TypeScript file at \`supabase/functions/<name>/index.ts\`.
+8. If you need a Shadcn component (e.g., sheet, accordion, dialog) that is not currently in the src/components/ui folder, you MUST include 'npx shadcn-ui@latest add [component-name]' in the 'installCommands' array in your JSON response.`;
 
 export class AIOrchestrator {
   private static currentFileTree: FileSystemTree | null = null;
@@ -72,56 +178,22 @@ export class AIOrchestrator {
           }
       }
 
-      if (nextStepIndex === -1) return null; // All done
+      if (nextStepIndex === -1) return null;
 
-      // Execute the step
-      const knowledgeService = CodebaseKnowledgeService.getInstance();
-      if (!knowledgeService.hasEmbeddings) {
-          await knowledgeService.indexCodebase(currentFileTree);
-      }
-
-      const relevantDocs = await knowledgeService.search(nextStepDescription, 4);
+      const relevantFiles = selectRelevantFiles(nextStepDescription, currentFileTree);
       const blueprint = generateProjectBlueprint(currentFileTree);
 
       let relevantContext = "";
-      for (const doc of relevantDocs) {
-          relevantContext += `--- START ${doc.path} ---\n${doc.content}\n--- END ${doc.path} ---\n`;
+      for (const f of relevantFiles) {
+          relevantContext += `--- START ${f.path} ---\n${f.content}\n--- END ${f.path} ---\n`;
       }
 
       const systemPrompt = NEBU_SCHEMA_CONTEXT + "\n\n" +
-      "You are an expert Senior React Engineer. Implement the following step from the plan. Output a valid JSON object containing a 'modifiedFiles' array. Do not include markdown formatting (```json) or conversational text. JSON only.\n\n" +
-      `Task: ${nextStepDescription}\n\n` +
-      "When the user asks for backend features (e.g., 'save this to the database' or 'create a user profile table'), you must perform a 3-step process:\n" +
-      "1. Generate a valid PostgreSQL CREATE TABLE statement wrapped in a file named `supabase/migrations/<timestamp>_create_<table_name>.sql`.\n" +
-      "2. Update or create `src/integrations/supabase/types.ts` to include the TypeScript interface for the new table.\n" +
-      "   Example for types.ts:\n" +
-      "   export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]\n" +
-      "   export interface Database {\n" +
-      "     public: {\n" +
-      "       Tables: {\n" +
-      "         profiles: {\n" +
-      "           Row: { id: string; created_at: string; username: string | null; }\n" +
-      "           Insert: { id: string; created_at?: string; username?: string | null; }\n" +
-      "           Update: { id?: string; created_at?: string; username?: string | null; }\n" +
-      "         }\n" +
-      "       }\n" +
-      "     }\n" +
-      "   }\n" +
-      "3. Create a custom hook `src/hooks/use<Entity>.ts` that encapsulates the Supabase client logic (select, insert, update, delete) using the generated types.\n" +
-      "   Example for useTodos.ts:\n" +
-      "   import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';\n" +
-      "   import { supabase } from '../integrations/supabase/client';\n" +
-      "   export const useTodos = () => {\n" +
-      "     const queryClient = useQueryClient();\n" +
-      "     const fetchTodos = async () => { const { data, error } = await supabase.from('todos').select('*'); if (error) throw error; return data; };\n" +
-      "     const addTodo = async (todo: any) => { const { data, error } = await supabase.from('todos').insert(todo).select(); if (error) throw error; return data; };\n" +
-      "     return { todos: useQuery({ queryKey: ['todos'], queryFn: fetchTodos }), addTodo: useMutation({ mutationFn: addTodo, onSuccess: () => queryClient.invalidateQueries({ queryKey: ['todos'] }) }) };\n" +
-      "   };\n" +
-      "4. Do NOT try to execute the SQL directly.\n" +
-      "5. If the user asks to 'Mock' the data, generate a src/data.json file instead of SQL.\n" +
-      "6. Use the `cn()` utility from `src/lib/utils` for merging Tailwind classes dynamically.\n" +
-      "7. If the user asks for backend logic (e.g., 'handle Stripe payments' or 'Edge Function'), generate a Deno-compatible TypeScript file at `supabase/functions/<name>/index.ts`.\n" +
-      "8. If you need a Shadcn component (e.g., sheet, accordion, dialog) that is not currently in the src/components/ui folder, you MUST include 'npx shadcn-ui@latest add [component-name]' in the 'installCommands' array in your JSON response.";
+      "You are an expert Senior React Engineer. Implement the following step from the plan.\n" +
+      FORMAT_INSTRUCTION + "\n" +
+      REACT_TAILWIND_RULES + "\n" +
+      BACKEND_RULES + "\n\n" +
+      `Task: ${nextStepDescription}`;
 
       const userMessage = `PROJECT BLUEPRINT (File Structure):\n${blueprint}\n\n` +
                           `RELEVANT FILE CONTEXT:\n${relevantContext}\n\n` +
@@ -134,20 +206,16 @@ export class AIOrchestrator {
 
           const newTree = JSON.parse(JSON.stringify(currentFileTree));
 
-          // Execute install commands if any
           if (response.installCommands && response.installCommands.length > 0) {
               for (const cmd of response.installCommands) {
                   await webContainerService.executeCommand(cmd);
               }
           }
 
-          // Apply changes
           const modifiedPaths: string[] = [];
           for (const file of response.modifiedFiles) {
               this.updateFileInTree(newTree, file.path, file.newContent);
               modifiedPaths.push(file.path);
-              // Update knowledge base
-              await CodebaseKnowledgeService.getInstance().updateFile(file.path, file.newContent);
 
               if (file.path.startsWith('supabase/functions/') && file.path.endsWith('index.ts')) {
                     const parts = file.path.split('/');
@@ -158,7 +226,6 @@ export class AIOrchestrator {
                 }
           }
 
-          // Update PLAN.md
           lines[nextStepIndex] = lines[nextStepIndex].replace('- [ ]', '- [x]');
           const newPlanContent = lines.join('\n');
           await webContainerService.writeFile('PLAN.md', newPlanContent);
@@ -183,25 +250,22 @@ export class AIOrchestrator {
     this.currentFileTree = currentFileTree;
     this.retryCount = 0;
 
-    // Check for "Plan: ..."
     if (input.toLowerCase().startsWith('plan:')) {
         const goal = input.substring(5).trim();
         return this.generatePlan(goal, currentFileTree);
     }
 
-    // Check for "Build a..."
     if (input.toLowerCase().startsWith('build a')) {
         return this.generatePlan(input, currentFileTree);
     }
 
-    // Check for "Execute Next Step"
     if (input.toLowerCase().trim() === 'execute next step' || input.toLowerCase().trim() === 'continue plan') {
         return this.executeNextStep(currentFileTree);
     }
 
     // Fast Lane: If element selected, use backend API
     if (selectedElement) {
-        const filePath = 'src/App.tsx'; // Hardcoded active file for now
+        const filePath = 'src/App.tsx';
         const fileContent = this.getFileContent(currentFileTree, filePath);
 
         if (fileContent) {
@@ -221,7 +285,6 @@ export class AIOrchestrator {
                 if (data.action === 'update-style') {
                     newContent = updateCode(fileContent, selectedElement, { className: data.className });
                 } else if (data.action === 'update-text') {
-                     // Cast to any to bypass potential TS error until ast.ts is updated
                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
                      newContent = updateCode(fileContent, selectedElement, { textContent: data.text } as any);
                 }
@@ -236,57 +299,23 @@ export class AIOrchestrator {
         }
     }
 
-    // Heavy Lane (Original Logic)
-    const knowledgeService = CodebaseKnowledgeService.getInstance();
-    if (!knowledgeService.hasEmbeddings) {
-        await knowledgeService.indexCodebase(currentFileTree);
-    }
-
-    const relevantDocs = await knowledgeService.search(input, 4);
+    // Heavy Lane
+    const relevantFiles = selectRelevantFiles(input, currentFileTree);
     const blueprint = generateProjectBlueprint(currentFileTree);
 
     let relevantContext = "";
-    for (const doc of relevantDocs) {
-        relevantContext += `--- START ${doc.path} ---\n${doc.content}\n--- END ${doc.path} ---\n`;
+    for (const f of relevantFiles) {
+        relevantContext += `--- START ${f.path} ---\n${f.content}\n--- END ${f.path} ---\n`;
     }
 
     const systemPrompt = NEBU_SCHEMA_CONTEXT + "\n\n" +
-    "You are an expert Senior React Engineer. You must output a valid JSON object containing a 'modifiedFiles' array. Do not include markdown formatting (```json) or conversational text. JSON only.\n\n" +
-    "When the user asks for backend features (e.g., 'save this to the database' or 'create a user profile table'), you must perform a 3-step process:\n" +
-    "1. Generate a valid PostgreSQL CREATE TABLE statement wrapped in a file named `supabase/migrations/<timestamp>_create_<table_name>.sql`.\n" +
-    "2. Update or create `src/integrations/supabase/types.ts` to include the TypeScript interface for the new table.\n" +
-    "   Example for types.ts:\n" +
-    "   export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]\n" +
-    "   export interface Database {\n" +
-    "     public: {\n" +
-    "       Tables: {\n" +
-    "         profiles: {\n" +
-    "           Row: { id: string; created_at: string; username: string | null; }\n" +
-    "           Insert: { id: string; created_at?: string; username?: string | null; }\n" +
-    "           Update: { id?: string; created_at?: string; username?: string | null; }\n" +
-    "         }\n" +
-    "       }\n" +
-    "     }\n" +
-    "   }\n" +
-    "3. Create a custom hook `src/hooks/use<Entity>.ts` that encapsulates the Supabase client logic (select, insert, update, delete) using the generated types.\n" +
-    "   Example for useTodos.ts:\n" +
-    "   import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';\n" +
-    "   import { supabase } from '../integrations/supabase/client';\n" +
-    "   export const useTodos = () => {\n" +
-    "     const queryClient = useQueryClient();\n" +
-    "     const fetchTodos = async () => { const { data, error } = await supabase.from('todos').select('*'); if (error) throw error; return data; };\n" +
-    "     const addTodo = async (todo: any) => { const { data, error } = await supabase.from('todos').insert(todo).select(); if (error) throw error; return data; };\n" +
-    "     return { todos: useQuery({ queryKey: ['todos'], queryFn: fetchTodos }), addTodo: useMutation({ mutationFn: addTodo, onSuccess: () => queryClient.invalidateQueries({ queryKey: ['todos'] }) }) };\n" +
-    "   };\n" +
-    "4. Do NOT try to execute the SQL directly.\n" +
-    "5. If the user asks to 'Mock' the data, generate a src/data.json file instead of SQL.\n" +
-    "6. Use the `cn()` utility from `src/lib/utils` for merging Tailwind classes dynamically.\n" +
-    "7. If the user asks for backend logic (e.g., 'handle Stripe payments' or 'Edge Function'), generate a Deno-compatible TypeScript file at `supabase/functions/<name>/index.ts`.\n" +
-    "8. If you need a Shadcn component (e.g., sheet, accordion, dialog) that is not currently in the src/components/ui folder, you MUST include 'npx shadcn-ui@latest add [component-name]' in the 'installCommands' array in your JSON response.";
+    "You are an expert Senior React Engineer.\n" +
+    FORMAT_INSTRUCTION + "\n" +
+    REACT_TAILWIND_RULES + "\n" +
+    BACKEND_RULES;
 
     let userMessage = "";
 
-    // Check for "Read [URL]" commands
     const readUrlRegex = /Read \[(.*?)\]/g;
     let match;
     const urlsToFetch: string[] = [];
@@ -330,7 +359,6 @@ export class AIOrchestrator {
 
       const newTree = JSON.parse(JSON.stringify(currentFileTree));
 
-      // Execute install commands if any
       if (response.installCommands && response.installCommands.length > 0) {
           for (const cmd of response.installCommands) {
               await webContainerService.executeCommand(cmd);
@@ -341,13 +369,9 @@ export class AIOrchestrator {
       for (const file of response.modifiedFiles) {
         this.updateFileInTree(newTree, file.path, file.newContent);
         modifiedPaths.push(file.path);
-        // Update knowledge base
-        await CodebaseKnowledgeService.getInstance().updateFile(file.path, file.newContent);
 
-        // Check for Edge Function deployment
         if (file.path.startsWith('supabase/functions/') && file.path.endsWith('index.ts')) {
             const parts = file.path.split('/');
-            // supabase/functions/<name>/index.ts
             if (parts.length === 4) {
                 const funcName = parts[2];
                 SupabaseService.getInstance().deployEdgeFunction(funcName, file.newContent);
@@ -386,8 +410,18 @@ export class AIOrchestrator {
   }
 
   private static cleanJsonOutput(text: string): string {
-    const match = text.match(/```json([\s\S]*?)```/);
-    return match ? match[1].trim() : text.trim();
+    // Try extracting from code fences first
+    const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fenced) return fenced[1].trim();
+
+    // Find the first { and last } to extract raw JSON
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start !== -1 && end !== -1 && end > start) {
+      return text.slice(start, end + 1);
+    }
+
+    return text.trim();
   }
 
   private static updateFileInTree(tree: FileSystemTree, filePath: string, newContent: string) {
@@ -397,12 +431,10 @@ export class AIOrchestrator {
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i];
       if (i === parts.length - 1) {
-        // File
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if (currentLevel[part] && 'file' in (currentLevel[part] as any)) {
           (currentLevel[part] as FileNode).file.contents = newContent;
         } else {
-             // Create if not exists
              currentLevel[part] = {
                  file: {
                      contents: newContent
@@ -410,12 +442,10 @@ export class AIOrchestrator {
              };
         }
       } else {
-        // Directory
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if (currentLevel[part] && 'directory' in (currentLevel[part] as any)) {
           currentLevel = (currentLevel[part] as DirectoryNode).directory;
         } else {
-           // Create directory if missing
            currentLevel[part] = { directory: {} };
            // eslint-disable-next-line @typescript-eslint/no-explicit-any
            currentLevel = (currentLevel[part] as DirectoryNode).directory;
@@ -435,7 +465,7 @@ export class AIOrchestrator {
       console.log(`[Self-Correction] Attempt ${this.retryCount}/${this.maxRetries}`);
 
       const systemPrompt = "You are an expert React Engineer. You recently modified files and the build failed. " +
-                           "Output a valid JSON object with 'modifiedFiles' to fix the error. JSON only.\n" +
+                           FORMAT_INSTRUCTION + "\n" +
                            "Error Trace:\n" + error + "\n\n" +
                            "Recently Modified Files:\n" + this.lastModifiedFiles.join(", ");
 
@@ -453,13 +483,11 @@ export class AIOrchestrator {
               this.updateFileInTree(newTree, file.path, file.newContent);
               modifiedPaths.push(file.path);
               await webContainerService.writeFile(file.path, file.newContent);
-              await CodebaseKnowledgeService.getInstance().updateFile(file.path, file.newContent);
           }
 
           this.lastModifiedFiles = modifiedPaths;
           this.currentFileTree = newTree;
 
-          // Notify listeners (UI)
           this.fileUpdateListeners.forEach(cb => cb(newTree));
 
           console.log('[Self-Correction] Applied fixes.');
@@ -479,7 +507,7 @@ export class AIOrchestrator {
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
-          max_tokens: 4096,
+          max_tokens: 8192,
           system: systemPrompt,
           messages: [{ role: 'user', content: userMessage }]
         })

@@ -19,7 +19,72 @@ export interface GraphData {
     edges: Edge[];
 }
 
-export const injectDataIds = (code: string): string => {
+export interface LayoutDelta {
+  dx: number;
+  dy: number;
+  dw?: number;
+  dh?: number;
+}
+
+export interface LayoutContext {
+  display: string;
+  position: string;
+  parentDisplay: string;
+  parentPosition: string;
+}
+
+/**
+ * Removes any existing class starting with `prefix` from `existing` and appends `newValue`.
+ */
+export function replaceOrAppendClass(existing: string, prefix: string, newValue: string): string {
+  const classes = existing.split(/\s+/).filter(Boolean);
+  const filtered = classes.filter(c => !c.startsWith(prefix));
+  filtered.push(newValue);
+  return filtered.join(' ');
+}
+
+/**
+ * Returns Tailwind classes for a drag/resize operation based on element layout context.
+ */
+export function classNamesForLayout(delta: LayoutDelta, layoutContext: LayoutContext): string {
+  const { dx, dy, dw, dh } = delta;
+  const { position, parentDisplay } = layoutContext;
+
+  let result = '';
+
+  if (dx !== 0 || dy !== 0) {
+    if (position === 'absolute' || position === 'fixed') {
+      if (dx !== 0) result = replaceOrAppendClass(result, 'left-', `left-[${dx}px]`);
+      if (dy !== 0) result = replaceOrAppendClass(result, 'top-', `top-[${dy}px]`);
+    } else if (parentDisplay === 'flex') {
+      if (dx !== 0) result = replaceOrAppendClass(result, 'ml-', `ml-[${dx}px]`);
+      if (dy !== 0) result = replaceOrAppendClass(result, 'mt-', `mt-[${dy}px]`);
+    } else if (parentDisplay === 'grid') {
+      if (Math.abs(dx) > 50 || Math.abs(dy) > 50) {
+        const col = Math.max(1, Math.round(dx / 50) + 1);
+        const row = Math.max(1, Math.round(dy / 50) + 1);
+        result = replaceOrAppendClass(result, 'col-start-', `col-start-${col}`);
+        result = replaceOrAppendClass(result, 'row-start-', `row-start-${row}`);
+      } else {
+        if (dx !== 0) result = replaceOrAppendClass(result, 'ml-', `ml-[${dx}px]`);
+        if (dy !== 0) result = replaceOrAppendClass(result, 'mt-', `mt-[${dy}px]`);
+      }
+    } else {
+      result = replaceOrAppendClass(result, 'relative', 'relative');
+      if (dx !== 0) result = replaceOrAppendClass(result, 'translate-x-', `translate-x-[${dx}px]`);
+      if (dy !== 0) result = replaceOrAppendClass(result, 'translate-y-', `translate-y-[${dy}px]`);
+    }
+  }
+
+  if (dw !== undefined) result = replaceOrAppendClass(result, 'w-', `w-[${Math.round(dw)}px]`);
+  if (dh !== undefined) result = replaceOrAppendClass(result, 'h-', `h-[${Math.round(dh)}px]`);
+
+  return result.trim();
+}
+
+export const injectDataIds = (code: string, filePath: string): string => {
+  let elementIndex = 0;
+
   const plugin = ({ types: t }: any) => ({
     visitor: {
       JSXOpeningElement(path: any) {
@@ -29,10 +94,13 @@ export const injectDataIds = (code: string): string => {
         );
 
         if (!hasDataOid) {
-          const id = Math.random().toString(36).substr(2, 9);
+          const idx = elementIndex++;
+          const id = btoa(filePath + ':' + idx).replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
           attributes.push(
             t.jsxAttribute(t.jsxIdentifier('data-oid'), t.stringLiteral(id))
           );
+        } else {
+          elementIndex++;
         }
       }
     }
@@ -63,9 +131,14 @@ export const updateCode = (
   updates: { className?: string; textContent?: string },
   options: { classNameMode?: 'replace' | 'merge' } = { classNameMode: 'merge' }
 ): string => {
-  const { tagName, className, dataOid } = target;
+  const { tagName, dataOid } = target;
   const { className: newClassName, textContent: newTextContent } = updates;
   const { classNameMode } = options;
+
+  if (!dataOid) {
+    console.warn('updateCode: no dataOid provided, skipping');
+    return fileContent;
+  }
 
   const plugin = ({ types: t }: any) => ({
     visitor: {
@@ -73,54 +146,15 @@ export const updateCode = (
         const openingElement = path.node.openingElement;
         const nameNode = openingElement.name;
 
-        // Handle simpler case where name is an identifier
         if (!t.isJSXIdentifier(nameNode)) return;
 
         const name = nameNode.name;
         if (name !== tagName) return;
 
-        // Check for data-oid if provided
-        let matchesOid = false;
-        if (dataOid) {
-             const oidAttr = openingElement.attributes.find(
-                (attr: any) => t.isJSXAttribute(attr) && attr.name && attr.name.name === 'data-oid'
-             );
-             if (oidAttr && t.isStringLiteral(oidAttr.value) && oidAttr.value.value === dataOid) {
-                 matchesOid = true;
-             }
-        }
-
-        // If dataOid is provided but doesn't match, skip this element
-        if (dataOid && !matchesOid) return;
-
-        // If dataOid is NOT provided, fallback to className matching
-        if (!dataOid) {
-            // Find existing className
-            const classNameAttrIndex = openingElement.attributes.findIndex(
-                (attr: any) => t.isJSXAttribute(attr) && attr.name && attr.name.name === 'className'
-            );
-            const classNameAttr = classNameAttrIndex !== -1 ? openingElement.attributes[classNameAttrIndex] : null;
-
-            let currentClass = '';
-            if (classNameAttr && t.isStringLiteral(classNameAttr.value)) {
-                currentClass = classNameAttr.value.value;
-            }
-
-            const normalize = (s: string) => s.split(/\s+/).filter(Boolean).sort().join(' ');
-
-            let isMatch = false;
-            if (className) {
-                if (normalize(currentClass) === normalize(className)) {
-                    isMatch = true;
-                }
-            } else {
-                if (!currentClass) {
-                    isMatch = true;
-                }
-            }
-
-            if (!isMatch) return;
-        }
+        const oidAttr = openingElement.attributes.find(
+          (attr: any) => t.isJSXAttribute(attr) && attr.name && attr.name.name === 'data-oid'
+        );
+        if (!oidAttr || !t.isStringLiteral(oidAttr.value) || oidAttr.value.value !== dataOid) return;
 
         // Apply updates
         let modified = false;
@@ -138,7 +172,6 @@ export const updateCode = (
                  if (classNameAttr && t.isStringLiteral(classNameAttr.value)) {
                      currentClass = classNameAttr.value.value;
                  }
-                 // Merge logic: existing + new (deduplicated)
                  if (currentClass) {
                      const existingClasses = new Set(currentClass.split(/\s+/).filter(Boolean));
                      const newClasses = newClassName.split(/\s+/).filter(Boolean);
@@ -172,7 +205,7 @@ export const updateCode = (
         }
 
         if (modified) {
-            path.stop(); // Stop after first match
+            path.stop();
         }
       }
     }
@@ -183,13 +216,11 @@ export const updateCode = (
           filename: 'file.tsx',
           parserOpts: {
               plugins: ['typescript', 'jsx'],
-              // isTSX: true is important for parsing <Type> assertions vs <Tag>
               isTSX: true
           } as any,
           plugins: [plugin],
           retainLines: true,
           compact: false,
-          // Disable generating compilation artifacts
           presets: [],
       });
       return result.code || fileContent;
@@ -204,7 +235,6 @@ export const extractComponentProps = (
   tagName: string
 ): PropDef[] => {
   let fileContent: string | null = null;
-  // Heuristic: check standard paths
   const pathsToCheck = [
     `src/components/${tagName}.tsx`,
     `src/components/ui/${tagName}.tsx`,
@@ -247,14 +277,12 @@ export const extractComponentProps = (
   let propTypeDefinition: any = null;
 
   const extractFromTypeLiteral = (typeLiteral: any) => {
-      // typeLiteral might be TSTypeLiteral or TSInterfaceBody
       const members = typeLiteral.members || typeLiteral.body;
       if (!members) return;
 
       members.forEach((member: any) => {
           if (member.type === 'TSPropertySignature' && member.key.type === 'Identifier') {
               const name = member.key.name;
-              // Ignore standard react props
               if (['className', 'children', 'style', 'key', 'ref'].includes(name)) return;
 
               const typeAnn = member.typeAnnotation?.typeAnnotation;
@@ -267,7 +295,6 @@ export const extractComponentProps = (
               } else if (typeAnn.type === 'TSNumberKeyword') {
                   props.push({ name, type: 'number' });
               } else if (typeAnn.type === 'TSUnionType') {
-                  // Check for string literals
                   const options = typeAnn.types
                       .filter((t: any) => t.type === 'TSLiteralType' && t.literal.type === 'StringLiteral')
                       .map((t: any) => t.literal.value);
@@ -282,7 +309,6 @@ export const extractComponentProps = (
 
   const analysisPlugin = ({ types: t }: any) => ({
       visitor: {
-          // Find Component
           VariableDeclarator(path: any) {
               if (t.isIdentifier(path.node.id) && path.node.id.name === tagName) {
                  const init = path.node.init;
@@ -312,7 +338,6 @@ export const extractComponentProps = (
                   }
               }
           },
-          // Find Type/Interface
           TSInterfaceDeclaration(path: any) {
               if (propTypeName && path.node.id.name === propTypeName) {
                   propTypeDefinition = path.node.body;
@@ -381,15 +406,8 @@ export const updateJSXProp = (
 
         if (dataOid && !matchesOid) return;
 
-        // If dataOid is NOT provided, fallback to matching first element of type (risky but consistent with updateCode)
-        if (!dataOid) {
-            // Assume match for now if no better ID logic
-            // In practice, inspector should always have dataOid if injected
-        }
-
-        // Find prop
         const propAttrIndex = openingElement.attributes.findIndex(
-            (attr: any) => t.isJSXAttribute(attr) && attr.name && attr.name.name === 'className'
+            (attr: any) => t.isJSXAttribute(attr) && attr.name && attr.name.name === propName
         );
         const propAttr = propAttrIndex !== -1 ? openingElement.attributes[propAttrIndex] : null;
 
@@ -437,22 +455,20 @@ export const updateJSXProp = (
 export const analyzeDependencyGraph = (tree: FileSystemTree): GraphData => {
     const nodes: Node[] = [];
     const edges: Edge[] = [];
-    const componentMap = new Map<string, string>(); // ComponentName -> FilePath
+    const componentMap = new Map<string, string>();
 
-    // 1. Identify all components
     const traverseTree = (path: string, node: any) => {
         if (node.file) {
             if (path.endsWith('.tsx') || path.endsWith('.jsx')) {
-                // Heuristic: Component name is filename without extension
                 const parts = path.split('/');
                 const fileName = parts[parts.length - 1];
                 const componentName = fileName.replace(/\.(tsx|jsx)$/, '');
 
                 nodes.push({
                     id: componentName,
-                    position: { x: 0, y: 0 }, // Will be laid out later
+                    position: { x: 0, y: 0 },
                     data: { label: componentName, path },
-                    type: 'default' // or custom
+                    type: 'default'
                 });
                 componentMap.set(componentName, path);
             }
@@ -464,8 +480,6 @@ export const analyzeDependencyGraph = (tree: FileSystemTree): GraphData => {
     };
     traverseTree('', tree);
 
-    // 2. Analyze imports and usage
-    // We need to read file content again.
     const getFileContent = (p: string): string | null => {
         const parts = p.split('/');
         let current: any = tree;
@@ -494,15 +508,11 @@ export const analyzeDependencyGraph = (tree: FileSystemTree): GraphData => {
 
         const plugin = ({ types: t }: any) => ({
             visitor: {
-                // Check Usage
                 JSXElement(path: any) {
                     const openingElement = path.node.openingElement;
                     if (t.isJSXIdentifier(openingElement.name)) {
                         const name = openingElement.name.name;
-                        // If this name matches a known component, add an edge
-                        // Exclude HTML tags (lowercase usually)
                         if (name[0] === name[0].toUpperCase() && componentMap.has(name)) {
-                            // Avoid self-references or duplicates
                              if (name !== node.id) {
                                  const edgeId = `${node.id}-${name}`;
                                  if (!edges.some(e => e.id === edgeId)) {
