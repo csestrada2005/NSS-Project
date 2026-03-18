@@ -15,20 +15,31 @@ import '../App.css';
 import { ChatInterface } from '../components/ChatInterface';
 import { PreviewOverlay } from '../components/PreviewOverlay';
 import { InspectorPanel } from '../components/InspectorPanel';
-import { Terminal, type TerminalRef } from '../components/Terminal';
 import { FileExplorer } from '../components/FileExplorer';
 import { AIOrchestrator } from '../services/AIOrchestrator';
 import type { FileSystemTree } from '@webcontainer/api';
 import { webContainerService } from '../services/WebContainerService';
 import { updateCode, updateJSXProp, type TargetElement } from '../utils/ast';
 import JSZip from 'jszip';
-import { Download, Upload, Loader2, LayoutTemplate, Undo, Redo, RefreshCw, Settings, Activity } from 'lucide-react';
+import {
+  Download,
+  Upload,
+  Loader2,
+  LayoutTemplate,
+  RefreshCw,
+  Settings,
+  Activity,
+  Menu,
+  X,
+} from 'lucide-react';
 import { TEMPLATES } from '../templates';
 import { ProtectedRoute } from '../components/auth/ProtectedRoute';
 import { SettingsModal } from '../components/settings/SettingsModal';
 import { StateGraph } from '../components/debug/StateGraph';
 import { CommandBubble } from '../components/CommandBubble';
 import { CommandModal } from '../components/CommandModal';
+
+type TabType = 'chat' | 'visual' | 'code';
 
 export function StudioEngine() {
   const { container, uploadZip, isLoading: isContainerLoading, installDependency, mountFileTree } = useWebContainer();
@@ -38,20 +49,22 @@ export function StudioEngine() {
   const [showTemplateSelector, setShowTemplateSelector] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [showGraph, setShowGraph] = useState(false);
+  const [showHamburger, setShowHamburger] = useState(false);
   const [selectedElement, setSelectedElement] = useState<TargetElement | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [editMode, setEditMode] = useState<'interaction' | 'visual' | 'code'>('interaction');
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [selectedFileContent, setSelectedFileContent] = useState<string>('');
-  const [activeBottomTab, setActiveBottomTab] = useState<'chat' | 'visual' | 'code' | 'terminal'>('chat');
+  const [activeBottomTab, setActiveBottomTab] = useState<TabType>('chat');
   const [isCommandModalOpen, setIsCommandModalOpen] = useState(false);
+
+  const uploadZipRef = useRef<HTMLInputElement>(null);
 
   // We keep track of the active file for AST updates (Inspector)
   // Assuming single-page app or main file is src/App.tsx for now
   const activeFilePath = 'src/App.tsx';
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const terminalRef = useRef<TerminalRef>(null);
 
   // Helper to get content from tree
   const getFileContent = (tree: FileSystemTree, path: string): string | null => {
@@ -303,6 +316,8 @@ export function StudioEngine() {
            triggerBuild();
        }
     }
+    // Reset so the same file can be re-uploaded if needed
+    e.target.value = '';
   };
 
   const handleLoadTemplate = async (templateKey: string) => {
@@ -326,32 +341,26 @@ export function StudioEngine() {
 
   const triggerBuild = async (force: boolean = false) => {
       if (!container) return;
-      setActiveBottomTab('terminal');
 
       try {
-        terminalRef.current?.write('Configuring Shadcn/UI...\r\n');
+        console.log('[build] Configuring Shadcn/UI...');
         await webContainerService.configureShadcn();
 
         let shouldInstall = force;
         if (!shouldInstall) {
             try {
                 await container.fs.readdir('node_modules');
-                console.log('node_modules exists, skipping install');
-                terminalRef.current?.write('Skipping npm install (node_modules exists)...\r\n');
-            } catch (error) {
+                console.log('[build] node_modules exists, skipping install');
+            } catch {
                 shouldInstall = true;
             }
         }
 
         if (shouldInstall) {
-            // Install
             const env = webContainerService.getEnv();
             const installProcess = await container.spawn('npm', ['install'], { env });
             installProcess.output.pipeTo(new WritableStream({
-                write(data) {
-                    console.log('[install]', data);
-                    terminalRef.current?.write(data);
-                }
+                write(data) { console.log('[install]', data); }
             }));
             await installProcess.exit;
         }
@@ -360,21 +369,16 @@ export function StudioEngine() {
         const env = webContainerService.getEnv();
         const startProcess = await container.spawn('npm', ['run', 'dev'], { env });
         startProcess.output.pipeTo(new WritableStream({
-            write(data) {
-                console.log('[run dev]', data);
-                terminalRef.current?.write(data);
-            }
+            write(data) { console.log('[run dev]', data); }
         }));
       } catch (err) {
-        console.error('Build failed', err);
-        terminalRef.current?.write(`\r\nBuild failed: ${err}\r\n`);
+        console.error('[build] Build failed', err);
       }
   };
 
   const handleInstallPackage = async (packageName: string) => {
-      setActiveBottomTab('terminal');
       await installDependency(packageName, (data) => {
-          terminalRef.current?.write(data);
+          console.log('[install]', data);
       });
   };
 
@@ -405,46 +409,123 @@ export function StudioEngine() {
     };
     addFilesToZip(fileTree, '');
     const blob = await zip.generateAsync({ type: 'blob' });
-    const url = URL.createObjectURL(blob);
+    const objectUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
+    a.href = objectUrl;
     a.download = 'project.zip';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    URL.revokeObjectURL(objectUrl);
   };
 
   return (
     <ProtectedRoute>
-      <div className="flex flex-col h-screen w-screen bg-gray-900 text-white overflow-hidden">
+      <div className="flex flex-col h-screen w-screen bg-gray-950 text-white overflow-hidden">
         <Group orientation="vertical">
           {/* Main Section */}
         <Panel defaultSize={100} minSize={30}>
-          <div className="relative w-full h-full bg-white">
-             {/* Undo/Redo Controls - Moved to Top Left */}
-             <div className="absolute top-4 left-4 z-50 bg-gray-900/90 rounded-full p-1 shadow-lg flex items-center border border-gray-700 gap-1">
-                 <button
-                    onClick={handleUndo}
-                    disabled={!history.canUndo}
-                    className="p-1.5 text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors rounded-full hover:bg-gray-800"
-                    title="Undo (Ctrl+Z)"
-                 >
-                     <Undo size={14} />
-                 </button>
-                 <button
-                    onClick={handleRedo}
-                    disabled={!history.canRedo}
-                    className="p-1.5 text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors rounded-full hover:bg-gray-800"
-                    title="Redo (Ctrl+Shift+Z)"
-                 >
-                     <Redo size={14} />
-                 </button>
-             </div>
+          <div className="relative w-full h-full bg-gray-950">
+
+            {/* Hamburger Menu — Top Left */}
+            <div className="absolute top-4 left-4 z-50">
+              <button
+                onClick={() => setShowHamburger((v) => !v)}
+                className="p-2 bg-gray-900/90 hover:bg-gray-800 border border-gray-700 rounded-lg shadow-lg text-gray-400 hover:text-white transition-colors"
+                title="Menu"
+              >
+                <Menu size={18} />
+              </button>
+
+              {showHamburger && (
+                <>
+                  {/* Backdrop to close on outside click */}
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowHamburger(false)}
+                  />
+                  <div className="absolute top-10 left-0 z-50 w-48 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl overflow-hidden py-1">
+                    {/* Upload Zip */}
+                    <label className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white cursor-pointer transition-colors">
+                      <Upload size={15} className="text-gray-400" />
+                      Upload Zip
+                      <input
+                        type="file"
+                        accept=".zip"
+                        ref={uploadZipRef}
+                        onChange={(e) => {
+                          setShowHamburger(false);
+                          handleUploadZip(e);
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+
+                    {/* Export Zip */}
+                    <button
+                      onClick={() => {
+                        setShowHamburger(false);
+                        downloadProject();
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+                    >
+                      <Download size={15} className="text-gray-400" />
+                      Export Zip
+                    </button>
+
+                    <div className="my-1 h-px bg-gray-800" />
+
+                    {/* Settings */}
+                    <button
+                      onClick={() => {
+                        setShowHamburger(false);
+                        setShowSettings(true);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+                    >
+                      <Settings size={15} className="text-gray-400" />
+                      Settings
+                    </button>
+
+                    {/* Visual Graph */}
+                    <button
+                      onClick={() => {
+                        setShowHamburger(false);
+                        setShowGraph(true);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+                    >
+                      <Activity size={15} className="text-gray-400" />
+                      Visual Graph
+                    </button>
+
+                    <div className="my-1 h-px bg-gray-800" />
+
+                    {/* Undo / Redo — kept accessible in menu */}
+                    <button
+                      onClick={() => { setShowHamburger(false); handleUndo(); }}
+                      disabled={!history.canUndo}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <X size={15} className="text-gray-400 rotate-45" />
+                      Undo
+                    </button>
+                    <button
+                      onClick={() => { setShowHamburger(false); handleRedo(); }}
+                      disabled={!history.canRedo}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <X size={15} className="text-gray-400 -rotate-45" />
+                      Redo
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
 
              {/* Main Content Area */}
              {editMode === 'code' ? (
-                <div className="flex w-full h-full bg-gray-900">
+                <div className="flex w-full h-full bg-gray-950">
                    <div className="w-64 border-r border-gray-800 h-full overflow-hidden">
                       <FileExplorer
                           fileTree={fileTree}
@@ -483,7 +564,7 @@ export function StudioEngine() {
                    </div>
                 </div>
              ) : (
-                // Existing Preview Logic
+                // Preview Logic
                 url ? (
                   <>
                     <iframe
@@ -582,7 +663,11 @@ export function StudioEngine() {
             visualEditMode={editMode === 'visual'}
             onToggleVisualEdit={(active) => setEditMode(active ? 'visual' : 'interaction')}
             activeTab={activeBottomTab}
-            setActiveTab={setActiveBottomTab}
+            setActiveTab={(tab) => {
+              setActiveBottomTab(tab);
+              // Switching to code tab also activates code edit mode
+              if (tab === 'code') setEditMode('code');
+            }}
           >
              <div className="h-full w-full flex flex-col">
                 <div className={`w-full h-full ${activeBottomTab === 'chat' ? 'block' : 'hidden'}`}>
@@ -590,47 +675,14 @@ export function StudioEngine() {
                         isLoading={isGenerating}
                         onSendMessage={handleSendMessage}
                         selectedElement={selectedElement}
-                        editMode={editMode}
-                        setEditMode={setEditMode}
                     />
                 </div>
-                <div className={`w-full h-full ${activeBottomTab === 'terminal' ? 'block' : 'hidden'}`}>
-                    <Terminal ref={terminalRef} />
+                {/* Visual tab content is handled entirely inside CommandModal (toggle switch) */}
+                <div className={`w-full h-full ${activeBottomTab === 'visual' ? 'block' : 'hidden'}`} />
+                {/* Code tab — code editing happens in the main canvas area */}
+                <div className={`w-full h-full flex items-center justify-center bg-gray-900 ${activeBottomTab === 'code' ? 'block' : 'hidden'}`}>
+                  <p className="text-sm text-gray-500">Code editor is open in the canvas. Close this panel to use it.</p>
                 </div>
-                <div className={`w-full h-full flex items-center justify-center p-4 bg-gray-900 ${activeBottomTab === 'visual' ? 'block' : 'hidden'}`}>
-                     <div className="flex flex-col gap-4 w-full max-w-sm">
-                        <label className="flex flex-col items-center justify-center h-24 border-2 border-dashed border-gray-700 rounded-lg hover:border-red-500 hover:bg-gray-800 transition-all cursor-pointer group">
-                            <Upload className="w-6 h-6 text-gray-400 group-hover:text-red-500 mb-2" />
-                            <span className="text-sm text-gray-400 group-hover:text-red-400">Upload Zip</span>
-                            <input type="file" accept=".zip" onChange={handleUploadZip} className="hidden" />
-                        </label>
-
-                        <button
-                            onClick={downloadProject}
-                            className="flex items-center justify-center gap-2 w-full py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-sm"
-                        >
-                            <Download className="w-4 h-4" />
-                            Export Zip
-                        </button>
-
-                        <button
-                            onClick={() => setShowSettings(true)}
-                            className="flex items-center justify-center gap-2 w-full py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-sm"
-                        >
-                            <Settings className="w-4 h-4" />
-                            Settings
-                        </button>
-
-                        <button
-                            onClick={() => setShowGraph(true)}
-                            className="flex items-center justify-center gap-2 w-full py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-sm"
-                        >
-                            <Activity className="w-4 h-4" />
-                            Visual Graph
-                        </button>
-                     </div>
-                </div>
-                {/* Code mode is handled directly in StudioEngine as a full overlay, so no separate block needed here for code editing, unless we want to move FileExplorer here */}
              </div>
           </CommandModal>
         )}
