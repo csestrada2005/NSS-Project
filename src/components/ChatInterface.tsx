@@ -8,7 +8,7 @@ interface Message {
 
 interface ChatInterfaceProps {
   isLoading: boolean;
-  onSendMessage: (message: string) => Promise<boolean>;
+  onSendMessage: (message: string) => Promise<{ success: boolean; modifiedFiles: string[] }>;
   selectedElement: { tagName: string; className?: string } | null;
 }
 
@@ -27,6 +27,16 @@ export function ChatInterface({ isLoading, onSendMessage, selectedElement }: Cha
     scrollToBottom();
   }, [messages, isLoading]);
 
+  const buildAssistantMessage = (result: { success: boolean; modifiedFiles: string[] }): string => {
+    if (!result.success) {
+      return 'Sorry, something went wrong processing your request.';
+    }
+    if (result.modifiedFiles.length > 0) {
+      return `Done. Modified: ${result.modifiedFiles.join(', ')}`;
+    }
+    return 'Done — no files needed changing.';
+  };
+
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
@@ -35,24 +45,16 @@ export function ChatInterface({ isLoading, onSendMessage, selectedElement }: Cha
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
 
     try {
-      const success = await onSendMessage(userMessage);
-
-      if (success) {
-        setMessages(prev => [
-          ...prev,
-          { role: 'assistant', content: `I received your request: ${userMessage}` }
-        ]);
-      } else {
-        setMessages(prev => [
-          ...prev,
-          { role: 'assistant', content: `Sorry, something went wrong processing your request.` }
-        ]);
-      }
+      const result = await onSendMessage(userMessage);
+      setMessages(prev => [
+        ...prev,
+        { role: 'assistant', content: buildAssistantMessage(result) }
+      ]);
     } catch (error) {
       console.error('Error in chat:', error);
       setMessages(prev => [
         ...prev,
-        { role: 'assistant', content: `Sorry, an unexpected error occurred.` }
+        { role: 'assistant', content: 'Sorry, an unexpected error occurred.' }
       ]);
     }
   };
@@ -122,14 +124,12 @@ export function ChatInterface({ isLoading, onSendMessage, selectedElement }: Cha
                     const trimmed = suggestion.trim();
                     setInput('');
                     setMessages(prev => [...prev, { role: 'user', content: trimmed }]);
-                    onSendMessage(trimmed).then((success) => {
+                    onSendMessage(trimmed).then((result) => {
                       setMessages(prev => [
                         ...prev,
                         {
                           role: 'assistant',
-                          content: success
-                            ? `I received your request: ${trimmed}`
-                            : 'Sorry, something went wrong processing your request.',
+                          content: buildAssistantMessage(result),
                         },
                       ]);
                     });

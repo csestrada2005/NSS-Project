@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Users, Briefcase, DollarSign, Clock, Loader2 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getAdminKPIs, getRecentSignups, getActiveProjects } from "@/services/data/supabaseData";
+import { SupabaseService } from "@/services/SupabaseService";
 import type { AdminKPIs, Profile, Project } from "@/types";
 
 const STATUS_COLORS: Record<Project["status"], string> = {
@@ -48,12 +49,17 @@ const AdminDashboard = () => {
   const [kpis, setKpis] = useState<AdminKPIs>(DEFAULT_KPIS);
   const [recentSignups, setRecentSignups] = useState<Profile[]>([]);
   const [activeProjects, setActiveProjects] = useState<Project[]>([]);
+  const [forgeVisitorsMTD, setForgeVisitorsMTD] = useState<number | string>('--');
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       setIsLoading(true);
       try {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+        const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString().slice(0, 10);
+
         const [kpiData, signups, projects] = await Promise.all([
           getAdminKPIs(),
           getRecentSignups(),
@@ -63,6 +69,22 @@ const AdminDashboard = () => {
           setKpis(kpiData);
           setRecentSignups(signups);
           setActiveProjects(projects);
+        }
+
+        // Forge Analytics MTD visitors
+        try {
+          const supabase = SupabaseService.getInstance().client;
+          const { data } = await supabase
+            .from('forge_analytics')
+            .select('visitors')
+            .gte('date', startOfMonth)
+            .lt('date', startOfNextMonth);
+          if (!cancelled && data) {
+            const total = data.reduce((s, r) => s + (r.visitors ?? 0), 0);
+            setForgeVisitorsMTD(total);
+          }
+        } catch {
+          // Table may not exist yet — keep '--'
         }
       } catch (err) {
         console.error("Admin dashboard fetch failed:", err);
@@ -97,6 +119,11 @@ const AdminDashboard = () => {
       value: formatCurrency(kpis.pendingPayments, lang),
       icon: Clock,
     },
+    {
+      label: { es: "Visitas Forge (mes)", en: "Site Visitors (MTD)" },
+      value: String(forgeVisitorsMTD),
+      icon: Users,
+    },
   ];
 
   return (
@@ -114,7 +141,7 @@ const AdminDashboard = () => {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {kpiCards.map((kpi) => (
           <div
             key={kpi.label.es}

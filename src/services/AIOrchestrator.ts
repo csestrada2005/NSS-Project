@@ -247,22 +247,25 @@ export class AIOrchestrator {
     input: string,
     currentFileTree: FileSystemTree,
     selectedElement: { tagName: string; className?: string } | null = null
-  ): Promise<FileSystemTree | null> {
+  ): Promise<{ tree: FileSystemTree | null; modifiedFiles: string[] }> {
     this.initialize();
     this.currentFileTree = currentFileTree;
     this.retryCount = 0;
 
     if (input.toLowerCase().startsWith('plan:')) {
         const goal = input.substring(5).trim();
-        return this.generatePlan(goal, currentFileTree);
+        const tree = await this.generatePlan(goal, currentFileTree);
+        return { tree, modifiedFiles: ['PLAN.md'] };
     }
 
     if (input.toLowerCase().startsWith('build a')) {
-        return this.generatePlan(input, currentFileTree);
+        const tree = await this.generatePlan(input, currentFileTree);
+        return { tree, modifiedFiles: ['PLAN.md'] };
     }
 
     if (input.toLowerCase().trim() === 'execute next step' || input.toLowerCase().trim() === 'continue plan') {
-        return this.executeNextStep(currentFileTree);
+        const tree = await this.executeNextStep(currentFileTree);
+        return { tree, modifiedFiles: tree ? this.lastModifiedFiles : [] };
     }
 
     // Fast Lane: If element selected, use backend API
@@ -293,10 +296,10 @@ export class AIOrchestrator {
 
                 const newTree = JSON.parse(JSON.stringify(currentFileTree));
                 this.updateFileInTree(newTree, filePath, newContent);
-                return newTree;
+                return { tree: newTree, modifiedFiles: [filePath] };
             } catch (e) {
                 console.error('Fast lane error:', e);
-                return null;
+                return { tree: null, modifiedFiles: [] };
             }
         }
     }
@@ -383,10 +386,10 @@ export class AIOrchestrator {
 
       this.lastModifiedFiles = modifiedPaths;
       this.currentFileTree = newTree;
-      return newTree;
+      return { tree: newTree, modifiedFiles: modifiedPaths };
     } catch (error) {
       console.error('Error parsing AI response:', error);
-      return null;
+      return { tree: null, modifiedFiles: [] };
     }
   }
 
