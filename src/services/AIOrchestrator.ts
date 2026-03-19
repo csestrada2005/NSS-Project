@@ -4,6 +4,15 @@ import { SupabaseService } from './SupabaseService';
 import { platformService } from './PlatformService';
 import { projectDBService } from './ProjectDBService';
 import { NEBU_SCHEMA_CONTEXT } from '../utils/schemaContext';
+import { ProjectMemoryService } from './ProjectMemoryService';
+import { IntentClassifier } from './IntentClassifier';
+import { Architect, type BuildStep } from './Architect';
+import { Implementer, type ProgressCallback } from './Implementer';
+import { Verifier, type RetryCallback } from './Verifier';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 interface ModifiedFile {
   path: string;
@@ -16,8 +25,15 @@ interface LLMResponse {
   error?: string;
 }
 
+export interface OrchestratorResult {
+  modifiedFiles: string[];
+  steps?: BuildStep[];
+  outcome?: 'success' | 'failed';
+  error?: string;
+}
+
 // ---------------------------------------------------------------------------
-// File relevance scoring — works with plain Map<string, string>
+// File relevance scoring — used by the legacy heavy lane and plan steps
 // ---------------------------------------------------------------------------
 
 function selectRelevantFiles(
@@ -118,7 +134,6 @@ const BACKEND_RULES = `When the user asks for backend features (e.g., 'save this
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Fire-and-forget update of AI call count and last active timestamp. */
 function trackAICall(projectId: string) {
   const supabase = SupabaseService.getInstance().client;
   (async () => {
@@ -136,13 +151,13 @@ function trackAICall(projectId: string) {
         })
         .eq('id', projectId);
     } catch {
-      // Ignore — non-critical tracking
+      // non-critical
     }
   })();
 }
 
 // ---------------------------------------------------------------------------
-// AIOrchestrator
+// AIOrchestrator — wires all 5 layers + legacy plan/step commands
 // ---------------------------------------------------------------------------
 
 export class AIOrchestrator {
@@ -153,7 +168,6 @@ export class AIOrchestrator {
   /** Callback invoked for every file the AI writes. Registered by StudioEngine. */
   private static fileUpdateCallback: ((path: string, content: string) => void) | null = null;
 
-  /** Register the callback that handles file writes from the AI. */
   static setFileUpdateCallback(cb: (path: string, content: string) => void) {
     this.fileUpdateCallback = cb;
   }
@@ -163,10 +177,13 @@ export class AIOrchestrator {
   }
 
   // -------------------------------------------------------------------------
-  // Plan generation
+  // Legacy plan generation
   // -------------------------------------------------------------------------
 
-  static async generatePlan(userGoal: string, files: Map<string, string>): Promise<{ modifiedFiles: string[] }> {
+  static async generatePlan(
+    userGoal: string,
+    files: Map<string, string>
+  ): Promise<{ modifiedFiles: string[] }> {
     const systemPrompt =
       'You are a Senior Technical Project Manager. Create a detailed implementation plan for the user\'s request. Output ONLY the content of a PLAN.md file. The format must be a markdown checklist.\n\n' +
       'Example:\n' +
@@ -181,10 +198,12 @@ export class AIOrchestrator {
   }
 
   // -------------------------------------------------------------------------
-  // Step execution
+  // Legacy step execution
   // -------------------------------------------------------------------------
 
-  static async executeNextStep(files: Map<string, string>): Promise<{ modifiedFiles: string[] } | null> {
+  static async executeNextStep(
+    files: Map<string, string>
+  ): Promise<{ modifiedFiles: string[] } | null> {
     this.retryCount = 0;
 
     const planContent = files.get('PLAN.md');
@@ -238,13 +257,11 @@ export class AIOrchestrator {
         if (file.path.startsWith('supabase/functions/') && file.path.endsWith('index.ts')) {
           const parts = file.path.split('/');
           if (parts.length === 4) {
-            const funcName = parts[2];
-            SupabaseService.getInstance().deployEdgeFunction(funcName, file.newContent);
+            SupabaseService.getInstance().deployEdgeFunction(parts[2], file.newContent);
           }
         }
       }
 
-      // Mark step complete in plan
       lines[nextStepIndex] = lines[nextStepIndex].replace('- [ ]', '- [x]');
       const newPlanContent = lines.join('\n');
       this.notifyFileUpdate('PLAN.md', newPlanContent);
@@ -259,25 +276,30 @@ export class AIOrchestrator {
   }
 
   // -------------------------------------------------------------------------
-  // Main command parser
+  // Main command parser — wires the 5-layer agentic architecture
   // -------------------------------------------------------------------------
 
   static async parseUserCommand(
     input: string,
     files: Map<string, string>,
     selectedElement: { tagName: string; className?: string } | null = null,
-    projectId?: string
-  ): Promise<{ modifiedFiles: string[] }> {
+    projectId?: string,
+    onProgress?: ProgressCallback,
+    onRetry?: RetryCallback
+  ): Promise<OrchestratorResult> {
     this.retryCount = 0;
 
-    // Plan commands
+    // ------------------------------------------------------------------
+    // Legacy shortcut commands (preserved for backward compatibility)
+    // ------------------------------------------------------------------
     if (input.toLowerCase().startsWith('plan:')) {
-      const goal = input.substring(5).trim();
-      return this.generatePlan(goal, files);
+      const result = await this.generatePlan(input.substring(5).trim(), files);
+      return { modifiedFiles: result.modifiedFiles };
     }
 
     if (input.toLowerCase().startsWith('build a')) {
-      return this.generatePlan(input, files);
+      const result = await this.generatePlan(input, files);
+      return { modifiedFiles: result.modifiedFiles };
     }
 
     if (
@@ -285,47 +307,170 @@ export class AIOrchestrator {
       input.toLowerCase().trim() === 'continue plan'
     ) {
       const result = await this.executeNextStep(files);
-      return result ?? { modifiedFiles: [] };
+      return result ? { modifiedFiles: result.modifiedFiles } : { modifiedFiles: [] };
     }
 
-    // Fast lane: element is selected, use backend API for targeted style/text changes
-    if (selectedElement) {
-      const filePath = 'src/App.tsx';
-      const fileContent = files.get(filePath);
+    // ------------------------------------------------------------------
+    // LAYER 1 — ProjectMemoryService: get or build project memory
+    // ------------------------------------------------------------------
+    let memory = projectId ? await ProjectMemoryService.get(projectId) : null;
+    if (!memory && projectId) {
+      memory = await ProjectMemoryService.buildFromFiles(projectId, files);
+    }
 
-      if (fileContent) {
-        try {
-          const { Authorization } = await SupabaseService.getInstance().getAuthHeader();
-          const response = await fetch('/api/ai-action', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization },
-            body: JSON.stringify({
-              userPrompt: input,
-              selectedElementContext: `<${selectedElement.tagName} className='${selectedElement.className || ''}' />`,
-            }),
-          });
+    // ------------------------------------------------------------------
+    // LAYER 2 — IntentClassifier: classify the user prompt
+    // ------------------------------------------------------------------
+    let intent = memory
+      ? await IntentClassifier.classify(input, memory)
+      : {
+          type: 'modify_existing' as const,
+          affected_files: [],
+          needs_new_files: false,
+          risk: 'medium' as const,
+          reasoning: 'No memory available; defaulting to modify_existing.',
+        };
 
-          const data = await response.json();
+    // ------------------------------------------------------------------
+    // Fast lane: style/low-risk with a selected element — skip layers 3-5
+    // ------------------------------------------------------------------
+    if (
+      selectedElement &&
+      (intent.type === 'style_change' || intent.risk === 'low')
+    ) {
+      return this.runFastLane(input, files, selectedElement);
+    }
 
-          let newContent = fileContent;
-          if (data.action === 'update-style') {
-            newContent = updateCode(fileContent, selectedElement, { className: data.className });
-          } else if (data.action === 'update-text') {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            newContent = updateCode(fileContent, selectedElement, { textContent: data.text } as any);
-          }
+    // ------------------------------------------------------------------
+    // LAYER 3 — Architect: produce a step-by-step plan
+    // ------------------------------------------------------------------
+    const memoryFormatted = memory
+      ? ProjectMemoryService.formatForPrompt(memory)
+      : '';
 
-          this.notifyFileUpdate(filePath, newContent);
-          this.lastModifiedFiles = [filePath];
-          return { modifiedFiles: [filePath] };
-        } catch (e) {
-          console.error('[AIOrchestrator] Fast lane error:', e);
-          return { modifiedFiles: [] };
-        }
+    const steps = await Architect.plan(input, memoryFormatted, intent);
+
+    if (steps.length === 0) {
+      // Architect returned nothing — fall back to the legacy heavy lane
+      return this.runHeavyLane(input, files, selectedElement, projectId);
+    }
+
+    // ------------------------------------------------------------------
+    // LAYER 4 — Implementer: execute each step
+    // ------------------------------------------------------------------
+    const modifiedFilesMap = await Implementer.execute(
+      steps,
+      files,
+      memory!,
+      onProgress
+    );
+
+    // Collect only the files that actually changed
+    const changedPaths: string[] = [];
+    for (const [path, content] of modifiedFilesMap) {
+      if (!files.has(path) || files.get(path) !== content) {
+        changedPaths.push(path);
       }
     }
 
-    // Heavy lane: full context analysis
+    // ------------------------------------------------------------------
+    // LAYER 5 — Verifier: compile-check and auto-fix
+    // ------------------------------------------------------------------
+    const verifyResult = await Verifier.verify(modifiedFilesMap, files, onRetry);
+
+    const finalFiles = verifyResult.files;
+    const finalPaths = changedPaths.filter(p => finalFiles.has(p));
+
+    if (verifyResult.success) {
+      // Notify StudioEngine about each modified file
+      for (const path of finalPaths) {
+        const content = finalFiles.get(path)!;
+        this.notifyFileUpdate(path, content);
+      }
+
+      // Update memory and record success
+      if (projectId) {
+        trackAICall(projectId);
+        await ProjectMemoryService.updateAfterChange(projectId, finalPaths, finalFiles);
+        await ProjectMemoryService.recordAction(projectId, {
+          action: input.slice(0, 120),
+          outcome: 'success',
+        });
+      }
+
+      this.lastModifiedFiles = finalPaths;
+      return { modifiedFiles: finalPaths, steps, outcome: 'success' };
+    } else {
+      // Verification failed after all retries — record failure and return error
+      if (projectId) {
+        await ProjectMemoryService.recordAction(projectId, {
+          action: input.slice(0, 120),
+          outcome: 'failed',
+        });
+      }
+
+      return {
+        modifiedFiles: [],
+        steps,
+        outcome: 'failed',
+        error: verifyResult.error,
+      };
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Fast lane — direct /api/ai-action call for style/text tweaks
+  // -------------------------------------------------------------------------
+
+  private static async runFastLane(
+    input: string,
+    files: Map<string, string>,
+    selectedElement: { tagName: string; className?: string }
+  ): Promise<OrchestratorResult> {
+    const filePath = 'src/App.tsx';
+    const fileContent = files.get(filePath);
+    if (!fileContent) return { modifiedFiles: [] };
+
+    try {
+      const { Authorization } = await SupabaseService.getInstance().getAuthHeader();
+      const response = await fetch('/api/ai-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization },
+        body: JSON.stringify({
+          userPrompt: input,
+          selectedElementContext: `<${selectedElement.tagName} className='${selectedElement.className || ''}' />`,
+        }),
+      });
+
+      const data = await response.json();
+
+      let newContent = fileContent;
+      if (data.action === 'update-style') {
+        newContent = updateCode(fileContent, selectedElement, { className: data.className });
+      } else if (data.action === 'update-text') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        newContent = updateCode(fileContent, selectedElement, { textContent: data.text } as any);
+      }
+
+      this.notifyFileUpdate(filePath, newContent);
+      this.lastModifiedFiles = [filePath];
+      return { modifiedFiles: [filePath], outcome: 'success' };
+    } catch (e) {
+      console.error('[AIOrchestrator] Fast lane error:', e);
+      return { modifiedFiles: [] };
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Heavy lane — legacy single-call path (fallback when Architect returns nothing)
+  // -------------------------------------------------------------------------
+
+  private static async runHeavyLane(
+    input: string,
+    files: Map<string, string>,
+    selectedElement: { tagName: string; className?: string } | null,
+    projectId?: string
+  ): Promise<OrchestratorResult> {
     const relevantFiles = selectRelevantFiles(input, files);
     const blueprint = generateBlueprintFromFiles(files);
 
@@ -334,7 +479,6 @@ export class AIOrchestrator {
       relevantContext += `--- START ${f.path} ---\n${f.content}\n--- END ${f.path} ---\n`;
     }
 
-    // Build system prompt — inject project DB context if available
     let projectDbContext = '';
     if (projectId) {
       try {
@@ -369,7 +513,7 @@ export class AIOrchestrator {
 
     // External documentation fetching
     const readUrlRegex = /Read \[(.*?)\]/g;
-    let match;
+    let match: RegExpExecArray | null;
     const urlsToFetch: string[] = [];
     while ((match = readUrlRegex.exec(input)) !== null) {
       urlsToFetch.push(match[1]);
@@ -388,7 +532,7 @@ export class AIOrchestrator {
     }
 
     if (selectedElement) {
-      userMessage += `CONTEXT: The user has selected this HTML element: <${selectedElement.tagName} className='${selectedElement.className || ''}' />. If their request is ambiguous (e.g., 'change color'), apply it to this element.\n\n`;
+      userMessage += `CONTEXT: The user has selected this HTML element: <${selectedElement.tagName} className='${selectedElement.className || ''}' />. If their request is ambiguous, apply it to this element.\n\n`;
     }
 
     userMessage +=
@@ -399,14 +543,7 @@ export class AIOrchestrator {
     try {
       const rawResponse = await this.callLLM(userMessage, systemPrompt);
       const cleanJson = this.cleanJsonOutput(rawResponse);
-
-      let response: LLMResponse;
-      try {
-        response = JSON.parse(cleanJson);
-      } catch (parseError) {
-        console.error('[AIOrchestrator] Failed to parse JSON:', parseError, '\nRaw output:', cleanJson);
-        throw parseError;
-      }
+      const response: LLMResponse = JSON.parse(cleanJson);
 
       const modifiedPaths: string[] = [];
       for (const file of response.modifiedFiles) {
@@ -416,22 +553,20 @@ export class AIOrchestrator {
         if (file.path.startsWith('supabase/functions/') && file.path.endsWith('index.ts')) {
           const parts = file.path.split('/');
           if (parts.length === 4) {
-            const funcName = parts[2];
-            SupabaseService.getInstance().deployEdgeFunction(funcName, file.newContent);
+            SupabaseService.getInstance().deployEdgeFunction(parts[2], file.newContent);
           }
         }
       }
 
       this.lastModifiedFiles = modifiedPaths;
 
-      // Fire-and-forget AI call tracking
       if (projectId && modifiedPaths.length > 0) {
         trackAICall(projectId);
       }
 
-      return { modifiedFiles: modifiedPaths };
+      return { modifiedFiles: modifiedPaths, outcome: 'success' };
     } catch (error) {
-      console.error('[AIOrchestrator] Error parsing AI response:', error);
+      console.error('[AIOrchestrator] Heavy lane error:', error);
       return { modifiedFiles: [] };
     }
   }
@@ -488,8 +623,6 @@ export class AIOrchestrator {
         messages: [{ role: 'user', content: userMessage }],
       });
 
-      // platformService.callChat also needs anthropic-version header
-      // We need to add that header — use a raw fetch with full headers instead
       const data = await response.json();
 
       if (data.error) {

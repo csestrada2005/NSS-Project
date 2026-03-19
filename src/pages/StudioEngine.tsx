@@ -368,16 +368,27 @@ export function StudioEngine() {
   // -------------------------------------------------------------------------
   // AI chat handler
   // -------------------------------------------------------------------------
-  const handleSendMessage = async (message: string): Promise<{ success: boolean; modifiedFiles: string[] }> => {
+  const handleSendMessage = async (
+    message: string,
+    onProgress?: (step: number, total: number, file: string) => void,
+    onRetry?: (attempt: number, error: string) => void
+  ): Promise<{ success: boolean; modifiedFiles: string[] }> => {
     if (isReadOnly) return { success: false, modifiedFiles: [] };
     setIsGenerating(true);
     try {
       lastChangeSource.current = 'ai';
-      const result = await AIOrchestrator.parseUserCommand(message, files, selectedElement);
+      const result = await AIOrchestrator.parseUserCommand(
+        message,
+        files,
+        selectedElement,
+        projectId,
+        onProgress,
+        onRetry
+      );
       if (result.modifiedFiles.length > 0) {
         await saveSnapshot('ai_action');
       }
-      return { success: true, modifiedFiles: result.modifiedFiles };
+      return { success: result.outcome !== 'failed', modifiedFiles: result.modifiedFiles };
     } catch (error) {
       console.error('[StudioEngine] Error processing message:', error);
       return { success: false, modifiedFiles: [] };
