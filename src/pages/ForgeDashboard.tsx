@@ -27,7 +27,7 @@ const ForgeDashboard = () => {
     techStack: string[];
   } | null>>(new Map());
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
 
   const supabase = SupabaseService.getInstance().client;
 
@@ -189,7 +189,7 @@ const ForgeDashboard = () => {
             <Settings size={18} />
             Settings
           </button>
-          <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">
+          <button onClick={signOut} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">
             <LogOut size={18} />
             Sign Out
           </button>

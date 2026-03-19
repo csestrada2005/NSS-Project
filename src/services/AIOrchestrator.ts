@@ -30,6 +30,7 @@ export interface OrchestratorResult {
   steps?: BuildStep[];
   outcome?: 'success' | 'failed';
   error?: string;
+  warning?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -388,13 +389,36 @@ export class AIOrchestrator {
     }
 
     // ------------------------------------------------------------------
+    // Fast path: simple/low-risk edits skip Architect + Implementer + Verifier
+    // ------------------------------------------------------------------
+    const isSimpleEdit =
+      intent.type === 'style_change' ||
+      (intent.risk === 'low' && intent.affected_files.length <= 1);
+
+    if (isSimpleEdit && files.size > 0) {
+      const result = await this.runSimpleLane(input, files, selectedElement, projectId);
+      if (projectId) {
+        await this.logIntent({
+          projectId,
+          prompt: input,
+          intentType: intent.type,
+          intentRisk: intent.risk,
+          modifiedFiles: result.modifiedFiles,
+          outcome: result.outcome || 'success',
+          durationMs: Date.now() - startTime,
+        });
+      }
+      return result;
+    }
+
+    // ------------------------------------------------------------------
     // LAYER 3 — Architect: produce a step-by-step plan
     // ------------------------------------------------------------------
     const memoryFormatted = memory
       ? ProjectMemoryService.formatForPrompt(memory)
       : '';
 
-    const steps = await Architect.plan(input, memoryFormatted, intent);
+    const { steps, wasTrimmed, originalCount } = await Architect.plan(input, memoryFormatted, intent);
 
     if (steps.length === 0) {
       // Architect returned nothing — fall back to the legacy heavy lane
@@ -467,7 +491,14 @@ export class AIOrchestrator {
       }
 
       this.lastModifiedFiles = finalPaths;
-      return { modifiedFiles: finalPaths, steps, outcome: 'success' };
+      return {
+        modifiedFiles: finalPaths,
+        steps,
+        outcome: 'success',
+        warning: wasTrimmed
+          ? `This request needed ${originalCount} steps. Only the first 6 were built. Send a follow-up to continue.`
+          : undefined,
+      };
     } else {
       // Verification failed after all retries — record failure and return error
       if (projectId) {
@@ -537,6 +568,55 @@ export class AIOrchestrator {
     } catch (e) {
       console.error('[AIOrchestrator] Fast lane error:', e);
       return { modifiedFiles: [] };
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Simple lane — single Claude call for low-risk / style edits
+  // -------------------------------------------------------------------------
+
+  private static async runSimpleLane(
+    input: string,
+    files: Map<string, string>,
+    selectedElement: { tagName: string; className?: string } | null,
+    projectId?: string
+  ): Promise<OrchestratorResult> {
+    const relevantFiles = selectRelevantFiles(input, files);
+    const topFile = relevantFiles[0];
+    if (!topFile) return { modifiedFiles: [] };
+
+    try {
+      const response = await platformService.callChat({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 8192,
+        system:
+          'You are a React/Tailwind expert. The user wants a simple change. ' +
+          'Return ONLY the complete updated file content. No explanation, ' +
+          'no markdown fences. Just the raw file starting from line 1. ' +
+          'Preserve all data-oid attributes exactly as they are.',
+        messages: [
+          {
+            role: 'user',
+            content: `FILE: ${topFile.path}\n\nCONTENT:\n${topFile.content}\n\nCHANGE REQUESTED: ${input}`,
+          },
+        ],
+      });
+
+      const data = await response.json();
+      if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+
+      const newContent: string = data.content?.[0]?.text ?? '';
+      if (!newContent) return { modifiedFiles: [] };
+
+      this.notifyFileUpdate(topFile.path, newContent);
+      if (projectId) {
+        trackAICall(projectId);
+      }
+      this.lastModifiedFiles = [topFile.path];
+      return { modifiedFiles: [topFile.path], outcome: 'success' };
+    } catch (e) {
+      console.error('[AIOrchestrator] Simple lane error:', e);
+      return { modifiedFiles: [], outcome: 'failed' };
     }
   }
 

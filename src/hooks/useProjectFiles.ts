@@ -29,6 +29,7 @@ export function useProjectFiles(): UseProjectFilesReturn {
 
   const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const pendingWrites = useRef<Map<string, string>>(new Map());
+  const writeVersion = useRef<Map<string, number>>(new Map());
 
   const supabase = SupabaseService.getInstance().client;
 
@@ -74,6 +75,9 @@ export function useProjectFiles(): UseProjectFilesReturn {
 
     pendingWrites.current.set(path, content);
 
+    const thisVersion = (writeVersion.current.get(path) ?? 0) + 1;
+    writeVersion.current.set(path, thisVersion);
+
     const existingTimer = debounceTimers.current.get(path);
     if (existingTimer) {
       clearTimeout(existingTimer);
@@ -82,6 +86,8 @@ export function useProjectFiles(): UseProjectFilesReturn {
     const timer = setTimeout(async () => {
       debounceTimers.current.delete(path);
       pendingWrites.current.delete(path);
+
+      if (writeVersion.current.get(path) !== thisVersion) return;
 
       const { error } = await supabase
         .from('forge_files')

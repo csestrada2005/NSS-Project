@@ -12,9 +12,11 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { Panel, Group } from 'react-resizable-panels';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useProjectFiles } from '../hooks/useProjectFiles';
 import '../App.css';
 import { ChatInterface } from '../components/ChatInterface';
+import { Terminal, type TerminalRef } from '../components/Terminal';
 import { PreviewOverlay } from '../components/PreviewOverlay';
 import { InspectorPanel } from '../components/InspectorPanel';
 import { FileExplorer } from '../components/FileExplorer';
@@ -34,6 +36,7 @@ import {
   Menu,
   Code,
   Eye,
+  Share2,
 } from 'lucide-react';
 import { TEMPLATES } from '../templates';
 import { ProtectedRoute } from '../components/auth/ProtectedRoute';
@@ -46,8 +49,6 @@ import { ProjectMemoryService } from '../services/ProjectMemoryService';
 
 type TabType = 'chat' | 'visual' | 'code';
 
-// Module-level debounce ref for Supabase snapshot saves
-let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Active file for AST updates (Inspector) — single-page apps live here
 const ACTIVE_FILE_PATH = 'src/App.tsx';
@@ -98,6 +99,9 @@ export function StudioEngine() {
   const lastChangeSource = useRef<'ai' | 'user'>('user');
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const terminalRef = useRef<TerminalRef>(null);
+
+  const [isPublic, setIsPublic] = useState(false);
 
   // -------------------------------------------------------------------------
   // Mount: load project files from Supabase
@@ -153,6 +157,14 @@ export function StudioEngine() {
       }
 
       await loadFromSupabase(projectId);
+
+      // Fetch is_public status after files are loaded
+      const { data: projectRow } = await supabase
+        .from('forge_projects')
+        .select('is_public')
+        .eq('id', projectId)
+        .single();
+      if (projectRow?.is_public) setIsPublic(true);
     };
 
     init().catch(console.error);
@@ -274,37 +286,31 @@ export function StudioEngine() {
   // -------------------------------------------------------------------------
   const saveSnapshot = useCallback(async (trigger: string, label?: string) => {
     if (!projectId) return;
+    if (files.size === 0) return;
     try {
       const supabase = SupabaseService.getInstance().client;
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // Flush all pending debounced writes before capturing the snapshot
+      await flushPendingWrites();
+
       const fileTree = mapToFileSystemTree(files);
 
-      const doSave = async () => {
-        try {
-          await flushPendingWrites(); // Ensure all debounced files are actually saved to Supabase before we take snapshot of fileTree
-          await supabase.from('forge_snapshots').insert({
-            project_id: projectId,
-            user_id: user.id,
-            label: label ?? null,
-            file_tree: fileTree,
-            trigger,
-          });
-          await supabase
-            .from('forge_projects')
-            .update({ updated_at: new Date().toISOString() })
-            .eq('id', projectId);
-        } catch (e) {
-          console.error('[saveSnapshot] Failed:', e);
-        }
-      };
-
-      if (trigger === 'ai_action') {
-        if (autoSaveTimer) clearTimeout(autoSaveTimer);
-        autoSaveTimer = setTimeout(doSave, 2000);
-      } else {
-        await doSave();
+      try {
+        await supabase.from('forge_snapshots').insert({
+          project_id: projectId,
+          user_id: user.id,
+          label: label ?? null,
+          file_tree: fileTree,
+          trigger,
+        });
+        await supabase
+          .from('forge_projects')
+          .update({ updated_at: new Date().toISOString() })
+          .eq('id', projectId);
+      } catch (e) {
+        console.error('[saveSnapshot] Failed:', e);
       }
     } catch (e) {
       console.error('[saveSnapshot] Error:', e);
@@ -361,7 +367,9 @@ export function StudioEngine() {
     if (!code) return;
 
     lastChangeSource.current = 'user';
-    const newCode = updateCode(code, selectedElement, { textContent: newText });
+    const newCode = updateCode(code, selectedElement, { textContent: newText }, undefined, (msg) => {
+      toast.error(msg);
+    });
     updateLocalFile(ACTIVE_FILE_PATH, newCode);
     await saveFile(ACTIVE_FILE_PATH, newCode);
   };
@@ -372,7 +380,9 @@ export function StudioEngine() {
     if (!code) return;
 
     lastChangeSource.current = 'user';
-    const newCode = updateCode(code, selectedElement, { className: newClassName }, { classNameMode: 'replace' });
+    const newCode = updateCode(code, selectedElement, { className: newClassName }, { classNameMode: 'replace' }, (msg) => {
+      toast.error(msg);
+    });
     updateLocalFile(ACTIVE_FILE_PATH, newCode);
     await saveFile(ACTIVE_FILE_PATH, newCode);
 
@@ -413,9 +423,13 @@ export function StudioEngine() {
     message: string,
     onProgress?: (step: number, total: number, file: string) => void,
     onRetry?: (attempt: number, error: string) => void
-  ): Promise<{ success: boolean; modifiedFiles: string[]; error?: string }> => {
+  ): Promise<{ success: boolean; modifiedFiles: string[]; error?: string; warning?: string }> => {
     if (isReadOnly) return { success: false, modifiedFiles: [] };
     setIsGenerating(true);
+
+    terminalRef.current?.clear();
+    terminalRef.current?.write('\r\n\x1b[33m⚡ Starting build...\x1b[0m\r\n');
+
     try {
       lastChangeSource.current = 'ai';
       const result = await AIOrchestrator.parseUserCommand(
@@ -423,19 +437,46 @@ export function StudioEngine() {
         files,
         selectedElement,
         projectId,
-        onProgress,
-        onRetry
+        (step, total, file) => {
+          terminalRef.current?.write(
+            `\r\n\x1b[32m  [${step}/${total}] Writing ${file}\x1b[0m`
+          );
+          onProgress?.(step, total, file);
+        },
+        (attempt, errorMsg) => {
+          terminalRef.current?.write(
+            `\r\n\x1b[31m  ⚠ Compile error — auto-fixing (attempt ${attempt}/3)\x1b[0m`
+          );
+          terminalRef.current?.write(
+            `\r\n\x1b[90m  ${errorMsg.slice(0, 200)}\x1b[0m`
+          );
+          onRetry?.(attempt, errorMsg);
+        }
       );
       if (result.modifiedFiles.length > 0) {
         await saveSnapshot('ai_action');
       }
+
+      const success = result.outcome !== 'failed';
+      if (success) {
+        terminalRef.current?.write(
+          `\r\n\x1b[32m✅ Done — ${result.modifiedFiles.length} file(s) updated.\x1b[0m\r\n`
+        );
+      } else {
+        terminalRef.current?.write(
+          '\r\n\x1b[31m❌ Build failed after 3 retries.\x1b[0m\r\n'
+        );
+      }
+
       return {
-        success: result.outcome !== 'failed',
+        success,
         modifiedFiles: result.modifiedFiles,
-        error: result.error
+        error: result.error,
+        warning: result.warning,
       };
     } catch (error) {
       console.error('[StudioEngine] Error processing message:', error);
+      terminalRef.current?.write('\r\n\x1b[31m❌ Unexpected error.\x1b[0m\r\n');
       return { success: false, modifiedFiles: [] };
     } finally {
       setIsGenerating(false);
@@ -465,6 +506,23 @@ export function StudioEngine() {
   // Upload ZIP — show coming-soon toast
   const handleUploadZip = () => {
     alert('ZIP upload coming soon. Use the AI chat to describe your project instead!');
+  };
+
+  // Toggle public share access
+  const togglePublicAccess = async () => {
+    if (!projectId) return;
+    const supabase = SupabaseService.getInstance().client;
+    const newValue = !isPublic;
+    await supabase
+      .from('forge_projects')
+      .update({ is_public: newValue })
+      .eq('id', projectId);
+    setIsPublic(newValue);
+    if (newValue) {
+      const url = `${window.location.origin}/preview/${projectId}`;
+      await navigator.clipboard.writeText(url);
+      toast.success('Preview link copied to clipboard');
+    }
   };
 
   // -------------------------------------------------------------------------
@@ -569,6 +627,17 @@ export function StudioEngine() {
                       >
                         <Activity size={15} className="text-gray-400" />
                         Visual Graph
+                      </button>
+
+                      <div className="my-1 h-px bg-gray-800" />
+
+                      {/* Share */}
+                      <button
+                        onClick={() => { setShowHamburger(false); togglePublicAccess(); }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+                      >
+                        <Share2 size={15} className="text-gray-400" />
+                        {isPublic ? 'Unshare' : 'Share'}
                       </button>
                     </div>
                   </>
@@ -726,7 +795,9 @@ export function StudioEngine() {
                   selectedElement={selectedElement}
                 />
               </div>
-              <div className={`w-full h-full ${activeBottomTab === 'visual' ? 'block' : 'hidden'}`} />
+              <div className={`w-full h-full ${activeBottomTab === 'visual' ? 'block' : 'hidden'}`}>
+                <Terminal ref={terminalRef} />
+              </div>
               <div className={`w-full h-full ${activeBottomTab === 'code' ? 'flex' : 'hidden'}`}>
                 <CodePanel />
               </div>

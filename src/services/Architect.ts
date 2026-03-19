@@ -22,7 +22,7 @@ export class Architect {
     prompt: string,
     memoryFormatted: string,
     intent: Intent
-  ): Promise<BuildStep[]> {
+  ): Promise<{ steps: BuildStep[]; wasTrimmed: boolean; originalCount: number }> {
     const systemPrompt = `You are a software architect for a React + TypeScript + Tailwind web builder.
 Do not write any code. Return only a JSON array of BuildStep objects.
 Each BuildStep must have exactly these fields:
@@ -77,19 +77,17 @@ Return ONLY a valid JSON array. No markdown fences, no explanation before or aft
       const cleaned = this.extractJsonArray(text);
       let steps = JSON.parse(cleaned) as BuildStep[];
 
-      if (!Array.isArray(steps)) return [];
+      if (!Array.isArray(steps)) return { steps: [], wasTrimmed: false, originalCount: 0 };
 
-      let trimmed = false;
+      const originalCount = steps.length;
+      let wasTrimmed = false;
       if (steps.length > 6) {
         steps = steps.slice(0, 6);
-        trimmed = true;
+        wasTrimmed = true;
+        console.warn(`[Architect] Plan trimmed from ${originalCount} to 6 steps`);
       }
 
-      if (trimmed) {
-        console.warn(`[Architect] Plan trimmed from ${JSON.parse(cleaned).length} to 6 steps`);
-      }
-
-      return steps
+      const filteredAndMappedSteps = steps
         .filter(s => s.file_path && s.file_path.trim() !== '')
         .map(s => {
           let desc = s.description;
@@ -106,9 +104,11 @@ Return ONLY a valid JSON array. No markdown fences, no explanation before or aft
               : [],
           };
         });
+
+      return { steps: filteredAndMappedSteps, wasTrimmed, originalCount };
     } catch (e) {
       console.error('[Architect] Failed to plan:', e);
-      return [];
+      return { steps: [], wasTrimmed: false, originalCount: 0 };
     }
   }
 

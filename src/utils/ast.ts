@@ -129,7 +129,8 @@ export const updateCode = (
   fileContent: string,
   target: TargetElement,
   updates: { className?: string; textContent?: string },
-  options: { classNameMode?: 'replace' | 'merge' } = { classNameMode: 'merge' }
+  options: { classNameMode?: 'replace' | 'merge' } = { classNameMode: 'merge' },
+  onNotFound?: (message: string) => void
 ): string => {
   const { tagName, dataOid } = target;
   const { className: newClassName, textContent: newTextContent } = updates;
@@ -139,6 +140,8 @@ export const updateCode = (
     console.warn('updateCode: no dataOid provided, skipping');
     return fileContent;
   }
+
+  let elementFound = false;
 
   const plugin = ({ types: t }: any) => ({
     visitor: {
@@ -155,6 +158,8 @@ export const updateCode = (
           (attr: any) => t.isJSXAttribute(attr) && attr.name && attr.name.name === 'data-oid'
         );
         if (!oidAttr || !t.isStringLiteral(oidAttr.value) || oidAttr.value.value !== dataOid) return;
+
+        elementFound = true;
 
         // Apply updates
         let modified = false;
@@ -223,6 +228,12 @@ export const updateCode = (
           compact: false,
           presets: [],
       });
+
+      if (!elementFound) {
+        onNotFound?.('Could not find the selected element — click it again to reselect.');
+        return fileContent;
+      }
+
       return result.code || fileContent;
   } catch (e) {
       console.error('Babel transform failed:', e);

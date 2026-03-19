@@ -116,24 +116,32 @@ export const ElementEditPopover = ({ element, onUpdateText, onUpdateStyle, onClo
         {mode === "color" && (
           <div className="flex flex-col gap-3">
             <div>
-              <label className="text-xs text-gray-400 block mb-1">Text Color (Hex)</label>
-              <input
-                type="text"
-                value={colorValue}
-                onChange={(e) => setColorValue(e.target.value)}
-                placeholder="#FFFFFF"
-                className="w-full p-2 bg-gray-800 border border-gray-700 rounded text-sm text-gray-200 focus:outline-none focus:border-red-500"
-              />
+              <label className="text-xs text-gray-400 block mb-1">Text Color</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={colorValue || '#ffffff'}
+                  onChange={(e) => setColorValue(e.target.value)}
+                  className="w-10 h-10 rounded cursor-pointer border border-gray-700 p-0.5 bg-gray-900"
+                />
+                <span className="text-xs text-gray-400 font-mono">
+                  {colorValue || '#ffffff'}
+                </span>
+              </div>
             </div>
             <div>
-              <label className="text-xs text-gray-400 block mb-1">Background Color (Hex)</label>
-              <input
-                type="text"
-                value={bgColorValue}
-                onChange={(e) => setBgColorValue(e.target.value)}
-                placeholder="#000000"
-                className="w-full p-2 bg-gray-800 border border-gray-700 rounded text-sm text-gray-200 focus:outline-none focus:border-red-500"
-              />
+              <label className="text-xs text-gray-400 block mb-1">Background Color</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={bgColorValue || '#ffffff'}
+                  onChange={(e) => setBgColorValue(e.target.value)}
+                  className="w-10 h-10 rounded cursor-pointer border border-gray-700 p-0.5 bg-gray-900"
+                />
+                <span className="text-xs text-gray-400 font-mono">
+                  {bgColorValue || '#ffffff'}
+                </span>
+              </div>
             </div>
             <div className="flex justify-end gap-2 mt-2">
               <button

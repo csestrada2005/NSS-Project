@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Lock, Github, Rocket, Eye, EyeOff, Plus, Trash2, Save, Database, Globe, Mail, Loader2, CheckCircle } from 'lucide-react';
+import { X, Lock, Github, Rocket, Eye, EyeOff, Plus, Trash2, Save, Database, Globe, Mail, BarChart3 } from 'lucide-react';
 import { webContainerService } from '../../services/WebContainerService';
 import { DeployManager } from '../deploy/DeployManager';
 import { gitHubService } from '../../services/GitHubService';
@@ -17,8 +17,6 @@ import { LighthousePanel } from './analytics/LighthousePanel';
 import { TopPagesTable } from './analytics/TopPagesTable';
 import { DomainsPanel } from './DomainsPanel';
 import { EmailPanel } from './EmailPanel';
-import { projectDBService } from '../../services/ProjectDBService';
-import { BarChart3 } from 'lucide-react';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -87,12 +85,6 @@ export function SettingsModal({ onClose, fileTree, files }: SettingsModalProps) 
   const [isPushing, setIsPushing] = useState(false);
   const [pushStatus, setPushStatus] = useState<{ success: boolean; message: string } | null>(null);
 
-  // DB provisioning state
-  const [hasProjectDb, setHasProjectDb] = useState<boolean | null>(null);
-  const [isProvisioning, setIsProvisioning] = useState(false);
-  const [provisionStage, setProvisionStage] = useState('');
-  const [provisionedUrl, setProvisionedUrl] = useState<string | null>(null);
-
   useEffect(() => {
     const stored = localStorage.getItem('secrets');
     if (stored) {
@@ -104,15 +96,6 @@ export function SettingsModal({ onClose, fileTree, files }: SettingsModalProps) 
       }
     }
   }, []);
-
-  useEffect(() => {
-    if (projectId) {
-      projectDBService.getCredentials(projectId).then(creds => {
-        setHasProjectDb(!!creds.projectUrl);
-        if (creds.projectUrl) setProvisionedUrl(creds.projectUrl);
-      }).catch(() => setHasProjectDb(false));
-    }
-  }, [projectId]);
 
   const handleSaveSecrets = () => {
     localStorage.setItem('secrets', JSON.stringify(secrets));
@@ -148,25 +131,6 @@ export function SettingsModal({ onClose, fileTree, files }: SettingsModalProps) 
       setPushStatus({ success: false, message: error.message });
     } finally {
       setIsPushing(false);
-    }
-  };
-
-  const handleProvisionDB = async () => {
-    if (!projectId) return;
-    setIsProvisioning(true);
-    setProvisionStage('Creating database...');
-    try {
-      // Poll status by stage — server polls internally but we show progress
-      setTimeout(() => setProvisionStage('Waiting for database to be ready...'), 5000);
-      const result = await projectDBService.provision(projectId);
-      setProvisionStage('Done!');
-      setHasProjectDb(true);
-      setProvisionedUrl(result.projectUrl);
-    } catch (e: any) {
-      setProvisionStage('');
-      alert(e?.message || 'Provisioning failed');
-    } finally {
-      setTimeout(() => { setIsProvisioning(false); setProvisionStage(''); }, 2000);
     }
   };
 
@@ -368,32 +332,6 @@ export function SettingsModal({ onClose, fileTree, files }: SettingsModalProps) 
           {/* Database tab */}
           {activeTab === 'database' && (
             <div>
-              {/* Provision Database button */}
-              {projectId && hasProjectDb === false && (
-                <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-4 mb-4 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-zinc-200">Provision a dedicated database</p>
-                    <p className="text-xs text-zinc-500 mt-0.5">Create an isolated Supabase instance for this project.</p>
-                  </div>
-                  <button
-                    onClick={handleProvisionDB}
-                    disabled={isProvisioning}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2 shrink-0"
-                  >
-                    {isProvisioning ? <Loader2 size={14} className="animate-spin" /> : <Database size={14} />}
-                    {isProvisioning ? provisionStage || 'Provisioning...' : 'Provision Database'}
-                  </button>
-                </div>
-              )}
-
-              {hasProjectDb && provisionedUrl && (
-                <div className="bg-emerald-900/20 border border-emerald-700/40 rounded-xl p-3 mb-4 flex items-center gap-2 text-sm">
-                  <CheckCircle size={14} className="text-emerald-400 shrink-0" />
-                  <span className="text-emerald-300">Project database active:</span>
-                  <code className="text-emerald-400 text-xs">{provisionedUrl}</code>
-                </div>
-              )}
-
               {/* Sub-tab bar */}
               <div className="flex gap-1 border-b border-zinc-700 mb-4 overflow-x-auto pb-px">
                 {DB_SUB_TABS.map((tab) => (

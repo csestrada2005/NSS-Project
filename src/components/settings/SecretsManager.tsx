@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { X, Plus, Trash2, Eye, EyeOff, Save, CheckCircle, Circle, Loader2 } from 'lucide-react';
-import { webContainerService } from '../../services/WebContainerService';
 import { platformService } from '../../services/PlatformService';
 
 interface Secret {
@@ -49,12 +48,9 @@ export function SecretsManager({ onClose }: SecretsManagerProps) {
   }, []);
 
   const handleSave = () => {
+    // Secrets are stored in localStorage for future use.
+    // They are not actively injected anywhere until WebContainers is re-enabled.
     localStorage.setItem('secrets', JSON.stringify(secrets));
-    const env: Record<string, string> = {};
-    secrets.forEach(s => {
-      if (s.key) env[s.key] = s.value;
-    });
-    webContainerService.setEnv(env);
     onClose();
   };
 

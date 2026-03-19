@@ -13,6 +13,7 @@ import DealsPage from './pages/DealsPage';
 import { Login } from './components/auth/Login';
 import ForgeDashboard from './pages/ForgeDashboard';
 import ProjectHubPage from './pages/ProjectHubPage';
+import { PublicPreviewPage } from './pages/PublicPreviewPage';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
       <Routes>
         {/* Public routes */}
         <Route path="login" element={<Login />} />
+        <Route path="preview/:projectId" element={<PublicPreviewPage />} />
 
         {/* Business OS — wrapped in the sidebar + top-nav shell */}
         <Route element={<WorkspaceLayout />}>
