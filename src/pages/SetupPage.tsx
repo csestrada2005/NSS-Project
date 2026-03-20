@@ -11,16 +11,35 @@ const SetupPage = () => {
 
   // Auto-refresh every 5 seconds while on this page (for when admin approves)
   useEffect(() => {
-    const interval = setInterval(() => {
-      refreshProfile();
+    let isPolling = false;
+
+    const interval = setInterval(async () => {
+      if (isPolling) return;
+      isPolling = true;
+      try {
+        await refreshProfile();
+      } finally {
+        isPolling = false;
+      }
     }, 5000);
+
     return () => clearInterval(interval);
   }, [refreshProfile]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await refreshProfile();
-    setIsRefreshing(false);
+    try {
+      await Promise.race([
+        refreshProfile(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('timeout')), 5000)
+        )
+      ]);
+    } catch (err) {
+      console.error('Refresh failed or timed out:', err);
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   return (

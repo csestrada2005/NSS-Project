@@ -179,20 +179,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const refreshProfile = useCallback(async () => {
-    if (!user) return;
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-      if (!error && data) {
-        setProfile(data as Profile);
-      }
-    } catch (err) {
-      console.error('refreshProfile error:', err);
+    if (!user?.id) return;
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[refreshProfile] error:', error);
+      return;
     }
-  }, [user]);
+
+    if (data) {
+      setProfile(data as Profile);
+    }
+  }, [user?.id]);
 
   const role = profile?.role;
   // pendingApproval: user has picked a role but not been approved yet
