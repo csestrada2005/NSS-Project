@@ -359,9 +359,6 @@ export class AIOrchestrator {
       if (user) {
         creditUserId = user.id;
         const creditCheck = await CreditService.canMakeCall(user.id);
-        if (!creditCheck.allowed) {
-          return { modifiedFiles: [], outcome: 'failed', error: 'INSUFFICIENT_CREDITS' };
-        }
         isFreePrompt = creditCheck.isFreePrompt ?? false;
         if (isFreePrompt) {
           await CreditService.markFreePromptUsed(user.id);

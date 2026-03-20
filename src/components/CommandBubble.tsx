@@ -7,7 +7,7 @@ interface CommandBubbleProps {
 
 export const CommandBubble = ({ onClick, onHistoryClick }: CommandBubbleProps) => {
   return (
-    <div className="fixed top-[4.5rem] right-6 z-[60]">
+    <div className="fixed bottom-24 lg:top-[4.5rem] lg:bottom-auto right-6 z-[60]">
       {/* History button — small, top-left of the main bubble */}
       <button
         onClick={onHistoryClick}

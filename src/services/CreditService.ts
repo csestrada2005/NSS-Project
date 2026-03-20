@@ -55,7 +55,7 @@ export class CreditService {
         return { allowed: true, isFreePrompt: false };
       }
 
-      return { allowed: false, reason: 'insufficient_credits' };
+      return { allowed: true, isFreePrompt: false };
     } catch (e) {
       console.error('[CreditService] canMakeCall error:', e);
       // Fail open — don't block users on DB errors
