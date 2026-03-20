@@ -48,8 +48,8 @@ function BuildProgress({
 
   return (
     <div className="flex justify-start w-full">
-      <div className="bg-gray-950 border border-gray-800 rounded-lg p-3 w-[85%]">
-        <div className="flex items-center gap-2 text-sm text-gray-300">
+      <div className="bg-background border border-border rounded-lg p-3 w-[85%]">
+        <div className="flex items-center gap-2 text-sm text-foreground">
           {isLastDone
             ? <CheckCircle size={14} className="text-green-400 shrink-0" />
             : <Loader2 size={14} className="animate-spin shrink-0" />}
@@ -117,7 +117,7 @@ function CompileErrorDetail({ errorDetail }: { errorDetail: string }) {
         What went wrong?
       </button>
       {expanded && (
-        <pre className="mt-1 p-2 bg-gray-900 border border-gray-700 rounded text-[10px] text-red-300 overflow-x-auto whitespace-pre-wrap">
+        <pre className="mt-1 p-2 bg-background border border-border rounded text-[10px] text-primary overflow-x-auto whitespace-pre-wrap">
           {errorDetail}
         </pre>
       )}
@@ -267,10 +267,10 @@ export function ChatInterface({ isLoading, onSendMessage, selectedElement }: Cha
   };
 
   return (
-    <div className="flex flex-col h-full w-full bg-gray-900">
-      <div className="p-4 border-b border-gray-800 flex items-center gap-3">
-        <Bot className="w-6 h-6 text-red-500 shrink-0" />
-        <h2 className="text-xl font-bold text-white">Wyrd Forge</h2>
+    <div className="flex flex-col h-full w-full bg-card">
+      <div className="p-4 border-b border-border flex items-center gap-3">
+        <Bot className="w-6 h-6 text-primary shrink-0" />
+        <h2 className="text-xl font-bold text-foreground">Wyrd Forge</h2>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -282,12 +282,12 @@ export function ChatInterface({ isLoading, onSendMessage, selectedElement }: Cha
             <div
               className={`max-w-[85%] rounded-lg p-3 text-sm ${
                 msg.role === 'user'
-                  ? 'bg-red-600 text-white'
+                  ? 'bg-primary text-white'
                   : msg.errorType === 'insufficient_credits'
                   ? 'bg-amber-900/40 border border-amber-600/50 text-amber-200'
                   : msg.errorType === 'compile_error'
-                  ? 'bg-gray-800 text-gray-200'
-                  : 'bg-gray-800 text-gray-200'
+                  ? 'bg-muted text-foreground'
+                  : 'bg-muted text-foreground'
               }`}
             >
               {msg.content}
@@ -311,18 +311,18 @@ export function ChatInterface({ isLoading, onSendMessage, selectedElement }: Cha
         )}
         {isLoading && progressLines.length === 0 && (
           <div className="flex justify-start w-full">
-             <div className="bg-gray-800 text-gray-200 rounded-lg p-3 text-sm flex items-center gap-1">
+             <div className="bg-muted text-foreground rounded-lg p-3 text-sm flex items-center gap-1">
                <Loader2 className="w-4 h-4 animate-spin" />
-               <span className="text-xs text-gray-400">Thinking...</span>
+               <span className="text-xs text-muted-foreground">Thinking...</span>
              </div>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="p-4 border-t border-gray-800 bg-gray-900">
+      <div className="p-4 border-t border-border bg-card">
         {selectedElement && (
-          <div className="mb-2 px-3 py-1.5 bg-red-900/30 border border-red-500/30 rounded text-xs text-red-200 flex items-center justify-between">
+          <div className="mb-2 px-3 py-1.5 bg-primary/10 border border-primary/30 rounded text-xs text-primary flex items-center justify-between">
             <span>
               Selected: <span className="font-mono text-red-100">&lt;{selectedElement.tagName.toLowerCase()}{selectedElement.className ? `.${selectedElement.className.split(' ')[0]}` : ''}&gt;</span>
             </span>
@@ -354,7 +354,7 @@ export function ChatInterface({ isLoading, onSendMessage, selectedElement }: Cha
                     });
                   }, 0);
                 }}
-                className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-red-500/50 text-gray-300 hover:text-white rounded-full text-xs transition-colors truncate max-w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1.5 bg-accent hover:bg-accent/80 border border-border hover:border-primary/50 text-muted-foreground hover:text-foreground rounded-full text-xs transition-colors truncate max-w-full disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {suggestion}
               </button>
@@ -368,13 +368,13 @@ export function ChatInterface({ isLoading, onSendMessage, selectedElement }: Cha
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type a message..."
-            className="flex-1 bg-gray-800 text-white border border-gray-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 placeholder-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 bg-accent text-foreground border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={isLoading}
           />
           <button
             onClick={handleSend}
             disabled={!input.trim() || isLoading}
-            className="bg-red-600 text-white p-2 rounded-md hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="bg-primary text-white p-2 rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           </button>

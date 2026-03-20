@@ -11,8 +11,8 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   // in new tabs where loading finished before canRedirect fired.
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen w-screen bg-gray-900 text-white">
-        <Loader2 className="animate-spin h-8 w-8" />
+      <div className="flex items-center justify-center h-screen w-screen bg-background">
+        <Loader2 className="animate-spin h-8 w-8 text-primary" />
       </div>
     );
   }

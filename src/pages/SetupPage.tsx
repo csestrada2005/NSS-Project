@@ -1,12 +1,13 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { LogOut, Clock, RefreshCw } from 'lucide-react';
+import { LogOut, Clock, RefreshCw, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const SetupPage = () => {
   const { signOut, refreshProfile } = useAuth();
   const { lang } = useLanguage();
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Auto-refresh every 5 seconds while on this page (for when admin approves)
   useEffect(() => {
@@ -15,6 +16,12 @@ const SetupPage = () => {
     }, 5000);
     return () => clearInterval(interval);
   }, [refreshProfile]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await refreshProfile();
+    setIsRefreshing(false);
+  };
 
   return (
     <section className="relative h-screen w-screen flex flex-col items-center justify-center bg-[#0A0A0A] overflow-hidden">
@@ -69,11 +76,12 @@ const SetupPage = () => {
           className="flex flex-col sm:flex-row gap-3"
         >
           <button
-            onClick={() => refreshProfile()}
-            className="group relative flex items-center justify-center gap-3 px-8 py-3 text-sm font-medium tracking-widest uppercase text-white/60 transition-all hover:text-white overflow-hidden border border-white/20 bg-transparent hover:border-white/50"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="group relative flex items-center justify-center gap-3 px-8 py-3 text-sm font-medium tracking-widest uppercase text-white/60 transition-all hover:text-white overflow-hidden border border-white/20 bg-transparent hover:border-white/50 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <RefreshCw size={18} />
-            <span>{lang === 'es' ? 'Actualizar estado' : 'Refresh status'}</span>
+            {isRefreshing ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
+            <span>{isRefreshing ? (lang === 'es' ? 'Verificando...' : 'Checking...') : (lang === 'es' ? 'Actualizar estado' : 'Refresh status')}</span>
           </button>
           <button
             onClick={signOut}
