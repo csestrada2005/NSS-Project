@@ -83,14 +83,24 @@ export interface Report {
   created_at: string;
 }
 
+export type DealStatus = 'draft' | 'sent_to_client' | 'client_revised' | 'developer_reviewing' | 'accepted' | 'closed_won';
+
 export interface Deal {
   id: string;
   user_id: string;
   contact_id: string | null;
+  client_profile_id: string | null;
   title: string;
   value: number;
   stage: 'prospecting' | 'qualification' | 'proposal' | 'negotiation' | 'closed_won' | 'closed_lost';
+  status: DealStatus | null;
   probability: number;
   expected_close: string | null;
+  scope_description: string | null;
+  timeline: string | null;
+  deposit_paid: boolean | null;
+  forge_project_id: string | null;
+  stripe_checkout_session_id: string | null;
+  deposit_invoice_id: string | null;
   created_at: string;
 }

@@ -12,6 +12,7 @@ import {
   Bell,
   Shield,
   Code2,
+  FileText,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -30,7 +31,8 @@ export type Page =
   | "metricas"
   | "ai-studio"
   | "notifications"
-  | "settings";
+  | "settings"
+  | "proposals";
 
 interface AppSidebarProps {
   open: boolean;
@@ -82,6 +84,11 @@ const navItems: NavItem[] = [
     icon: Bell,
   },
   {
+    id: "proposals",
+    label: { es: "Propuestas", en: "Proposals" },
+    icon: FileText,
+  },
+  {
     id: "settings",
     label: { es: "Ajustes", en: "Settings" },
     icon: Settings,
@@ -103,12 +110,13 @@ const routeMapping: Record<Page, string> = {
   metricas: "/metrics",
   "ai-studio": "/ai-studio",
   notifications: "/notifications",
+  proposals: "/proposals",
   settings: "/settings",
 };
 
 const AppSidebar = ({ open, onClose }: AppSidebarProps) => {
   const { lang } = useLanguage();
-  const { profile, signOut, isAdmin } = useAuth();
+  const { profile, signOut, isAdmin, isCliente } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [approvalPanelOpen, setApprovalPanelOpen] = useState(false);
   const [pendingApprovalCount, setPendingApprovalCount] = useState(0);
@@ -190,6 +198,8 @@ const AppSidebar = ({ open, onClose }: AppSidebarProps) => {
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-4 px-2.5 space-y-1">
           {navItems.map((item) => {
+            if (item.id === "proposals" && !isCliente) return null;
+
             const path = routeMapping[item.id];
             const active =
               location.pathname === path ||

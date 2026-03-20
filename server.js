@@ -1,3 +1,4 @@
+// SQL note: ALTER TABLE payments ADD COLUMN IF NOT EXISTS deal_id uuid REFERENCES deals(id);
 import 'dotenv/config';
 import express from 'express';
 import path from 'path';
@@ -168,6 +169,55 @@ app.post('/api/credits/webhook', express.raw({ type: 'application/json' }), asyn
       } catch (err) {
         console.error('[Stripe] Failed to process webhook:', err);
         return res.status(500).json({ error: 'Failed to process payment' });
+      }
+    }
+
+    if (session.metadata?.type === 'deposit') {
+      const { dealId, developerId, paymentId } = session.metadata;
+      if (dealId && developerId && supabaseAdmin) {
+        await supabaseAdmin.from('payments').update({ status: 'paid' }).eq('id', paymentId);
+        await supabaseAdmin.from('deals')
+          .update({ deposit_paid: true, status: 'closed_won', stage: 'closed_won' })
+          .eq('id', dealId);
+
+        const { data: deal } = await supabaseAdmin
+          .from('deals')
+          .select('title, scope_description, client_profile_id, value')
+          .eq('id', dealId)
+          .single();
+
+        if (deal) {
+          const { data: project } = await supabaseAdmin
+            .from('forge_projects')
+            .insert({
+              user_id: developerId,
+              name: deal.title,
+              description: deal.scope_description ?? '',
+              initial_prompt: deal.scope_description ?? '',
+            })
+            .select('id')
+            .single();
+
+          if (project) {
+            await supabaseAdmin.from('deals').update({ forge_project_id: project.id }).eq('id', dealId);
+            await supabaseAdmin.from('notifications').insert({
+              user_id: developerId,
+              type: 'deposit_paid',
+              title: 'Deposit received — project created!',
+              body: `The 50% deposit for "${deal.title}" was paid. A new Forge project has been created.`,
+              read: false,
+            });
+            if (deal.client_profile_id) {
+              await supabaseAdmin.from('notifications').insert({
+                user_id: deal.client_profile_id,
+                type: 'project_created',
+                title: 'Your project has started!',
+                body: `The deposit was confirmed and your project "${deal.title}" has been created.`,
+                read: false,
+              });
+            }
+          }
+        }
       }
     }
   }
@@ -976,6 +1026,208 @@ app.post('/api/credits/checkout', async (req, res) => {
     console.error('[Stripe] Checkout error:', err);
     res.status(500).json({ error: 'Failed to create checkout session' });
   }
+});
+
+// ---------------------------------------------------------------------------
+// Deal negotiation endpoints
+// ---------------------------------------------------------------------------
+
+const APP_URL = process.env.APP_URL || 'http://localhost:3000';
+
+// POST /api/deals/:dealId/send-to-client — developer sends proposal to client
+app.post('/api/deals/:dealId/send-to-client', async (req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Database not configured' });
+  const { dealId } = req.params;
+
+  const { data: deal, error: dealErr } = await supabaseAdmin
+    .from('deals')
+    .select('*')
+    .eq('id', dealId)
+    .single();
+
+  if (dealErr || !deal) return res.status(404).json({ error: 'Deal not found' });
+  if (deal.user_id !== req.userId) return res.status(403).json({ error: 'Forbidden' });
+
+  await supabaseAdmin.from('deals').update({ status: 'sent_to_client' }).eq('id', dealId);
+
+  await supabaseAdmin.from('deal_revisions').insert({
+    deal_id: dealId,
+    revision_number: 1,
+    submitted_by: req.userId,
+    submitted_by_role: 'developer',
+    value: deal.value,
+    scope_description: deal.scope_description,
+    timeline: deal.timeline,
+    status: 'pending',
+  });
+
+  if (deal.client_profile_id) {
+    await supabaseAdmin.from('notifications').insert({
+      user_id: deal.client_profile_id,
+      type: 'proposal_sent',
+      title: 'New project proposal',
+      body: `You have received a proposal for "${deal.title}" worth $${deal.value}`,
+      read: false,
+    });
+  }
+
+  res.json({ success: true });
+});
+
+// POST /api/deals/:dealId/revise — either party can revise
+app.post('/api/deals/:dealId/revise', async (req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Database not configured' });
+  const { dealId } = req.params;
+  const { value, scope_description, timeline, note } = req.body;
+
+  const { data: deal, error: dealErr } = await supabaseAdmin
+    .from('deals')
+    .select('*')
+    .eq('id', dealId)
+    .single();
+
+  if (dealErr || !deal) return res.status(404).json({ error: 'Deal not found' });
+
+  const isDeveloper = deal.user_id === req.userId;
+  const isClient = deal.client_profile_id === req.userId;
+  if (!isDeveloper && !isClient) return res.status(403).json({ error: 'Forbidden' });
+
+  const submittedByRole = isDeveloper ? 'developer' : 'client';
+
+  // Supersede existing pending revisions
+  await supabaseAdmin
+    .from('deal_revisions')
+    .update({ status: 'superseded' })
+    .eq('deal_id', dealId)
+    .eq('status', 'pending');
+
+  // Get max revision_number
+  const { data: revisions } = await supabaseAdmin
+    .from('deal_revisions')
+    .select('revision_number')
+    .eq('deal_id', dealId)
+    .order('revision_number', { ascending: false })
+    .limit(1);
+
+  const nextRevision = (revisions?.[0]?.revision_number ?? 0) + 1;
+
+  await supabaseAdmin.from('deal_revisions').insert({
+    deal_id: dealId,
+    revision_number: nextRevision,
+    submitted_by: req.userId,
+    submitted_by_role: submittedByRole,
+    value,
+    scope_description,
+    timeline,
+    note,
+    status: 'pending',
+  });
+
+  if (isClient) {
+    await supabaseAdmin.from('deals').update({ status: 'client_revised' }).eq('id', dealId);
+    await supabaseAdmin.from('notifications').insert({
+      user_id: deal.user_id,
+      type: 'proposal_revised',
+      title: 'Client revised proposal',
+      body: `Client revised the proposal for "${deal.title}"`,
+      read: false,
+    });
+  } else {
+    await supabaseAdmin.from('deals').update({ status: 'sent_to_client' }).eq('id', dealId);
+    if (deal.client_profile_id) {
+      await supabaseAdmin.from('notifications').insert({
+        user_id: deal.client_profile_id,
+        type: 'proposal_sent',
+        title: 'Updated proposal received',
+        body: `You received an updated proposal for "${deal.title}"`,
+        read: false,
+      });
+    }
+  }
+
+  res.json({ success: true });
+});
+
+// POST /api/deals/:dealId/accept — only client can accept
+app.post('/api/deals/:dealId/accept', async (req, res) => {
+  const stripeKey = process.env.STRIPE_SECRET_KEY;
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Database not configured' });
+  if (!stripeKey) return res.status(503).json({ error: 'Payments not configured' });
+
+  const { dealId } = req.params;
+
+  const { data: deal, error: dealErr } = await supabaseAdmin
+    .from('deals')
+    .select('*')
+    .eq('id', dealId)
+    .single();
+
+  if (dealErr || !deal) return res.status(404).json({ error: 'Deal not found' });
+  if (deal.client_profile_id !== req.userId) return res.status(403).json({ error: 'Only the client can accept a deal' });
+  if (!['sent_to_client', 'developer_reviewing'].includes(deal.status)) {
+    return res.status(400).json({ error: 'Deal is not in an acceptable status' });
+  }
+
+  await supabaseAdmin.from('deals').update({ status: 'accepted' }).eq('id', dealId);
+  await supabaseAdmin
+    .from('deal_revisions')
+    .update({ status: 'accepted' })
+    .eq('deal_id', dealId)
+    .eq('status', 'pending');
+
+  const depositAmount = Math.ceil(deal.value * 0.5);
+
+  const { data: payment } = await supabaseAdmin
+    .from('payments')
+    .insert({
+      user_id: deal.user_id,
+      project_id: null,
+      recipient_profile_id: req.userId,
+      amount: depositAmount,
+      status: 'pending',
+      description: `50% deposit for "${deal.title}"`,
+      invoice_number: `DEP-${Date.now()}`,
+      deal_id: deal.id,
+    })
+    .select('id')
+    .single();
+
+  const { default: Stripe } = await import('stripe');
+  const stripe = new Stripe(stripeKey);
+  const session = await stripe.checkout.sessions.create({
+    mode: 'payment',
+    line_items: [{
+      price_data: {
+        currency: 'usd',
+        product_data: { name: `50% deposit — ${deal.title}` },
+        unit_amount: depositAmount * 100,
+      },
+      quantity: 1,
+    }],
+    success_url: `${APP_URL}/proposals?deposit=success&deal=${deal.id}`,
+    cancel_url: `${APP_URL}/proposals?deposit=cancelled`,
+    metadata: {
+      type: 'deposit',
+      dealId: deal.id,
+      developerId: deal.user_id,
+      paymentId: payment?.id ?? '',
+    },
+  });
+
+  await supabaseAdmin
+    .from('deals')
+    .update({ stripe_checkout_session_id: session.id, deposit_invoice_id: payment?.id })
+    .eq('id', dealId);
+
+  await supabaseAdmin.from('notifications').insert({
+    user_id: deal.user_id,
+    type: 'proposal_accepted',
+    title: 'Proposal accepted!',
+    body: `Client accepted the proposal for "${deal.title}". Awaiting 50% deposit.`,
+    read: false,
+  });
+
+  res.json({ checkoutUrl: session.url });
 });
 
 // ---------------------------------------------------------------------------
