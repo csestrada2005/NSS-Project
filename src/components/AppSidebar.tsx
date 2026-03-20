@@ -204,7 +204,7 @@ const AppSidebar = ({ open, onClose }: AppSidebarProps) => {
                   navigate(path);
                   onClose();
                 }}
-                className={`w-full flex items-center gap-3 rounded-lg text-[13px] transition-all duration-150 group ${collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2.5"} ${active ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-accent"}`}
+                className={`w-full flex items-center gap-3 rounded-lg text-[13px] transition-all duration-150 group ${collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2.5"} ${active ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:text-primary hover:bg-primary/10"}`}
                 title={collapsed ? item.label[lang] : undefined}
               >
                 <div className="relative shrink-0">
@@ -232,7 +232,7 @@ const AppSidebar = ({ open, onClose }: AppSidebarProps) => {
           {isAdmin && (
             <button
               onClick={() => setApprovalPanelOpen(true)}
-              className={`w-full flex items-center gap-3 rounded-lg text-[13px] transition-all duration-150 ${collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2.5"} text-muted-foreground hover:text-foreground hover:bg-accent`}
+              className={`w-full flex items-center gap-3 rounded-lg text-[13px] transition-all duration-150 ${collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2.5"} text-muted-foreground hover:text-primary hover:bg-primary/10`}
               title={collapsed ? "Approvals" : undefined}
             >
               <div className="relative shrink-0">

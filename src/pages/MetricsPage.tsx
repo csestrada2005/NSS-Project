@@ -7,17 +7,18 @@ import AIReports from './metrics/AIReports';
 import { TrafficCharts } from '../components/settings/analytics/TrafficCharts';
 import { LighthousePanel } from '../components/settings/analytics/LighthousePanel';
 import { SupabaseService } from '../services/SupabaseService';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const TABS = [
-  'Website Analytics',
-  'Meta Ads',
-  'Performance',
-  'Forecast',
-  'AI Reports',
-  'Forge Analytics',
+  { id: 'website', en: 'Website Analytics', es: 'Analytics Web' },
+  { id: 'meta', en: 'Meta Ads', es: 'Meta Ads' },
+  { id: 'performance', en: 'Performance', es: 'Rendimiento' },
+  { id: 'forecast', en: 'Forecast', es: 'Pronóstico' },
+  { id: 'aireports', en: 'AI Reports', es: 'Reportes IA' },
+  { id: 'forge', en: 'Forge Analytics', es: 'Analytics Forge' },
 ] as const;
 
-type Tab = (typeof TABS)[number];
+type TabId = (typeof TABS)[number]['id'];
 
 interface ForgeProject {
   id: string;
@@ -102,14 +103,19 @@ function ForgeAnalyticsSummary() {
 }
 
 const MetricsPage = () => {
-  const [activeTab, setActiveTab] = useState<Tab>('Website Analytics');
+  const { lang } = useLanguage();
+  const [activeTab, setActiveTab] = useState<TabId>('website');
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto w-full pb-10">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Metrics</h1>
-        <p className="text-muted-foreground mt-1">Track performance across all your channels</p>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">
+          {lang === 'es' ? 'Métricas' : 'Metrics'}
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          {lang === 'es' ? 'Monitorea el rendimiento en todos tus canales' : 'Track performance across all your channels'}
+        </p>
       </div>
 
       {/* Tab bar */}
@@ -117,27 +123,27 @@ const MetricsPage = () => {
         <nav className="flex gap-1 -mb-px overflow-x-auto">
           {TABS.map((tab) => (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
               className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
-                activeTab === tab
-                  ? 'border-emerald-500 text-white'
+                activeTab === tab.id
+                  ? 'border-primary text-white'
                   : 'border-transparent text-zinc-400 hover:text-zinc-200'
               }`}
             >
-              {tab}
+              {lang === 'es' ? tab.es : tab.en}
             </button>
           ))}
         </nav>
       </div>
 
       {/* Tab content */}
-      {activeTab === 'Website Analytics' && <WebAnalytics />}
-      {activeTab === 'Meta Ads' && <MetaAds />}
-      {activeTab === 'Performance' && <Performance />}
-      {activeTab === 'Forecast' && <Forecast />}
-      {activeTab === 'AI Reports' && <AIReports />}
-      {activeTab === 'Forge Analytics' && <ForgeAnalyticsSummary />}
+      {activeTab === 'website' && <WebAnalytics />}
+      {activeTab === 'meta' && <MetaAds />}
+      {activeTab === 'performance' && <Performance />}
+      {activeTab === 'forecast' && <Forecast />}
+      {activeTab === 'aireports' && <AIReports />}
+      {activeTab === 'forge' && <ForgeAnalyticsSummary />}
     </div>
   );
 };

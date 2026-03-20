@@ -114,7 +114,7 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
       {/* Backdrop */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/40 z-[79]"
+          className="fixed inset-0 bg-black/80 z-[79]"
           onClick={onClose}
         />
       )}

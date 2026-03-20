@@ -1,26 +1,21 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
-import { Bot, Send, Image, Code, MessageSquare, Plus, Settings, Wand2, PanelLeftClose } from "lucide-react";
-// Note: Wand2 kept to avoid removing unused import warning on the images tab
+import { Bot, Send, Code, MessageSquare, Plus } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
 
-type Tab = "chat" | "images" | "builder";
+type Tab = "chat" | "builder";
 type Message = { role: 'user' | 'assistant'; content: string };
 type HistoryEntry = { role: string; content: string };
 
 const AIStudioPage = () => {
   const navigate = useNavigate();
+  const { lang } = useLanguage();
   const [activeTab, setActiveTab] = useState<Tab>("chat");
   const [chatInput, setChatInput] = useState("");
-  const [imagePrompt, setImagePrompt] = useState("");
-  const [showConfig, setShowConfig] = useState(false);
 
   // Chat states
   const [messages, setMessages] = useState<Message[]>([]);
   const [isSending, setIsSending] = useState(false);
-  const [assistantName, setAssistantName] = useState('NOVY');
-  const [assistantPersonality, setAssistantPersonality] = useState('');
-  const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-6');
   const [conversationHistory, setConversationHistory] = useState<HistoryEntry[]>([]);
 
   useEffect(() => {
@@ -54,9 +49,6 @@ const AIStudioPage = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: selectedModel,
-          max_tokens: 1000,
-          system: assistantPersonality || `Eres un asistente útil llamado ${assistantName}`,
           messages: [...conversationHistory, { role: 'user', content: userContent }],
         }),
       });
@@ -69,16 +61,19 @@ const AIStudioPage = () => {
       setMessages((prev) => [...prev, assistantMessage]);
       setConversationHistory((prev) => [...prev, assistantHistory]);
     } catch {
-      setMessages((prev) => [...prev, { role: 'assistant', content: 'Error al conectar con el asistente. Verifica tu API key.' }]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: lang === 'es' ? 'Error al conectar con el asistente.' : 'Error connecting to the assistant.' }]);
     } finally {
       setIsSending(false);
     }
   };
 
+  const quickActions = lang === 'es'
+    ? ["Resumen del día", "Nueva cotización", "Analizar sitio web", "Ideas de contenido", "Redactar email"]
+    : ["Daily summary", "New quote", "Analyze website", "Content ideas", "Draft email"];
+
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: "chat", label: "Chat", icon: <MessageSquare size={16} /> },
-    { id: "images", label: "Image Studio", icon: <Image size={16} /> },
-    { id: "builder", label: "Web Builder", icon: <Code size={16} /> },
+    { id: "chat", label: "Novy", icon: <MessageSquare size={16} /> },
+    { id: "builder", label: lang === 'es' ? "Constructor Web" : "Web Builder", icon: <Code size={16} /> },
   ];
 
   return (
@@ -87,7 +82,9 @@ const AIStudioPage = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">AI Studio</h1>
-          <p className="text-sm text-muted-foreground mt-1">Chat, genera imágenes y construye sitios web con IA</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {lang === 'es' ? 'Chat con Novy y construye sitios web con IA' : 'Chat with Novy and build websites with AI'}
+          </p>
         </div>
       </div>
 
@@ -118,86 +115,32 @@ const AIStudioPage = () => {
                 className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium px-4 py-2 rounded-lg transition-colors"
               >
                 <Plus size={16} />
-                Nueva conversación
+                {lang === 'es' ? 'Nueva conversación' : 'New conversation'}
               </button>
             </div>
             <div className="flex-1 p-3 space-y-1 overflow-y-auto">
-              <p className="text-xs text-muted-foreground text-center py-8">Sin conversaciones previas</p>
-            </div>
-            <div className="p-3 border-t border-border">
-              <button onClick={() => setShowConfig(!showConfig)} className="w-full flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm px-3 py-2 rounded-lg hover:bg-secondary transition-colors">
-                <Settings size={14} />
-                Configurar asistente
-              </button>
+              <p className="text-xs text-muted-foreground text-center py-8">
+                {lang === 'es' ? 'Sin conversaciones previas' : 'No previous conversations'}
+              </p>
             </div>
           </div>
 
           {/* Main chat area */}
           <div className="flex-1 flex flex-col bg-muted/30 border border-border rounded-xl overflow-hidden">
-            {/* Config panel */}
-            {showConfig && (
-              <div className="p-4 border-b border-border bg-muted/50 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-foreground">Personaliza tu asistente</h3>
-                  <button onClick={() => setShowConfig(false)} className="text-muted-foreground hover:text-foreground">
-                    <PanelLeftClose size={16} />
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-muted-foreground block mb-1">Nombre del asistente</label>
-                    <input
-                      value={assistantName}
-                      onChange={(e) => setAssistantName(e.target.value)}
-                      className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-ring"
-                      placeholder="NOVY"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground block mb-1">Modelo de IA</label>
-                    <select
-                      value={selectedModel}
-                      onChange={(e) => setSelectedModel(e.target.value)}
-                      className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-ring"
-                    >
-                      <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
-                      <option value="claude-opus-4-6">Claude Opus 4.6</option>
-                      <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
-                    </select>
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="text-xs text-muted-foreground block mb-1">Personalidad / Instrucciones</label>
-                    <textarea
-                      value={assistantPersonality}
-                      onChange={(e) => setAssistantPersonality(e.target.value)}
-                      className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-ring resize-none h-16"
-                      placeholder="Eres un asistente especializado en..."
-                    />
-                  </div>
-                  <div className="flex items-end">
-                    <button
-                      onClick={() => toast.success('Configuración guardada')}
-                      className="bg-primary hover:bg-primary/90 text-primary-foreground text-sm px-4 py-2 rounded-lg transition-colors"
-                    >
-                      Guardar
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Chat messages / empty state */}
             {messages.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center p-8">
                 <div className="w-20 h-20 bg-gradient-to-br from-primary/20 to-accent/20 rounded-3xl flex items-center justify-center mb-6 border border-primary/20">
                   <Bot size={36} className="text-primary" />
                 </div>
-                <h3 className="text-xl font-semibold text-foreground mb-2">Tu asistente IA</h3>
+                <h3 className="text-xl font-semibold text-foreground mb-2">Novy</h3>
                 <p className="text-sm text-muted-foreground max-w-md text-center mb-8">
-                  Configura tu asistente con tu propia API key. Pregunta sobre tus proyectos, genera cotizaciones, analiza métricas y más.
+                  {lang === 'es'
+                    ? 'Tu asistente de negocios inteligente. Pregunta sobre tus proyectos, genera cotizaciones, analiza métricas o crea reportes.'
+                    : 'Your intelligent business assistant. Ask about your projects, generate quotes, analyze metrics, or create reports.'}
                 </p>
                 <div className="flex flex-wrap gap-2 justify-center max-w-lg">
-                  {["Resumen del día", "Nueva cotización", "Analizar sitio web", "Ideas de contenido", "Redactar email"].map((action) => (
+                  {quickActions.map((action) => (
                     <button
                       key={action}
                       onClick={() => setChatInput(action)}
@@ -242,7 +185,7 @@ const AIStudioPage = () => {
                   onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendChat()}
                   disabled={isSending}
                   className="flex-1 bg-secondary border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-ring disabled:opacity-50"
-                  placeholder="Pregunta lo que necesites..."
+                  placeholder={lang === 'es' ? 'Pregunta lo que necesites...' : 'Ask anything...'}
                 />
                 <button
                   onClick={handleSendChat}
@@ -257,62 +200,6 @@ const AIStudioPage = () => {
         </div>
       )}
 
-      {/* IMAGE STUDIO TAB */}
-      {activeTab === "images" && (
-        <div className="flex gap-4 h-[calc(100%-80px)]">
-          {/* Controls */}
-          <div className="w-80 shrink-0 bg-muted/50 border border-border rounded-xl p-4 space-y-4 overflow-y-auto">
-            <div>
-              <label className="text-xs text-muted-foreground block mb-2">Describe la imagen</label>
-              <textarea
-                value={imagePrompt}
-                onChange={(e) => setImagePrompt(e.target.value)}
-                className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-ring resize-none h-24"
-                placeholder="Un banner minimalista para tienda de café con tonos cálidos..."
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground block mb-2">Estilo</label>
-              <div className="grid grid-cols-2 gap-2">
-                {["Realista", "Ilustración", "3D", "Minimalista", "Ad Creative", "Social Post"].map((style) => (
-                  <button key={style} className="text-xs bg-secondary hover:bg-secondary/80 text-muted-foreground px-3 py-2 rounded-lg border border-border transition-colors">
-                    {style}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground block mb-2">Formato</label>
-              <select className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-ring">
-                <option>1:1 Instagram</option>
-                <option>16:9 Banner</option>
-                <option>9:16 Story</option>
-                <option>4:5 Feed</option>
-                <option>Custom</option>
-              </select>
-            </div>
-            <button
-              onClick={() => toast.info('Image generation coming soon. Connect an image model to enable this feature.')}
-              className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-3 rounded-xl transition-colors"
-            >
-              <Wand2 size={18} />
-              Generar imagen
-            </button>
-          </div>
-
-          {/* Results */}
-          <div className="flex-1 bg-muted/30 border border-border rounded-xl flex flex-col items-center justify-center p-8">
-            <div className="w-20 h-20 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-3xl flex items-center justify-center mb-6 border border-purple-500/20">
-              <Image size={36} className="text-purple-400" />
-            </div>
-            <h3 className="text-xl font-semibold text-foreground mb-2">Genera contenido visual con IA</h3>
-            <p className="text-sm text-muted-foreground max-w-md text-center">
-              Banners, posts para redes, mockups y más. Describe lo que necesitas y la IA lo genera.
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* WEB BUILDER TAB */}
       {activeTab === "builder" && (
         <div className="flex items-center justify-center h-[calc(100%-80px)]">
@@ -320,16 +207,20 @@ const AIStudioPage = () => {
             <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto">
               <Code size={32} className="text-primary" />
             </div>
-            <h3 className="text-xl font-semibold text-foreground">Abrir Wyrd Forge</h3>
+            <h3 className="text-xl font-semibold text-foreground">
+              {lang === 'es' ? 'Abrir Wyrd Forge' : 'Open Wyrd Forge'}
+            </h3>
             <p className="text-sm text-muted-foreground">
-              Wyrd Forge es nuestro entorno de desarrollo. Promptea y desarrolla tu sitio web o SAAS con nuestra IA
+              {lang === 'es'
+                ? 'Wyrd Forge es nuestro entorno de desarrollo con IA. Crea tu sitio web o SAAS con nuestra IA'
+                : 'Wyrd Forge is our AI development environment. Prompt and build your website or SaaS with our AI'}
             </p>
             <button
               onClick={() => navigate('/forge')}
               className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-3 rounded-xl transition-colors"
             >
               <Code size={18} />
-              Abrir Wyrd Forge
+              {lang === 'es' ? 'Abrir Wyrd Forge' : 'Open Wyrd Forge'}
             </button>
           </div>
         </div>

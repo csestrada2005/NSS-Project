@@ -196,7 +196,7 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
           <button
             onClick={() => onSave(local)}
             disabled={!local.name || !local.subject}
-            className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-1.5"
+            className="px-4 py-1.5 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-1.5"
           >
             <Save size={13} />
             Save
@@ -241,7 +241,7 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
             <button
               onClick={setupDomain}
               disabled={isSettingUp || !sendingDomain.trim()}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
             >
               {isSettingUp ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
               Setup
@@ -385,7 +385,7 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
             <button
               onClick={sendTestEmail}
               disabled={isSending || !testEmail || !testTemplate}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
             >
               {isSending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
               {isSending ? 'Sending...' : 'Send Test'}

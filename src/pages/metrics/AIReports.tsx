@@ -246,7 +246,7 @@ const AIReports = () => {
         <div className="p-3 border-b border-border">
           <button
             onClick={() => { setShowModal(true); setFormError(null); }}
-            className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
           >
             <Plus size={16} />
             {l('newReport')}
@@ -383,7 +383,7 @@ const AIReports = () => {
                 <button
                   type="submit"
                   disabled={submitting || !formTitle.trim() || !formPrompt.trim()}
-                  className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors"
+                  className="bg-primary hover:bg-primary/90 disabled:opacity-60 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors"
                 >
                   {submitting ? '…' : l('generateBtn')}
                 </button>

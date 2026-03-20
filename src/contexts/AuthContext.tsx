@@ -35,7 +35,7 @@ const AuthContext = createContext<AuthContextType>({
 
 const PROFILE_CACHE_KEY = 'nebu_profile_cache';
 
-function readProfileCache(): Pick<Profile, 'role' | 'pending_role' | 'role_approved'> | null {
+function readProfileCache(): Pick<Profile, 'role' | 'pending_role' | 'role_approved' | 'full_name' | 'avatar_url' | 'email'> | null {
   try {
     const raw = localStorage.getItem(PROFILE_CACHE_KEY);
     if (!raw) return null;
@@ -49,7 +49,14 @@ function writeProfileCache(p: Profile) {
   try {
     localStorage.setItem(
       PROFILE_CACHE_KEY,
-      JSON.stringify({ role: p.role, pending_role: p.pending_role, role_approved: p.role_approved })
+      JSON.stringify({
+        role: p.role,
+        pending_role: p.pending_role,
+        role_approved: p.role_approved,
+        full_name: p.full_name,
+        avatar_url: p.avatar_url,
+        email: p.email,
+      })
     );
   } catch {}
 }

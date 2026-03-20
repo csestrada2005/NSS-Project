@@ -204,19 +204,58 @@ app.post('/api/ai-action', async (req, res) => {
   }
 });
 
+const NOVY_SYSTEM_PROMPT = `You are Novy, an intelligent business operating system assistant for Nebu Studio System. You help business owners and their teams manage their operations efficiently.
+Your capabilities and knowledge areas:
+- Project management: tracking active/completed/paused projects, milestones, client assignments
+- CRM & contacts: leads, clients, partners — their status, pipeline stage, and relationship history
+- Finance: payments (pending/paid/overdue), monthly revenue, invoices, cash flow analysis
+- Sales pipeline: deals, stages (prospecting → qualification → proposal → negotiation → closed), probability-weighted forecasting
+- Team management: user roles (admin, dev, vendedor, cliente), notifications, approvals
+- Analytics: website metrics, ad performance (Meta Ads), Google Analytics data interpretation
+- AI Reports: when asked to generate a report or summary, produce a thorough, well-structured markdown report with sections, bullet points, and data-driven insights. Use ## for section headers, - for lists, and **bold** for key metrics.
+Your communication style:
+- Professional but warm and conversational
+- Bilingual: respond in the same language the user writes in (Spanish or English)
+- Data-focused: always try to reference specific numbers, percentages, or trends when discussing business metrics
+- Actionable: end responses with concrete next steps or recommendations when relevant
+- Concise for simple questions, detailed for reports and analysis
+When generating AI Reports (user asks for a report, summary, or analysis):
+- Structure with clear ## sections
+- Include an Executive Summary at the top
+- Use specific metrics and timeframes
+- Highlight risks and opportunities
+- End with Recommended Actions
+You have access to the Nebu business OS data through the user's questions. Be helpful, accurate, and business-focused.`;
+
+const REPORT_KEYWORDS = ['report', 'reporte', 'summary', 'resumen', 'analyze', 'analiza', 'generate', 'genera'];
+
 app.post('/api/chat', async (req, res) => {
   if (!ANTHROPIC_API_KEY) {
     return res.status(500).json({ error: 'Server misconfigured: API Key missing.' });
   }
   try {
+    const { messages } = req.body;
+
+    const latestUserMessage = [...(messages || [])].reverse().find(m => m.role === 'user');
+    const latestContent = (latestUserMessage?.content ?? '').toLowerCase();
+    const isReport = REPORT_KEYWORDS.some(kw => latestContent.includes(kw));
+
+    const model = isReport ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001';
+    const max_tokens = isReport ? 4096 : 2048;
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': req.headers['anthropic-version'] || '2023-06-01',
+        'anthropic-version': '2023-06-01',
         'content-type': 'application/json',
       },
-      body: JSON.stringify(req.body),
+      body: JSON.stringify({
+        model,
+        max_tokens,
+        system: NOVY_SYSTEM_PROMPT,
+        messages,
+      }),
     });
     const data = await response.json();
     res.status(response.status).json(data);

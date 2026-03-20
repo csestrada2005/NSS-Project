@@ -75,7 +75,7 @@ const ProjectDetailPanel = ({ project, contacts, onClose, onUpdate, onDelete, la
       {/* Backdrop */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30"
+          className="fixed inset-0 bg-black/80 backdrop-blur-md z-30"
           onClick={onClose}
         />
       )}

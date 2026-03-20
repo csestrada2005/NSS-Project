@@ -156,7 +156,7 @@ export function DomainsPanel({ projectId }: DomainsPanelProps) {
           <button
             onClick={connectDomain}
             disabled={isConnecting || !newDomain.trim()}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
+            className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
           >
             {isConnecting ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
             Connect

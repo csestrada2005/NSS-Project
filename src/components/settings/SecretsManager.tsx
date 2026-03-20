@@ -143,7 +143,7 @@ export function SecretsManager({ onClose }: SecretsManagerProps) {
             <button
               onClick={addSecret}
               disabled={!newKey.trim()}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
             >
               <Plus size={16} />
               Add
@@ -185,7 +185,7 @@ export function SecretsManager({ onClose }: SecretsManagerProps) {
           </button>
           <button
             onClick={handleSave}
-            className="px-6 py-2 bg-green-600 hover:bg-green-500 text-white rounded text-sm font-medium transition-colors flex items-center gap-2 shadow-lg shadow-green-900/20"
+            className="px-6 py-2 bg-primary hover:bg-primary/90 text-white rounded text-sm font-medium transition-colors flex items-center gap-2 shadow-lg shadow-green-900/20"
           >
             <Save size={16} />
             Save Changes

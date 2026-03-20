@@ -219,7 +219,7 @@ const Performance = () => {
           />
           <button
             onClick={handleApplyRange}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium px-4 py-1.5 rounded-lg transition-colors"
+            className="bg-primary hover:bg-primary/90 text-white text-xs font-medium px-4 py-1.5 rounded-lg transition-colors"
           >
             {l('applyBtn')}
           </button>

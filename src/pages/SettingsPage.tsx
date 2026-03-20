@@ -47,6 +47,7 @@ interface AvatarUploadProps {
 function AvatarUpload({ userId, avatarUrl, displayName, onUpload }: AvatarUploadProps) {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { lang } = useLanguage();
 
   const initials = displayName
     .split(' ')
@@ -123,8 +124,8 @@ function AvatarUpload({ userId, avatarUrl, displayName, onUpload }: AvatarUpload
       </div>
       <div className="text-sm text-muted-foreground">
         <p className="font-medium text-foreground">{displayName || '—'}</p>
-        <p className="text-xs mt-0.5">Click the avatar to upload a new photo</p>
-        <p className="text-xs text-muted-foreground/60">Max 2MB · JPG, PNG, WebP</p>
+        <p className="text-xs mt-0.5">{lang === 'es' ? 'Haz clic en el avatar para subir una foto nueva' : 'Click the avatar to upload a new photo'}</p>
+        <p className="text-xs text-muted-foreground/60">{lang === 'es' ? 'Máx 2MB · JPG, PNG, WebP' : 'Max 2MB · JPG, PNG, WebP'}</p>
       </div>
     </div>
   );
@@ -309,14 +310,27 @@ const SettingsPage = () => {
                     </span>
                     <span className="text-sm text-muted-foreground">{labels.languageDesc[lang]}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-sm ${lang === 'en' ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>EN</span>
-                    <Switch
-                      checked={lang === 'es'}
-                      onCheckedChange={(checked) => setLang(checked ? 'es' : 'en')}
-                      id="language-toggle"
-                    />
-                    <span className={`text-sm ${lang === 'es' ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>ES</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setLang('en')}
+                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                        lang === 'en'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                      }`}
+                    >
+                      EN
+                    </button>
+                    <button
+                      onClick={() => setLang('es')}
+                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                        lang === 'es'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                      }`}
+                    >
+                      ES
+                    </button>
                   </div>
                 </div>
               </CardContent>
