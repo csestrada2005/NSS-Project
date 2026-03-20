@@ -380,7 +380,7 @@ export class AIOrchestrator {
     // ------------------------------------------------------------------
     // LAYER 2 — IntentClassifier: classify the user prompt
     // ------------------------------------------------------------------
-    let intent = memory
+    const intent = memory
       ? await IntentClassifier.classify(input, memory)
       : {
           type: 'modify_existing' as const,
@@ -632,7 +632,7 @@ export class AIOrchestrator {
   private static async runSimpleLane(
     input: string,
     files: Map<string, string>,
-    selectedElement: { tagName: string; className?: string } | null,
+    _selectedElement: { tagName: string; className?: string } | null,
     projectId?: string
   ): Promise<OrchestratorResult> {
     const relevantFiles = selectRelevantFiles(input, files);

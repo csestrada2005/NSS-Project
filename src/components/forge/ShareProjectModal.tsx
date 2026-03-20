@@ -55,7 +55,7 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [sending, setSending] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Load existing collaborators
   useEffect(() => {
