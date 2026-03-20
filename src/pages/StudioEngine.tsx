@@ -66,6 +66,7 @@ export function StudioEngine() {
   // Initial prompt from ForgeDashboard navigate state (Phase 4 Fix 4)
   const initialPrompt = (location.state as any)?.initialPrompt as string | undefined;
   const hasProcessedInitialPrompt = useRef(false);
+  const isAutoLoadingTemplate = useRef(false);
 
   // -------------------------------------------------------------------------
   // File state (replaces WebContainer + FileSystemTree)
@@ -76,6 +77,7 @@ export function StudioEngine() {
   // Preview state
   // -------------------------------------------------------------------------
   const [compiledHtml, setCompiledHtml] = useState('');
+  const [hasValidPreview, setHasValidPreview] = useState(false);
   const [isCompiling, setIsCompiling] = useState(false);
   const [isIndexing, setIsIndexing] = useState(false);
   const memoryInitialized = useRef<boolean>(false);
@@ -83,7 +85,7 @@ export function StudioEngine() {
   // -------------------------------------------------------------------------
   // UI state
   // -------------------------------------------------------------------------
-  const [showTemplateSelector, setShowTemplateSelector] = useState(true);
+  const [showTemplateSelector, setShowTemplateSelector] = useState(!initialPrompt);
   const [showSettings, setShowSettings] = useState(false);
   const [showGraph, setShowGraph] = useState(false);
   const [showHamburger, setShowHamburger] = useState(false);
@@ -213,7 +215,10 @@ export function StudioEngine() {
       try {
         const html = await compile(files);
         setCompiledHtml(html);
-        setShowTemplateSelector(false);
+        if (!html.includes('Compilation Error')) {
+          setHasValidPreview(true);
+          setShowTemplateSelector(false);
+        }
       } catch (e: any) {
         console.error('[StudioEngine] Compile error:', e);
       } finally {
@@ -266,11 +271,21 @@ export function StudioEngine() {
   // Phase 4 Fix 4: run initialPrompt only after files have loaded
   // -------------------------------------------------------------------------
   useEffect(() => {
-    if (!isLoading && !hasProcessedInitialPrompt.current && initialPrompt && files.size > 0) {
+    if (isLoading) return;
+    if (!initialPrompt) return;
+    if (hasProcessedInitialPrompt.current) return;
+    if (isAutoLoadingTemplate.current) return;
+
+    if (files.size > 0) {
       hasProcessedInitialPrompt.current = true;
       handleSendMessage(initialPrompt);
+    } else {
+      isAutoLoadingTemplate.current = true;
+      hasProcessedInitialPrompt.current = true;
+      handleLoadTemplate('landing-page').then(() => {
+        handleSendMessage(initialPrompt);
+      });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading]);
 
   // -------------------------------------------------------------------------
@@ -549,7 +564,7 @@ export function StudioEngine() {
   // Derived state
   // -------------------------------------------------------------------------
   const fileTree = mapToFileSystemTree(files); // for legacy components (InspectorPanel, StateGraph, SettingsModal, HistoryDrawer)
-  const hasPreview = compiledHtml !== '';
+  const hasPreview = hasValidPreview;
 
   // -------------------------------------------------------------------------
   // Code panel (rendered inside CommandModal)
@@ -759,47 +774,66 @@ export function StudioEngine() {
                     />
                   )}
                 </div>
+              ) : compiledHtml !== '' ? (
+                /* Show error HTML in iframe even when hasValidPreview is false */
+                <iframe
+                  ref={iframeRef}
+                  srcDoc={compiledHtml}
+                  sandbox="allow-scripts allow-modals"
+                  className="w-full h-full border-none"
+                  title="Preview"
+                />
               ) : (
                 /* Template selector / waiting state */
                 <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-4">
-                  {showTemplateSelector ? (
-                    <div className="flex flex-col items-center gap-6 max-w-2xl w-full px-8">
-                      <div className="text-center">
-                        <h2 className="text-2xl font-bold text-gray-300 mb-2">Start a New Project</h2>
-                        <p className="text-gray-500">Choose a template to get started quickly.</p>
+                  {!hasPreview && (
+                    initialPrompt ? (
+                      <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-4">
+                        <Loader2 className="animate-spin w-8 h-8" />
+                        <div className="text-sm font-medium">Setting up your project...</div>
+                        <div className="text-xs text-gray-600">This may take a moment</div>
                       </div>
-
-                      <div className="grid grid-cols-2 gap-4 w-full">
-                        <button
-                          onClick={() => handleLoadTemplate('landing-page')}
-                          className="flex flex-col items-center p-6 bg-gray-800 border-2 border-gray-700 hover:border-red-500 rounded-xl transition-all group text-left"
-                        >
-                          <div className="p-3 rounded-full bg-red-900/30 text-red-400 mb-4 group-hover:scale-110 transition-transform">
-                            <LayoutTemplate className="w-8 h-8" />
+                    ) : (
+                      showTemplateSelector ? (
+                        <div className="flex flex-col items-center gap-6 max-w-2xl w-full px-8">
+                          <div className="text-center">
+                            <h2 className="text-2xl font-bold text-gray-300 mb-2">Start a New Project</h2>
+                            <p className="text-gray-500">Choose a template to get started quickly.</p>
                           </div>
-                          <h3 className="text-lg font-semibold text-gray-200 mb-1">Landing Page</h3>
-                          <p className="text-sm text-gray-500 text-center">Modern hero section with features grid and responsive navbar.</p>
-                        </button>
 
-                        <button
-                          onClick={() => handleLoadTemplate('dashboard')}
-                          className="flex flex-col items-center p-6 bg-gray-800 border-2 border-gray-700 hover:border-red-500 rounded-xl transition-all group text-left"
-                        >
-                          <div className="p-3 rounded-full bg-red-900/30 text-red-400 mb-4 group-hover:scale-110 transition-transform">
-                            <LayoutTemplate className="w-8 h-8" />
+                          <div className="grid grid-cols-2 gap-4 w-full">
+                            <button
+                              onClick={() => handleLoadTemplate('landing-page')}
+                              className="flex flex-col items-center p-6 bg-gray-800 border-2 border-gray-700 hover:border-red-500 rounded-xl transition-all group text-left"
+                            >
+                              <div className="p-3 rounded-full bg-red-900/30 text-red-400 mb-4 group-hover:scale-110 transition-transform">
+                                <LayoutTemplate className="w-8 h-8" />
+                              </div>
+                              <h3 className="text-lg font-semibold text-gray-200 mb-1">Landing Page</h3>
+                              <p className="text-sm text-gray-500 text-center">Modern hero section with features grid and responsive navbar.</p>
+                            </button>
+
+                            <button
+                              onClick={() => handleLoadTemplate('dashboard')}
+                              className="flex flex-col items-center p-6 bg-gray-800 border-2 border-gray-700 hover:border-red-500 rounded-xl transition-all group text-left"
+                            >
+                              <div className="p-3 rounded-full bg-red-900/30 text-red-400 mb-4 group-hover:scale-110 transition-transform">
+                                <LayoutTemplate className="w-8 h-8" />
+                              </div>
+                              <h3 className="text-lg font-semibold text-gray-200 mb-1">Dashboard</h3>
+                              <p className="text-sm text-gray-500 text-center">Admin layout with sidebar, header, and stats cards.</p>
+                            </button>
                           </div>
-                          <h3 className="text-lg font-semibold text-gray-200 mb-1">Dashboard</h3>
-                          <p className="text-sm text-gray-500 text-center">Admin layout with sidebar, header, and stats cards.</p>
-                        </button>
-                      </div>
 
-                      <p className="text-xs text-gray-600">Or use the chat to describe what you want to build →</p>
-                    </div>
-                  ) : (
-                    <div className="text-center">
-                      <Loader2 className="animate-spin w-6 h-6 mx-auto mb-2" />
-                      <div className="text-sm">Compiling preview…</div>
-                    </div>
+                          <p className="text-xs text-gray-600">Or use the chat to describe what you want to build →</p>
+                        </div>
+                      ) : (
+                        <div className="text-center">
+                          <Loader2 className="animate-spin w-6 h-6 mx-auto mb-2" />
+                          <div className="text-sm">Compiling preview…</div>
+                        </div>
+                      )
+                    )
                   )}
                 </div>
               )}
@@ -856,12 +890,27 @@ export function StudioEngine() {
           isOpen={isHistoryOpen}
           onClose={() => setIsHistoryOpen(false)}
           onRestore={async (tree) => {
-            // Phase 2: restore saves each file to forge_files via the hook
             const restoredFiles = fileSystemTreeToMap(tree);
             for (const [path, content] of restoredFiles) {
               updateLocalFile(path, content);
               await saveFile(path, content);
             }
+
+            // Force immediate recompile after restore
+            setIsCompiling(true);
+            try {
+              const html = await compile(restoredFiles);
+              setCompiledHtml(html);
+              if (!html.includes('Compilation Error')) {
+                setHasValidPreview(true);
+                setShowTemplateSelector(false);
+              }
+            } catch (e) {
+              console.error('[Restore] Compile error:', e);
+            } finally {
+              setIsCompiling(false);
+            }
+
             setIsHistoryOpen(false);
           }}
           currentTree={fileTree}
