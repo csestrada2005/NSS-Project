@@ -24,13 +24,22 @@ interface Props {
   onClose: () => void;
 }
 
-function Avatar({ name, size = 8 }: { name: string | null; size?: number }) {
+function Avatar({ name, avatarUrl, size = 8 }: { name: string | null; avatarUrl?: string | null; size?: number }) {
   const initials = (name ?? '?')
     .split(' ')
     .map((w) => w[0])
     .join('')
     .slice(0, 2)
     .toUpperCase();
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={name ?? ''}
+        className={`w-${size} h-${size} rounded-full object-cover shrink-0`}
+      />
+    );
+  }
   return (
     <div
       className={`w-${size} h-${size} rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-semibold shrink-0`}
@@ -180,7 +189,7 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
                         key={c.id}
                         className="flex items-center gap-3 p-3 rounded-xl bg-gray-800/50 border border-gray-700/50"
                       >
-                        <Avatar name={c.profile?.full_name ?? null} />
+                        <Avatar name={c.profile?.full_name ?? null} avatarUrl={c.profile?.avatar_url} />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-white truncate">
                             {c.profile?.full_name ?? c.user_id}
@@ -254,7 +263,7 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
                         disabled={alreadyAdded || alreadyCollaborator}
                         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <Avatar name={result.full_name} />
+                        <Avatar name={result.full_name} avatarUrl={result.avatar_url} />
                         <div className="flex-1 text-left min-w-0">
                           <p className="text-sm font-medium text-white truncate">
                             {result.full_name ?? 'Unknown'}
@@ -294,7 +303,7 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
                       key={invite.user.id}
                       className="flex items-center gap-3 p-3 rounded-xl bg-gray-800/50 border border-gray-700/50"
                     >
-                      <Avatar name={invite.user.full_name} />
+                      <Avatar name={invite.user.full_name} avatarUrl={invite.user.avatar_url} />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-white truncate">
                           {invite.user.full_name ?? 'Unknown'}

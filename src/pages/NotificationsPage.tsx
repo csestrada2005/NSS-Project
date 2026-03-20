@@ -1,4 +1,20 @@
-import { Bell, Check, CheckCheck, Info, UserPlus, AlertCircle, Loader2 } from 'lucide-react';
+import {
+  Bell,
+  Check,
+  CheckCheck,
+  Info,
+  UserPlus,
+  AlertCircle,
+  Loader2,
+  Shield,
+  CheckCircle,
+  XCircle,
+  Briefcase,
+  CreditCard,
+  DollarSign,
+  Flag,
+  MessageSquare,
+} from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useNotifications } from '@/hooks/useNotifications';
 import { SupabaseService } from '@/services/SupabaseService';
@@ -10,9 +26,28 @@ function notificationIcon(type: string) {
     case 'project_invitation':
       return <UserPlus size={16} className="text-blue-400" />;
     case 'role_approved':
-      return <Check size={16} className="text-emerald-400" />;
+      return <CheckCircle size={16} className="text-emerald-400" />;
+    case 'role_rejected':
+      return <XCircle size={16} className="text-red-400" />;
+    case 'role_request':
+      return <Shield size={16} className="text-amber-400" />;
+    case 'project_status':
+      return <Briefcase size={16} className="text-blue-400" />;
+    case 'payment_created':
+      return <CreditCard size={16} className="text-blue-400" />;
+    case 'payment_paid':
+      return <DollarSign size={16} className="text-emerald-400" />;
+    case 'milestone_added':
+      return <Flag size={16} className="text-amber-400" />;
+    case 'milestone_completed':
+      return <CheckCircle size={16} className="text-emerald-400" />;
+    case 'milestone_note':
+      return <MessageSquare size={16} className="text-gray-400" />;
     case 'warning':
       return <AlertCircle size={16} className="text-amber-400" />;
+    // legacy
+    case 'role_approved_legacy':
+      return <Check size={16} className="text-emerald-400" />;
     default:
       return <Info size={16} className="text-gray-400" />;
   }

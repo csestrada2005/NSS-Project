@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
-import { Save, User, Bell, Mail, Smartphone } from 'lucide-react';
+import { Save, User, Bell, Mail, Camera, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,8 +22,7 @@ const labels = {
   profileDesc: { en: 'Update your personal details and public profile.', es: 'Actualiza tus datos personales y perfil público.' },
   fullName: { en: 'Full Name', es: 'Nombre Completo' },
   email: { en: 'Email Address', es: 'Correo Electrónico' },
-  avatarUrl: { en: 'Avatar URL', es: 'URL del Avatar' },
-  avatarPlaceholder: { en: 'https://example.com/avatar.png', es: 'https://ejemplo.com/avatar.png' },
+  profilePicture: { en: 'Profile Picture', es: 'Foto de Perfil' },
   saveChanges: { en: 'Save Changes', es: 'Guardar Cambios' },
   saving: { en: 'Saving…', es: 'Guardando…' },
   saved: { en: 'Saved!', es: '¡Guardado!' },
@@ -32,11 +31,104 @@ const labels = {
   notifDesc: { en: 'Choose how and when you want to be notified.', es: 'Elige cómo y cuándo quieres recibir notificaciones.' },
   emailAlerts: { en: 'Email Alerts', es: 'Alertas por Correo' },
   emailAlertsDesc: { en: 'Receive daily summaries and critical alerts via email.', es: 'Recibe resúmenes diarios y alertas críticas por correo.' },
-  pushNotifs: { en: 'Push Notifications', es: 'Notificaciones Push' },
-  pushNotifsDesc: { en: 'Get instant notifications on your mobile device.', es: 'Recibe notificaciones instantáneas en tu dispositivo móvil.' },
+  inAppNotifs: { en: 'In-App Notifications', es: 'Notificaciones en la Aplicación' },
+  inAppNotifsDesc: { en: 'Receive real-time notifications for project updates, payments, and milestones.', es: 'Recibe notificaciones en tiempo real sobre proyectos, pagos e hitos.' },
   language: { en: 'Language', es: 'Idioma' },
   languageDesc: { en: 'Switch between English and Spanish.', es: 'Cambia entre inglés y español.' },
 };
+
+interface AvatarUploadProps {
+  userId: string;
+  avatarUrl: string;
+  displayName: string;
+  onUpload: (url: string) => void;
+}
+
+function AvatarUpload({ userId, avatarUrl, displayName, onUpload }: AvatarUploadProps) {
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const initials = displayName
+    .split(' ')
+    .map((w) => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || '?';
+
+  const uploadAvatar = async (file: File) => {
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Image must be under 2MB');
+      return;
+    }
+    const fileExt = file.name.split('.').pop();
+    const filePath = `${userId}/avatar.${fileExt}`;
+    setUploading(true);
+
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(filePath, file, { upsert: true });
+
+    if (uploadError) {
+      toast.error('Failed to upload image');
+      setUploading(false);
+      return;
+    }
+
+    const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
+    const publicUrl = data.publicUrl + '?t=' + Date.now();
+
+    await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', userId);
+    onUpload(publicUrl);
+    toast.success('Profile picture updated');
+    setUploading(false);
+  };
+
+  return (
+    <div className="flex items-center gap-6">
+      <div className="relative group">
+        {avatarUrl ? (
+          <img
+            src={avatarUrl}
+            alt={displayName}
+            className="w-20 h-20 rounded-full object-cover border border-border"
+          />
+        ) : (
+          <div className="w-20 h-20 rounded-full bg-primary/10 text-primary flex items-center justify-center text-2xl font-semibold border border-border">
+            {initials}
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity disabled:cursor-not-allowed"
+        >
+          {uploading ? (
+            <Loader2 size={20} className="text-white animate-spin" />
+          ) : (
+            <Camera size={20} className="text-white" />
+          )}
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) uploadAvatar(file);
+            e.target.value = '';
+          }}
+        />
+      </div>
+      <div className="text-sm text-muted-foreground">
+        <p className="font-medium text-foreground">{displayName || '—'}</p>
+        <p className="text-xs mt-0.5">Click the avatar to upload a new photo</p>
+        <p className="text-xs text-muted-foreground/60">Max 2MB · JPG, PNG, WebP</p>
+      </div>
+    </div>
+  );
+}
 
 const SettingsPage = () => {
   const { user, profile } = useAuth();
@@ -72,7 +164,7 @@ const SettingsPage = () => {
     setIsSaving(true);
     const { error } = await supabase
       .from('profiles')
-      .update({ full_name: fullName.trim(), avatar_url: avatarUrl.trim() || null })
+      .update({ full_name: fullName.trim() })
       .eq('id', user.id);
 
     if (error) {
@@ -121,6 +213,19 @@ const SettingsPage = () => {
                 <CardDescription>{labels.profileDesc[lang]}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+                {/* Avatar Upload */}
+                <div className="grid gap-2">
+                  <Label>{labels.profilePicture[lang]}</Label>
+                  {user && (
+                    <AvatarUpload
+                      userId={user.id}
+                      avatarUrl={avatarUrl}
+                      displayName={fullName}
+                      onUpload={(url) => setAvatarUrl(url)}
+                    />
+                  )}
+                </div>
+
                 <div className="grid gap-2">
                   <Label htmlFor="fullName">{labels.fullName[lang]}</Label>
                   <Input
@@ -139,23 +244,6 @@ const SettingsPage = () => {
                     disabled
                     className="opacity-60"
                   />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="avatarUrl">{labels.avatarUrl[lang]}</Label>
-                  <Input
-                    id="avatarUrl"
-                    value={avatarUrl}
-                    onChange={(e) => setAvatarUrl(e.target.value)}
-                    placeholder={labels.avatarPlaceholder[lang]}
-                  />
-                  {avatarUrl && (
-                    <img
-                      src={avatarUrl}
-                      alt="Avatar preview"
-                      className="w-14 h-14 rounded-full object-cover border border-border mt-1"
-                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                    />
-                  )}
                 </div>
               </CardContent>
               <CardFooter className="border-t border-border pt-6 flex items-center justify-end">
@@ -204,10 +292,10 @@ const SettingsPage = () => {
                 <div className="flex items-center justify-between space-x-2">
                   <div className="flex flex-col space-y-1">
                     <span className="flex items-center gap-2 font-medium">
-                      <Smartphone className="h-4 w-4 text-muted-foreground" />
-                      {labels.pushNotifs[lang]}
+                      <Bell className="h-4 w-4 text-muted-foreground" />
+                      {labels.inAppNotifs[lang]}
                     </span>
-                    <span className="text-sm text-muted-foreground">{labels.pushNotifsDesc[lang]}</span>
+                    <span className="text-sm text-muted-foreground">{labels.inAppNotifsDesc[lang]}</span>
                   </div>
                   <Switch checked={pushNotifications} onCheckedChange={(v) => handleNotifChange('push_notifications', v)} id="push-notifications" />
                 </div>

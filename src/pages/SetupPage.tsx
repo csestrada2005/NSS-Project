@@ -1,11 +1,20 @@
+import { useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { LogOut, Clock } from 'lucide-react';
+import { LogOut, Clock, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const SetupPage = () => {
-  const { signOut } = useAuth();
+  const { signOut, refreshProfile } = useAuth();
   const { lang } = useLanguage();
+
+  // Auto-refresh every 5 seconds while on this page (for when admin approves)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refreshProfile();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [refreshProfile]);
 
   return (
     <section className="relative h-screen w-screen flex flex-col items-center justify-center bg-[#0A0A0A] overflow-hidden">
@@ -52,18 +61,29 @@ const SetupPage = () => {
           </p>
         </motion.div>
 
-        {/* Botón de Cerrar Sesión con borde rojo y llenado hover */}
-        <motion.button
+        {/* Botones de acción */}
+        <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.6, duration: 0.5 }}
-          onClick={signOut}
-          className="group relative flex items-center justify-center gap-3 px-8 py-3 text-sm font-medium tracking-widest uppercase text-[#E60000] transition-all hover:text-white overflow-hidden border border-[#E60000] bg-transparent"
+          className="flex flex-col sm:flex-row gap-3"
         >
-          <div className="absolute inset-0 bg-[#E60000] -translate-x-full transition-transform duration-300 ease-out group-hover:translate-x-0" />
-          <LogOut size={18} className="relative z-10" />
-          <span className="relative z-10">{lang === 'es' ? 'Cerrar sesión' : 'Sign out'}</span>
-        </motion.button>
+          <button
+            onClick={() => refreshProfile()}
+            className="group relative flex items-center justify-center gap-3 px-8 py-3 text-sm font-medium tracking-widest uppercase text-white/60 transition-all hover:text-white overflow-hidden border border-white/20 bg-transparent hover:border-white/50"
+          >
+            <RefreshCw size={18} />
+            <span>{lang === 'es' ? 'Actualizar estado' : 'Refresh status'}</span>
+          </button>
+          <button
+            onClick={signOut}
+            className="group relative flex items-center justify-center gap-3 px-8 py-3 text-sm font-medium tracking-widest uppercase text-[#E60000] transition-all hover:text-white overflow-hidden border border-[#E60000] bg-transparent"
+          >
+            <div className="absolute inset-0 bg-[#E60000] -translate-x-full transition-transform duration-300 ease-out group-hover:translate-x-0" />
+            <LogOut size={18} className="relative z-10" />
+            <span className="relative z-10">{lang === 'es' ? 'Cerrar sesión' : 'Sign out'}</span>
+          </button>
+        </motion.div>
       </div>
 
       {/* Línea inferior decorativa */}

@@ -15,10 +15,12 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useViewMode } from "@/contexts/ViewModeContext";
+import { UserApprovalPanel } from "@/components/admin/UserApprovalPanel";
+import { SupabaseService } from "@/services/SupabaseService";
 
 export type Page =
   | "dashboard"
@@ -108,10 +110,30 @@ const AppSidebar = ({ open, onClose }: AppSidebarProps) => {
   const { lang } = useLanguage();
   const { profile, signOut, isAdmin } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
+  const [approvalPanelOpen, setApprovalPanelOpen] = useState(false);
+  const [pendingApprovalCount, setPendingApprovalCount] = useState(0);
   const location = useLocation();
   const navigate = useNavigate();
   const { unreadCount } = useNotifications();
   const { viewMode, setViewMode } = useViewMode();
+
+  // Fetch pending approval count for admins
+  useEffect(() => {
+    if (!isAdmin) return;
+    const supabase = SupabaseService.getInstance().client;
+    const fetchCount = async () => {
+      const { count } = await supabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true })
+        .not('pending_role', 'is', null)
+        .is('role', null)
+        .eq('role_approved', false);
+      setPendingApprovalCount(count ?? 0);
+    };
+    fetchCount();
+    const interval = setInterval(fetchCount, 30000);
+    return () => clearInterval(interval);
+  }, [isAdmin]);
 
   const sidebarWidth = collapsed ? 64 : 220;
 
@@ -205,6 +227,28 @@ const AppSidebar = ({ open, onClose }: AppSidebarProps) => {
               </button>
             );
           })}
+
+          {/* Admin-only Approvals button */}
+          {isAdmin && (
+            <button
+              onClick={() => setApprovalPanelOpen(true)}
+              className={`w-full flex items-center gap-3 rounded-lg text-[13px] transition-all duration-150 ${collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2.5"} text-muted-foreground hover:text-foreground hover:bg-accent`}
+              title={collapsed ? "Approvals" : undefined}
+            >
+              <div className="relative shrink-0">
+                <Shield size={18} strokeWidth={1.5} />
+                {pendingApprovalCount > 0 && collapsed && (
+                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500" />
+                )}
+              </div>
+              {!collapsed && <span className="flex-1 text-left">Approvals</span>}
+              {!collapsed && pendingApprovalCount > 0 && (
+                <span className="ml-auto min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded-full bg-red-500 text-white px-1">
+                  {pendingApprovalCount > 99 ? "99+" : pendingApprovalCount}
+                </span>
+              )}
+            </button>
+          )}
         </nav>
 
         {/* Admin view toggle (only for admins) */}
@@ -251,9 +295,17 @@ const AppSidebar = ({ open, onClose }: AppSidebarProps) => {
           {!collapsed ? (
             <>
               <div className="flex items-center gap-3 px-1">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold bg-primary/10 text-primary">
-                  {initials}
-                </div>
+                {profile?.avatar_url ? (
+                  <img
+                    src={profile.avatar_url}
+                    alt={displayName}
+                    className="w-8 h-8 rounded-full object-cover shrink-0"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold bg-primary/10 text-primary">
+                    {initials}
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium truncate text-foreground">
                     {displayName}
@@ -282,6 +334,24 @@ const AppSidebar = ({ open, onClose }: AppSidebarProps) => {
           )}
         </div>
       </aside>
+
+      {isAdmin && (
+        <UserApprovalPanel
+          open={approvalPanelOpen}
+          onClose={() => {
+            setApprovalPanelOpen(false);
+            // Refresh count after panel closes
+            const supabase = SupabaseService.getInstance().client;
+            supabase
+              .from('profiles')
+              .select('id', { count: 'exact', head: true })
+              .not('pending_role', 'is', null)
+              .is('role', null)
+              .eq('role_approved', false)
+              .then(({ count }) => setPendingApprovalCount(count ?? 0));
+          }}
+        />
+      )}
     </>
   );
 };

@@ -11,6 +11,7 @@ interface AuthContextType {
   pendingApproval: boolean;
   signOut: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
   isAdmin: boolean;
   isDev: boolean;
   isVendedor: boolean;
@@ -25,6 +26,7 @@ const AuthContext = createContext<AuthContextType>({
   pendingApproval: false,
   signOut: async () => {},
   signInWithGoogle: async () => {},
+  refreshProfile: async () => {},
   isAdmin: false,
   isDev: false,
   isVendedor: false,
@@ -49,7 +51,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.error("Error fetching profile:", error);
       return null;
     }
-    return data as Profile;
+    const p = data as Profile;
+    // If profile exists but has no role and no pending_role, the DB trigger
+    // might still be running. Wait 500ms and retry once.
+    if (p && !p.role && !p.pending_role) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const { data: retryData, error: retryError } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
+      if (!retryError && retryData) {
+        return retryData as Profile;
+      }
+    }
+    return p;
   };
 
   const updateLastSeen = async (userId: string) => {
@@ -79,7 +95,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           const p = await fetchProfile(session.user.id);
           if (!mountedRef.current) return;
           setUser(session.user);
-          if (p) setProfile(p);
+
+          if (p && !p.role && !p.pending_role) {
+            // Wait and retry once for cases where the trigger is still running
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            const retried = await fetchProfile(session.user.id);
+            if (!mountedRef.current) return;
+            if (retried) {
+              setProfile(retried);
+            } else {
+              setProfile(p);
+            }
+          } else if (p) {
+            setProfile(p);
+          }
 
           updateLastSeen(session.user.id).catch(console.error);
         }
@@ -149,6 +178,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await supabase.auth.signInWithOAuth({ provider: "google" });
   };
 
+  const refreshProfile = async () => {
+    if (!user) return;
+    const p = await fetchProfile(user.id);
+    if (p) setProfile(p);
+  };
+
   const role = profile?.role;
   // pendingApproval: user has picked a role but not been approved yet
   const pendingApproval = !!(profile && !profile.role && profile.pending_role);
@@ -165,6 +200,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         pendingApproval,
         signOut,
         signInWithGoogle,
+        refreshProfile,
         isAdmin: role === "admin",
         isDev: role === "dev",
         isVendedor: role === "vendedor",
