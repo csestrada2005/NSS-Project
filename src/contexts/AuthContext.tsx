@@ -192,9 +192,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    if (data) {
-      setProfile(data as Profile);
-    }
+    console.log('[refreshProfile] fetched data:', data);
+    setProfile((data as Profile) || null);
   }, [user?.id]);
 
   const role = profile?.role;

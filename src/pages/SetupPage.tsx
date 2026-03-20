@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LogOut, Clock, RefreshCw, Loader2 } from 'lucide-react';
@@ -8,6 +9,7 @@ const SetupPage = () => {
   const { signOut, refreshProfile } = useAuth();
   const { lang } = useLanguage();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const navigate = useNavigate();
 
   // Auto-refresh every 5 seconds while on this page (for when admin approves)
   useEffect(() => {
@@ -35,8 +37,8 @@ const SetupPage = () => {
           setTimeout(() => reject(new Error('timeout')), 5000)
         )
       ]);
-      // Force a full page reload to clear cached states and re-evaluate layout
-      window.location.reload();
+      // Redirect to the dashboard instead of reloading
+      navigate('/');
     } catch (err) {
       console.error('Refresh failed or timed out:', err);
     } finally {
