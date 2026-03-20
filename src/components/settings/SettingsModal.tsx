@@ -22,6 +22,7 @@ interface SettingsModalProps {
   onClose: () => void;
   fileTree: FileSystemTree;
   files?: Map<string, string>;
+  projectId?: string | null;
 }
 
 interface Secret {
@@ -53,11 +54,11 @@ const DB_SUB_TABS: { id: DbSubTab; label: string }[] = [
   { id: 'usage', label: 'Usage' },
 ];
 
-export function SettingsModal({ onClose, fileTree, files }: SettingsModalProps) {
+export function SettingsModal({ onClose, fileTree, files, projectId: propProjectId }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<MainTab>('secrets');
   const [dbSubTab, setDbSubTab] = useState<DbSubTab>('overview');
 
-  const projectId = sessionStorage.getItem('forge_project_id');
+  const projectId = propProjectId ?? sessionStorage.getItem('forge_project_id');
 
   // Analytics date range state
   const [dateRange, setDateRange] = useState(() => {
@@ -137,7 +138,7 @@ export function SettingsModal({ onClose, fileTree, files }: SettingsModalProps) 
   const TAB_BUTTON = (id: MainTab, label: string, Icon: React.ComponentType<any>) => (
     <button
       onClick={() => setActiveTab(id)}
-      className={`px-3 py-2 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 ${activeTab === id ? 'bg-gray-800 text-white border-b-2 border-blue-500' : 'text-gray-400 hover:text-white hover:bg-gray-800/50'}`}
+      className={`px-3 py-2 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 ${activeTab === id ? 'bg-gray-800 text-white border-b-2 border-primary' : 'text-gray-400 hover:text-white hover:bg-gray-800/50'}`}
     >
       <Icon size={15} />
       {label}
@@ -181,19 +182,19 @@ export function SettingsModal({ onClose, fileTree, files }: SettingsModalProps) 
                     placeholder="KEY (e.g. GITHUB_TOKEN)"
                     value={newKey}
                     onChange={(e) => setNewKey(e.target.value)}
-                    className="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                    className="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
                   />
                   <input
                     type="password"
                     placeholder="VALUE"
                     value={newValue}
                     onChange={(e) => setNewValue(e.target.value)}
-                    className="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                    className="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
                   />
                   <button
                     onClick={addSecret}
                     disabled={!newKey.trim()}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
+                    className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
                   >
                     <Plus size={16} />
                     Add
@@ -250,17 +251,17 @@ export function SettingsModal({ onClose, fileTree, files }: SettingsModalProps) 
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Repository (username/repo)</label>
                     <input type="text" placeholder="e.g. jules/my-app" value={repoName} onChange={(e) => setRepoName(e.target.value)}
-                      className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none" />
+                      className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Branch</label>
                     <input type="text" placeholder="main" value={branch} onChange={(e) => setBranch(e.target.value)}
-                      className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none" />
+                      className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Commit Message</label>
                     <input type="text" value={commitMessage} onChange={(e) => setCommitMessage(e.target.value)}
-                      className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none" />
+                      className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none" />
                   </div>
                   <button onClick={handleGitHubPush} disabled={isPushing || !repoName || !branch}
                     className="w-full py-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 border border-gray-700">
@@ -338,7 +339,7 @@ export function SettingsModal({ onClose, fileTree, files }: SettingsModalProps) 
                   <button
                     key={tab.id}
                     onClick={() => setDbSubTab(tab.id)}
-                    className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${dbSubTab === tab.id ? 'border-blue-500 text-white' : 'border-transparent text-zinc-400 hover:text-zinc-200'}`}
+                    className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${dbSubTab === tab.id ? 'border-primary text-white' : 'border-transparent text-zinc-400 hover:text-zinc-200'}`}
                   >
                     {tab.label}
                   </button>

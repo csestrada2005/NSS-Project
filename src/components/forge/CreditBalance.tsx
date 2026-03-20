@@ -54,17 +54,17 @@ export default function CreditBalance() {
       {/* Credit pill */}
       <div className="flex items-center gap-2">
         {showFreePrompt ? (
-          <div className="flex items-center gap-1.5 bg-gray-900/90 border border-gray-700 rounded-full px-3 py-1.5 text-xs text-yellow-400 font-medium">
+          <div className="flex items-center gap-1.5 bg-background/90 border border-border rounded-full px-3 py-1.5 text-xs text-yellow-400 font-medium">
             <Zap size={12} className="shrink-0" />
             <span>1 free build remaining</span>
           </div>
         ) : isOutOfCredits ? (
-          <div className="flex items-center gap-1.5 bg-gray-900/90 border border-red-700/50 rounded-full px-3 py-1.5 text-xs text-red-400 font-medium">
+          <div className="flex items-center gap-1.5 bg-background/90 border border-primary/50 rounded-full px-3 py-1.5 text-xs text-primary font-medium">
             <Zap size={12} className="shrink-0" />
             <span>0 credits</span>
           </div>
         ) : (
-          <div className="flex items-center gap-1.5 bg-gray-900/90 border border-gray-700 rounded-full px-3 py-1.5 text-xs text-gray-300 font-medium">
+          <div className="flex items-center gap-1.5 bg-background/90 border border-border rounded-full px-3 py-1.5 text-xs text-foreground font-medium">
             <Zap size={12} className="shrink-0 text-yellow-400" />
             <span>{balance.toLocaleString()} credits</span>
           </div>

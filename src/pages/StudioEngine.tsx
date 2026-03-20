@@ -30,13 +30,13 @@ import {
   Download,
   Upload,
   Loader2,
-  LayoutTemplate,
   Settings,
   Activity,
   Menu,
   Code,
   Eye,
   Share2,
+  ChevronLeft,
 } from 'lucide-react';
 import { TEMPLATES } from '../templates';
 import { ProtectedRoute } from '../components/auth/ProtectedRoute';
@@ -85,7 +85,7 @@ export function StudioEngine() {
   // -------------------------------------------------------------------------
   // UI state
   // -------------------------------------------------------------------------
-  const [showTemplateSelector, setShowTemplateSelector] = useState(!initialPrompt);
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showGraph, setShowGraph] = useState(false);
   const [showHamburger, setShowHamburger] = useState(false);
@@ -287,6 +287,16 @@ export function StudioEngine() {
       });
     }
   }, [isLoading]);
+
+  // -------------------------------------------------------------------------
+  // Auto-load template silently when files are empty (Prompt 4)
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    if (isLoading) return;
+    if (files.size > 0) return;
+    if (hasProcessedInitialPrompt.current) return;
+    handleLoadTemplate('landing-page');
+  }, [isLoading, files.size]);
 
   // -------------------------------------------------------------------------
   // Phase 4 Fix 2: clear stale element selection after AI modifies App.tsx
@@ -570,20 +580,20 @@ export function StudioEngine() {
   // Code panel (rendered inside CommandModal)
   // -------------------------------------------------------------------------
   const CodePanel = () => (
-    <div className="flex w-full h-full bg-gray-950">
-      <div className="w-56 border-r border-gray-800 h-full overflow-hidden shrink-0">
+    <div className="flex w-full h-full bg-background">
+      <div className="w-56 border-r border-border h-full overflow-hidden shrink-0">
         <FileExplorer
           files={files}
           onSelect={handleFileSelect}
         />
       </div>
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        <div className="h-10 border-b border-gray-800 flex items-center justify-between px-4 bg-gray-900 shrink-0">
-          <span className="text-sm text-gray-400 truncate">{selectedFilePath || 'No file selected'}</span>
+        <div className="h-10 border-b border-border flex items-center justify-between px-4 bg-card shrink-0">
+          <span className="text-sm text-muted-foreground truncate">{selectedFilePath || 'No file selected'}</span>
           <button
             onClick={saveAndRun}
             disabled={!selectedFilePath}
-            className="px-3 py-1 bg-red-600 hover:bg-red-500 text-white text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-1 bg-primary hover:bg-primary/90 text-white text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Save & Run
           </button>
@@ -591,7 +601,7 @@ export function StudioEngine() {
         <textarea
           value={selectedFileContent}
           onChange={(e) => handleCodeEdit(e.target.value)}
-          className="flex-1 w-full bg-gray-950 text-gray-300 p-4 font-mono text-sm resize-none focus:outline-none"
+          className="flex-1 w-full bg-background text-foreground p-4 font-mono text-sm resize-none focus:outline-none"
           spellCheck={false}
           disabled={!selectedFilePath}
         />
@@ -604,16 +614,16 @@ export function StudioEngine() {
   // -------------------------------------------------------------------------
   return (
     <ProtectedRoute>
-      <div className="flex flex-col h-screen w-screen bg-gray-950 text-white overflow-hidden">
+      <div className="flex flex-col h-screen w-screen bg-background text-foreground overflow-hidden">
         <Group orientation="vertical">
           <Panel defaultSize={100} minSize={30}>
-            <div className="relative w-full h-full bg-gray-950">
+            <div className="relative w-full h-full bg-background">
 
               {/* Hamburger menu — top left */}
               <div className="absolute top-4 left-4 z-50">
                 <button
                   onClick={() => setShowHamburger(v => !v)}
-                  className="p-2 bg-gray-900/90 hover:bg-gray-800 border border-gray-700 rounded-lg shadow-lg text-gray-400 hover:text-white transition-colors"
+                  className="p-2 bg-background/90 hover:bg-accent border border-border rounded-lg shadow-lg text-muted-foreground hover:text-foreground transition-colors"
                   title="Menu"
                 >
                   <Menu size={18} />
@@ -625,62 +635,62 @@ export function StudioEngine() {
                       className="fixed inset-0 z-40"
                       onClick={() => setShowHamburger(false)}
                     />
-                    <div className="absolute top-10 left-0 z-50 w-48 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl overflow-hidden py-1">
+                    <div className="absolute top-10 left-0 z-50 w-52 bg-card border border-border rounded-xl shadow-xl overflow-hidden py-1">
+                      {/* Back to Nebu */}
+                      <button
+                        onClick={() => { setShowHamburger(false); navigate('/'); }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors rounded-lg"
+                      >
+                        <ChevronLeft size={15} className="text-muted-foreground" />
+                        Back to Nebu
+                      </button>
+
+                      <div className="my-1 h-px bg-border" />
+
                       {/* Upload Zip — coming soon */}
                       <button
                         onClick={() => { setShowHamburger(false); handleUploadZip(); }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                       >
-                        <Upload size={15} className="text-gray-400" />
+                        <Upload size={15} className="text-muted-foreground" />
                         Upload Zip
                       </button>
 
                       {/* Export Zip */}
                       <button
                         onClick={() => { setShowHamburger(false); downloadProject(); }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                       >
-                        <Download size={15} className="text-gray-400" />
+                        <Download size={15} className="text-muted-foreground" />
                         Export Zip
-                      </button>
-
-                      <div className="my-1 h-px bg-gray-800" />
-
-                      {/* Settings */}
-                      <button
-                        onClick={() => { setShowHamburger(false); setShowSettings(true); }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
-                      >
-                        <Settings size={15} className="text-gray-400" />
-                        Settings
                       </button>
 
                       {/* Visual Graph */}
                       <button
                         onClick={() => { setShowHamburger(false); setShowGraph(true); }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                       >
-                        <Activity size={15} className="text-gray-400" />
+                        <Activity size={15} className="text-muted-foreground" />
                         Visual Graph
                       </button>
 
-                      <div className="my-1 h-px bg-gray-800" />
+                      <div className="my-1 h-px bg-border" />
 
                       {/* Share (public link toggle) */}
                       <button
                         onClick={() => { setShowHamburger(false); togglePublicAccess(); }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                       >
-                        <Share2 size={15} className="text-gray-400" />
+                        <Share2 size={15} className="text-muted-foreground" />
                         {isPublic ? 'Unshare' : 'Share'}
                       </button>
 
                       {/* Share with collaborators */}
                       <button
                         onClick={() => { setShowHamburger(false); setShowShareModal(true); }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                       >
-                        <Share2 size={15} className="text-blue-400" />
+                        <Share2 size={15} className="text-muted-foreground" />
                         Invite Collaborators
                       </button>
                     </div>
@@ -705,45 +715,52 @@ export function StudioEngine() {
 
               {/* Main content area */}
               {isLoading ? (
-                <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-4">
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-4">
                   <Loader2 className="animate-spin w-8 h-8" />
                   <div>Loading project...</div>
                 </div>
               ) : hasPreview ? (
                 <div className="relative w-full h-full">
                   {/* Edit mode toolbar */}
-                  <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-gray-900 border border-gray-700 rounded-lg flex overflow-hidden shadow-lg">
+                  <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-card border border-border rounded-lg flex overflow-hidden shadow-lg">
                     <button
                       onClick={() => setEditMode('interaction')}
-                      className={`px-3 py-1.5 text-xs font-medium transition-colors ${editMode === 'interaction' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                      className={`px-3 py-1.5 text-xs font-medium transition-colors ${editMode === 'interaction' ? 'bg-red-600 text-white' : 'text-muted-foreground hover:text-foreground'}`}
                     >
                       Interaction
                     </button>
                     <button
                       onClick={() => setEditMode('visual')}
-                      className={`px-3 py-1.5 text-xs font-medium transition-colors ${editMode === 'visual' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                      className={`px-3 py-1.5 text-xs font-medium transition-colors ${editMode === 'visual' ? 'bg-red-600 text-white' : 'text-muted-foreground hover:text-foreground'}`}
                     >
                       Visual
                     </button>
                     <button
                       onClick={() => { setActiveBottomTab('code'); setIsCommandModalOpen(true); }}
-                      className={`px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1 ${activeBottomTab === 'code' && isCommandModalOpen ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                      className={`px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1 ${activeBottomTab === 'code' && isCommandModalOpen ? 'bg-red-600 text-white' : 'text-muted-foreground hover:text-foreground'}`}
                     >
                       <Code size={12} />
                       Code
+                    </button>
+                    <button
+                      onClick={() => setShowSettings(true)}
+                      className="px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 border-l border-border ml-1 pl-3"
+                    >
+                      <Settings size={12} />
+                      Settings
                     </button>
                   </div>
 
                   {/* Compiling indicator */}
                   {isCompiling && (
-                    <div className="absolute bottom-4 right-4 z-40 flex items-center gap-2 bg-gray-900/90 border border-gray-700 text-gray-400 text-xs px-3 py-1.5 rounded-full">
+                    <div className="absolute bottom-4 right-4 z-40 flex items-center gap-2 bg-card/90 border border-border text-muted-foreground text-xs px-3 py-1.5 rounded-full">
                       <Loader2 size={12} className="animate-spin" />
                       Compiling…
                     </div>
                   )}
 
                   {isIndexing && (
-                    <div className="absolute inset-0 bg-gray-950/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center gap-3">
+                    <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center gap-3">
                       <Loader2 className="animate-spin text-red-500" size={28} />
                       <p className="text-sm text-gray-400 font-mono">Analyzing project structure...</p>
                     </div>
@@ -784,57 +801,9 @@ export function StudioEngine() {
                   title="Preview"
                 />
               ) : (
-                /* Template selector / waiting state */
-                <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-4">
-                  {!hasPreview && (
-                    initialPrompt ? (
-                      <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-4">
-                        <Loader2 className="animate-spin w-8 h-8" />
-                        <div className="text-sm font-medium">Setting up your project...</div>
-                        <div className="text-xs text-gray-600">This may take a moment</div>
-                      </div>
-                    ) : (
-                      showTemplateSelector ? (
-                        <div className="flex flex-col items-center gap-6 max-w-2xl w-full px-8">
-                          <div className="text-center">
-                            <h2 className="text-2xl font-bold text-gray-300 mb-2">Start a New Project</h2>
-                            <p className="text-gray-500">Choose a template to get started quickly.</p>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-4 w-full">
-                            <button
-                              onClick={() => handleLoadTemplate('landing-page')}
-                              className="flex flex-col items-center p-6 bg-gray-800 border-2 border-gray-700 hover:border-red-500 rounded-xl transition-all group text-left"
-                            >
-                              <div className="p-3 rounded-full bg-red-900/30 text-red-400 mb-4 group-hover:scale-110 transition-transform">
-                                <LayoutTemplate className="w-8 h-8" />
-                              </div>
-                              <h3 className="text-lg font-semibold text-gray-200 mb-1">Landing Page</h3>
-                              <p className="text-sm text-gray-500 text-center">Modern hero section with features grid and responsive navbar.</p>
-                            </button>
-
-                            <button
-                              onClick={() => handleLoadTemplate('dashboard')}
-                              className="flex flex-col items-center p-6 bg-gray-800 border-2 border-gray-700 hover:border-red-500 rounded-xl transition-all group text-left"
-                            >
-                              <div className="p-3 rounded-full bg-red-900/30 text-red-400 mb-4 group-hover:scale-110 transition-transform">
-                                <LayoutTemplate className="w-8 h-8" />
-                              </div>
-                              <h3 className="text-lg font-semibold text-gray-200 mb-1">Dashboard</h3>
-                              <p className="text-sm text-gray-500 text-center">Admin layout with sidebar, header, and stats cards.</p>
-                            </button>
-                          </div>
-
-                          <p className="text-xs text-gray-600">Or use the chat to describe what you want to build →</p>
-                        </div>
-                      ) : (
-                        <div className="text-center">
-                          <Loader2 className="animate-spin w-6 h-6 mx-auto mb-2" />
-                          <div className="text-sm">Compiling preview…</div>
-                        </div>
-                      )
-                    )
-                  )}
+                /* Waiting / auto-loading state */
+                <div className="flex items-center justify-center h-full">
+                  <Loader2 className="animate-spin w-8 h-8 text-muted-foreground" />
                 </div>
               )}
             </div>
@@ -875,7 +844,7 @@ export function StudioEngine() {
           </CommandModal>
         )}
 
-        {showSettings && <SettingsModal onClose={() => setShowSettings(false)} fileTree={fileTree} files={files} />}
+        {showSettings && <SettingsModal onClose={() => setShowSettings(false)} fileTree={fileTree} files={files} projectId={projectId ?? null} />}
         {showGraph && <StateGraph fileTree={fileTree} onClose={() => setShowGraph(false)} />}
         {showShareModal && projectId && (
           <ShareProjectModal

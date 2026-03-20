@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { User } from "@supabase/supabase-js";
 import { SupabaseService } from "@/services/SupabaseService";
 import type { Profile } from "@/types";
@@ -178,11 +178,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await supabase.auth.signInWithOAuth({ provider: "google" });
   };
 
-  const refreshProfile = async () => {
+  const refreshProfile = useCallback(async () => {
     if (!user) return;
-    const p = await fetchProfile(user.id);
-    if (p) setProfile(p);
-  };
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      if (!error && data) {
+        setProfile(data as Profile);
+      }
+    } catch (err) {
+      console.error('refreshProfile error:', err);
+    }
+  }, [user]);
 
   const role = profile?.role;
   // pendingApproval: user has picked a role but not been approved yet

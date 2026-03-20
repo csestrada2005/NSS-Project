@@ -121,24 +121,24 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
 
       {/* Drawer */}
       <div
-        className={`fixed right-0 top-0 h-full w-96 bg-gray-900 border-l border-gray-800 z-[80] flex flex-col shadow-2xl transition-transform duration-300 ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`fixed right-0 top-0 h-full w-96 bg-card border-l border-border z-[80] flex flex-col shadow-2xl transition-transform duration-300 ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2">
             <GitBranch size={18} className="text-red-400" />
             <span className="text-white font-semibold">Version History</span>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors"
+            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-full transition-colors"
           >
             <X size={16} />
           </button>
         </div>
 
         {/* Save Checkpoint */}
-        <div className="px-3 py-3 border-b border-gray-800">
+        <div className="px-3 py-3 border-b border-border">
           {showLabelInput ? (
             <div className="flex gap-2">
               <input
@@ -147,7 +147,7 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
                 onChange={(e) => setLabelValue(e.target.value)}
                 placeholder="Checkpoint name..."
                 autoFocus
-                className="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                className="flex-1 bg-accent border border-border rounded px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-primary"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleSaveCheckpoint();
                   if (e.key === 'Escape') { setShowLabelInput(false); setLabelValue(''); }
@@ -156,7 +156,7 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
               <button
                 onClick={handleSaveCheckpoint}
                 disabled={!labelValue.trim() || isSaving}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs rounded transition-colors"
+                className="px-3 py-1.5 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-xs rounded transition-colors"
               >
                 {isSaving ? <Loader2 size={12} className="animate-spin" /> : 'Save'}
               </button>
@@ -170,7 +170,7 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
           ) : (
             <button
               onClick={() => setShowLabelInput(true)}
-              className="w-full flex items-center justify-center gap-2 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-sm text-gray-300 hover:text-white rounded-lg transition-colors"
+              className="w-full flex items-center justify-center gap-2 py-2 bg-accent hover:bg-accent/80 border border-border text-sm text-muted-foreground hover:text-foreground rounded-lg transition-colors"
             >
               <Tag size={14} />
               Save checkpoint
@@ -194,7 +194,7 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
             snapshots.map((snap) => (
               <div
                 key={snap.id}
-                className="rounded-lg border border-gray-800 bg-gray-800/50 p-3 hover:border-gray-600 transition-colors"
+                className="rounded-lg border border-border bg-accent/50 p-3 hover:border-border/80 transition-colors"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
@@ -204,13 +204,13 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
                       </span>
                     </div>
                     {snap.label && (
-                      <p className="text-white text-sm font-medium truncate">{snap.label}</p>
+                      <p className="text-foreground text-sm font-medium truncate">{snap.label}</p>
                     )}
-                    <p className="text-gray-500 text-xs mt-0.5">{formatDate(snap.created_at)}</p>
+                    <p className="text-muted-foreground text-xs mt-0.5">{formatDate(snap.created_at)}</p>
                   </div>
                   <button
                     onClick={() => handleRestore(snap)}
-                    className="flex items-center gap-1 px-2 py-1 bg-red-600 hover:bg-red-500 text-white text-xs rounded transition-colors shrink-0"
+                    className="flex items-center gap-1 px-2 py-1 bg-primary hover:bg-primary/90 text-white text-xs rounded transition-colors shrink-0"
                   >
                     <RotateCcw size={11} />
                     Restore
