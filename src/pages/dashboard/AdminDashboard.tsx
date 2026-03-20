@@ -375,7 +375,7 @@ const AdminDashboard = () => {
                   {recentSignups.map((p) => (
                     <tr key={p.id} className="hover:bg-muted/40 transition-colors">
                       <td className="px-3 py-2.5 font-medium text-foreground">{p.full_name ?? "—"}</td>
-                      <td className="px-3 py-2.5 text-muted-foreground">{ROLE_LABELS[p.role]?.[lang] ?? p.role}</td>
+                      <td className="px-3 py-2.5 text-muted-foreground">{p.role ? (ROLE_LABELS[p.role]?.[lang] ?? p.role) : "—"}</td>
                       <td className="px-3 py-2.5 text-muted-foreground">
                         {new Date(p.created_at).toLocaleDateString(lang === "es" ? "es-MX" : "en-US", { day: "numeric", month: "short", year: "numeric" })}
                       </td>

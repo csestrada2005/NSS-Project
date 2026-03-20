@@ -70,7 +70,7 @@ Return ONLY a valid JSON array. No markdown fences, no explanation before or aft
 
       if (data.error) {
         console.error('[Architect] API error:', data.error);
-        return [];
+        return { steps: [], wasTrimmed: false, originalCount: 0 };
       }
 
       const text: string = data.content?.[0]?.text ?? '';
