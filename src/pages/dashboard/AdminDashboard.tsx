@@ -84,6 +84,9 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     let cancelled = false;
+    const safetyTimer = setTimeout(() => {
+      if (!cancelled) setIsLoading(false);
+    }, 8000);
     const load = async () => {
       setIsLoading(true);
       try {
@@ -124,7 +127,7 @@ const AdminDashboard = () => {
       }
     };
     load();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; clearTimeout(safetyTimer); };
   }, []);
 
   // Wyrd Forge platform stats

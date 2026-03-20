@@ -12,14 +12,12 @@ import {
 } from '@/components/ui/table';
 import EmptyState from '@/components/EmptyState';
 import { useLanguage } from '@/contexts/LanguageContext';
-import {
-  getProjectsForClient,
-  getPaymentsForClient,
-  getClientFinanceKPIs,
-} from '@/services/data/supabaseData';
+import { getClientFinanceKPIs } from '@/services/data/supabaseData';
+import { SupabaseService } from '@/services/SupabaseService';
+import { toast } from 'sonner';
 import type { Payment } from '@/types';
 
-type PaymentWithProject = Payment & { projects: { title: string } | null };
+type PaymentWithProject = Payment & { projects: { title: string } | null; user_id?: string | null };
 
 const labels = {
   title: { en: 'My Finances', es: 'Mis Finanzas' },
@@ -30,14 +28,16 @@ const labels = {
   colStatus: { en: 'Status', es: 'Estado' },
   colDueDate: { en: 'Due Date', es: 'Vencimiento' },
   colDescription: { en: 'Description', es: 'Descripción' },
+  colActions: { en: 'Actions', es: 'Acciones' },
   kpiTotalBilled: { en: 'Total Billed', es: 'Total Facturado' },
   kpiPaid: { en: 'Paid', es: 'Pagado' },
   kpiPending: { en: 'Pending', es: 'Pendiente' },
   emptyTitle: { en: 'No payments yet', es: 'Sin pagos aún' },
   emptySubtitle: {
-    en: 'No payment records found for your projects.',
-    es: 'No se encontraron registros de pago para tus proyectos.',
+    en: 'No payment records found for your account.',
+    es: 'No se encontraron registros de pago para tu cuenta.',
   },
+  markAsPaid: { en: 'Mark as Paid', es: 'Marcar como Pagado' },
 };
 
 const statusBadgeClass: Record<Payment['status'], string> = {
@@ -55,22 +55,60 @@ const ClientFinance = () => {
   const [kpis, setKpis] = useState({ totalBilled: 0, paid: 0, pending: 0 });
   const [isLoading, setIsLoading] = useState(true);
 
+  const supabase = SupabaseService.getInstance().client;
+
   useEffect(() => {
     const load = async () => {
-      const clientProjects = await getProjectsForClient();
-      const projectIds = clientProjects.map((p) => p.id);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setIsLoading(false); return; }
 
-      const [paymentData, kpiData] = await Promise.all([
-        getPaymentsForClient(),
-        getClientFinanceKPIs(projectIds),
-      ]);
+      const { data: paymentData } = await supabase
+        .from('payments')
+        .select('*, projects(title)')
+        .eq('recipient_profile_id', user.id)
+        .order('created_at', { ascending: false });
 
-      setPayments(paymentData);
+      const fetchedPayments = (paymentData ?? []) as PaymentWithProject[];
+      setPayments(fetchedPayments);
+
+      const projectIds = fetchedPayments
+        .map((p) => p.project_id)
+        .filter((id): id is string => !!id);
+      const kpiData = await getClientFinanceKPIs(projectIds);
       setKpis(kpiData);
       setIsLoading(false);
     };
     load();
   }, []);
+
+  const handleMarkAsPaid = async (payment: PaymentWithProject) => {
+    const { error } = await supabase
+      .from('payments')
+      .update({ status: 'paid' })
+      .eq('id', payment.id);
+
+    if (error) {
+      toast.error('Failed to mark as paid');
+      return;
+    }
+
+    setPayments((prev) =>
+      prev.map((p) => (p.id === payment.id ? { ...p, status: 'paid' as Payment['status'] } : p))
+    );
+
+    // Notify sender
+    if (payment.user_id) {
+      await supabase.from('notifications').insert({
+        user_id: payment.user_id,
+        type: 'invoice_paid',
+        title: 'Invoice paid',
+        body: `Your invoice of ${formatCurrency(payment.amount)} has been marked as paid.`,
+        read: false,
+      });
+    }
+
+    toast.success('Marked as paid');
+  };
 
   return (
     <div className="space-y-6">
@@ -145,6 +183,7 @@ const ClientFinance = () => {
                 <TableHead>{labels.colStatus[lang]}</TableHead>
                 <TableHead>{labels.colDueDate[lang]}</TableHead>
                 <TableHead>{labels.colDescription[lang]}</TableHead>
+                <TableHead>{labels.colActions[lang]}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -175,6 +214,16 @@ const ClientFinance = () => {
                         ? payment.description.slice(0, 50) + '…'
                         : payment.description
                       : '—'}
+                  </TableCell>
+                  <TableCell>
+                    {payment.status === 'pending' && (
+                      <button
+                        onClick={() => handleMarkAsPaid(payment)}
+                        className="px-2 py-1 text-xs font-medium rounded-md bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border border-emerald-500/20 transition-colors"
+                      >
+                        {labels.markAsPaid[lang]}
+                      </button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 import { Folders } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -54,6 +55,7 @@ const PAGE_SIZE = 20;
 
 const StaffProjects = () => {
   const { lang } = useLanguage();
+  const navigate = useNavigate();
   const [projects, setProjects] = useState<ProjectWithClient[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [contacts, setContacts] = useState<{ id: string; name: string }[]>([]);
@@ -136,11 +138,29 @@ const StaffProjects = () => {
             <span className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin" />
           </div>
         ) : projects.length === 0 ? (
+          searchQuery === '' ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center">
+                <Folders size={24} className="text-muted-foreground" />
+              </div>
+              <p className="text-sm font-medium text-foreground">No projects yet</p>
+              <p className="text-xs text-muted-foreground max-w-xs">
+                Projects are created through Wyrd Forge. Head there to start building.
+              </p>
+              <button
+                onClick={() => navigate('/forge')}
+                className="mt-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                Open Wyrd Forge
+              </button>
+            </div>
+          ) : (
           <EmptyState
             icon={Folders}
             title={labels.emptyTitle}
             subtitle={labels.emptySubtitle}
           />
+          )
         ) : (
           <Table>
             <TableHeader>

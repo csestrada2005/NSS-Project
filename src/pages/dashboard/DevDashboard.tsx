@@ -80,6 +80,9 @@ const DevDashboard = () => {
 
   useEffect(() => {
     let cancelled = false;
+    const safetyTimer = setTimeout(() => {
+      if (!cancelled) setIsLoading(false);
+    }, 8000);
     const load = async () => {
       setIsLoading(true);
       try {
@@ -100,12 +103,16 @@ const DevDashboard = () => {
     load();
     return () => {
       cancelled = true;
+      clearTimeout(safetyTimer);
     };
   }, []);
 
   useEffect(() => {
     if (!user?.id) return;
     let cancelled = false;
+    const safetyTimerForge = setTimeout(() => {
+      if (!cancelled) setForgeLoading(false);
+    }, 8000);
     const loadForge = async () => {
       setForgeLoading(true);
       try {
@@ -124,7 +131,7 @@ const DevDashboard = () => {
       }
     };
     loadForge();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; clearTimeout(safetyTimerForge); };
   }, [user?.id]);
 
   const now = new Date();

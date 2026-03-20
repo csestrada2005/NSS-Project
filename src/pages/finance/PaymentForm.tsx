@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import type { Payment } from '@/types';
 
 interface PaymentFormProps {
-  initialData?: Partial<Payment & { project_id?: string | null }>;
+  initialData?: Partial<Payment & { project_id?: string | null; clientEmail?: string }>;
   projects: { id: string; title: string }[];
   onSubmit: (data: {
     invoice_number: string;
@@ -13,6 +13,7 @@ interface PaymentFormProps {
     status: Payment['status'];
     due_date: string;
     project_id: string | null;
+    clientEmail: string;
   }) => void;
   onCancel: () => void;
   isLoading?: boolean;
@@ -21,6 +22,8 @@ interface PaymentFormProps {
 
 const labels = {
   invoiceNumber: { en: 'Invoice Number', es: 'Número de Factura' },
+  clientEmail: { en: 'Client Email', es: 'Correo del Cliente' },
+  clientEmailRequired: { en: 'Client email is required', es: 'El correo del cliente es requerido' },
   description: { en: 'Description', es: 'Descripción' },
   amount: { en: 'Amount', es: 'Monto' },
   amountRequired: { en: 'Amount must be greater than 0', es: 'El monto debe ser mayor que 0' },
@@ -31,7 +34,7 @@ const labels = {
   dueDate: { en: 'Due Date', es: 'Fecha de Vencimiento' },
   project: { en: 'Project', es: 'Proyecto' },
   noProject: { en: 'No project', es: 'Sin proyecto' },
-  submit: { en: 'Save', es: 'Guardar' },
+  submit: { en: 'Send Invoice', es: 'Enviar Factura' },
   cancel: { en: 'Cancel', es: 'Cancelar' },
 };
 
@@ -44,6 +47,7 @@ const PaymentForm = ({
   lang,
 }: PaymentFormProps) => {
   const [invoiceNumber, setInvoiceNumber] = useState(initialData?.invoice_number ?? '');
+  const [clientEmail, setClientEmail] = useState(initialData?.clientEmail ?? '');
   const [description, setDescription] = useState(initialData?.description ?? '');
   const [amount, setAmount] = useState<string>(
     initialData?.amount !== undefined ? String(initialData.amount) : ''
@@ -52,14 +56,24 @@ const PaymentForm = ({
   const [dueDate, setDueDate] = useState(initialData?.due_date ?? '');
   const [projectId, setProjectId] = useState<string>(initialData?.project_id ?? '');
   const [amountError, setAmountError] = useState(false);
+  const [clientEmailError, setClientEmailError] = useState(false);
 
   const handleSubmit = () => {
+    let valid = true;
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       setAmountError(true);
-      return;
+      valid = false;
+    } else {
+      setAmountError(false);
     }
-    setAmountError(false);
+    if (!clientEmail.trim()) {
+      setClientEmailError(true);
+      valid = false;
+    } else {
+      setClientEmailError(false);
+    }
+    if (!valid) return;
     onSubmit({
       invoice_number: invoiceNumber.trim(),
       description: description.trim(),
@@ -67,6 +81,7 @@ const PaymentForm = ({
       status,
       due_date: dueDate,
       project_id: projectId || null,
+      clientEmail: clientEmail.trim(),
     });
   };
 
@@ -80,6 +95,21 @@ const PaymentForm = ({
           placeholder={labels.invoiceNumber[lang]}
           disabled={isLoading}
         />
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-sm font-medium text-foreground">{labels.clientEmail[lang]}</label>
+        <Input
+          type="email"
+          value={clientEmail}
+          onChange={(e) => { setClientEmail(e.target.value); setClientEmailError(false); }}
+          placeholder="client@example.com"
+          disabled={isLoading}
+          className={clientEmailError ? 'border-rose-500' : ''}
+        />
+        {clientEmailError && (
+          <p className="text-xs text-rose-500">{labels.clientEmailRequired[lang]}</p>
+        )}
       </div>
 
       <div className="space-y-1">
