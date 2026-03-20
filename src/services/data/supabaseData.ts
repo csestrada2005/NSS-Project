@@ -668,7 +668,7 @@ export const getDeals = async (
   const offset = (page - 1) * pageSize;
   let query = supabase
     .from('deals')
-    .select('*, contacts(name)', { count: 'exact' })
+    .select('*, contacts(name), status, scope_description, timeline, client_profile_id, deposit_paid, forge_project_id', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(offset, offset + pageSize - 1);
 
@@ -688,6 +688,9 @@ export const createDeal = async (data: {
   probability: number;
   expected_close: string | null;
   contact_id: string | null;
+  client_profile_id?: string | null;
+  scope_description?: string | null;
+  timeline?: string | null;
 }): Promise<DealWithContact | null> => {
   const { data: { user } } = await supabase.auth.getUser();
   const { data: created, error } = await supabase
@@ -701,7 +704,7 @@ export const createDeal = async (data: {
 
 export const updateDeal = async (
   id: string,
-  data: Partial<Pick<Deal, 'title' | 'value' | 'stage' | 'probability' | 'expected_close'> & { contact_id?: string | null }>
+  data: Partial<Pick<Deal, 'title' | 'value' | 'stage' | 'probability' | 'expected_close'> & { contact_id?: string | null; client_profile_id?: string | null; scope_description?: string | null; timeline?: string | null; }>
 ): Promise<DealWithContact | null> => {
   const { data: updated, error } = await supabase
     .from('deals')
@@ -717,4 +720,13 @@ export const deleteDeal = async (id: string): Promise<boolean> => {
   const { error } = await supabase.from('deals').delete().eq('id', id);
   if (error) { console.error('Error deleting deal:', error); return false; }
   return true;
+};
+
+export const getDealRevisions = async (dealId: string) => {
+  const { data } = await supabase
+    .from('deal_revisions')
+    .select('*, profiles!submitted_by(full_name, role)')
+    .eq('deal_id', dealId)
+    .order('revision_number', { ascending: false });
+  return data ?? [];
 };

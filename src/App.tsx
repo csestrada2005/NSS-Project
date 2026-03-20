@@ -12,6 +12,7 @@ import AIStudioPage from './pages/AIStudioPage';
 import DealsPage from './pages/DealsPage';
 import NotificationsPage from './pages/NotificationsPage';
 import ClientProjectPage from './pages/ClientProjectPage';
+import ProposalsPage from './pages/ProposalsPage';
 import { Login } from './components/auth/Login';
 import ForgeDashboard from './pages/ForgeDashboard';
 import ProjectHubPage from './pages/ProjectHubPage';
@@ -37,6 +38,7 @@ function App() {
           <Route path="ai-studio" element={<AIStudioPage />} />
           <Route path="deals" element={<DealsPage />} />
           <Route path="notifications" element={<NotificationsPage />} />
+          <Route path="proposals" element={<ProposalsPage />} />
           <Route path="project/:projectId/status" element={<ClientProjectPage />} />
         </Route>
 
