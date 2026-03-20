@@ -8,6 +8,7 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   profileSettled: boolean;
+  pendingApproval: boolean;
   signOut: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   isAdmin: boolean;
@@ -21,6 +22,7 @@ const AuthContext = createContext<AuthContextType>({
   profile: null,
   loading: true,
   profileSettled: false,
+  pendingApproval: false,
   signOut: async () => {},
   signInWithGoogle: async () => {},
   isAdmin: false,
@@ -148,6 +150,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const role = profile?.role;
+  // pendingApproval: user has picked a role but not been approved yet
+  const pendingApproval = !!(profile && !profile.role && profile.pending_role);
 
   return (
     <AuthContext.Provider
@@ -158,6 +162,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // profileSettled is kept for backward compatibility with any consumers
         // that still reference it.  It is always true once loading is false.
         profileSettled: !loading,
+        pendingApproval,
         signOut,
         signInWithGoogle,
         isAdmin: role === "admin",

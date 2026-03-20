@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { Layers, Flame, Plus, Search, Settings, LogOut, Trash2, Loader2, LayoutDashboard } from "lucide-react";
+import { Layers, Flame, Plus, Search, Settings, LogOut, Trash2, Loader2, LayoutDashboard, Share2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { SupabaseService } from "@/services/SupabaseService";
 import { useAuth } from "@/contexts/AuthContext";
 import { ProjectMemoryService } from "@/services/ProjectMemoryService";
+import { ShareProjectModal } from "@/components/forge/ShareProjectModal";
 
 interface ForgeProject {
   id: string;
@@ -21,6 +22,7 @@ const ForgeDashboard = () => {
   const [projects, setProjects] = useState<ForgeProject[]>([]);
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
+  const [shareProject, setShareProject] = useState<ForgeProject | null>(null);
   const [projectSummaries, setProjectSummaries] = useState<Map<string, {
     componentCount: number;
     routeCount: number;
@@ -150,6 +152,13 @@ const ForgeDashboard = () => {
 
   return (
     <div className="flex h-screen bg-gray-950">
+      {shareProject && (
+        <ShareProjectModal
+          projectId={shareProject.id}
+          projectName={shareProject.name}
+          onClose={() => setShareProject(null)}
+        />
+      )}
       {/* Sidebar */}
       <aside className="w-64 flex flex-col border-r border-gray-800 bg-gray-900">
         <div className="p-6">
@@ -309,6 +318,13 @@ const ForgeDashboard = () => {
                       >
                         <LayoutDashboard size={11} />
                         Hub
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setShareProject(project); }}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
+                        title="Share project"
+                      >
+                        <Share2 size={11} />
                       </button>
                     </div>
                   </div>

@@ -9,13 +9,15 @@ export interface Item {
 export interface Profile {
   id: string;
   full_name: string | null;
-  role: 'admin' | 'dev' | 'vendedor' | 'cliente';
+  role: 'admin' | 'dev' | 'vendedor' | 'cliente' | null;
   email: string | null;
   avatar_url: string | null;
   last_seen: string | null;
   created_at: string;
   email_alerts?: boolean;
   push_notifications?: boolean;
+  pending_role?: 'admin' | 'dev' | 'cliente' | null;
+  role_approved?: boolean | null;
 }
 
 export interface DataInterface {

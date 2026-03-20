@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Zap } from 'lucide-react';
+import { Zap, Infinity as InfinityIcon } from 'lucide-react';
 import { CreditService } from '../../services/CreditService';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -7,6 +7,7 @@ export default function CreditBalance() {
   const { user } = useAuth();
   const [balance, setBalance] = useState<number>(0);
   const [freePromptUsed, setFreePromptUsed] = useState<boolean>(false);
+  const [unlimited, setUnlimited] = useState<boolean>(false);
   const [showModal, setShowModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -16,6 +17,7 @@ export default function CreditBalance() {
       const data = await CreditService.getBalance(user.id);
       setBalance(data.balance);
       setFreePromptUsed(data.freePromptUsed);
+      setUnlimited(data.unlimited ?? false);
     } catch (e) {
       console.error('[CreditBalance] fetch error:', e);
     } finally {
@@ -34,6 +36,16 @@ export default function CreditBalance() {
   }, [fetchBalance]);
 
   if (isLoading || !user) return null;
+
+  // Admin unlimited badge
+  if (unlimited) {
+    return (
+      <div className="flex items-center gap-1.5 bg-amber-950/80 border border-amber-600/50 rounded-full px-3 py-1.5 text-xs text-amber-400 font-medium">
+        <InfinityIcon size={12} className="shrink-0" />
+        <span>Admin — Unlimited</span>
+      </div>
+    );
+  }
 
   const isOutOfCredits = freePromptUsed && balance === 0;
   const showFreePrompt = !freePromptUsed;

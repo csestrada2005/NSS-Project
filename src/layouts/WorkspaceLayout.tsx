@@ -6,10 +6,12 @@ import AppSidebar from '@/components/AppSidebar';
 import { Topbar } from '@/components/Topbar';
 import { Loader2 } from 'lucide-react';
 import SetupPage from '@/pages/SetupPage';
+import RoleSelectionPage from '@/pages/RoleSelectionPage';
+import PendingApprovalPage from '@/pages/PendingApprovalPage';
 
 export function WorkspaceLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { user, loading, profile } = useAuth();
+  const { user, loading, profile, pendingApproval } = useAuth();
 
   // Safe to use plain `loading` here because AuthContext guarantees that
   // loading stays true until BOTH user AND profile are fully resolved.
@@ -27,9 +29,27 @@ export function WorkspaceLayout() {
   }
 
   // At this point loading is false AND user is set, so profile has been
-  // fetched (or confirmed absent).  A missing role means the account is
-  // genuinely not configured — not a race condition.
+  // fetched (or confirmed absent).
   if (!profile?.role) {
+    // Has selected a pending role but awaiting admin approval
+    if (pendingApproval) {
+      return (
+        <LanguageProvider>
+          <PendingApprovalPage />
+        </LanguageProvider>
+      );
+    }
+
+    // No role and no pending_role → first-time OAuth user, pick a role
+    if (profile && !profile.pending_role) {
+      return (
+        <LanguageProvider>
+          <RoleSelectionPage />
+        </LanguageProvider>
+      );
+    }
+
+    // Edge case: profile not loaded yet or truly misconfigured
     return (
       <LanguageProvider>
         <SetupPage />

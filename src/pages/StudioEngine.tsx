@@ -47,6 +47,7 @@ import { CommandModal } from '../components/CommandModal';
 import { HistoryDrawer } from '../components/HistoryDrawer';
 import { ProjectMemoryService } from '../services/ProjectMemoryService';
 import CreditBalance from '../components/forge/CreditBalance';
+import { ShareProjectModal } from '../components/forge/ShareProjectModal';
 
 type TabType = 'chat' | 'visual' | 'code';
 
@@ -103,6 +104,8 @@ export function StudioEngine() {
   const terminalRef = useRef<TerminalRef>(null);
 
   const [isPublic, setIsPublic] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [currentProjectName, setCurrentProjectName] = useState<string>('');
 
   // -------------------------------------------------------------------------
   // Mount: load project files from Supabase
@@ -125,9 +128,11 @@ export function StudioEngine() {
       // Check project ownership / access
       const { data: project } = await supabase
         .from('forge_projects')
-        .select('id, user_id')
+        .select('id, user_id, name')
         .eq('id', projectId)
         .single();
+
+      if (project?.name) setCurrentProjectName(project.name);
 
       if (!project) {
         // Check public access
@@ -143,18 +148,32 @@ export function StudioEngine() {
         }
         setIsReadOnly(true);
       } else if (project.user_id !== user.id) {
-        // Another user's project — check if public
-        const { data: access } = await supabase
-          .from('forge_project_access')
-          .select('is_public')
+        // Another user's project — check collaborator access first
+        const { data: collab } = await supabase
+          .from('forge_project_collaborators')
+          .select('role, status')
           .eq('project_id', projectId)
+          .eq('user_id', user.id)
+          .eq('status', 'accepted')
           .single();
 
-        if (!access?.is_public) {
-          navigate('/forge', { replace: true });
-          return;
+        if (collab) {
+          // Collaborator — read-only if 'read' role, can edit if 'edit' role
+          setIsReadOnly(collab.role === 'read');
+        } else {
+          // Not a collaborator — check if project is public
+          const { data: access } = await supabase
+            .from('forge_project_access')
+            .select('is_public')
+            .eq('project_id', projectId)
+            .single();
+
+          if (!access?.is_public) {
+            navigate('/forge', { replace: true });
+            return;
+          }
+          setIsReadOnly(true);
         }
-        setIsReadOnly(true);
       }
 
       await loadFromSupabase(projectId);
@@ -632,13 +651,22 @@ export function StudioEngine() {
 
                       <div className="my-1 h-px bg-gray-800" />
 
-                      {/* Share */}
+                      {/* Share (public link toggle) */}
                       <button
                         onClick={() => { setShowHamburger(false); togglePublicAccess(); }}
                         className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
                       >
                         <Share2 size={15} className="text-gray-400" />
                         {isPublic ? 'Unshare' : 'Share'}
+                      </button>
+
+                      {/* Share with collaborators */}
+                      <button
+                        onClick={() => { setShowHamburger(false); setShowShareModal(true); }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+                      >
+                        <Share2 size={15} className="text-blue-400" />
+                        Invite Collaborators
                       </button>
                     </div>
                   </>
@@ -815,6 +843,13 @@ export function StudioEngine() {
 
         {showSettings && <SettingsModal onClose={() => setShowSettings(false)} fileTree={fileTree} files={files} />}
         {showGraph && <StateGraph fileTree={fileTree} onClose={() => setShowGraph(false)} />}
+        {showShareModal && projectId && (
+          <ShareProjectModal
+            projectId={projectId}
+            projectName={currentProjectName}
+            onClose={() => setShowShareModal(false)}
+          />
+        )}
 
         <HistoryDrawer
           projectId={projectId ?? null}

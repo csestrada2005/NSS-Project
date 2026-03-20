@@ -56,6 +56,17 @@ interface CreditStats {
   activeWallets: number;
 }
 
+interface PlatformUsageRow {
+  full_name: string | null;
+  total_spent: number;
+}
+
+interface PlatformUsage {
+  topSpenders: PlatformUsageRow[];
+  totalAICallsMTD: number;
+  totalActiveForgeProjects: number;
+}
+
 const AdminDashboard = () => {
   const { lang } = useLanguage();
   const navigate = useNavigate();
@@ -68,6 +79,8 @@ const AdminDashboard = () => {
   const [forgeStatsLoading, setForgeStatsLoading] = useState(true);
   const [creditStats, setCreditStats] = useState<CreditStats | null>(null);
   const [creditStatsLoading, setCreditStatsLoading] = useState(true);
+  const [platformUsage, setPlatformUsage] = useState<PlatformUsage | null>(null);
+  const [platformUsageLoading, setPlatformUsageLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -215,6 +228,72 @@ const AdminDashboard = () => {
       }
     };
     loadCreditStats();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Platform usage stats (MTD)
+  useEffect(() => {
+    let cancelled = false;
+    const loadPlatformUsage = async () => {
+      setPlatformUsageLoading(true);
+      try {
+        const supabase = SupabaseService.getInstance().client;
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+        const [
+          { data: spendersData },
+          { data: aiCallsData },
+          { count: activeForgeProjects },
+        ] = await Promise.all([
+          supabase
+            .from('forge_credit_transactions')
+            .select('user_id, amount_credits, profiles!inner(full_name)')
+            .eq('type', 'spend')
+            .gte('created_at', startOfMonth),
+          supabase
+            .from('forge_projects')
+            .select('ai_call_count')
+            .gte('updated_at', startOfMonth),
+          supabase
+            .from('forge_projects')
+            .select('*', { count: 'exact', head: true })
+            .gte('updated_at', startOfMonth),
+        ]);
+
+        // Aggregate top spenders
+        const spenderMap = new Map<string, { full_name: string | null; total: number }>();
+        for (const row of spendersData ?? []) {
+          const profile = (row as any).profiles;
+          const name = profile?.full_name ?? row.user_id;
+          const existing = spenderMap.get(row.user_id) ?? { full_name: name, total: 0 };
+          existing.total += Math.abs(row.amount_credits ?? 0);
+          spenderMap.set(row.user_id, existing);
+        }
+        const topSpenders = Array.from(spenderMap.values())
+          .sort((a, b) => b.total - a.total)
+          .slice(0, 5)
+          .map((s) => ({ full_name: s.full_name, total_spent: s.total }));
+
+        const totalAICallsMTD = (aiCallsData ?? []).reduce(
+          (sum: number, p: any) => sum + (p.ai_call_count ?? 0),
+          0
+        );
+
+        if (!cancelled) {
+          setPlatformUsage({
+            topSpenders,
+            totalAICallsMTD,
+            totalActiveForgeProjects: activeForgeProjects ?? 0,
+          });
+        }
+      } catch {
+        // Fail gracefully
+      } finally {
+        if (!cancelled) setPlatformUsageLoading(false);
+      }
+    };
+    loadPlatformUsage();
     return () => { cancelled = true; };
   }, []);
 
@@ -446,6 +525,91 @@ const AdminDashboard = () => {
                       <td className="px-3 py-2.5 font-medium text-foreground truncate max-w-[200px]">{p.name}</td>
                       <td className="px-3 py-2.5 text-muted-foreground">{p.ai_call_count ?? 0}</td>
                       <td className="px-3 py-2.5 text-muted-foreground">{formatDate(p.last_active_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Platform Usage section */}
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <Zap size={16} className="text-amber-500" />
+          <h2 className="text-base font-semibold text-foreground">
+            {lang === "es" ? "Uso de la plataforma (mes)" : "Platform Usage (MTD)"}
+          </h2>
+        </div>
+
+        {/* Summary cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <div className="rounded-xl p-5 bg-card border border-border">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                {lang === "es" ? "Llamadas IA (mes)" : "AI Calls (MTD)"}
+              </span>
+              <Zap size={15} strokeWidth={1.5} className="text-muted-foreground" />
+            </div>
+            {platformUsageLoading ? (
+              <Loader2 size={20} className="animate-spin text-muted-foreground" />
+            ) : (
+              <p className="text-2xl font-bold text-foreground">
+                {platformUsage?.totalAICallsMTD?.toLocaleString() ?? 0}
+              </p>
+            )}
+          </div>
+          <div className="rounded-xl p-5 bg-card border border-border">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                {lang === "es" ? "Proyectos Forge activos" : "Active Forge Projects"}
+              </span>
+              <Flame size={15} strokeWidth={1.5} className="text-muted-foreground" />
+            </div>
+            {platformUsageLoading ? (
+              <Loader2 size={20} className="animate-spin text-muted-foreground" />
+            ) : (
+              <p className="text-2xl font-bold text-foreground">
+                {platformUsage?.totalActiveForgeProjects ?? 0}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Top spenders table */}
+        <div className="rounded-xl bg-card border border-border">
+          <div className="px-5 py-4 border-b border-border">
+            <h2 className="text-sm font-semibold text-foreground">
+              {lang === "es" ? "Top usuarios por créditos gastados (mes)" : "Top users by credit spend (MTD)"}
+            </h2>
+          </div>
+          <div className="p-2">
+            {platformUsageLoading ? (
+              <div className="flex items-center justify-center py-10">
+                <Loader2 size={22} className="animate-spin text-muted-foreground" />
+              </div>
+            ) : !platformUsage?.topSpenders.length ? (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                {lang === "es" ? "Sin actividad este mes" : "No credit activity this month"}
+              </p>
+            ) : (
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-muted-foreground">
+                    <th className="text-left px-3 py-2 font-medium">#</th>
+                    <th className="text-left px-3 py-2 font-medium">{lang === "es" ? "Nombre" : "Name"}</th>
+                    <th className="text-right px-3 py-2 font-medium">{lang === "es" ? "Créditos gastados" : "Credits Spent"}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {platformUsage.topSpenders.map((row, i) => (
+                    <tr key={i} className="hover:bg-muted/40 transition-colors">
+                      <td className="px-3 py-2.5 text-muted-foreground font-mono">{i + 1}</td>
+                      <td className="px-3 py-2.5 font-medium text-foreground">{row.full_name ?? '—'}</td>
+                      <td className="px-3 py-2.5 text-right text-muted-foreground font-mono">
+                        {row.total_spent.toLocaleString()}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

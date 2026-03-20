@@ -10,6 +10,8 @@ import MetricsPage from './pages/MetricsPage';
 import SettingsPage from './pages/SettingsPage';
 import AIStudioPage from './pages/AIStudioPage';
 import DealsPage from './pages/DealsPage';
+import NotificationsPage from './pages/NotificationsPage';
+import ClientProjectPage from './pages/ClientProjectPage';
 import { Login } from './components/auth/Login';
 import ForgeDashboard from './pages/ForgeDashboard';
 import ProjectHubPage from './pages/ProjectHubPage';
@@ -34,6 +36,8 @@ function App() {
           <Route path="settings" element={<SettingsPage />} />
           <Route path="ai-studio" element={<AIStudioPage />} />
           <Route path="deals" element={<DealsPage />} />
+          <Route path="notifications" element={<NotificationsPage />} />
+          <Route path="project/:projectId/status" element={<ClientProjectPage />} />
         </Route>
 
         {/* AI Web-Builder Studio — full-screen, no business chrome */}

@@ -9,11 +9,16 @@ import {
   ChevronLeft,
   ChevronRight,
   TrendingUp,
+  Bell,
+  Shield,
+  Code2,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useNotifications } from "@/hooks/useNotifications";
+import { useViewMode } from "@/contexts/ViewModeContext";
 
 export type Page =
   | "dashboard"
@@ -22,6 +27,7 @@ export type Page =
   | "deals"
   | "metricas"
   | "ai-studio"
+  | "notifications"
   | "settings";
 
 interface AppSidebarProps {
@@ -69,6 +75,11 @@ const navItems: NavItem[] = [
     badge: "AI",
   },
   {
+    id: "notifications",
+    label: { es: "Notificaciones", en: "Notifications" },
+    icon: Bell,
+  },
+  {
     id: "settings",
     label: { es: "Ajustes", en: "Settings" },
     icon: Settings,
@@ -89,15 +100,18 @@ const routeMapping: Record<Page, string> = {
   deals: "/deals",
   metricas: "/metrics",
   "ai-studio": "/ai-studio",
+  notifications: "/notifications",
   settings: "/settings",
 };
 
 const AppSidebar = ({ open, onClose }: AppSidebarProps) => {
   const { lang } = useLanguage();
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, isAdmin } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const { unreadCount } = useNotifications();
+  const { viewMode, setViewMode } = useViewMode();
 
   const sidebarWidth = collapsed ? 64 : 220;
 
@@ -158,6 +172,9 @@ const AppSidebar = ({ open, onClose }: AppSidebarProps) => {
             const active =
               location.pathname === path ||
               (path !== "/" && location.pathname.startsWith(path));
+            const isNotifications = item.id === "notifications";
+            const showBadge = isNotifications && unreadCount > 0;
+
             return (
               <button
                 key={item.id}
@@ -168,17 +185,63 @@ const AppSidebar = ({ open, onClose }: AppSidebarProps) => {
                 className={`w-full flex items-center gap-3 rounded-lg text-[13px] transition-all duration-150 group ${collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2.5"} ${active ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-accent"}`}
                 title={collapsed ? item.label[lang] : undefined}
               >
-                <item.icon size={18} strokeWidth={active ? 2 : 1.5} />
-                {!collapsed && <span>{item.label[lang]}</span>}
+                <div className="relative shrink-0">
+                  <item.icon size={18} strokeWidth={active ? 2 : 1.5} />
+                  {showBadge && collapsed && (
+                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-primary" />
+                  )}
+                </div>
+                {!collapsed && <span className="flex-1 text-left">{item.label[lang]}</span>}
                 {!collapsed && item.badge && (
                   <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-primary/15 text-primary">
                     {item.badge}
+                  </span>
+                )}
+                {!collapsed && showBadge && (
+                  <span className="ml-auto min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded-full bg-primary text-primary-foreground px-1">
+                    {unreadCount > 99 ? "99+" : unreadCount}
                   </span>
                 )}
               </button>
             );
           })}
         </nav>
+
+        {/* Admin view toggle (only for admins) */}
+        {isAdmin && !collapsed && (
+          <div
+            className="px-3 py-3 shrink-0"
+            style={{ borderTop: "1px solid hsl(var(--border))" }}
+          >
+            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-2 px-1">
+              View as
+            </p>
+            <div className="flex rounded-lg overflow-hidden border border-border">
+              <button
+                onClick={() => setViewMode('admin')}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium transition-colors ${
+                  viewMode === 'admin'
+                    ? 'bg-primary/15 text-primary'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                }`}
+              >
+                <Shield size={13} />
+                Admin
+              </button>
+              <button
+                onClick={() => setViewMode('dev')}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium transition-colors border-l border-border ${
+                  viewMode === 'dev'
+                    ? 'bg-primary/15 text-primary'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                }`}
+              >
+                <Code2 size={13} />
+                Dev
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* User footer */}
         <div
