@@ -300,7 +300,7 @@ export default function ProjectHubPage() {
         {activeTab === 'performance' && (
           <div className="max-w-2xl">
             <h2 className="text-xl font-bold text-white mb-6">Performance</h2>
-            <LighthousePanel projectId={projectId ?? null} />
+            <LighthousePanel projectId={projectId ?? null} initialUrl={project?.deployment_url ?? ''} />
           </div>
         )}
 

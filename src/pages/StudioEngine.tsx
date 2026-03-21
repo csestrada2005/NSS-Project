@@ -49,7 +49,7 @@ import { ProjectMemoryService } from '../services/ProjectMemoryService';
 import CreditBalance from '../components/forge/CreditBalance';
 import { ShareProjectModal } from '../components/forge/ShareProjectModal';
 
-type TabType = 'chat' | 'visual' | 'code';
+type TabType = 'chat' | 'visual' | 'code' | 'navigate';
 
 
 // Active file for AST updates (Inspector) — single-page apps live here
@@ -210,8 +210,7 @@ export function StudioEngine() {
     if (files.size === 0) return;
 
     // Guard: if last change was from a visual edit, we already compiled immediately — skip debounce
-    if (lastChangeSource.current === 'user') {
-      lastChangeSource.current = 'ai';
+    if (lastChangeSource.current !== 'ai') {
       return;
     }
 
@@ -395,11 +394,19 @@ export function StudioEngine() {
     setSelectedFileContent(newContent);
   };
 
+  const [isSaving, setIsSaving] = useState(false);
+
   const saveAndRun = async () => {
     if (!selectedFilePath) return;
-    lastChangeSource.current = 'user';
-    updateLocalFile(selectedFilePath, selectedFileContent);
-    await saveFile(selectedFilePath, selectedFileContent);
+    setIsSaving(true);
+    try {
+      lastChangeSource.current = 'user';
+      updateLocalFile(selectedFilePath, selectedFileContent);
+      await saveFile(selectedFilePath, selectedFileContent);
+      toast.success('Saved successfully');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // -------------------------------------------------------------------------
@@ -573,11 +580,6 @@ export function StudioEngine() {
     URL.revokeObjectURL(objectUrl);
   };
 
-  // Upload ZIP — show coming-soon toast
-  const handleUploadZip = () => {
-    alert('ZIP upload coming soon. Use the AI chat to describe your project instead!');
-  };
-
   // Toggle public share access
   const togglePublicAccess = async () => {
     if (!projectId) return;
@@ -602,6 +604,56 @@ export function StudioEngine() {
   const hasPreview = hasValidPreview;
 
   // -------------------------------------------------------------------------
+  // Navigate panel
+  // -------------------------------------------------------------------------
+  const [activeRoute, setActiveRoute] = useState<string>('/');
+  const NavigatePanel = () => {
+    const pageFiles = Array.from(files.keys()).filter(path =>
+      path.startsWith('src/pages/') &&
+      (path.endsWith('.tsx') || path.endsWith('.jsx'))
+    );
+
+    const routes = pageFiles.map(path => {
+      const name = path.replace('src/pages/', '').replace(/\.tsx?$/, '').replace(/\.jsx?$/, '');
+      if (name === 'Index' || name === 'Home') return '/';
+      return `/${name.toLowerCase()}`;
+    }).sort((a, b) => a === '/' ? -1 : b === '/' ? 1 : a.localeCompare(b));
+
+    const handleNavigate = (route: string) => {
+      setActiveRoute(route);
+      iframeRef.current?.contentWindow?.postMessage({ type: 'navigate', path: route }, '*');
+    };
+
+    return (
+      <div className="flex flex-col w-full h-full bg-background">
+        <div className="p-4 border-b border-border bg-card shrink-0">
+          <h3 className="text-sm font-medium text-foreground mb-1">Project Map</h3>
+          <p className="text-xs text-muted-foreground">Select a route to navigate the preview.</p>
+        </div>
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          {routes.length === 0 ? (
+            <div className="text-sm text-muted-foreground p-4 text-center">No routes found</div>
+          ) : (
+            routes.map(route => {
+              const isActive = activeRoute === route;
+              return (
+                <button
+                  key={route}
+                  onClick={() => handleNavigate(route)}
+                  className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-lg text-sm transition-colors text-left ${isActive ? 'bg-primary/10 border border-primary/30 text-primary' : 'text-foreground hover:bg-accent border border-transparent'}`}
+                >
+                  <code className={`text-xs px-1.5 py-0.5 rounded ${isActive ? 'bg-primary/20 text-primary' : 'bg-muted'}`}>{route}</code>
+                  {isActive && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
+                </button>
+              );
+            })
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // -------------------------------------------------------------------------
   // Code panel (rendered inside CommandModal)
   // -------------------------------------------------------------------------
   const CodePanel = () => (
@@ -617,10 +669,10 @@ export function StudioEngine() {
           <span className="text-sm text-muted-foreground truncate">{selectedFilePath || 'No file selected'}</span>
           <button
             onClick={saveAndRun}
-            disabled={!selectedFilePath}
+            disabled={!selectedFilePath || isSaving}
             className="px-3 py-1 bg-primary hover:bg-primary/90 text-white text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Save & Run
+            {isSaving ? 'Saving...' : 'Save & Run'}
           </button>
         </div>
         <textarea
@@ -674,8 +726,9 @@ export function StudioEngine() {
 
                       {/* Upload Zip — coming soon */}
                       <button
-                        onClick={() => { setShowHamburger(false); handleUploadZip(); }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                        disabled
+                        title="Coming soon"
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-muted-foreground opacity-50 cursor-not-allowed"
                       >
                         <Upload size={15} className="text-muted-foreground" />
                         Upload Zip
@@ -733,8 +786,14 @@ export function StudioEngine() {
 
               {/* Credit balance — only for owners */}
               {!isReadOnly && (
-                <div className="absolute top-14 right-4 z-40">
+                <div className="absolute top-14 right-4 z-40 flex flex-col items-end gap-2">
                   <CreditBalance />
+                  {isPublic && (
+                    <div className="flex items-center gap-1.5 bg-green-950/80 border border-green-700/50 rounded-full px-2.5 py-1 text-[10px] text-green-400 font-medium">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                      Live
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -781,6 +840,12 @@ export function StudioEngine() {
                     <div className="absolute bottom-4 right-4 z-40 flex items-center gap-2 bg-card/90 border border-border text-muted-foreground text-xs px-3 py-1.5 rounded-full">
                       <Loader2 size={12} className="animate-spin" />
                       Compiling…
+                    </div>
+                  )}
+                  {!isCompiling && !hasValidPreview && compiledHtml !== '' && (
+                    <div className="absolute bottom-4 right-4 z-40 flex items-center gap-2 bg-card/90 border border-border text-muted-foreground text-xs px-3 py-1.5 rounded-full">
+                      <Loader2 size={12} className="animate-spin" />
+                      Compiling preview...
                     </div>
                   )}
 
@@ -864,6 +929,9 @@ export function StudioEngine() {
               </div>
               <div className={`w-full h-full ${activeBottomTab === 'code' ? 'flex' : 'hidden'}`}>
                 <CodePanel />
+              </div>
+              <div className={`w-full h-full ${activeBottomTab === 'navigate' ? 'flex' : 'hidden'}`}>
+                <NavigatePanel />
               </div>
             </div>
           </CommandModal>

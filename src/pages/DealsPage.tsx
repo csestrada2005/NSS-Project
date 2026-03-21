@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { Plus, TrendingUp, Send, Edit2, History, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, TrendingUp, Send, Edit2, History, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -10,7 +10,7 @@ import { usePagination } from '@/hooks/usePagination';
 import Pagination from '@/components/Pagination';
 import { SupabaseService } from '@/services/SupabaseService';
 import { useNavigate } from 'react-router-dom';
-import type { Deal, DealStatus } from '@/types';
+import type { Deal } from '@/types';
 
 type DealWithContact = Deal & { contacts: { name: string } | null };
 
@@ -148,7 +148,7 @@ const DealsPage = () => {
   const [editingDeal, setEditingDeal] = useState<DealWithContact | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [historyDeal, setHistoryDeal] = useState<DealWithContact | null>(null);
-  const [reviseNote, setReviseNote] = useState('');
+  const [, setReviseNote] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   // Form state

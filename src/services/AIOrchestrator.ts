@@ -360,9 +360,6 @@ export class AIOrchestrator {
         creditUserId = user.id;
         const creditCheck = await CreditService.canMakeCall(user.id);
         isFreePrompt = creditCheck.isFreePrompt ?? false;
-        if (isFreePrompt) {
-          await CreditService.markFreePromptUsed(user.id);
-        }
       }
     } catch (e) {
       console.error('[AIOrchestrator] Credit check error:', e);
@@ -398,8 +395,12 @@ export class AIOrchestrator {
       (intent.type === 'style_change' || intent.risk === 'low')
     ) {
       const result = await this.runFastLane(input, files, selectedElement);
-      if (result.outcome === 'success' && creditUserId && !isFreePrompt) {
-        await CreditService.deductCredits(creditUserId, 0, 0, projectId);
+      if (result.outcome === 'success' && creditUserId) {
+        if (isFreePrompt) {
+          await CreditService.markFreePromptUsed(creditUserId);
+        } else {
+          await CreditService.deductCredits(creditUserId, 0, 0, projectId);
+        }
         window.dispatchEvent(new CustomEvent('forge:credits-updated'));
       }
       if (projectId) {
@@ -425,13 +426,17 @@ export class AIOrchestrator {
 
     if (isSimpleEdit && files.size > 0) {
       const result = await this.runSimpleLane(input, files, selectedElement, projectId);
-      if (result.outcome === 'success' && creditUserId && !isFreePrompt) {
-        await CreditService.deductCredits(
-          creditUserId,
-          result.tokensInput ?? 0,
-          result.tokensOutput ?? 0,
-          projectId
-        );
+      if (result.outcome === 'success' && creditUserId) {
+        if (isFreePrompt) {
+          await CreditService.markFreePromptUsed(creditUserId);
+        } else {
+          await CreditService.deductCredits(
+            creditUserId,
+            result.tokensInput ?? 0,
+            result.tokensOutput ?? 0,
+            projectId
+          );
+        }
         window.dispatchEvent(new CustomEvent('forge:credits-updated'));
       }
       if (projectId) {
@@ -460,13 +465,17 @@ export class AIOrchestrator {
     if (steps.length === 0) {
       // Architect returned nothing — fall back to the legacy heavy lane
       const result = await this.runHeavyLane(input, files, selectedElement, projectId);
-      if (result.outcome === 'success' && creditUserId && !isFreePrompt) {
-        await CreditService.deductCredits(
-          creditUserId,
-          result.tokensInput ?? 0,
-          result.tokensOutput ?? 0,
-          projectId
-        );
+      if (result.outcome === 'success' && creditUserId) {
+        if (isFreePrompt) {
+          await CreditService.markFreePromptUsed(creditUserId);
+        } else {
+          await CreditService.deductCredits(
+            creditUserId,
+            result.tokensInput ?? 0,
+            result.tokensOutput ?? 0,
+            projectId
+          );
+        }
         window.dispatchEvent(new CustomEvent('forge:credits-updated'));
       }
       if (projectId) {
@@ -517,10 +526,14 @@ export class AIOrchestrator {
       }
 
       // Deduct credits for main pipeline
-      if (creditUserId && !isFreePrompt) {
-        const totalInput = verifyResult.tokensInput ?? 0;
-        const totalOutput = verifyResult.tokensOutput ?? 0;
-        await CreditService.deductCredits(creditUserId, totalInput, totalOutput, projectId);
+      if (creditUserId) {
+        if (isFreePrompt) {
+          await CreditService.markFreePromptUsed(creditUserId);
+        } else {
+          const totalInput = verifyResult.tokensInput ?? 0;
+          const totalOutput = verifyResult.tokensOutput ?? 0;
+          await CreditService.deductCredits(creditUserId, totalInput, totalOutput, projectId);
+        }
         window.dispatchEvent(new CustomEvent('forge:credits-updated'));
       }
 
