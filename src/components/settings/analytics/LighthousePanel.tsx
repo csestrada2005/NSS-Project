@@ -76,13 +76,17 @@ function CWVRow({ label, value, unit, target, targetLabel }: CWV) {
   );
 }
 
-export function LighthousePanel({ projectId }: LighthousePanelProps) {
+export function LighthousePanel({ projectId, initialUrl }: LighthousePanelProps & { initialUrl?: string }) {
   const [scores, setScores] = useState<Scores>({ perf: null, a11y: null, bestPractices: null, seo: null, lcp: null, tbt: null, cls: null, ttfb: null });
-  const [deployedUrl, setDeployedUrl] = useState('');
+  const [deployedUrl, setDeployedUrl] = useState(initialUrl || '');
   const [strategy, setStrategy] = useState<'mobile' | 'desktop'>('mobile');
   const [isRunning, setIsRunning] = useState(false);
   const [lastRun, setLastRun] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialUrl) setDeployedUrl(initialUrl);
+  }, [initialUrl]);
 
   useEffect(() => {
     if (!projectId) return;

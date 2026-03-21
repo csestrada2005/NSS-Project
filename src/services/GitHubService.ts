@@ -2,8 +2,6 @@ import { Octokit } from '@octokit/rest';
 import type { FileSystemTree } from '@webcontainer/api';
 
 export class GitHubService {
-  private octokit: Octokit | null = null;
-
   private getOctokit() {
     const stored = localStorage.getItem('secrets');
     if (stored) {

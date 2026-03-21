@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bot, Send, Code, MessageSquare, Plus } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { SupabaseService } from "@/services/SupabaseService";
 
 type Tab = "chat" | "builder";
 type Message = { role: 'user' | 'assistant'; content: string };
@@ -45,9 +46,13 @@ const AIStudioPage = () => {
     setIsSending(true);
 
     try {
+      const { Authorization } = await SupabaseService.getInstance().getAuthHeader();
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': Authorization
+        },
         body: JSON.stringify({
           messages: [...conversationHistory, { role: 'user', content: userContent }],
         }),

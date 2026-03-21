@@ -84,6 +84,9 @@ const PREVIEW_CLIENT_SCRIPT = `
         const layoutContext = getLayoutContext(element);
         window.parent.postMessage({ type: 'element-clicked', tagName: element.tagName.toLowerCase(), className: element.className, innerText: element.innerText, hasChildren: element.children.length > 0, dataOid: element.getAttribute('data-oid'), rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height }, layoutContext }, '*');
       }
+    } else if (event.data.type === 'navigate') {
+      window.history.pushState({}, '', event.data.path);
+      window.dispatchEvent(new PopStateEvent('popstate'));
     }
   });
 
