@@ -127,7 +127,7 @@ const stageBadgeLabel: Record<Stage, { en: string; es: string }> = {
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 const Forecast = () => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { lang } = useLanguage();
 
   const currentYear = new Date().getFullYear();
@@ -144,8 +144,13 @@ const Forecast = () => {
       setError(null);
       setLoading(true);
       try {
+        const { data: { session } } = await supabase.auth.getSession();
+
         const { data: result, error: fnError } = await supabase.functions.invoke('forecast-data', {
           body: { user_id: user.id, year: selectedYear },
+          headers: {
+            Authorization: `Bearer ${session?.access_token}`
+          }
         });
         if (fnError) throw fnError;
         setData(result as ForecastData);
@@ -160,8 +165,14 @@ const Forecast = () => {
   );
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      setError('User not authenticated');
+      setLoading(false);
+      return;
+    }
     loadData(year);
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, authLoading, year, loadData]);
 
   const handleYearChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const y = Number(e.target.value);
@@ -197,15 +208,19 @@ const Forecast = () => {
   const yearOptions = [currentYear - 2, currentYear - 1, currentYear, currentYear + 1, currentYear + 2];
 
   // ── Render ──
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-xl px-5 py-4 text-sm">
+          <p className="font-semibold mb-1">Failed to load forecast data</p>
+          <p>{error}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Error banner */}
-      {error && (
-        <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-xl px-5 py-4 text-sm">
-          {error}
-        </div>
-      )}
-
       {/* Header bar */}
       <div className="bg-zinc-800 rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
         <div className="flex items-center gap-2 flex-1">

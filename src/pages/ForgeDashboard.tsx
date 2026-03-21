@@ -24,6 +24,7 @@ const ForgeDashboard = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [projects, setProjects] = useState<ForgeProject[]>([]);
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [shareProject, setShareProject] = useState<ForgeProject | null>(null);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [projectSummaries, setProjectSummaries] = useState<Map<string, {
@@ -32,30 +33,41 @@ const ForgeDashboard = () => {
     techStack: string[];
   } | null>>(new Map());
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   const supabase = SupabaseService.getInstance().client;
 
   const loadProjects = async () => {
     if (!user) return;
     setIsLoadingProjects(true);
+    setError(null);
     try {
-      const { data, error } = await supabase
+      const { data, error: fetchError } = await supabase
         .from("forge_projects")
         .select("id, name, description, created_at, updated_at, deployment_url")
         .eq("user_id", user.id)
         .order("updated_at", { ascending: false });
-      if (!error && data) {
+      if (fetchError) throw fetchError;
+      if (data) {
         setProjects(data as ForgeProject[]);
       }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to load projects';
+      setError(msg);
     } finally {
       setIsLoadingProjects(false);
     }
   };
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      setError('User not authenticated');
+      setIsLoadingProjects(false);
+      return;
+    }
     loadProjects();
-  }, [user]);
+  }, [user, authLoading]);
 
   useEffect(() => {
     if (projects.length === 0) return;
@@ -112,6 +124,27 @@ const ForgeDashboard = () => {
     if (diffDays < 7) return `${diffDays}d ago`;
     return d.toLocaleDateString();
   };
+
+  if (error) {
+    return (
+      <div className="flex flex-col h-screen bg-background items-center justify-center p-6">
+        <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-xl px-5 py-4 text-sm max-w-md w-full text-center">
+          <p className="font-semibold mb-1">Failed to load projects</p>
+          <p>{error}</p>
+          <Button
+            variant="outline"
+            className="mt-4 border-red-700 hover:bg-red-900/40 text-red-300"
+            onClick={() => {
+              setError(null);
+              loadProjects();
+            }}
+          >
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-screen bg-background">

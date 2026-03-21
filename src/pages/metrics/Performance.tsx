@@ -129,7 +129,7 @@ const npsScoreBadgeClass = (score: number): string => {
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 const Performance = () => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { lang } = useLanguage();
 
   const [loading, setLoading] = useState(true);
@@ -146,8 +146,13 @@ const Performance = () => {
       setError(null);
       setLoading(true);
       try {
+        const { data: { session } } = await supabase.auth.getSession();
+
         const { data: result, error: fnError } = await supabase.functions.invoke('performance-data', {
           body: { user_id: user.id, start_date: range.start, end_date: range.end },
+          headers: {
+            Authorization: `Bearer ${session?.access_token}`
+          }
         });
         if (fnError) throw fnError;
         setData(result as PerformanceData);
@@ -162,8 +167,14 @@ const Performance = () => {
   );
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      setError('User not authenticated');
+      setLoading(false);
+      return;
+    }
     loadData(dateRange);
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, authLoading, dateRange, loadData]);
 
   const handleApplyRange = () => {
     setDateRange(pendingRange);
@@ -187,15 +198,19 @@ const Performance = () => {
   };
 
   // ── Render ──
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-xl px-5 py-4 text-sm">
+          <p className="font-semibold mb-1">Failed to load performance data</p>
+          <p>{error}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Error banner */}
-      {error && (
-        <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-xl px-5 py-4 text-sm">
-          {error}
-        </div>
-      )}
-
       {/* Date range bar */}
       <div className="bg-zinc-800 rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
         <div className="flex items-center gap-2 flex-1">
