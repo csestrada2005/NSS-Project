@@ -91,8 +91,8 @@ const DealHistoryPanel = ({ deal, onClose }: { deal: DealWithContact; onClose: (
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex justify-end">
-      <div className="bg-card border-l border-border w-full max-w-md flex flex-col h-full">
+    <div className="fixed inset-0 bg-black/60 z-50 flex justify-end">
+      <div className="bg-zinc-800 border-l border-zinc-700 w-full max-w-md flex flex-col h-full">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 className="text-base font-semibold text-foreground">
             Deal History — {deal.title}
@@ -451,8 +451,8 @@ const DealsPage = () => {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-zinc-800 border border-zinc-700 rounded-xl shadow-xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <h2 className="text-base font-semibold text-foreground">
               {editingDeal ? (lang === 'es' ? 'Editar / Revisar deal' : 'Edit / Revise deal') : (lang === 'es' ? 'Nuevo deal' : 'New deal')}
             </h2>

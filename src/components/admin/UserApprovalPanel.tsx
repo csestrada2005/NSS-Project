@@ -113,11 +113,11 @@ export function UserApprovalPanel({ open, onClose }: UserApprovalPanelProps) {
   return (
     <>
       {open && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-30" onClick={onClose} />
+        <div className="fixed inset-0 bg-black/60 z-30" onClick={onClose} />
       )}
 
       <div
-        className={`fixed top-0 right-0 h-full w-[380px] bg-card border-l border-border z-40 flex flex-col shadow-xl transition-transform duration-300 ${open ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`fixed top-0 right-0 h-full w-[380px] bg-zinc-800 border-l border-zinc-700 z-40 flex flex-col shadow-xl transition-transform duration-300 ${open ? 'translate-x-0' : 'translate-x-full'}`}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
@@ -162,7 +162,7 @@ export function UserApprovalPanel({ open, onClose }: UserApprovalPanelProps) {
                 return (
                   <div
                     key={user.id}
-                    className="p-4 rounded-xl border border-border bg-card space-y-3"
+                    className="p-4 rounded-xl border border-zinc-700 bg-zinc-800 space-y-3"
                   >
                     {/* User info */}
                     <div className="flex items-center gap-3">

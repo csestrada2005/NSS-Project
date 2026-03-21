@@ -55,8 +55,8 @@ export default function NewProjectModal({ onClose, onCreated }: NewProjectModalP
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-lg p-6 flex flex-col gap-5">
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+      <div className="bg-zinc-800 border border-zinc-700 rounded-2xl shadow-2xl w-full max-w-lg p-6 flex flex-col gap-5">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
