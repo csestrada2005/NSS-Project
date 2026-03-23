@@ -177,7 +177,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const handleVisibilityChange = async () => {
       if (document.visibilityState !== 'visible') return;
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        let { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          // Re-hydrate the Supabase client's in-memory session so that
+          // subsequent queries run with auth.uid() set correctly (RLS).
+          await supabase.auth.setSession({
+            access_token: session.access_token,
+            refresh_token: session.refresh_token,
+          });
+        } else {
+          // No session in storage — try a token refresh as a fallback.
+          const { data: refreshData } = await supabase.auth.refreshSession();
+          if (refreshData.session) {
+            session = refreshData.session;
+            await supabase.auth.setSession({
+              access_token: refreshData.session.access_token,
+              refresh_token: refreshData.session.refresh_token,
+            });
+          }
+        }
         if (!mountedRef.current) return;
         if (session?.user) {
           setUser(session.user);
@@ -193,6 +211,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       } catch (err) {
         console.error('[AuthContext] visibility refresh error:', err);
+        // Do not wipe state on failure — leave the existing user/profile intact.
       }
     };
 
