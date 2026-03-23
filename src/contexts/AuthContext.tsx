@@ -77,6 +77,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
   const [loading, setLoading] = useState(true);
   const mountedRef = useRef(true);
+  const isRefreshingRef = useRef(false);
 
   const supabase = SupabaseService.getInstance().client;
 
@@ -173,11 +174,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     initAuth();
 
-    // Visibility change listener: refresh session silently when tab regains focus
+    // Visibility change listener: refresh session silently when tab regains focus.
+    // Golden rule: a failed refresh must be a silent no-op that preserves whatever
+    // auth state already exists. Never wipe user/profile here.
     const handleVisibilityChange = async () => {
       if (document.visibilityState !== 'visible') return;
+
+      // Guard against concurrent calls from rapid tab switching.
+      if (isRefreshingRef.current) return;
+      isRefreshingRef.current = true;
+
       try {
-        let { data: { session } } = await supabase.auth.getSession();
+        let { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        // If getSession() returns an error (including clock-skew), bail out and
+        // preserve whatever is already in memory — do not touch user or profile.
+        if (sessionError) {
+          console.warn('[AuthContext] visibility refresh skipped (getSession error):', sessionError.message);
+          return;
+        }
+
         if (session) {
           // Re-hydrate the Supabase client's in-memory session so that
           // subsequent queries run with auth.uid() set correctly (RLS).
@@ -196,6 +212,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             });
           }
         }
+
         if (!mountedRef.current) return;
         if (session?.user) {
           setUser(session.user);
@@ -210,8 +227,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         }
       } catch (err) {
-        console.error('[AuthContext] visibility refresh error:', err);
-        // Do not wipe state on failure — leave the existing user/profile intact.
+        // AbortError means a concurrent navigation or signal cancellation fired —
+        // this is expected on rapid tab switches. Treat as a silent no-op.
+        if (err instanceof Error && err.name === 'AbortError') return;
+        console.warn('[AuthContext] visibility refresh error (state preserved):', err);
+        // Any other error: preserve existing user/profile intact.
+      } finally {
+        isRefreshingRef.current = false;
       }
     };
 
