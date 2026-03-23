@@ -40,6 +40,9 @@ import {
   Clock,
   UserPlus,
   X as XIcon,
+  Monitor,
+  Tablet,
+  Smartphone,
 } from 'lucide-react';
 import { TEMPLATES } from '../templates';
 import { ProtectedRoute } from '../components/auth/ProtectedRoute';
@@ -53,6 +56,7 @@ import CreditBalance from '../components/forge/CreditBalance';
 import { ShareProjectModal } from '../components/forge/ShareProjectModal';
 
 type TabType = 'chat' | 'visual' | 'code' | 'navigate';
+type ViewportMode = 'mobile' | 'tablet' | 'desktop';
 
 
 // Active file for AST updates (Inspector) — single-page apps live here
@@ -100,6 +104,14 @@ export function StudioEngine() {
   const [isCommandModalOpen, setIsCommandModalOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isReadOnly, setIsReadOnly] = useState(false);
+  const [viewportMode, setViewportMode] = useState<ViewportMode>(() => {
+    return (localStorage.getItem('forge_viewport_mode') as ViewportMode) || 'desktop';
+  });
+
+  const handleViewportChange = (mode: ViewportMode) => {
+    setViewportMode(mode);
+    localStorage.setItem('forge_viewport_mode', mode);
+  };
 
   // Phase 4 Fix 2: track whether last file change came from AI
   const lastChangeSource = useRef<'ai' | 'user'>('user');
@@ -814,7 +826,7 @@ export function StudioEngine() {
                   <div>Loading project...</div>
                 </div>
               ) : hasPreview ? (
-                <div className="relative w-full h-full">
+                <div className={`relative w-full h-full ${viewportMode !== 'desktop' ? 'bg-zinc-900 flex items-start justify-center' : ''}`}>
                   {/* Edit mode toolbar */}
                   <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-card border border-border rounded-lg flex overflow-hidden shadow-lg">
                     <button
@@ -828,6 +840,28 @@ export function StudioEngine() {
                       className={`px-3 py-1.5 text-xs font-medium transition-colors ${editMode === 'visual' ? 'bg-red-600 text-white' : 'text-muted-foreground hover:text-foreground'}`}
                     >
                       Visual
+                    </button>
+                    <div className="border-l border-border mx-1" />
+                    <button
+                      onClick={() => handleViewportChange('desktop')}
+                      className={`px-2 py-1.5 text-xs font-medium transition-colors ${viewportMode === 'desktop' ? 'bg-red-600 text-white' : 'text-muted-foreground hover:text-foreground'}`}
+                      title="Desktop"
+                    >
+                      <Monitor size={13} />
+                    </button>
+                    <button
+                      onClick={() => handleViewportChange('tablet')}
+                      className={`px-2 py-1.5 text-xs font-medium transition-colors ${viewportMode === 'tablet' ? 'bg-red-600 text-white' : 'text-muted-foreground hover:text-foreground'}`}
+                      title="Tablet (768px)"
+                    >
+                      <Tablet size={13} />
+                    </button>
+                    <button
+                      onClick={() => handleViewportChange('mobile')}
+                      className={`px-2 py-1.5 text-xs font-medium transition-colors ${viewportMode === 'mobile' ? 'bg-red-600 text-white' : 'text-muted-foreground hover:text-foreground'}`}
+                      title="Mobile (390px)"
+                    >
+                      <Smartphone size={13} />
                     </button>
                     <button
                       onClick={() => { setActiveBottomTab('code'); setIsCommandModalOpen(true); }}
@@ -866,21 +900,49 @@ export function StudioEngine() {
                     </div>
                   )}
 
-                  <iframe
-                    ref={iframeRef}
-                    srcDoc={compiledHtml}
-                    sandbox="allow-scripts allow-modals"
-                    className="w-full h-full border-none"
-                    title="Preview"
-                  />
-
-                  <PreviewOverlay
-                    iframeRef={iframeRef}
-                    onElementSelect={handleElementSelect}
-                    editMode={editMode}
-                    onUpdateStyle={handleStyleUpdate}
-                    onUpdateText={handleTextUpdate}
-                  />
+                  {viewportMode === 'desktop' ? (
+                    <div className="relative w-full h-full">
+                      <iframe
+                        ref={iframeRef}
+                        srcDoc={compiledHtml}
+                        sandbox="allow-scripts allow-modals"
+                        className="w-full h-full border-none"
+                        title="Preview"
+                      />
+                      <PreviewOverlay
+                        iframeRef={iframeRef}
+                        onElementSelect={handleElementSelect}
+                        editMode={editMode}
+                        onUpdateStyle={handleStyleUpdate}
+                        onUpdateText={handleTextUpdate}
+                      />
+                    </div>
+                  ) : (
+                    <div
+                      className="flex flex-col items-center h-full"
+                      style={{ width: viewportMode === 'mobile' ? 390 : 768 }}
+                    >
+                      <div className="text-xs text-zinc-500 py-1 shrink-0">
+                        {viewportMode === 'mobile' ? '390px' : '768px'}
+                      </div>
+                      <div className="relative flex-1 w-full overflow-hidden">
+                        <iframe
+                          ref={iframeRef}
+                          srcDoc={compiledHtml}
+                          sandbox="allow-scripts allow-modals"
+                          className="w-full h-full border border-zinc-600 rounded-t-lg"
+                          title="Preview"
+                        />
+                        <PreviewOverlay
+                          iframeRef={iframeRef}
+                          onElementSelect={handleElementSelect}
+                          editMode={editMode}
+                          onUpdateStyle={handleStyleUpdate}
+                          onUpdateText={handleTextUpdate}
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   {editMode === 'visual' && selectedElement && (
                     <InspectorPanel
