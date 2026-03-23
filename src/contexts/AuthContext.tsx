@@ -183,8 +183,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setUser(session.user);
           const p = await fetchProfile(session.user.id);
           if (!mountedRef.current) return;
-          if (p) {
-            if (p.role) writeProfileCache(p);
+          // Only overwrite the profile when the fetch returns a real, settled
+          // profile (non-null + role present).  A null or role-less result from
+          // a cold-start / network blip must never wipe an existing profile.
+          if (p && p.role) {
+            writeProfileCache(p);
             setProfile(p);
           }
         }
@@ -216,11 +219,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const p = await fetchProfile(currentUser.id);
             if (!mountedRef.current) return;
 
-            // SOLUCIÓN CLAVE: Si p es null (por un fallo transitorio al
-            // refrescar el token entre pestañas), NO sobreescribimos el perfil existente.
-            // Esto elimina el error de "Account Being Configured".
-            if (p) {
-              if (p.role) writeProfileCache(p);
+            // Only update the profile when fetchProfile returns a real, settled
+            // record (non-null + role present).  Transient null returns (Render
+            // cold start, network blip) or role-less records must never wipe
+            // the existing profile — that is the root cause of the
+            // "infinite loading / Account Being Configured" regression on tab
+            // refocus.  setProfile(null) is only ever called below when
+            // currentUser itself is null (genuine sign-out).
+            if (p && p.role) {
+              writeProfileCache(p);
               setProfile(p);
             }
 
