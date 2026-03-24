@@ -4,6 +4,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config';
 export class SupabaseService {
   private static instance: SupabaseService;
   public client: SupabaseClient;
+  private currentToken: string | null = null;
 
   private constructor() {
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
@@ -18,6 +19,10 @@ export class SupabaseService {
         },
       });
     }
+
+    this.client.auth.onAuthStateChange((_event, session) => {
+      this.currentToken = session?.access_token || null;
+    });
   }
 
   public static getInstance(): SupabaseService {
@@ -33,22 +38,15 @@ export class SupabaseService {
    * Throws if refresh fails.
    */
   public async getAuthHeader(): Promise<{ Authorization: string }> {
-    const { data } = await this.client.auth.getSession();
-    const session = data.session;
-
-    const expiresAt = session?.expires_at ?? 0;
-    const nowSec = Math.floor(Date.now() / 1000);
-    const isExpiringSoon = !session || (expiresAt - nowSec) < 60;
-
-    if (isExpiringSoon) {
-      const { data: refreshData, error } = await this.client.auth.refreshSession();
-      if (error || !refreshData.session) {
-        throw new Error('Session expired — please refresh the page.');
-      }
-      return { Authorization: `Bearer ${refreshData.session.access_token}` };
+    if (this.currentToken) {
+      return { Authorization: `Bearer ${this.currentToken}` };
     }
 
-    return { Authorization: `Bearer ${session.access_token}` };
+    const { data } = await this.client.auth.getSession();
+    const session = data.session;
+    this.currentToken = session?.access_token || null;
+
+    return { Authorization: `Bearer ${this.currentToken}` };
   }
 
   /**
