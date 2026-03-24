@@ -128,41 +128,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       try {
         let resolvedUser: User | null = null;
 
-        // Race getSession against a 2000ms timeout to bypass cross-tab
-        // Gotrue-js lock corruption that can cause an indefinite hang.
-        try {
-          const { data: { session }, error } = await Promise.race([
-            supabase.auth.getSession(),
-            new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error('SESSION_TIMEOUT')), 2000)
-            ),
-          ]);
-          if (error) throw error;
-          resolvedUser = session?.user ?? null;
-        } catch (sessionErr) {
-          if (sessionErr instanceof Error && sessionErr.message === 'SESSION_TIMEOUT') {
-            // Gotrue-js lock is corrupted — read the raw token from localStorage
-            // as a fallback so the user is not stranded on an infinite loader.
-            console.warn('[AuthContext] getSession timed out — falling back to localStorage session read');
-            try {
-              for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
-                  const raw = localStorage.getItem(key);
-                  if (raw) {
-                    const sessionObj = JSON.parse(raw);
-                    resolvedUser = sessionObj?.user ?? null;
-                  }
-                  break;
-                }
-              }
-            } catch (parseErr) {
-              console.error('[AuthContext] Failed to parse localStorage session:', parseErr);
-            }
-          } else {
-            throw sessionErr;
-          }
-        }
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        resolvedUser = session?.user ?? null;
 
         if (resolvedUser) {
           // Set user immediately so the UI is not blocked on profile fetch.
