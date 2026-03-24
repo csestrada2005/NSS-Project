@@ -174,15 +174,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const handleVisibilityChange = async () => {
       if (document.visibilityState !== 'visible') return;
 
-      // Fix #2: set loading immediately so WorkspaceLayout never sees stale
-      // user=null / loading=false during a mid-flight refresh.
-      setLoading(true);
+      // Fix #1: suppress SIGNED_OUT events fired during this refresh window.
+      // Set immediately — before any async work — to close the timing gap.
+      visibilityChangePendingRef.current = true;
 
       // Guard against concurrent calls from rapid tab switching.
-      if (isRefreshingRef.current) return;
+      // Reset visibilityChangePendingRef on early return so it doesn't stay stuck.
+      if (isRefreshingRef.current) {
+        visibilityChangePendingRef.current = false;
+        return;
+      }
       isRefreshingRef.current = true;
-      // Fix #1: suppress SIGNED_OUT events fired during this refresh window.
-      visibilityChangePendingRef.current = true;
+
+      // Fix #2: set loading only after both guards pass so we never call
+      // setLoading(true) without a matching setLoading(false) in the finally.
+      setLoading(true);
 
       try {
         let { data: { session }, error: sessionError } = await supabase.auth.getSession();
