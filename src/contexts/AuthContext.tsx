@@ -77,12 +77,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
   const [loading, setLoading] = useState(true);
   const mountedRef = useRef(true);
-  const isRefreshingRef = useRef(false);
-  const visibilityChangePendingRef = useRef(false);
-  // Fix 3: set to true in initAuth's finally block so handleVisibilityChange
-  // can guard against the Chromium visibilitychange(visible) that fires during
-  // the initial page load — before initAuth has settled.
-  const initCompleteRef = useRef(false);
 
   const supabase = SupabaseService.getInstance().client;
 
@@ -127,43 +121,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     mountedRef.current = true;
 
-    // Safety valve
-    const safetyTimer = setTimeout(() => {
-      if (mountedRef.current) setLoading(false);
-    }, 10000);
-
+    // ── Part 1: Initial Boot ─────────────────────────────────────────────────
+    // Runs once on mount. Sets loading=false in its finally block and never
+    // sets loading=true again after that point.
     const initAuth = async () => {
       try {
-        // getSession espera de forma segura a que se refresque el token si es necesario
-        // lo que evita el falso negativo (redirección a /login) en la nueva pestaña.
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error) throw error;
 
         if (session?.user) {
-          // Fix 1: race fetchProfile against a 5-second timeout so a cold-start
-          // 503 never keeps loading=true until the 10-second safety timer fires.
-          const fetchTimeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
-          const p = await Promise.race([fetchProfile(session.user.id), fetchTimeout]);
+          const p = await fetchProfile(session.user.id);
           if (!mountedRef.current) return;
           setUser(session.user);
 
-          if (p && !p.role && !p.pending_role) {
-            // Wait and retry once for cases where the trigger is still running
-            await new Promise((resolve) => setTimeout(resolve, 1000));
-            const fetchTimeout2 = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
-            const retried = await Promise.race([fetchProfile(session.user.id), fetchTimeout2]);
-            if (!mountedRef.current) return;
-            if (retried) {
-              setProfile(retried);
-            } else {
-              setProfile(p);
-            }
-          } else if (p) {
+          if (p) {
             setProfile(p);
           } else {
-            // Fix 2: fetchProfile returned null (network error / cold-start 503).
-            // Fall back to the localStorage cache so the user sees their dashboard
-            // immediately rather than being stranded on SetupPage or stuck loading.
+            // fetchProfile returned null (network error / cold-start 503).
+            // Fall back to the localStorage cache so the user sees their
+            // dashboard immediately rather than being stranded on SetupPage.
             const cached = readProfileCache();
             if (cached) {
               setProfile(cached as unknown as Profile);
@@ -174,169 +150,56 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       } catch (err) {
         console.error("Error al obtener la sesión inicial:", err);
-        // Si la sesión local está corrupta tras un deploy en Render, la cerramos forzosamente
-        // para evitar el loop infinito de carga y devolverte limpiamente al login.
+        // If the local session is corrupted, sign out cleanly to avoid an
+        // infinite loading loop and return the user to the login page.
         await supabase.auth.signOut().catch(console.error);
       } finally {
-        // Fix 3: mark init as complete before clearing loading so that any
-        // Chromium visibilitychange(visible) that queued up during startup
-        // will now be a no-op instead of triggering a second auth cycle.
-        initCompleteRef.current = true;
+        // loading is set to false exactly once — here — and never toggled again.
         if (mountedRef.current) setLoading(false);
       }
     };
 
     initAuth();
 
-    // Visibility change listener: refresh session silently when tab regains focus.
-    // Golden rule: a failed refresh must be a silent no-op that preserves whatever
-    // auth state already exists. Never wipe user/profile here.
-    const handleVisibilityChange = async () => {
-      if (document.visibilityState !== 'visible') return;
+    // ── Part 2: Background Sync ──────────────────────────────────────────────
+    // Supabase's autoRefreshToken handles tab focus and background token
+    // refreshes natively. We only react to events here to keep React state
+    // in sync — without ever touching the loading flag.
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        // INITIAL_SESSION is handled by initAuth above.
+        if (event === "INITIAL_SESSION") return;
 
-      // Fix 3: Chromium fires visibilitychange(visible) during the initial page
-      // load, potentially before initAuth has settled. Bail out early to avoid
-      // a concurrent second getSession/fetchProfile cycle at startup.
-      if (!initCompleteRef.current) return;
-
-      // Fix #1: suppress SIGNED_OUT events fired during this refresh window.
-      // Set immediately — before any async work — to close the timing gap.
-      visibilityChangePendingRef.current = true;
-
-      // Guard against concurrent calls from rapid tab switching.
-      // Reset visibilityChangePendingRef on early return so it doesn't stay stuck.
-      if (isRefreshingRef.current) {
-        visibilityChangePendingRef.current = false;
-        return;
-      }
-      isRefreshingRef.current = true;
-
-      // Fix #2: set loading only after both guards pass so we never call
-      // setLoading(true) without a matching setLoading(false) in the finally.
-      setLoading(true);
-
-      try {
-        let { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-        // If getSession() returns an error (including clock-skew), bail out and
-        // preserve whatever is already in memory — do not touch user or profile.
-        if (sessionError) {
-          console.warn('[AuthContext] visibility refresh skipped (getSession error):', sessionError.message);
-          return;
-        }
-
-        if (session) {
-          // Fix 4: getSession() already returned a valid session that the client
-          // holds in memory — calling setSession here is redundant and harmful.
-          // It forces the Supabase JS client to re-validate the session, which
-          // emits a spurious SIGNED_IN event through onAuthStateChange and
-          // triggers a second fetchProfile call + re-render cycle.
-          // setSession is only needed in the fallback branch below where
-          // refreshSession() returns a brand-new session the client hasn't seen.
-        } else {
-          // Fix #3: No session in storage — try a token refresh as a fallback.
-          // If that also returns null (clock-skew silent failure), do NOT wipe
-          // state — just return. The SIGNED_OUT event will be suppressed by
-          // visibilityChangePendingRef (fix #1).
-          const { data: refreshData } = await supabase.auth.refreshSession();
-          if (refreshData.session) {
-            session = refreshData.session;
-            await supabase.auth.setSession({
-              access_token: refreshData.session.access_token,
-              refresh_token: refreshData.session.refresh_token,
-            });
-          } else {
-            return;
-          }
-        }
-
-        if (!mountedRef.current) return;
-        if (session?.user) {
+        if (event === "TOKEN_REFRESHED" || event === "SIGNED_IN") {
+          if (!session?.user || !mountedRef.current) return;
           setUser(session.user);
-          // Fix 1: race fetchProfile against a 5-second timeout so a cold-start
-          // 503 on tab re-focus never hangs loading until the safety timer fires.
-          const fetchTimeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
-          const p = await Promise.race([fetchProfile(session.user.id), fetchTimeout]);
+          // Fetch profile silently in the background — never modify loading state.
+          const p = await fetchProfile(session.user.id);
           if (!mountedRef.current) return;
-          // Only overwrite the profile when the fetch returns a real, settled
-          // profile (non-null + role present).  A null or role-less result from
-          // a cold-start / network blip must never wipe an existing profile.
           if (p && p.role) {
             writeProfileCache(p);
             setProfile(p);
           }
-        }
-      } catch (err) {
-        // AbortError means a concurrent navigation or signal cancellation fired —
-        // this is expected on rapid tab switches. Treat as a silent no-op.
-        if (err instanceof Error && err.name === 'AbortError') return;
-        console.warn('[AuthContext] visibility refresh error (state preserved):', err);
-        // Any other error: preserve existing user/profile intact.
-      } finally {
-        isRefreshingRef.current = false;
-        visibilityChangePendingRef.current = false;
-        setLoading(false);
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        // Ignoramos INITIAL_SESSION porque ya lo manejamos robustamente en initAuth
-        if (event === "INITIAL_SESSION") return;
-        // Fix #1: suppress SIGNED_OUT events caused by clock-skew during tab re-focus.
-        // handleVisibilityChange sets this flag before doing any async work and
-        // clears it in its finally block.
-        if (event === "SIGNED_OUT" && visibilityChangePendingRef.current) return;
-        // TOKEN_REFRESHED should NOT set loading to true — update state silently
-        if (event === "TOKEN_REFRESHED") {
-          if (session?.user && mountedRef.current) {
-            setUser(session.user);
+          if (event === "SIGNED_IN") {
+            updateLastSeen(session.user.id).catch(console.error);
           }
           return;
         }
 
-        try {
-          const currentUser = session?.user ?? null;
-          if (currentUser) {
-            if (!mountedRef.current) return;
-            setUser(currentUser);
-
-            const p = await fetchProfile(currentUser.id);
-            if (!mountedRef.current) return;
-
-            // Only update the profile when fetchProfile returns a real, settled
-            // record (non-null + role present).  Transient null returns (Render
-            // cold start, network blip) or role-less records must never wipe
-            // the existing profile — that is the root cause of the
-            // "infinite loading / Account Being Configured" regression on tab
-            // refocus.  setProfile(null) is only ever called below when
-            // currentUser itself is null (genuine sign-out).
-            if (p && p.role) {
-              writeProfileCache(p);
-              setProfile(p);
-            }
-
-            if (event === "SIGNED_IN") {
-              updateLastSeen(currentUser.id).catch(console.error);
-            }
-          } else {
-            if (!mountedRef.current) return;
-            setUser(null);
-            setProfile(null);
-          }
-        } catch (err) {
-          console.error("Error en el cambio de estado de auth:", err);
+        // For any other event (SIGNED_OUT, USER_UPDATED, etc.) clear state when
+        // there is no session, otherwise keep whatever is already in memory.
+        if (!session) {
+          if (!mountedRef.current) return;
+          setUser(null);
+          setProfile(null);
+          clearProfileCache();
         }
       }
     );
 
     return () => {
       mountedRef.current = false;
-      clearTimeout(safetyTimer);
       listener.subscription.unsubscribe();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
 
