@@ -120,92 +120,60 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     mountedRef.current = true;
+    let authResolved = false;
 
-    // ── Part 1: Initial Boot ─────────────────────────────────────────────────
-    // Runs once on mount. Sets loading=false in its finally block and never
-    // sets loading=true again after that point.
-    const initAuth = async () => {
-      try {
-        let resolvedUser: User | null = null;
+    const loadUserData = async (session: Awaited<ReturnType<typeof supabase.auth.getSession>>["data"]["session"], event: string) => {
+      authResolved = true;
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
 
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) throw error;
-        resolvedUser = session?.user ?? null;
+      if (currentUser) {
+        // Race fetchProfile against a 3000ms timeout to prevent database
+        // cold-start hangs from blocking the UI indefinitely.
+        const p = await Promise.race([
+          fetchProfile(currentUser.id),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
+        ]);
 
-        if (resolvedUser) {
-          // Set user immediately so the UI is not blocked on profile fetch.
-          setUser(resolvedUser);
+        if (!mountedRef.current) return;
 
-          // Race fetchProfile against a 3000ms timeout to prevent database
-          // cold-start hangs from blocking the UI indefinitely.
-          const p = await Promise.race([
-            fetchProfile(resolvedUser.id),
-            new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
-          ]);
-
-          if (!mountedRef.current) return;
-
-          if (p) {
-            setProfile(p);
-          } else {
-            // fetchProfile returned null (network error / cold-start 503).
-            // Fall back to the localStorage cache so the user sees their
-            // dashboard immediately rather than being stranded on SetupPage.
-            const cached = readProfileCache();
-            if (cached) {
-              setProfile(cached as unknown as Profile);
-            }
+        if (p) {
+          setProfile(p);
+        } else {
+          // fetchProfile returned null (network error / cold-start 503).
+          // Fall back to the localStorage cache so the user sees their
+          // dashboard immediately rather than being stranded on SetupPage.
+          const cached = readProfileCache();
+          if (cached) {
+            setProfile(cached as unknown as Profile);
           }
-
-          updateLastSeen(resolvedUser.id).catch(console.error);
         }
-      } catch (err) {
-        console.error("Error al obtener la sesión inicial:", err);
-        // Let it fail gracefully — do NOT force signOut on transient errors,
-        // as that would wipe valid storage on temporary network failures.
-      } finally {
-        // loading is set to false exactly once — here — and never toggled again.
-        if (mountedRef.current) setLoading(false);
+
+        if (event === "SIGNED_IN") {
+          updateLastSeen(currentUser.id).catch(console.error);
+        }
+      } else {
+        setProfile(null);
+        clearProfileCache();
       }
+
+      if (mountedRef.current) setLoading(false);
     };
 
-    initAuth();
-
-    // ── Part 2: Background Sync ──────────────────────────────────────────────
-    // Supabase's autoRefreshToken handles tab focus and background token
-    // refreshes natively. We only react to events here to keep React state
-    // in sync — without ever touching the loading flag.
+    // Set up the auth listener FIRST so no events are missed.
     const { data: listener } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        // INITIAL_SESSION is handled by initAuth above.
-        if (event === "INITIAL_SESSION") return;
-
-        if (event === "TOKEN_REFRESHED" || event === "SIGNED_IN") {
-          if (!session?.user || !mountedRef.current) return;
-          setUser(session.user);
-          // Fetch profile silently in the background — never modify loading state.
-          const p = await fetchProfile(session.user.id);
-          if (!mountedRef.current) return;
-          if (p && p.role) {
-            writeProfileCache(p);
-            setProfile(p);
-          }
-          if (event === "SIGNED_IN") {
-            updateLastSeen(session.user.id).catch(console.error);
-          }
-          return;
-        }
-
-        // For any other event (SIGNED_OUT, USER_UPDATED, etc.) clear state when
-        // there is no session, otherwise keep whatever is already in memory.
-        if (!session) {
-          if (!mountedRef.current) return;
-          setUser(null);
-          setProfile(null);
-          clearProfileCache();
-        }
+      (event, session) => {
+        loadUserData(session, event);
       }
     );
+
+    // Non-blocking fallback: if the listener hasn't fired yet (e.g. no session),
+    // ensure loading is resolved via getSession().
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!authResolved) {
+        loadUserData(session, "INITIAL_SESSION");
+      }
+    });
 
     return () => {
       mountedRef.current = false;
