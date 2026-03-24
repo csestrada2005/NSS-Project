@@ -11,7 +11,12 @@ export class SupabaseService {
       // Initialize with empty strings to avoid crashes, but calls will fail or return errors.
       this.client = createClient('https://placeholder.supabase.co', 'placeholder');
     } else {
-      this.client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      this.client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+          autoRefreshToken: true,
+          detectSessionInUrl: true,
+        },
+      });
     }
   }
 

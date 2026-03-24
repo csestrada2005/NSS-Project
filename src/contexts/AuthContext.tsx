@@ -78,6 +78,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const mountedRef = useRef(true);
   const isRefreshingRef = useRef(false);
+  const visibilityChangePendingRef = useRef(false);
 
   const supabase = SupabaseService.getInstance().client;
 
@@ -131,15 +132,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       try {
         // getSession espera de forma segura a que se refresque el token si es necesario
         // lo que evita el falso negativo (redirección a /login) en la nueva pestaña.
-        let { data: { session }, error } = await supabase.auth.getSession();
+        const { data: { session }, error } = await supabase.auth.getSession();
         if (error) throw error;
-
-        // Retry once after 2 seconds if session comes back null (race condition on tab focus)
-        if (!session) {
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-          const retry = await supabase.auth.getSession();
-          if (!retry.error) session = retry.data.session;
-        }
 
         if (session?.user) {
           const p = await fetchProfile(session.user.id);
@@ -180,9 +174,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const handleVisibilityChange = async () => {
       if (document.visibilityState !== 'visible') return;
 
+      // Fix #2: set loading immediately so WorkspaceLayout never sees stale
+      // user=null / loading=false during a mid-flight refresh.
+      setLoading(true);
+
       // Guard against concurrent calls from rapid tab switching.
       if (isRefreshingRef.current) return;
       isRefreshingRef.current = true;
+      // Fix #1: suppress SIGNED_OUT events fired during this refresh window.
+      visibilityChangePendingRef.current = true;
 
       try {
         let { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -202,7 +202,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             refresh_token: session.refresh_token,
           });
         } else {
-          // No session in storage — try a token refresh as a fallback.
+          // Fix #3: No session in storage — try a token refresh as a fallback.
+          // If that also returns null (clock-skew silent failure), do NOT wipe
+          // state — just return. The SIGNED_OUT event will be suppressed by
+          // visibilityChangePendingRef (fix #1).
           const { data: refreshData } = await supabase.auth.refreshSession();
           if (refreshData.session) {
             session = refreshData.session;
@@ -210,6 +213,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               access_token: refreshData.session.access_token,
               refresh_token: refreshData.session.refresh_token,
             });
+          } else {
+            return;
           }
         }
 
@@ -234,6 +239,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Any other error: preserve existing user/profile intact.
       } finally {
         isRefreshingRef.current = false;
+        visibilityChangePendingRef.current = false;
+        setLoading(false);
       }
     };
 
@@ -243,6 +250,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       async (event, session) => {
         // Ignoramos INITIAL_SESSION porque ya lo manejamos robustamente en initAuth
         if (event === "INITIAL_SESSION") return;
+        // Fix #1: suppress SIGNED_OUT events caused by clock-skew during tab re-focus.
+        // handleVisibilityChange sets this flag before doing any async work and
+        // clears it in its finally block.
+        if (event === "SIGNED_OUT" && visibilityChangePendingRef.current) return;
         // TOKEN_REFRESHED should NOT set loading to true — update state silently
         if (event === "TOKEN_REFRESHED") {
           if (session?.user && mountedRef.current) {
