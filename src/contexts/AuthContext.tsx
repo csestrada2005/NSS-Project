@@ -79,6 +79,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const mountedRef = useRef(true);
   const isRefreshingRef = useRef(false);
   const visibilityChangePendingRef = useRef(false);
+  // Fix 3: set to true in initAuth's finally block so handleVisibilityChange
+  // can guard against the Chromium visibilitychange(visible) that fires during
+  // the initial page load — before initAuth has settled.
+  const initCompleteRef = useRef(false);
 
   const supabase = SupabaseService.getInstance().client;
 
@@ -136,14 +140,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (error) throw error;
 
         if (session?.user) {
-          const p = await fetchProfile(session.user.id);
+          // Fix 1: race fetchProfile against a 5-second timeout so a cold-start
+          // 503 never keeps loading=true until the 10-second safety timer fires.
+          const fetchTimeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
+          const p = await Promise.race([fetchProfile(session.user.id), fetchTimeout]);
           if (!mountedRef.current) return;
           setUser(session.user);
 
           if (p && !p.role && !p.pending_role) {
             // Wait and retry once for cases where the trigger is still running
             await new Promise((resolve) => setTimeout(resolve, 1000));
-            const retried = await fetchProfile(session.user.id);
+            const fetchTimeout2 = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
+            const retried = await Promise.race([fetchProfile(session.user.id), fetchTimeout2]);
             if (!mountedRef.current) return;
             if (retried) {
               setProfile(retried);
@@ -152,6 +160,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
           } else if (p) {
             setProfile(p);
+          } else {
+            // Fix 2: fetchProfile returned null (network error / cold-start 503).
+            // Fall back to the localStorage cache so the user sees their dashboard
+            // immediately rather than being stranded on SetupPage or stuck loading.
+            const cached = readProfileCache();
+            if (cached) {
+              setProfile(cached as unknown as Profile);
+            }
           }
 
           updateLastSeen(session.user.id).catch(console.error);
@@ -162,6 +178,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // para evitar el loop infinito de carga y devolverte limpiamente al login.
         await supabase.auth.signOut().catch(console.error);
       } finally {
+        // Fix 3: mark init as complete before clearing loading so that any
+        // Chromium visibilitychange(visible) that queued up during startup
+        // will now be a no-op instead of triggering a second auth cycle.
+        initCompleteRef.current = true;
         if (mountedRef.current) setLoading(false);
       }
     };
@@ -173,6 +193,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // auth state already exists. Never wipe user/profile here.
     const handleVisibilityChange = async () => {
       if (document.visibilityState !== 'visible') return;
+
+      // Fix 3: Chromium fires visibilitychange(visible) during the initial page
+      // load, potentially before initAuth has settled. Bail out early to avoid
+      // a concurrent second getSession/fetchProfile cycle at startup.
+      if (!initCompleteRef.current) return;
 
       // Fix #1: suppress SIGNED_OUT events fired during this refresh window.
       // Set immediately — before any async work — to close the timing gap.
@@ -201,12 +226,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
 
         if (session) {
-          // Re-hydrate the Supabase client's in-memory session so that
-          // subsequent queries run with auth.uid() set correctly (RLS).
-          await supabase.auth.setSession({
-            access_token: session.access_token,
-            refresh_token: session.refresh_token,
-          });
+          // Fix 4: getSession() already returned a valid session that the client
+          // holds in memory — calling setSession here is redundant and harmful.
+          // It forces the Supabase JS client to re-validate the session, which
+          // emits a spurious SIGNED_IN event through onAuthStateChange and
+          // triggers a second fetchProfile call + re-render cycle.
+          // setSession is only needed in the fallback branch below where
+          // refreshSession() returns a brand-new session the client hasn't seen.
         } else {
           // Fix #3: No session in storage — try a token refresh as a fallback.
           // If that also returns null (clock-skew silent failure), do NOT wipe
@@ -227,7 +253,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (!mountedRef.current) return;
         if (session?.user) {
           setUser(session.user);
-          const p = await fetchProfile(session.user.id);
+          // Fix 1: race fetchProfile against a 5-second timeout so a cold-start
+          // 503 on tab re-focus never hangs loading until the safety timer fires.
+          const fetchTimeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
+          const p = await Promise.race([fetchProfile(session.user.id), fetchTimeout]);
           if (!mountedRef.current) return;
           // Only overwrite the profile when the fetch returns a real, settled
           // profile (non-null + role present).  A null or role-less result from
