@@ -29,6 +29,7 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SUPABASE_MANAGEMENT_TOKEN = process.env.SUPABASE_MANAGEMENT_TOKEN;
 const SUPABASE_ORG_ID = process.env.SUPABASE_ORG_ID;
 const ENCRYPTION_SECRET = process.env.ENCRYPTION_SECRET || 'default-secret-32-chars-padding!!';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 // ---------------------------------------------------------------------------
 // Supabase admin client (for auth validation and platform DB operations)
@@ -1229,6 +1230,64 @@ app.post('/api/deals/:dealId/accept', async (req, res) => {
   });
 
   res.json({ checkoutUrl: session.url });
+});
+
+// ---------------------------------------------------------------------------
+// Embed-and-search — generates a Gemini embedding for a query string and
+// performs a vector similarity search against forge_patterns.
+// GEMINI_API_KEY=your_key_here  (add to .env alongside the other keys)
+// ---------------------------------------------------------------------------
+app.post('/api/embed-and-search', requireAuth, async (req, res) => {
+  try {
+    if (!GEMINI_API_KEY) {
+      return res.status(503).json({ error: 'Embedding not configured', patterns: [] });
+    }
+
+    const { query, threshold = 0.70, count = 6 } = req.body;
+    if (!query || typeof query !== 'string' || query.trim() === '') {
+      return res.status(400).json({ error: 'query required' });
+    }
+
+    // Generate embedding via Gemini text-embedding-004
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'models/text-embedding-004',
+          content: { parts: [{ text: query }] },
+        }),
+      }
+    );
+
+    if (!geminiRes.ok) {
+      return res.status(502).json({ error: 'Embedding API failed', patterns: [] });
+    }
+
+    const geminiData = await geminiRes.json();
+    const values = geminiData?.embedding?.values;
+    if (!Array.isArray(values) || values.length === 0) {
+      return res.status(502).json({ error: 'Embedding API failed', patterns: [] });
+    }
+
+    // Vector similarity search via Supabase RPC
+    const { data, error: rpcError } = await supabaseAdmin.rpc('match_forge_patterns', {
+      query_embedding: values,
+      match_threshold: threshold,
+      match_count: count,
+    });
+
+    if (rpcError) {
+      console.error('[embed-and-search]', rpcError);
+      return res.status(500).json({ error: 'Search failed', patterns: [] });
+    }
+
+    return res.json({ patterns: data ?? [] });
+  } catch (err) {
+    console.error('[embed-and-search] Unhandled error:', err);
+    return res.status(500).json({ error: 'Internal error', patterns: [] });
+  }
 });
 
 // ---------------------------------------------------------------------------
