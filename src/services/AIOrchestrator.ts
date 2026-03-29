@@ -294,6 +294,8 @@ export class AIOrchestrator {
     outcome: 'success' | 'failed';
     errorMessage?: string;
     durationMs: number;
+    requiredPatternIds?: string[];
+    domain?: string;
   }): Promise<void> {
     try {
       const supabase = SupabaseService.getInstance().client;
@@ -311,6 +313,8 @@ export class AIOrchestrator {
         outcome: params.outcome,
         error_message: params.errorMessage,
         duration_ms: params.durationMs,
+        required_pattern_ids: params.requiredPatternIds ?? [],
+        domain: params.domain ?? 'general',
       });
     } catch (e) {
       console.error('[AIOrchestrator] Failed to log intent:', e);
@@ -414,6 +418,8 @@ export class AIOrchestrator {
           modifiedFiles: result.modifiedFiles,
           outcome: result.outcome || 'success',
           durationMs: Date.now() - startTime,
+          requiredPatternIds: intent.requiredPatternIds,
+          domain: intent.domain,
         });
       }
       return result;
@@ -451,6 +457,8 @@ export class AIOrchestrator {
           modifiedFiles: result.modifiedFiles,
           outcome: result.outcome || 'success',
           durationMs: Date.now() - startTime,
+          requiredPatternIds: intent.requiredPatternIds,
+          domain: intent.domain,
         });
       }
       return result;
@@ -491,6 +499,8 @@ export class AIOrchestrator {
           modifiedFiles: result.modifiedFiles,
           outcome: result.outcome || 'success',
           durationMs: Date.now() - startTime,
+          requiredPatternIds: intent.requiredPatternIds,
+          domain: intent.domain,
         });
       }
       return result;
@@ -558,6 +568,8 @@ export class AIOrchestrator {
           modifiedFiles: finalPaths,
           outcome: 'success',
           durationMs: Date.now() - startTime,
+          requiredPatternIds: intent.requiredPatternIds,
+          domain: intent.domain,
         });
       }
 
@@ -587,6 +599,8 @@ export class AIOrchestrator {
           outcome: 'failed',
           errorMessage: verifyResult.error,
           durationMs: Date.now() - startTime,
+          requiredPatternIds: intent.requiredPatternIds,
+          domain: intent.domain,
         });
       }
 
