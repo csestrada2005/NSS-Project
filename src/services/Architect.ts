@@ -21,10 +21,11 @@ export class Architect {
   static async plan(
     prompt: string,
     memoryFormatted: string,
-    intent: Intent
+    intent: Intent,
+    patternContext: string = ''
   ): Promise<{ steps: BuildStep[]; wasTrimmed: boolean; originalCount: number }> {
     const systemPrompt = `You are a software architect for a React + TypeScript + Tailwind web builder.
-Do not write any code. Return only a JSON array of BuildStep objects.
+${patternContext ? patternContext + '\n\n' : ''}Do not write any code. Return only a JSON array of BuildStep objects.
 Each BuildStep must have exactly these fields:
 
 order: number (starting at 1)

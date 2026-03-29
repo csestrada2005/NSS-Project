@@ -10,6 +10,7 @@ import { Architect, type BuildStep } from './Architect';
 import { Implementer, type ProgressCallback } from './Implementer';
 import { Verifier, type RetryCallback } from './Verifier';
 import { CreditService } from './CreditService';
+import { PatternInjector } from './PatternInjector';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -392,7 +393,8 @@ export class AIOrchestrator {
     // ------------------------------------------------------------------
     if (
       selectedElement &&
-      (intent.type === 'style_change' || intent.risk === 'low')
+      (intent.type === 'style_change' || intent.risk === 'low') &&
+      !(intent.requiredPatternIds && intent.requiredPatternIds.length > 0)
     ) {
       const result = await this.runFastLane(input, files, selectedElement);
       if (result.outcome === 'success' && creditUserId) {
@@ -421,8 +423,9 @@ export class AIOrchestrator {
     // Fast path: simple/low-risk edits skip Architect + Implementer + Verifier
     // ------------------------------------------------------------------
     const isSimpleEdit =
-      intent.type === 'style_change' ||
-      (intent.risk === 'low' && intent.affected_files.length <= 1);
+      (intent.type === 'style_change' ||
+      (intent.risk === 'low' && intent.affected_files.length <= 1)) &&
+      (intent.requiredPatternIds ?? []).length === 0;
 
     if (isSimpleEdit && files.size > 0) {
       const result = await this.runSimpleLane(input, files, selectedElement, projectId);
@@ -460,7 +463,8 @@ export class AIOrchestrator {
       ? ProjectMemoryService.formatForPrompt(memory)
       : '';
 
-    const { steps, wasTrimmed, originalCount } = await Architect.plan(input, memoryFormatted, intent);
+    const patternContext = PatternInjector.inject(intent.requiredPatternIds ?? []);
+    const { steps, wasTrimmed, originalCount } = await Architect.plan(input, memoryFormatted, intent, patternContext);
 
     if (steps.length === 0) {
       // Architect returned nothing — fall back to the legacy heavy lane
