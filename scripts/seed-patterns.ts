@@ -438,26 +438,40 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
+console.log(`[seed-patterns] Connecting to: ${SUPABASE_URL}`);
+console.log(`[seed-patterns] Patterns to seed: ${patterns.length}`);
+
 // ---------------------------------------------------------------------------
 // Seed
 // ---------------------------------------------------------------------------
 async function main() {
-  let successCount = 0;
+  let seeded = 0;
+  let failed = 0;
 
   for (const pattern of patterns) {
     const { error } = await supabase
       .from('forge_patterns')
-      .upsert(pattern, { onConflict: 'name' });
+      .upsert(
+        { ...pattern, updated_at: new Date().toISOString() },
+        { onConflict: 'name' }
+      );
 
     if (error) {
-      console.error(`✗ ${pattern.name}: ${error.message}`);
+      console.error(`✗ ${pattern.name}`);
+      console.error('  Full error:', JSON.stringify(error, null, 2));
+      failed++;
     } else {
       console.log(`✓ ${pattern.name}`);
-      successCount++;
+      seeded++;
     }
   }
 
-  console.log(`\nSeeded ${successCount} patterns. Next: run npm run embed:patterns`);
+  console.log(`\nSeeded ${seeded} patterns, ${failed} failed.`);
+  if (failed > 0) {
+    console.log('Next: fix the errors above, then re-run.');
+  } else {
+    console.log('Next: run npm run embed:patterns');
+  }
 }
 
 main();
