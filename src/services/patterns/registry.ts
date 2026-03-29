@@ -1,7 +1,16 @@
-[
+export interface InjectionPattern {
+  id: string;
+  triggerDescription: string;
+  dependencies: string[];
+  codeContext: string;
+  rules: [string, string, string];
+  maxTokenEstimate: number;
+  incompatibleWith: string[];
+}
+
+export const PATTERN_DATA: InjectionPattern[] = [
   {
     "id": "supabase-react-auth-context",
-    "domain": "auth",
     "triggerDescription": "Inject this pattern when setting up a global authentication state manager using Supabase and React Context.",
     "dependencies": [
       "@supabase/supabase-js",
@@ -21,7 +30,6 @@
   },
   {
     "id": "shopify-storefront-cart-flow",
-    "domain": "ecommerce",
     "triggerDescription": "Inject this pattern when building a headless e-commerce storefront that requires fetching products and managing a persistent shopping cart via the Shopify Storefront GraphQL API.",
     "dependencies": [
       "react",
@@ -41,7 +49,6 @@
   },
   {
     "id": "react-spa-provider-routing",
-    "domain": "generic",
     "triggerDescription": "When setting up the root architecture of a React Single Page Application requiring global query state, UI provider wrapping, and client-side routing.",
     "dependencies": [
       "react",
@@ -63,7 +70,6 @@
   },
   {
     "id": "secure-ai-sse-stream",
-    "domain": "ai_app",
     "triggerDescription": "When building a React hook to securely call an AI backend service and consume a Server-Sent Events (SSE) stream for real-time text generation.",
     "dependencies": [
       "react",
@@ -83,7 +89,6 @@
   },
   {
     "id": "supabase-pgvector-rag-storage",
-    "domain": "ai_app",
     "triggerDescription": "Inject this pattern when building a RAG system that requires semantic document storage, chunking with metadata, and similarity-based retrieval using Supabase and pgvector.",
     "dependencies": [
       "@supabase/supabase-js",
@@ -92,7 +97,6 @@
       "@langchain/community"
     ],
     "codeContext": "import { createClient, SupabaseClient } from '@supabase/supabase-js';\nimport { SupabaseVectorStore } from '@langchain/community/vectorstores/supabase';\nimport { Embeddings } from '@langchain/core/embeddings';\nimport { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';\n\ntype VectorDocument = { id: string; content: string; metadata: Record<string, any>; similarity?: number };\n\nexport class RAGManager {\n  private client: SupabaseClient;\n  private vectorStore: SupabaseVectorStore;\n\n  constructor(url: string, key: string, embeddings: Embeddings, tableName: string) {\n    this.client = createClient(url, key);\n    this.vectorStore = new SupabaseVectorStore(embeddings, {\n      client: this.client,\n      tableName: tableName,\n      queryName: 'match_documents',\n    });\n  }\n\n  async ingest(text: string, metadata: Record<string, any>): Promise<void> {\n    const splitter = new RecursiveCharacterTextSplitter({ chunkSize: 1000, chunkOverlap: 200 });\n    const docs = await splitter.createDocuments([text], [metadata]);\n    await this.vectorStore.addDocuments(docs);\n  }\n\n  async search(query: string, filter: Record<string, any>, limit: number = 5): Promise<VectorDocument[]> {\n    const results = await this.client.rpc('match_documents', {\n      query_embedding: await this.vectorStore.embeddings.embedQuery(query),\n      match_threshold: 0.5,\n      match_count: limit,\n      filter_metadata: filter\n    });\n    return results.data || [];\n  }\n}",
-    "migrationSQL": "CREATE OR REPLACE FUNCTION match_documents(\n  query_embedding vector(768),\n  match_threshold float,\n  match_count int,\n  filter_metadata jsonb\n) RETURNS TABLE (id uuid, content text, metadata jsonb, similarity float)\nLANGUAGE plpgsql AS $$\nBEGIN\n  RETURN QUERY\n  SELECT d.id, d.content, d.metadata,\n    1 - (d.embedding <=> query_embedding) AS similarity\n  FROM documents d\n  WHERE d.metadata @> filter_metadata\n    AND 1 - (d.embedding <=> query_embedding) > match_threshold\n  ORDER BY d.embedding <=> query_embedding\n  LIMIT match_count;\nEND; $$;",
     "rules": [
       "Always use the @> containment operator in the PostgreSQL RPC function to filter JSONB metadata, ensuring efficient index usage during similarity scans.",
       "Initialize the RecursiveCharacterTextSplitter with an explicit chunkOverlap to preserve semantic context across chunk boundaries during the ingest phase.",
@@ -106,7 +110,6 @@
   },
   {
     "id": "high-fidelity-motion-system",
-    "domain": "landing",
     "triggerDescription": "Inject this pattern when building immersive, performance-optimized creative websites requiring scroll-synchronized reveals and high-performance animation hooks.",
     "dependencies": [
       "framer-motion",
@@ -126,7 +129,6 @@
   },
   {
     "id": "headless-provider-abstraction",
-    "domain": "generic",
     "triggerDescription": "Implement this pattern when integrating a headless third-party API requiring GraphQL data fetching, external-to-internal entity mapping, and remote state synchronization with local storage.",
     "dependencies": [
       "react",
@@ -146,7 +148,6 @@
   },
   {
     "id": "scroll-reveal-interaction",
-    "domain": "generic",
     "triggerDescription": "Inject this pattern when the user needs to progressively reveal layout elements on scroll with staggered delays while respecting native accessibility motion preferences.",
     "dependencies": [
       "react"
@@ -165,7 +166,6 @@
   },
   {
     "id": "supabase-ecommerce-subscription",
-    "domain": "ecommerce",
     "triggerDescription": "Inject this pattern when scaffolding a full-stack e-commerce application that requires persistent local cart state with mutually exclusive subscriptions, alongside Supabase authentication.",
     "dependencies": [
       "@supabase/supabase-js",
@@ -187,7 +187,6 @@
   },
   {
     "id": "hybrid-domain-routing",
-    "domain": "generic",
     "triggerDescription": "Inject this pattern when an application needs to serve multiple distinct business verticals or sub-apps with independent layouts and seamless page transitions under a single unified SPA.",
     "dependencies": [
       "react-router-dom",
@@ -207,7 +206,6 @@
   },
   {
     "id": "serverless-ai-integration-flow",
-    "domain": "ai_app",
     "triggerDescription": "When integrating a third-party LLM API that requires secure credential management, structured JSON outputs, and resilient frontend error handling with fallbacks.",
     "dependencies": [
       "react"
@@ -225,7 +223,6 @@
   },
   {
     "id": "saas-protected-dashboard-shell",
-    "domain": "saas",
     "triggerDescription": "Inject this pattern when initializing the foundational routing and authentication shell for a secure dashboard or CRM application.",
     "dependencies": [
       "react",
@@ -246,7 +243,6 @@
   },
   {
     "id": "react-context-rbac",
-    "domain": "generic",
     "triggerDescription": "Inject this pattern when the application requires rendering components or restricting routes conditionally based on user roles fetched from an auth provider.",
     "dependencies": [
       "react",
@@ -256,7 +252,7 @@
     "rules": [
       "Define the ACCESS_MAP as a static constant outside the provider component to prevent reallocation on every render and guarantee a single source of truth.",
       "Safeguard the hasAccess function using optional chaining and nullish coalescing (ACCESS_MAP[role]?.includes(resource) ?? false) to default to access denial on unmapped roles.",
-      "Use RoleProtectedLayout with React Router's Outlet for route-level protection and ProtectedRoute for component-level conditional rendering — never mix the two approaches for the same resource."
+      "Use RoleProtectedLayout with React Router's Outlet for route-level protection and ProtectedRoute for component-level conditional rendering \u2014 never mix the two approaches for the same resource."
     ],
     "maxTokenEstimate": 290,
     "incompatibleWith": [
@@ -265,7 +261,6 @@
   },
   {
     "id": "integrated-conversational-ai-agent",
-    "domain": "ai_app",
     "triggerDescription": "Inject this pattern when the application requires an interactive, context-aware AI chat interface that maintains local conversation history and integrates dynamically injected application state.",
     "dependencies": [
       "react"
@@ -284,7 +279,6 @@
   },
   {
     "id": "compound-component-architecture",
-    "domain": "generic",
     "triggerDescription": "Use this pattern when building complex UI elements that require shared state across multiple sub-components without prop drilling.",
     "dependencies": [
       "react"
@@ -303,7 +297,6 @@
   },
   {
     "id": "supabase-tanstack-query-setup",
-    "domain": "generic",
     "triggerDescription": "Inject this pattern when the application requires integrating a Supabase backend with TanStack Query for asynchronous state management and caching.",
     "dependencies": [
       "@supabase/supabase-js",
@@ -324,7 +317,6 @@
   },
   {
     "id": "supabase-entity-crm-pattern",
-    "domain": "saas",
     "triggerDescription": "Inject this pattern when building an admin panel or CRM interface that requires fetching, filtering, updating status, and exporting a list of database entities.",
     "dependencies": [
       "react",
@@ -344,7 +336,6 @@
   },
   {
     "id": "rhf-zod-validation",
-    "domain": "generic",
     "triggerDescription": "Inject this pattern when the user needs a TypeScript form with schema-driven validation, field-level error display, and the ability to surface server-side errors back into specific form fields after a failed API call.",
     "dependencies": [
       "react-hook-form",
@@ -362,7 +353,6 @@
   },
   {
     "id": "stripe-checkout-webhook",
-    "domain": "ecommerce",
     "triggerDescription": "Inject this pattern when the user needs to create a server-side Stripe Checkout session, redirect the client to the hosted payment page, and verify incoming webhook events with signature validation on a raw request body before any JSON parsing middleware runs.",
     "dependencies": [
       "stripe",
@@ -371,7 +361,7 @@
     ],
     "codeContext": "import express, { Router, Request, Response } from 'express';\nimport asyncHandler from 'express-async-handler';\nimport Stripe from 'stripe';\n\nconst stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {\n  apiVersion: '2024-12-18.acacia',\n});\n\nexport const checkoutRouter = Router();\n\ncheckoutRouter.post(\n  '/create-session',\n  express.json(),\n  asyncHandler(async (req: Request, res: Response) => {\n    const { priceId, userId } = req.body as { priceId: string; userId: string };\n    const session = await stripe.checkout.sessions.create({\n      mode: 'subscription',\n      line_items: [{ price: priceId, quantity: 1 }],\n      success_url: `${process.env.APP_URL}/success?session_id={CHECKOUT_SESSION_ID}`,\n      cancel_url: `${process.env.APP_URL}/cancel`,\n      metadata: { userId },\n    });\n    res.json({ url: session.url });\n  }),\n);\n\nexport const webhookRouter = Router();\n\nwebhookRouter.post(\n  '/webhook',\n  express.raw({ type: 'application/json' }),\n  asyncHandler(async (req: Request, res: Response) => {\n    const sig = req.headers['stripe-signature'] as string;\n    let event: Stripe.Event;\n    try {\n      event = stripe.webhooks.constructEvent(\n        req.body as Buffer,\n        sig,\n        process.env.STRIPE_WEBHOOK_SECRET!,\n      );\n    } catch (err: unknown) {\n      const message = err instanceof Error ? err.message : 'Unknown error';\n      res.status(400).send(`Webhook Error: ${message}`);\n      return;\n    }\n    if (event.type === 'checkout.session.completed') {\n      const session = event.data.object as Stripe.Checkout.Session;\n      await handleCheckoutComplete(session);\n    }\n    res.sendStatus(204);\n  }),\n);\n\nasync function handleCheckoutComplete(session: Stripe.Checkout.Session) {\n  const userId = session.metadata?.userId;\n  if (!userId) throw new Error('Missing userId in session metadata');\n}",
     "rules": [
-      "Register `express.raw({ type: 'application/json' })` as inline middleware directly on the webhook POST route before any global express.json() call, because stripe.webhooks.constructEvent requires a raw Buffer body — if express.json() runs first it parses the body to an object and the HMAC signature check throws a 'No signatures found matching' error.",
+      "Register `express.raw({ type: 'application/json' })` as inline middleware directly on the webhook POST route before any global express.json() call, because stripe.webhooks.constructEvent requires a raw Buffer body \u2014 if express.json() runs first it parses the body to an object and the HMAC signature check throws a 'No signatures found matching' error.",
       "Call `stripe.webhooks.constructEvent(req.body as Buffer, req.headers['stripe-signature'] as string, process.env.STRIPE_WEBHOOK_SECRET!)` inside a try/catch and return a 400 response on failure, not a 500, so Stripe's dashboard marks the delivery as a client error and stops retrying.",
       "Return `res.sendStatus(204)` (not 200 with a body) after all event handling completes so that Stripe considers the delivery acknowledged, and ensure the response is sent even when the event type is not handled by the switch/if block."
     ],
@@ -380,15 +370,14 @@
   },
   {
     "id": "supabase-realtime-subscription",
-    "domain": "saas",
     "triggerDescription": "Inject this pattern when the user needs a React hook that subscribes to live Postgres table changes via Supabase Realtime, receives typed INSERT/UPDATE/DELETE payloads, and deterministically removes the channel subscription when the component unmounts or the filter changes.",
     "dependencies": [
       "@supabase/supabase-js"
     ],
     "codeContext": "import { useEffect, useRef, useState, useCallback } from 'react';\nimport { createClient, RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';\n\nconst supabase = createClient(\n  import.meta.env.VITE_SUPABASE_URL as string,\n  import.meta.env.VITE_SUPABASE_ANON_KEY as string\n);\n\ntype SubscriptionStatus = 'SUBSCRIBED' | 'TIMED_OUT' | 'CLOSED' | 'CHANNEL_ERROR';\n\ninterface UseEntityRealtimeOptions<T extends Record<string, unknown>> {\n  table: string;\n  filter?: string;\n  onInsert?: (record: T) => void;\n  onUpdate?: (record: T) => void;\n  onDelete?: (record: T) => void;\n}\n\nexport function useEntityRealtime<T extends Record<string, unknown>>({\n  table,\n  filter,\n  onInsert,\n  onUpdate,\n  onDelete,\n}: UseEntityRealtimeOptions<T>) {\n  const [status, setStatus] = useState<SubscriptionStatus | null>(null);\n  const onInsertRef = useRef(onInsert);\n  const onUpdateRef = useRef(onUpdate);\n  const onDeleteRef = useRef(onDelete);\n\n  useEffect(() => { onInsertRef.current = onInsert; }, [onInsert]);\n  useEffect(() => { onUpdateRef.current = onUpdate; }, [onUpdate]);\n  useEffect(() => { onDeleteRef.current = onDelete; }, [onDelete]);\n\n  useEffect(() => {\n    const channelId = `realtime:${table}:${filter ?? 'all'}`;\n    let channel: RealtimeChannel;\n\n    channel = supabase\n      .channel(channelId)\n      .on<T>(\n        'postgres_changes',\n        { event: '*', schema: 'public', table, ...(filter ? { filter } : {}) },\n        (payload: RealtimePostgresChangesPayload<T>) => {\n          if (payload.eventType === 'INSERT') onInsertRef.current?.(payload.new as T);\n          if (payload.eventType === 'UPDATE') onUpdateRef.current?.(payload.new as T);\n          if (payload.eventType === 'DELETE') onDeleteRef.current?.(payload.old as T);\n        },\n      )\n      .subscribe((s: SubscriptionStatus) => setStatus(s));\n\n    return () => { supabase.removeChannel(channel); };\n  }, [table, filter]);\n\n  return { status };\n}",
     "rules": [
-      "Store callback props (onInsert, onUpdate, onDelete) in refs via useEffect and read from those refs inside the subscription handler — never include the callbacks in the useEffect dependency array, because inline-defined callbacks change reference on every parent render and would cause the channel to resubscribe on every render cycle.",
-      "Call `supabase.removeChannel(channel)` — not `channel.unsubscribe()` — inside the useEffect cleanup function so that Supabase's internal channel registry is updated and the WebSocket heartbeat for that channel stops, preventing memory leaks on repeated mount/unmount.",
+      "Store callback props (onInsert, onUpdate, onDelete) in refs via useEffect and read from those refs inside the subscription handler \u2014 never include the callbacks in the useEffect dependency array, because inline-defined callbacks change reference on every parent render and would cause the channel to resubscribe on every render cycle.",
+      "Call `supabase.removeChannel(channel)` \u2014 not `channel.unsubscribe()` \u2014 inside the useEffect cleanup function so that Supabase's internal channel registry is updated and the WebSocket heartbeat for that channel stops, preventing memory leaks on repeated mount/unmount.",
       "Pass the callback to `.subscribe((status) => setStatus(status))` to capture 'SUBSCRIBED', 'TIMED_OUT', and 'CHANNEL_ERROR' statuses so callers can display connection state and conditionally render retry UI."
     ],
     "maxTokenEstimate": 400,
@@ -396,7 +385,6 @@
   },
   {
     "id": "tanstack-query-optimistic-update",
-    "domain": "generic",
     "triggerDescription": "Inject this pattern when the user needs a TanStack Query mutation that instantly updates the UI before the server responds, rolls back to the previous cache state if the server returns an error, and then invalidates the query to sync authoritative data after the mutation settles.",
     "dependencies": [
       "@tanstack/react-query"
@@ -412,7 +400,6 @@
   },
   {
     "id": "multistep-form-session-persist",
-    "domain": "generic",
     "triggerDescription": "Inject this pattern when the user needs a multi-step form where each step validates only its own fields before advancing, the accumulated form state survives a browser refresh via sessionStorage, and the entire form data is collected into one typed object for final submission.",
     "dependencies": [
       "react-hook-form",
@@ -421,11 +408,19 @@
     ],
     "codeContext": "import { useState, useEffect, useRef } from 'react';\nimport { useForm, UseFormReturn } from 'react-hook-form';\nimport { zodResolver } from '@hookform/resolvers/zod';\nimport { z } from 'zod';\n\nconst Step0Schema = z.object({ name: z.string().min(1, 'Name is required') });\nconst Step1Schema = z.object({ email: z.string().email('Invalid email') });\nconst Step2Schema = z.object({ plan: z.enum(['free', 'pro']) });\n\nconst EntitySchema = Step0Schema.merge(Step1Schema).merge(Step2Schema);\ntype EntityFormData = z.infer<typeof EntitySchema>;\n\nconst STEP_SCHEMAS = [Step0Schema, Step1Schema, Step2Schema];\ntype StepIndex = 0 | 1 | 2;\nconst STORAGE_KEY = 'entity-form-draft';\n\nconst STEP_FIELDS: Record<StepIndex, (keyof EntityFormData)[]> = {\n  0: ['name'],\n  1: ['email'],\n  2: ['plan'],\n};\n\nexport function useEntityMultiStepForm(onComplete: (data: EntityFormData) => void) {\n  const [step, setStep] = useState<StepIndex>(0);\n  const stepRef = useRef(step);\n  useEffect(() => { stepRef.current = step; }, [step]);\n\n  const persisted = typeof window !== 'undefined'\n    ? JSON.parse(sessionStorage.getItem(STORAGE_KEY) ?? 'null')\n    : null;\n\n  const form = useForm<EntityFormData>({\n    resolver: zodResolver(EntitySchema),\n    defaultValues: persisted ?? { name: '', email: '', plan: 'free' },\n    mode: 'onTouched',\n  });\n\n  useEffect(() => {\n    const subscription = form.watch((values) => {\n      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(values));\n    });\n    return () => subscription.unsubscribe();\n  }, [form]);\n\n  const next = async () => {\n    const currentStep = stepRef.current;\n    const fields = STEP_FIELDS[currentStep];\n    const valid = await form.trigger(fields, { shouldFocus: true });\n    if (!valid) return;\n    if (currentStep === 2) {\n      const data = form.getValues() as EntityFormData;\n      sessionStorage.removeItem(STORAGE_KEY);\n      onComplete(data);\n      return;\n    }\n    setStep((s) => (s + 1) as StepIndex);\n  };\n\n  const back = () => setStep((s) => Math.max(0, s - 1) as StepIndex);\n\n  return { form, step, next, back };\n}",
     "rules": [
-      "Use `zodResolver(EntitySchema)` with the full merged schema on useForm initialization and rely exclusively on `form.trigger(STEP_FIELDS[step], { shouldFocus: true })` for per-step validation — do not swap the resolver between steps, as useForm does not reinitialize after mount and changing the resolver prop has no effect.",
+      "Use `zodResolver(EntitySchema)` with the full merged schema on useForm initialization and rely exclusively on `form.trigger(STEP_FIELDS[step], { shouldFocus: true })` for per-step validation \u2014 do not swap the resolver between steps, as useForm does not reinitialize after mount and changing the resolver prop has no effect.",
       "Subscribe to `form.watch((values) => sessionStorage.setItem(STORAGE_KEY, JSON.stringify(values)))` inside a useEffect and call `subscription.unsubscribe()` in the cleanup function so every field change is persisted to sessionStorage without creating memory leaks across re-renders.",
       "Call `await form.trigger(STEP_FIELDS[step])` inside the next function to validate only the fields belonging to the current step before advancing, so errors from later steps never surface prematurely and { shouldFocus: true } auto-scrolls to the first invalid field."
     ],
     "maxTokenEstimate": 450,
     "incompatibleWith": []
   }
-]
+];
+
+export const PATTERN_REGISTRY: Map<string, InjectionPattern> = new Map(
+  PATTERN_DATA.map(pattern => [pattern.id, pattern])
+);
+
+export const PATTERN_SUMMARY: string = PATTERN_DATA
+  .map(pattern => `[${pattern.id}]: ${pattern.triggerDescription}`)
+  .join('\n');
