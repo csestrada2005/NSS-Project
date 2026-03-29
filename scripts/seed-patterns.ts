@@ -452,7 +452,7 @@ async function main() {
     const { error } = await supabase
       .from('forge_patterns')
       .upsert(
-        { ...pattern, updated_at: new Date().toISOString() },
+        { ...pattern },
         { onConflict: 'name' }
       );
 
