@@ -1,5 +1,6 @@
 import { platformService } from './PlatformService';
 import type { ProjectMemory } from './ProjectMemoryService';
+import { PATTERN_SUMMARY } from './patterns/registry';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -18,6 +19,8 @@ export interface Intent {
   needs_new_files: boolean;
   risk: 'low' | 'medium' | 'high';
   reasoning: string;
+  requiredPatternIds?: string[];
+  domain?: 'auth' | 'payments' | 'realtime' | 'forms' | 'data' | 'ui' | 'general';
 }
 
 const DEFAULT_INTENT: Intent = {
@@ -26,6 +29,8 @@ const DEFAULT_INTENT: Intent = {
   needs_new_files: false,
   risk: 'medium',
   reasoning: 'Could not classify intent; using safe default.',
+  requiredPatternIds: [],
+  domain: 'general',
 };
 
 // ---------------------------------------------------------------------------
@@ -54,7 +59,13 @@ interface Intent {
   reasoning: string;          // one sentence explanation
 }
 
-Return ONLY valid JSON. No markdown fences, no explanation outside the JSON object.`;
+Return ONLY valid JSON. No markdown fences, no explanation outside the JSON object.
+
+AVAILABLE ARCHITECTURE PATTERNS: ${PATTERN_SUMMARY}
+
+Additionally output these two fields in your JSON response:
+* requiredPatternIds: string[] — select at most 3 pattern IDs from the list above that are most relevant to the user's request. If none apply, return an empty array. Only use IDs exactly as listed above. Do not invent IDs.
+* domain: one of 'auth' | 'payments' | 'realtime' | 'forms' | 'data' | 'ui' | 'general'`;
 
     const userMessage =
       `COMPONENT REGISTRY: ${registrySummary || 'none'}\n` +
@@ -64,7 +75,7 @@ Return ONLY valid JSON. No markdown fences, no explanation outside the JSON obje
     try {
       const response = await platformService.callChat({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 512,
+        max_tokens: 768,
         system: systemPrompt,
         messages: [{ role: 'user', content: userMessage }],
       });
@@ -90,6 +101,8 @@ Return ONLY valid JSON. No markdown fences, no explanation outside the JSON obje
         needs_new_files: parsed.needs_new_files ?? false,
         risk: parsed.risk,
         reasoning: parsed.reasoning ?? '',
+        requiredPatternIds: Array.isArray(parsed.requiredPatternIds) ? parsed.requiredPatternIds : [],
+        domain: parsed.domain ?? 'general',
       };
     } catch (e) {
       console.warn('[IntentClassifier] Failed to classify:', e);
