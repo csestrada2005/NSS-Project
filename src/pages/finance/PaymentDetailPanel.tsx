@@ -67,6 +67,7 @@ const PaymentDetailPanel = ({
     status: Payment['status'];
     due_date: string;
     project_id: string | null;
+    clientEmail: string;
   }) => {
     if (!payment) return;
     setIsLoading(true);

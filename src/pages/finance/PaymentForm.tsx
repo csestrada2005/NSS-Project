@@ -33,6 +33,7 @@ const labels = {
   statusOverdue: { en: 'Overdue', es: 'Vencido' },
   dueDate: { en: 'Due Date', es: 'Fecha de Vencimiento' },
   project: { en: 'Project', es: 'Proyecto' },
+  projectRequired: { en: 'Project is required', es: 'El proyecto es requerido' },
   noProject: { en: 'No project', es: 'Sin proyecto' },
   submit: { en: 'Send Invoice', es: 'Enviar Factura' },
   cancel: { en: 'Cancel', es: 'Cancelar' },
@@ -57,6 +58,7 @@ const PaymentForm = ({
   const [projectId, setProjectId] = useState<string>(initialData?.project_id ?? '');
   const [amountError, setAmountError] = useState(false);
   const [clientEmailError, setClientEmailError] = useState(false);
+  const [projectError, setProjectError] = useState(false);
 
   const handleSubmit = () => {
     let valid = true;
@@ -72,6 +74,12 @@ const PaymentForm = ({
       valid = false;
     } else {
       setClientEmailError(false);
+    }
+    if (!projectId) {
+      setProjectError(true);
+      valid = false;
+    } else {
+      setProjectError(false);
     }
     if (!valid) return;
     onSubmit({
@@ -169,15 +177,18 @@ const PaymentForm = ({
         <label className="text-sm font-medium text-foreground">{labels.project[lang]}</label>
         <select
           value={projectId}
-          onChange={(e) => setProjectId(e.target.value)}
+          onChange={(e) => { setProjectId(e.target.value); setProjectError(false); }}
           disabled={isLoading}
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+          className={`w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 ${projectError ? 'border-rose-500' : 'border-border'}`}
         >
           <option value="">{labels.noProject[lang]}</option>
           {projects.map((p) => (
             <option key={p.id} value={p.id}>{p.title}</option>
           ))}
         </select>
+        {projectError && (
+          <p className="text-xs text-rose-500">{labels.projectRequired[lang]}</p>
+        )}
       </div>
 
       <div className="flex gap-2 pt-2">
