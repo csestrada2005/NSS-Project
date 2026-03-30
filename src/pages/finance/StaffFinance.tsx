@@ -15,16 +15,19 @@ import {
 import EmptyState from '@/components/EmptyState';
 import Pagination from '@/components/Pagination';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { SupabaseService } from '@/services/SupabaseService';
 import {
   getPayments,
   getProjectsForPaymentDropdown,
   getStaffFinanceKPIs,
+  createPayment,
   updatePayment,
   deletePayment,
 } from '@/services/data/supabaseData';
 import { usePagination } from '@/hooks/usePagination';
 import type { Payment } from '@/types';
 import PaymentDetailPanel from './PaymentDetailPanel';
+import PaymentForm from './PaymentForm';
 
 type PaymentWithProject = Payment & { projects: { title: string } | null; user_id?: string | null };
 
@@ -68,8 +71,11 @@ const StaffFinance = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [kpisLoading, setKpisLoading] = useState(true);
+  const [showAddForm, setShowAddForm] = useState(false);
 
   const { currentPage, totalPages, goToPage } = usePagination(totalCount, PAGE_SIZE);
+
+  const supabase = SupabaseService.getInstance().client;
 
   const refreshKpis = async () => {
     const data = await getStaffFinanceKPIs();
@@ -109,6 +115,95 @@ const StaffFinance = () => {
 
   const handlePageChange = (n: number) => {
     goToPage(n);
+  };
+
+  const sendInvoiceNotifications = async (payment: PaymentWithProject, recipient: { id: string; full_name: string | null }, clientEmail: string) => {
+    // 1. In-app notification to recipient
+    await supabase.from('notifications').insert({
+      user_id: recipient.id,
+      type: 'invoice_sent',
+      title: 'New invoice received',
+      body: `You have a new invoice for ${formatCurrency(payment.amount)}${payment.projects?.title ? ` on project "${payment.projects.title}"` : ''}.`,
+      read: false,
+    });
+    // 2. In-app notification to sender (confirmation)
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from('notifications').insert({
+        user_id: user.id,
+        type: 'invoice_sent',
+        title: 'Invoice sent',
+        body: `Invoice of ${formatCurrency(payment.amount)} sent to ${recipient.full_name ?? 'client'}.`,
+        read: false,
+      });
+    }
+    // 3. Email (only if Resend is configured — call our existing /api/email endpoint)
+    // We'll use a fire-and-forget fetch, ignore errors gracefully
+    const projectId = payment.project_id;
+    if (projectId) {
+      try {
+        const { Authorization } = await SupabaseService.getInstance().getAuthHeader();
+        // Try to send via Resend — if not configured, server returns 503 which we ignore
+        await fetch(`/api/email/${projectId}/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization },
+          body: JSON.stringify({
+            to: clientEmail,
+            templateName: 'invoice',
+            variables: {
+              amount: formatCurrency(payment.amount),
+              project: payment.projects?.title ?? '',
+              invoice_number: payment.invoice_number ?? '',
+              due_date: payment.due_date ?? '',
+            },
+          }),
+        });
+      } catch { /* ignore — email is best-effort */ }
+    }
+  };
+
+  const handleCreate = async (data: {
+    invoice_number: string;
+    description: string;
+    amount: number;
+    status: Payment['status'];
+    due_date: string;
+    project_id: string | null;
+    clientEmail: string;
+  }) => {
+    // Look up recipient profile
+    const { data: recipientProfile } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .eq('email', data.clientEmail)
+      .maybeSingle();
+
+    if (!recipientProfile) {
+      toast.error("This client hasn't registered in Nebu yet. Contact the client.");
+      return;
+    }
+
+    const newPayment = await createPayment({
+      invoice_number: data.invoice_number,
+      description: data.description,
+      amount: data.amount,
+      status: data.status,
+      project_id: data.project_id,
+      due_date: data.due_date || null,
+      recipient_profile_id: recipientProfile.id,
+    });
+
+    if (newPayment) {
+      setPayments((prev) => [newPayment, ...prev]);
+      setShowAddForm(false);
+      await refreshKpis();
+      toast.success('Factura enviada');
+
+      // Fire and forget notifications
+      sendInvoiceNotifications(newPayment, recipientProfile, data.clientEmail);
+    } else {
+      toast.error('Error al crear pago');
+    }
   };
 
   const handleUpdate = async (
@@ -158,6 +253,13 @@ const StaffFinance = () => {
           <h1 className="text-2xl font-semibold text-foreground">{labels.title[lang]}</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{labels.subtitle[lang]}</p>
         </div>
+        <button
+          onClick={() => setShowAddForm(true)}
+          className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          <Receipt className="w-4 h-4" />
+          {labels.addPayment[lang]}
+        </button>
       </div>
 
       {/* KPI Cards */}
@@ -300,6 +402,32 @@ const StaffFinance = () => {
         onMarkPaid={handleMarkPaid}
         lang={lang}
       />
+
+      {/* Add Payment Form Backdrop/Modal */}
+      {showAddForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-30" onClick={() => setShowAddForm(false)} />
+          <div className="relative w-full max-w-md bg-card border border-border shadow-2xl z-40 rounded-xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <h2 className="text-lg font-semibold text-foreground">{labels.addPayment[lang]}</h2>
+              <button
+                onClick={() => setShowAddForm(false)}
+                className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                <Receipt className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 overflow-y-auto flex-1">
+              <PaymentForm
+                projects={projects}
+                onSubmit={handleCreate}
+                onCancel={() => setShowAddForm(false)}
+                lang={lang}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

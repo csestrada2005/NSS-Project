@@ -55,18 +55,30 @@ const ClientFinance = () => {
   const [kpis, setKpis] = useState({ totalBilled: 0, paid: 0, pending: 0 });
   const [isLoading, setIsLoading] = useState(true);
 
-  const supabase = SupabaseService.getInstance().client;
-
   useEffect(() => {
+    const supabase = SupabaseService.getInstance().client;
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setIsLoading(false); return; }
 
-      const { data: paymentData } = await supabase
+      const { data: projectData } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('client_profile_id', user.id);
+      const projectIdsFromProjects = (projectData ?? []).map((p) => p.id);
+
+      let query = supabase
         .from('payments')
         .select('*, projects(title)')
-        .eq('recipient_profile_id', user.id)
         .order('created_at', { ascending: false });
+
+      if (projectIdsFromProjects.length > 0) {
+        query = query.or(`recipient_profile_id.eq.${user.id},project_id.in.(${projectIdsFromProjects.join(',')})`);
+      } else {
+        query = query.eq('recipient_profile_id', user.id);
+      }
+
+      const { data: paymentData } = await query;
 
       const fetchedPayments = (paymentData ?? []) as PaymentWithProject[];
       setPayments(fetchedPayments);
@@ -82,6 +94,7 @@ const ClientFinance = () => {
   }, []);
 
   const handleMarkAsPaid = async (payment: PaymentWithProject) => {
+    const supabase = SupabaseService.getInstance().client;
     const { error } = await supabase
       .from('payments')
       .update({ status: 'paid' })
@@ -98,6 +111,7 @@ const ClientFinance = () => {
 
     // Notify sender
     if (payment.user_id) {
+      const supabase = SupabaseService.getInstance().client;
       await supabase.from('notifications').insert({
         user_id: payment.user_id,
         type: 'invoice_paid',
@@ -105,6 +119,37 @@ const ClientFinance = () => {
         body: `Your invoice of ${formatCurrency(payment.amount)} has been marked as paid.`,
         read: false,
       });
+
+      // Fire-and-forget an email to the sender if possible
+      const projectId = payment.project_id;
+      if (projectId) {
+        try {
+          const { data: senderProfile } = await supabase
+            .from('profiles')
+            .select('email')
+            .eq('id', payment.user_id)
+            .maybeSingle();
+
+          if (senderProfile?.email) {
+            const { Authorization } = await SupabaseService.getInstance().getAuthHeader();
+            fetch(`/api/email/${projectId}/send`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization },
+              body: JSON.stringify({
+                to: senderProfile.email,
+                templateName: 'invoice_paid',
+                variables: {
+                  amount: formatCurrency(payment.amount),
+                  project: payment.projects?.title ?? '',
+                  invoice_number: payment.invoice_number ?? '',
+                },
+              }),
+            }).catch(() => {});
+          }
+        } catch {
+          // Ignore
+        }
+      }
     }
 
     toast.success('Marked as paid');
