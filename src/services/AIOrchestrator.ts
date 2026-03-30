@@ -5,6 +5,7 @@ import { platformService } from './PlatformService';
 import { projectDBService } from './ProjectDBService';
 import { NEBU_SCHEMA_CONTEXT } from '../utils/schemaContext';
 import { ProjectMemoryService } from './ProjectMemoryService';
+import { PatternRetriever } from './PatternRetriever';
 import { IntentClassifier } from './IntentClassifier';
 import { Architect, type BuildStep } from './Architect';
 import { Implementer, type ProgressCallback } from './Implementer';
@@ -327,7 +328,8 @@ export class AIOrchestrator {
     selectedElement: { tagName: string; className?: string } | null = null,
     projectId?: string,
     onProgress?: ProgressCallback,
-    onRetry?: RetryCallback
+    onRetry?: RetryCallback,
+    chatHistory: { role: 'user' | 'assistant'; content: string }[] = []
   ): Promise<OrchestratorResult> {
     this.retryCount = 0;
     const startTime = Date.now();
@@ -471,8 +473,16 @@ export class AIOrchestrator {
       ? ProjectMemoryService.formatForPrompt(memory)
       : '';
 
-    const patternContext = PatternInjector.inject(intent.requiredPatternIds ?? []);
-    const { steps, wasTrimmed, originalCount } = await Architect.plan(input, memoryFormatted, intent, patternContext);
+    const { steps, wasTrimmed, originalCount } = await Architect.plan(input, memoryFormatted, intent, PatternInjector.inject(intent.requiredPatternIds ?? []));
+
+    // ------------------------------------------------------------------
+    // Pattern retrieval — fetch relevant design patterns via RAG
+    // Runs in parallel with nothing (patterns are needed before Implementer)
+    // Falls back silently to '' if PatternRetriever errors or finds nothing
+    // ------------------------------------------------------------------
+    const patternContext = steps.length > 0
+      ? await PatternRetriever.retrieve(input, chatHistory)
+      : '';
 
     if (steps.length === 0) {
       // Architect returned nothing — fall back to the legacy heavy lane
@@ -513,7 +523,8 @@ export class AIOrchestrator {
       steps,
       files,
       memory!,
-      onProgress
+      onProgress,
+      patternContext
     );
 
     // Collect only the files that actually changed
@@ -868,21 +879,29 @@ export class AIOrchestrator {
   // LLM gateway — uses PlatformService to attach auth header
   // -------------------------------------------------------------------------
 
-  static async callLLM(userMessage: string, systemPrompt: string): Promise<string> {
-    const result = await this.callLLMWithUsage(userMessage, systemPrompt);
+  static async callLLM(
+    userMessage: string,
+    systemPrompt: string,
+    priorMessages: { role: 'user' | 'assistant'; content: string }[] = []
+  ): Promise<string> {
+    const result = await this.callLLMWithUsage(userMessage, systemPrompt, priorMessages);
     return result.text;
   }
 
   static async callLLMWithUsage(
     userMessage: string,
-    systemPrompt: string
+    systemPrompt: string,
+    priorMessages: { role: 'user' | 'assistant'; content: string }[] = []
   ): Promise<{ text: string; tokensInput: number; tokensOutput: number }> {
     try {
       const response = await platformService.callChat({
         model: 'claude-sonnet-4-6',
         max_tokens: 8192,
         system: systemPrompt,
-        messages: [{ role: 'user', content: userMessage }],
+        messages: [
+          ...priorMessages,
+          { role: 'user' as const, content: userMessage },
+        ],
       });
 
       const data = await response.json();

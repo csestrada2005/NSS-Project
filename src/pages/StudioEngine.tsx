@@ -97,6 +97,9 @@ export function StudioEngine() {
   const [isMenuPanelOpen, setIsMenuPanelOpen] = useState(false);
   const [selectedElement, setSelectedElement] = useState<TargetElement | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [chatHistory, setChatHistory] = useState<
+    { role: 'user' | 'assistant'; content: string }[]
+  >([]);
   const [editMode, setEditMode] = useState<'interaction' | 'visual'>('interaction');
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [selectedFileContent, setSelectedFileContent] = useState<string>('');
@@ -543,7 +546,8 @@ export function StudioEngine() {
             `\r\n\x1b[90m  ${errorMsg.slice(0, 200)}\x1b[0m`
           );
           onRetry?.(attempt, errorMsg);
-        }
+        },
+        chatHistory
       );
       if (result.modifiedFiles.length > 0) {
         await saveSnapshot('ai_action');
@@ -993,6 +997,8 @@ export function StudioEngine() {
                   isLoading={isGenerating}
                   onSendMessage={handleSendMessage}
                   selectedElement={selectedElement}
+                  chatHistory={chatHistory}
+                  onHistoryUpdate={(history) => setChatHistory(history.slice(-10))}
                 />
               </div>
               <div className={`w-full h-full ${activeBottomTab === 'visual' ? 'block' : 'hidden'}`}>

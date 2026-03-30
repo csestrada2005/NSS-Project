@@ -17,6 +17,8 @@ interface ChatInterfaceProps {
     onRetry?: (attempt: number, error: string) => void
   ) => Promise<{ success: boolean; modifiedFiles: string[]; error?: string; warning?: string }>;
   selectedElement: { tagName: string; className?: string } | null;
+  chatHistory?: { role: 'user' | 'assistant'; content: string }[];
+  onHistoryUpdate?: (history: { role: 'user' | 'assistant'; content: string }[]) => void;
 }
 
 function BuildProgress({
@@ -125,7 +127,13 @@ function CompileErrorDetail({ errorDetail }: { errorDetail: string }) {
   );
 }
 
-export function ChatInterface({ isLoading, onSendMessage, selectedElement }: ChatInterfaceProps) {
+export function ChatInterface({
+  isLoading,
+  onSendMessage,
+  selectedElement,
+  chatHistory = [],
+  onHistoryUpdate,
+}: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', content: 'Hello! How can I help you today?' }
   ]);
@@ -241,6 +249,11 @@ export function ChatInterface({ isLoading, onSendMessage, selectedElement }: Cha
       }
 
       const { content, warning, errorType, errorDetail } = buildAssistantMessage(result);
+      onHistoryUpdate?.([
+        ...chatHistory,
+        { role: 'user' as const, content: userMessage },
+        { role: 'assistant' as const, content },
+      ]);
       setMessages(prev => [
         ...prev,
         { role: 'assistant', content, warning, errorType, errorDetail }

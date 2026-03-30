@@ -40,7 +40,8 @@ export class Implementer {
     plan: BuildStep[],
     files: Map<string, string>,
     memory: ProjectMemory,
-    onProgress?: ProgressCallback
+    onProgress?: ProgressCallback,
+    patternContext: string = ''
   ): Promise<Map<string, string>> {
     const modifiedFiles = new Map<string, string>(files);
     const completed = new Set<number>();
@@ -70,7 +71,7 @@ export class Implementer {
           continue;
         }
 
-        const newContent = await this.executeStep(step, modifiedFiles, memory);
+        const newContent = await this.executeStep(step, modifiedFiles, memory, patternContext);
         if (newContent !== null) {
           modifiedFiles.set(step.file_path, newContent);
         }
@@ -84,30 +85,115 @@ export class Implementer {
     return modifiedFiles;
   }
 
-  private static truncateToTokenBudget(content: string, maxChars = 24000): string {
-    if (content.length <= maxChars) {
-      return content;
-    }
-    const lines = content.split('\n');
-    const firstLines = lines.slice(0, 40).join('\n');
-    const lastLines = lines.slice(-20).join('\n');
-    const omittedCount = lines.length - 60;
+  private static truncateFileContent(
+    content: string,
+    filePath: string,
+    budgetChars: number
+  ): string {
+    if (content.length <= budgetChars) return content;
 
-    if (omittedCount > 0) {
-      return `${firstLines}\n\n// ... (${omittedCount} lines omitted for context budget) ...\n\n${lastLines}`;
+    const lines = content.split('\n');
+
+    // Collect preserved top: imports, interfaces, type declarations
+    const preservedTop: string[] = [];
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      if (
+        line.startsWith('import ') ||
+        line.startsWith('export type') ||
+        line.startsWith('export interface') ||
+        line.startsWith('type ') ||
+        line.startsWith('interface ') ||
+        line.trim() === ''
+      ) {
+        preservedTop.push(line);
+        i++;
+      } else {
+        break;
+      }
     }
-    return content;
+
+    // Capture the first non-empty line after the import block
+    // (usually the component/function signature)
+    while (i < lines.length && lines[i].trim() === '') i++;
+    if (i < lines.length) {
+      preservedTop.push(lines[i]);
+      i++;
+    }
+
+    // Always preserve the last 30 lines (closing JSX, exports)
+    const tailStart = Math.max(i, lines.length - 30);
+    const preservedBottom = lines.slice(tailStart);
+
+    const topStr = preservedTop.join('\n');
+    const bottomStr = preservedBottom.join('\n');
+    const remaining = budgetChars - topStr.length - bottomStr.length - 80;
+
+    if (remaining <= 0) {
+      return (
+        topStr +
+        '\n\n// ... [body omitted for context budget] ...\n\n' +
+        bottomStr
+      );
+    }
+
+    // Fill middle with as many lines as fit the remaining budget
+    const middleLines: string[] = [];
+    let used = 0;
+    for (let j = i; j < tailStart; j++) {
+      const line = lines[j] + '\n';
+      if (used + line.length > remaining) {
+        middleLines.push(
+          `// ... [${tailStart - j} lines omitted for context budget] ...`
+        );
+        break;
+      }
+      middleLines.push(lines[j]);
+      used += line.length;
+    }
+
+    return topStr + '\n' + middleLines.join('\n') + '\n' + bottomStr;
+  }
+
+  private static allocateBudget(
+    patternContext: string,
+    importedContext: string,
+    fileContent: string
+  ): { patternBudget: number; importBudget: number; fileBudget: number } {
+    const TOTAL_BUDGET   = 28_000;
+    const SYSTEM_RESERVE = 2_000;
+    const MEMORY_MAX     = 3_500;
+    const PATTERN_MAX    = 7_000;
+    const IMPORT_MAX     = 1_200;
+    const FILE_MAX = TOTAL_BUDGET - SYSTEM_RESERVE - MEMORY_MAX - PATTERN_MAX - IMPORT_MAX;
+
+    return {
+      patternBudget: Math.min(patternContext.length, PATTERN_MAX),
+      importBudget:  Math.min(importedContext.length, IMPORT_MAX),
+      fileBudget:    Math.min(fileContent.length, FILE_MAX),
+    };
   }
 
   private static async executeStep(
     step: BuildStep,
     files: Map<string, string>,
-    memory: ProjectMemory
+    memory: ProjectMemory,
+    patternContext: string = ''
   ): Promise<string | null> {
-    const rawContent = files.get(step.file_path) ?? '';
-    const currentContent = this.truncateToTokenBudget(rawContent);
+    const rawContent      = files.get(step.file_path) ?? '';
     const importedContext = this.getImportedFileContext(rawContent, files);
-    const compactMemory = this.buildCompactMemory(memory);
+    const compactMemory   = this.buildCompactMemory(memory);
+
+    const { patternBudget, importBudget, fileBudget } = this.allocateBudget(
+      patternContext,
+      importedContext,
+      rawContent
+    );
+
+    const trimmedPattern  = patternContext.slice(0, patternBudget);
+    const trimmedImports  = importedContext.slice(0, importBudget);
+    const trimmedContent  = this.truncateFileContent(rawContent, step.file_path, fileBudget);
 
     const systemPrompt =
       `You are an expert React + TypeScript engineer implementing one specific step in a build plan.\n` +
@@ -120,12 +206,19 @@ export class Implementer {
     parts.push(`ACTION: ${step.action}`);
     parts.push(`FILE: ${step.file_path}`);
 
-    if (importedContext) {
-      parts.push(`\nIMPORTED FILES CONTEXT:\n${importedContext}`);
+    if (trimmedPattern) {
+      parts.push(
+        `\nRELEVANT DESIGN PATTERNS:\n${trimmedPattern}\n` +
+        `Use these as a structural reference if they match this step.`
+      );
     }
 
-    if (currentContent) {
-      parts.push(`\nCURRENT FILE CONTENT:\n${currentContent}`);
+    if (trimmedImports) {
+      parts.push(`\nIMPORTED FILES CONTEXT:\n${trimmedImports}`);
+    }
+
+    if (trimmedContent) {
+      parts.push(`\nCURRENT FILE CONTENT:\n${trimmedContent}`);
     }
 
     parts.push(
