@@ -34,6 +34,7 @@ async function generateEmbedding(text: string): Promise<number[]> {
     body: JSON.stringify({
       model: EMBEDDING_MODEL_NAME,
       content: { parts: [{ text }] },
+      outputDimensionality: 768,
     }),
   });
 
@@ -46,7 +47,7 @@ async function generateEmbedding(text: string): Promise<number[]> {
   const values = data?.embedding?.values;
   if (!Array.isArray(values) || values.length !== EMBEDDING_DIM) {
     throw new Error(
-      `Unexpected embedding shape: expected ${EMBEDDING_DIM} values, got ${values?.length}`
+      `Unexpected embedding shape: expected 768 values (outputDimensionality), got ${values?.length}`
     );
   }
   return values;
