@@ -1,5 +1,6 @@
 import { platformService } from './PlatformService';
 import type { Intent } from './IntentClassifier';
+import { DesignContextService } from './DesignContextService';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -48,18 +49,22 @@ Every step description must explain what the file will contain after the change.
 
 Return ONLY a valid JSON array. No markdown fences, no explanation before or after.`;
 
-    const userMessage =
-      `${memoryFormatted}\n\n` +
-      `USER REQUEST: ${prompt}\n\n` +
-      `CLASSIFIED INTENT:\n` +
-      `- Type: ${intent.type}\n` +
-      `- Affected files: ${intent.affected_files.join(', ') || 'to be determined'}\n` +
-      `- Needs new files: ${intent.needs_new_files}\n` +
-      `- Risk: ${intent.risk}\n` +
-      `- Reasoning: ${intent.reasoning}\n\n` +
-      `Plan the implementation as a JSON array of BuildStep objects:`;
-
     try {
+      // Fetch design context based on the user's request
+      const designContext = await DesignContextService.fetchForPrompt(prompt.slice(0, 80));
+
+      const userMessage =
+        `${memoryFormatted}\n\n` +
+        (designContext ? `${designContext}\n\n` : '') +
+        `USER REQUEST: ${prompt}\n\n` +
+        `CLASSIFIED INTENT:\n` +
+        `- Type: ${intent.type}\n` +
+        `- Affected files: ${intent.affected_files.join(', ') || 'to be determined'}\n` +
+        `- Needs new files: ${intent.needs_new_files}\n` +
+        `- Risk: ${intent.risk}\n` +
+        `- Reasoning: ${intent.reasoning}\n\n` +
+        `Plan the implementation as a JSON array of BuildStep objects:`;
+
       const response = await platformService.callChat({
         model: 'claude-sonnet-4-6',
         max_tokens: 4096,
