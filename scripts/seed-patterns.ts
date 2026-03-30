@@ -5,52 +5,6 @@ config({ path: resolve(process.cwd(), '.env') });
 import { createClient } from '@supabase/supabase-js';
 
 // ---------------------------------------------------------------------------
-// Import TEMPLATES — wrapped in try/catch because this Node script runs outside
-// Vite and templates.ts transitively imports '@webcontainer/api' which is a
-// browser/bundler-only package.
-// ---------------------------------------------------------------------------
-let TEMPLATES: Record<string, any> = {};
-try {
-  const mod = await import('../src/templates.ts');
-  TEMPLATES = mod.TEMPLATES ?? {};
-} catch (err) {
-  console.warn(
-    'Warning: could not import TEMPLATES from src/templates.ts — ' +
-      'standalone patterns will still be seeded.\n' +
-      String(err)
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Helper: traverse a FileSystemTree using a dot-separated path such as
-//   'src.components.layout.Header.tsx'
-// Directory nodes have the shape: { directory: { [key]: node } }
-// File nodes have the shape:      { file: { contents: string } }
-// ---------------------------------------------------------------------------
-function extractFileContent(tree: Record<string, any>, dotPath: string): string | null {
-  const segments = dotPath.split('.');
-  let current: any = tree;
-
-  for (const segment of segments) {
-    if (current == null || typeof current !== 'object') return null;
-
-    // Unwrap directory wrapper if present at this level
-    if ('directory' in current) {
-      current = current.directory;
-    }
-
-    if (!(segment in current)) return null;
-    current = current[segment];
-  }
-
-  // Final node should be a file node
-  if (current && 'file' in current && typeof current.file.contents === 'string') {
-    return current.file.contents.trim();
-  }
-  return null;
-}
-
-// ---------------------------------------------------------------------------
 // Patterns
 // ---------------------------------------------------------------------------
 const patterns: {
@@ -67,9 +21,25 @@ const patterns: {
     category: 'routing',
     description: 'React Router v6 BrowserRouter with nested routes and a layout wrapper.',
     tags: ['router', 'routes', 'navigation', 'layout', 'react-router'],
-    code_example:
-      extractFileContent(TEMPLATES['landing-page'] ?? {}, 'src.App.tsx') ??
-      '// Could not extract from template — add BrowserRouter + Routes + Route tree here',
+    code_example: `import { BrowserRouter, Routes, Route } from "react-router-dom";
+import Index from "./pages/Index";
+import NotFound from "./pages/NotFound";
+import Layout from "./components/layout/Layout";
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Layout />}>
+          <Route index element={<Index />} />
+          <Route path="*" element={<NotFound />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+export default App;`,
   },
 
   {
@@ -77,11 +47,24 @@ const patterns: {
     category: 'layout',
     description: 'Full-page layout component using React Router Outlet with sticky header and footer.',
     tags: ['layout', 'header', 'footer', 'outlet', 'page'],
-    code_example:
-      extractFileContent(
-        TEMPLATES['landing-page'] ?? {},
-        'src.components.layout.Layout.tsx'
-      ) ?? '// Could not extract from template — add Layout component with Outlet here',
+    code_example: `import React from 'react';
+import { Outlet } from 'react-router-dom';
+import Header from './Header';
+import Footer from './Footer';
+
+const Layout = () => {
+  return (
+    <div className="flex flex-col min-h-screen">
+      <Header />
+      <main className="flex-grow container mx-auto px-4 py-8">
+        <Outlet />
+      </main>
+      <Footer />
+    </div>
+  );
+};
+
+export default Layout;`,
   },
 
   {
@@ -89,11 +72,25 @@ const patterns: {
     category: 'navigation',
     description: 'Top navigation bar with logo link and nav items using React Router Link.',
     tags: ['header', 'navigation', 'navbar', 'link', 'react-router'],
-    code_example:
-      extractFileContent(
-        TEMPLATES['landing-page'] ?? {},
-        'src.components.layout.Header.tsx'
-      ) ?? '// Could not extract from template — add Header component with nav links here',
+    code_example: `import React from 'react';
+import { Link } from 'react-router-dom';
+
+const Header = () => {
+  return (
+    <header className="border-b bg-white">
+      <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+        <Link to="/" className="text-xl font-bold">App Name</Link>
+        <nav>
+          <ul className="flex space-x-4">
+            <li><Link to="/" className="hover:underline">Home</Link></li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+  );
+};
+
+export default Header;`,
   },
 
   {
@@ -101,11 +98,19 @@ const patterns: {
     category: 'layout',
     description: 'Minimal footer with copyright year computed dynamically.',
     tags: ['footer', 'layout'],
-    code_example:
-      extractFileContent(
-        TEMPLATES['landing-page'] ?? {},
-        'src.components.layout.Footer.tsx'
-      ) ?? '// Could not extract from template — add Footer component here',
+    code_example: `import React from 'react';
+
+const Footer = () => {
+  return (
+    <footer className="border-t bg-gray-50 mt-auto">
+      <div className="container mx-auto px-4 py-6 text-center text-sm text-gray-500">
+        © {new Date().getFullYear()} Your Company. All rights reserved.
+      </div>
+    </footer>
+  );
+};
+
+export default Footer;`,
   },
 
   {
@@ -113,11 +118,24 @@ const patterns: {
     category: 'feedback',
     description: 'Not found page with a link back to home using React Router.',
     tags: ['404', 'not-found', 'error', 'page'],
-    code_example:
-      extractFileContent(
-        TEMPLATES['landing-page'] ?? {},
-        'src.pages.NotFound.tsx'
-      ) ?? '// Could not extract from template — add NotFound page with Link to "/" here',
+    code_example: `import React from "react";
+import { Link } from "react-router-dom";
+
+const NotFound = () => {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
+      <div className="text-center">
+        <h1 className="text-4xl font-bold text-gray-900 mb-4">404</h1>
+        <p className="text-xl text-gray-600 mb-4">Oops! Page not found</p>
+        <Link to="/" className="text-blue-500 hover:text-blue-700 underline">
+          Return to Home
+        </Link>
+      </div>
+    </div>
+  );
+};
+
+export default NotFound;`,
   },
 
   {
@@ -125,9 +143,16 @@ const patterns: {
     category: 'config',
     description: 'Standard main.tsx entry point rendering App into the root div with StrictMode.',
     tags: ['entry', 'main', 'vite', 'react', 'root'],
-    code_example:
-      extractFileContent(TEMPLATES['landing-page'] ?? {}, 'src.main.tsx') ??
-      '// Could not extract from template — add createRoot + StrictMode entry point here',
+    code_example: `import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import App from './App.tsx'
+import './index.css'
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+)`,
   },
 
   // ---- Standalone patterns (inline code_example) ---------------------------
