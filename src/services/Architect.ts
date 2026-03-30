@@ -51,7 +51,7 @@ Return ONLY a valid JSON array. No markdown fences, no explanation before or aft
 
     try {
       // Fetch design context based on the user's request
-      const designContext = await DesignContextService.fetchForPrompt(prompt.slice(0, 80));
+      const designContext = await DesignContextService.getContext(prompt.slice(0, 80));
 
       const userMessage =
         `${memoryFormatted}\n\n` +

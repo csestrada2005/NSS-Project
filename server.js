@@ -1243,39 +1243,40 @@ app.post('/api/embed-and-search', requireAuth, async (req, res) => {
       return res.status(503).json({ error: 'Embedding not configured', patterns: [] });
     }
 
-    const { query, threshold = 0.70, count = 6 } = req.body;
+    const { query, limit = 5 } = req.body;
     if (!query || typeof query !== 'string' || query.trim() === '') {
       return res.status(400).json({ error: 'query required' });
     }
 
-    // Generate embedding via Gemini text-embedding-004
+    // Generate embedding via Gemini gemini-embedding-001
     const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'models/text-embedding-004',
+          model: 'models/gemini-embedding-001',
           content: { parts: [{ text: query }] },
+          outputDimensionality: 768,
         }),
       }
     );
 
     if (!geminiRes.ok) {
-      return res.status(502).json({ error: 'Embedding API failed', patterns: [] });
+      return res.status(500).json({ error: 'Embedding API failed', patterns: [] });
     }
 
     const geminiData = await geminiRes.json();
     const values = geminiData?.embedding?.values;
     if (!Array.isArray(values) || values.length === 0) {
-      return res.status(502).json({ error: 'Embedding API failed', patterns: [] });
+      return res.status(500).json({ error: 'Embedding API failed', patterns: [] });
     }
 
     // Vector similarity search via Supabase RPC
     const { data, error: rpcError } = await supabaseAdmin.rpc('match_forge_patterns', {
       query_embedding: values,
-      match_threshold: threshold,
-      match_count: count,
+      match_threshold: 0.7,
+      match_count: limit,
     });
 
     if (rpcError) {

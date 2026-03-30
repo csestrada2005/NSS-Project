@@ -1,4 +1,4 @@
-import { PATTERN_REGISTRY, InjectionPattern } from './registry';
+import { PATTERN_REGISTRY, type InjectionPattern } from './registry';
 
 // ---------------------------------------------------------------------------
 // Types

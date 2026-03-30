@@ -328,8 +328,7 @@ export class AIOrchestrator {
     selectedElement: { tagName: string; className?: string } | null = null,
     projectId?: string,
     onProgress?: ProgressCallback,
-    onRetry?: RetryCallback,
-    chatHistory: { role: 'user' | 'assistant'; content: string }[] = []
+    onRetry?: RetryCallback
   ): Promise<OrchestratorResult> {
     this.retryCount = 0;
     const startTime = Date.now();
@@ -481,7 +480,7 @@ export class AIOrchestrator {
     // Falls back silently to '' if PatternRetriever errors or finds nothing
     // ------------------------------------------------------------------
     const patternContext = steps.length > 0
-      ? await PatternRetriever.retrieve(input, chatHistory)
+      ? await PatternRetriever.retrieve(input)
       : '';
 
     if (steps.length === 0) {

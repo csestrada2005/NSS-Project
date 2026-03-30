@@ -87,7 +87,7 @@ export class Implementer {
 
   private static truncateFileContent(
     content: string,
-    filePath: string,
+    _filePath: string,
     budgetChars: number
   ): string {
     if (content.length <= budgetChars) return content;
