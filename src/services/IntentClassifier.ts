@@ -38,7 +38,11 @@ const DEFAULT_INTENT: Intent = {
 // ---------------------------------------------------------------------------
 
 export class IntentClassifier {
-  static async classify(prompt: string, memory: ProjectMemory): Promise<Intent> {
+  static async classify(
+    prompt: string,
+    memory: ProjectMemory,
+    chatHistory: Array<{ role: string; content: string }> = []
+  ): Promise<Intent> {
     const registrySummary = memory.component_registry
       .slice(0, 20)
       .map(c => `${c.name} (${c.path})`)
@@ -47,6 +51,11 @@ export class IntentClassifier {
     const routeSummary = memory.route_map
       .map(r => `${r.path} → ${r.component}`)
       .join(', ');
+
+    const recentHistory = chatHistory
+      .slice(-4)
+      .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
+      .join('\n');
 
     const systemPrompt = `You are an intent classifier for a React web builder AI.
 Given a user prompt and project context, classify the intent and return ONLY a JSON object matching this TypeScript interface:
@@ -70,6 +79,7 @@ Additionally output these two fields in your JSON response:
     const userMessage =
       `COMPONENT REGISTRY: ${registrySummary || 'none'}\n` +
       `ROUTES: ${routeSummary || 'none'}\n` +
+      (recentHistory ? `RECENT CHAT HISTORY:\n${recentHistory}\n` : '') +
       `USER PROMPT: ${prompt}`;
 
     try {

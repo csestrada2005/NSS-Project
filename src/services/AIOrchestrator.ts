@@ -6,12 +6,12 @@ import { projectDBService } from './ProjectDBService';
 import { NEBU_SCHEMA_CONTEXT } from '../utils/schemaContext';
 import { ProjectMemoryService } from './ProjectMemoryService';
 import { PatternRetriever } from './PatternRetriever';
+import { DesignContextService } from './DesignContextService';
 import { IntentClassifier } from './IntentClassifier';
 import { Architect, type BuildStep } from './Architect';
 import { Implementer, type ProgressCallback } from './Implementer';
 import { Verifier, type RetryCallback } from './Verifier';
 import { CreditService } from './CreditService';
-import { PatternInjector } from './PatternInjector';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -328,7 +328,8 @@ export class AIOrchestrator {
     selectedElement: { tagName: string; className?: string } | null = null,
     projectId?: string,
     onProgress?: ProgressCallback,
-    onRetry?: RetryCallback
+    onRetry?: RetryCallback,
+    chatHistory?: Array<{ role: string; content: string }>
   ): Promise<OrchestratorResult> {
     this.retryCount = 0;
     const startTime = Date.now();
@@ -384,7 +385,7 @@ export class AIOrchestrator {
     // LAYER 2 — IntentClassifier: classify the user prompt
     // ------------------------------------------------------------------
     const intent = memory
-      ? await IntentClassifier.classify(input, memory)
+      ? await IntentClassifier.classify(input, memory, chatHistory)
       : {
           type: 'modify_existing' as const,
           affected_files: [],
@@ -472,16 +473,20 @@ export class AIOrchestrator {
       ? ProjectMemoryService.formatForPrompt(memory)
       : '';
 
-    const { steps, wasTrimmed, originalCount } = await Architect.plan(input, memoryFormatted, intent, PatternInjector.inject(intent.requiredPatternIds ?? []));
+    // ------------------------------------------------------------------
+    // Context Retrieval — fetch design patterns and design context
+    // ------------------------------------------------------------------
+    const [patternContext, designContext] = await Promise.all([
+      PatternRetriever.retrieve(input),
+      DesignContextService.getContext(input),
+    ]);
 
-    // ------------------------------------------------------------------
-    // Pattern retrieval — fetch relevant design patterns via RAG
-    // Runs in parallel with nothing (patterns are needed before Implementer)
-    // Falls back silently to '' if PatternRetriever errors or finds nothing
-    // ------------------------------------------------------------------
-    const patternContext = steps.length > 0
-      ? await PatternRetriever.retrieve(input)
-      : '';
+    const { steps, wasTrimmed, originalCount } = await Architect.plan(
+      input,
+      memoryFormatted,
+      intent,
+      designContext
+    );
 
     if (steps.length === 0) {
       // Architect returned nothing — fall back to the legacy heavy lane
@@ -523,7 +528,8 @@ export class AIOrchestrator {
       files,
       memory!,
       onProgress,
-      patternContext
+      patternContext,
+      designContext
     );
 
     // Collect only the files that actually changed

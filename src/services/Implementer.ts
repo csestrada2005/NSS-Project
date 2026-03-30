@@ -41,7 +41,8 @@ export class Implementer {
     files: Map<string, string>,
     memory: ProjectMemory,
     onProgress?: ProgressCallback,
-    patternContext: string = ''
+    patternContext?: string,
+    designContext?: string
   ): Promise<Map<string, string>> {
     const modifiedFiles = new Map<string, string>(files);
     const completed = new Set<number>();
@@ -71,7 +72,7 @@ export class Implementer {
           continue;
         }
 
-        const newContent = await this.executeStep(step, modifiedFiles, memory, patternContext);
+        const newContent = await this.executeStep(step, modifiedFiles, memory, patternContext, designContext);
         if (newContent !== null) {
           modifiedFiles.set(step.file_path, newContent);
         }
@@ -85,75 +86,17 @@ export class Implementer {
     return modifiedFiles;
   }
 
-  private static truncateFileContent(
-    content: string,
-    _filePath: string,
-    budgetChars: number
-  ): string {
-    if (content.length <= budgetChars) return content;
-
+  private static truncateFileContent(content: string, maxChars = 18000): string {
+    if (content.length <= maxChars) return content;
     const lines = content.split('\n');
-
-    // Collect preserved top: imports, interfaces, type declarations
-    const preservedTop: string[] = [];
-    let i = 0;
-    while (i < lines.length) {
-      const line = lines[i];
-      if (
-        line.startsWith('import ') ||
-        line.startsWith('export type') ||
-        line.startsWith('export interface') ||
-        line.startsWith('type ') ||
-        line.startsWith('interface ') ||
-        line.trim() === ''
-      ) {
-        preservedTop.push(line);
-        i++;
-      } else {
-        break;
-      }
-    }
-
-    // Capture the first non-empty line after the import block
-    // (usually the component/function signature)
-    while (i < lines.length && lines[i].trim() === '') i++;
-    if (i < lines.length) {
-      preservedTop.push(lines[i]);
-      i++;
-    }
-
-    // Always preserve the last 30 lines (closing JSX, exports)
-    const tailStart = Math.max(i, lines.length - 30);
-    const preservedBottom = lines.slice(tailStart);
-
-    const topStr = preservedTop.join('\n');
-    const bottomStr = preservedBottom.join('\n');
-    const remaining = budgetChars - topStr.length - bottomStr.length - 80;
-
-    if (remaining <= 0) {
-      return (
-        topStr +
-        '\n\n// ... [body omitted for context budget] ...\n\n' +
-        bottomStr
-      );
-    }
-
-    // Fill middle with as many lines as fit the remaining budget
-    const middleLines: string[] = [];
-    let used = 0;
-    for (let j = i; j < tailStart; j++) {
-      const line = lines[j] + '\n';
-      if (used + line.length > remaining) {
-        middleLines.push(
-          `// ... [${tailStart - j} lines omitted for context budget] ...`
-        );
-        break;
-      }
-      middleLines.push(lines[j]);
-      used += line.length;
-    }
-
-    return topStr + '\n' + middleLines.join('\n') + '\n' + bottomStr;
+    // Always preserve imports (first block) and export signatures (last 30 lines)
+    const importLines = lines.filter(l => l.startsWith('import '));
+    const bodyLines = lines.filter(l => !l.startsWith('import '));
+    const importBlock = importLines.join('\n');
+    const tailBlock = bodyLines.slice(-30).join('\n');
+    const budget = maxChars - importBlock.length - tailBlock.length - 100;
+    const midBlock = bodyLines.slice(0, Math.floor(budget / 50)).join('\n');
+    return `${importBlock}\n\n${midBlock}\n\n// ... (middle truncated for context budget) ...\n\n${tailBlock}`;
   }
 
   private static allocateBudget(
@@ -179,7 +122,8 @@ export class Implementer {
     step: BuildStep,
     files: Map<string, string>,
     memory: ProjectMemory,
-    patternContext: string = ''
+    patternContext: string = '',
+    designContext: string = ''
   ): Promise<string | null> {
     const rawContent      = files.get(step.file_path) ?? '';
     const importedContext = this.getImportedFileContext(rawContent, files);
@@ -193,7 +137,7 @@ export class Implementer {
 
     const trimmedPattern  = patternContext.slice(0, patternBudget);
     const trimmedImports  = importedContext.slice(0, importBudget);
-    const trimmedContent  = this.truncateFileContent(rawContent, step.file_path, fileBudget);
+    const trimmedContent  = this.truncateFileContent(rawContent, fileBudget);
 
     const systemPrompt =
       `You are an expert React + TypeScript engineer implementing one specific step in a build plan.\n` +
@@ -206,10 +150,13 @@ export class Implementer {
     parts.push(`ACTION: ${step.action}`);
     parts.push(`FILE: ${step.file_path}`);
 
+    if (designContext) {
+      parts.push(`\nDESIGN SYSTEM CONTEXT:\n${designContext}`);
+    }
+
     if (trimmedPattern) {
       parts.push(
-        `\nRELEVANT DESIGN PATTERNS:\n${trimmedPattern}\n` +
-        `Use these as a structural reference if they match this step.`
+        `\nREFERENCE PATTERNS (use these as structural guidance, do not copy verbatim):\n${trimmedPattern}`
       );
     }
 

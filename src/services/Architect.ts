@@ -1,6 +1,5 @@
 import { platformService } from './PlatformService';
 import type { Intent } from './IntentClassifier';
-import { DesignContextService } from './DesignContextService';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -23,10 +22,10 @@ export class Architect {
     prompt: string,
     memoryFormatted: string,
     intent: Intent,
-    patternContext: string = ''
+    designContext?: string
   ): Promise<{ steps: BuildStep[]; wasTrimmed: boolean; originalCount: number }> {
     const systemPrompt = `You are a software architect for a React + TypeScript + Tailwind web builder.
-${patternContext ? patternContext + '\n\n' : ''}Do not write any code. Return only a JSON array of BuildStep objects.
+Do not write any code. Return only a JSON array of BuildStep objects.
 Each BuildStep must have exactly these fields:
 
 order: number (starting at 1)
@@ -50,12 +49,10 @@ Every step description must explain what the file will contain after the change.
 Return ONLY a valid JSON array. No markdown fences, no explanation before or after.`;
 
     try {
-      // Fetch design context based on the user's request
-      const designContext = await DesignContextService.getContext(prompt.slice(0, 80));
-
+      const designBlock = designContext ? `DESIGN SYSTEM CONTEXT:\n${designContext}\n\n` : '';
       const userMessage =
+        designBlock +
         `${memoryFormatted}\n\n` +
-        (designContext ? `${designContext}\n\n` : '') +
         `USER REQUEST: ${prompt}\n\n` +
         `CLASSIFIED INTENT:\n` +
         `- Type: ${intent.type}\n` +
