@@ -24,6 +24,7 @@ export class Architect {
     intent: Intent,
     designContext?: string
   ): Promise<{ steps: BuildStep[]; wasTrimmed: boolean; originalCount: number }> {
+    console.log('[Architect] designContext chars:', designContext?.length ?? 0, '| preview:', designContext?.slice(0, 300)); // TODO: remove after RAG verification
     const systemPrompt = `You are a software architect for a React + TypeScript + Tailwind web builder.
 Do not write any code. Return only a JSON array of BuildStep objects.
 Each BuildStep must have exactly these fields:

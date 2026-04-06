@@ -125,6 +125,7 @@ export class Implementer {
     patternContext: string = '',
     designContext: string = ''
   ): Promise<string | null> {
+    console.log('[Implementer] patternContext chars:', patternContext?.length ?? 0, '| preview:', patternContext?.slice(0, 200)); // TODO: remove after RAG verification
     const rawContent      = files.get(step.file_path) ?? '';
     const importedContext = this.getImportedFileContext(rawContent, files);
     const compactMemory   = this.buildCompactMemory(memory);

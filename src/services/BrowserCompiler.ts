@@ -20,7 +20,32 @@ import { SupabaseService } from './SupabaseService';
  * Delegates to /api/compile on the server.
  * Returns an error page if compilation or the fetch itself fails.
  */
+function generateLoadingHTML(): string {
+  return [
+    '<!DOCTYPE html>',
+    '<html lang="en">',
+    '<head>',
+    '  <meta charset="utf-8">',
+    '  <style>',
+    '    body { background: #0a0a0f; margin: 0; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: system-ui; }',
+    '    .dot { width: 12px; height: 12px; background-color: #E54D5B; border-radius: 50%; animation: pulse 1s ease-in-out infinite; }',
+    '    .text { color: white; font-size: 14px; margin-top: 12px; }',
+    '    @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }',
+    '  </style>',
+    '</head>',
+    '<body>',
+    '  <div class="dot"></div>',
+    '  <div class="text">Initializing project...</div>',
+    '</body>',
+    '</html>'
+  ].join('\n');
+}
+
 export async function compile(files: Map<string, string>): Promise<string> {
+  if (files.size === 0) {
+    return generateLoadingHTML();
+  }
+
   try {
     const { Authorization } = await SupabaseService.getInstance().getAuthHeader();
     const response = await fetch('/api/compile', {
@@ -81,13 +106,13 @@ export function generateErrorHTML(message: string, stack?: string): string {
     '    h1{color:#ef4444;font-size:1.5rem;margin-bottom:16px;}',
     '    pre{background:#111;border:1px solid #333;padding:16px;border-radius:8px;overflow:auto;font-size:12px;color:#f87171;white-space:pre-wrap;}',
     '    .note{margin-top:24px;color:#9ca3af;font-size:14px;}',
-    '  <\/style>',
-    '<\/head>',
+    '  </style>',
+    '</head>',
     '<body>',
-    '  <h1>Compilation Error<\/h1>',
-    `  <pre>${escapeHtml(message)}${stack ? '\n\n' + escapeHtml(stack) : ''}<\/pre>`,
-    '  <p class="note">The AI will auto-fix this...<\/p>',
-    '<\/body>',
-    '<\/html>',
+    '  <h1>Compilation Error</h1>',
+    `  <pre>${escapeHtml(message)}${stack ? '\n\n' + escapeHtml(stack) : ''}</pre>`,
+    '  <p class="note">The AI will auto-fix this...</p>',
+    '</body>',
+    '</html>',
   ].join('\n');
 }

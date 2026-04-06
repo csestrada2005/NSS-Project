@@ -480,6 +480,7 @@ export class AIOrchestrator {
       PatternRetriever.retrieve(input),
       DesignContextService.getContext(input),
     ]);
+    console.log('[AIOrchestrator] patternContext chars:', patternContext?.length ?? 0); // TODO: remove after RAG verification
 
     const { steps, wasTrimmed, originalCount } = await Architect.plan(
       input,

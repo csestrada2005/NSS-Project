@@ -448,6 +448,7 @@ export function StudioEngine() {
 
     const updatedMap = new Map(files);
     updatedMap.set(ACTIVE_FILE_PATH, newCode);
+    if (updatedMap.size === 0) return;
     compile(updatedMap).then(html => {
       setCompiledHtml(html);
       if (!html.includes('Compilation Error')) setHasValidPreview(true);
@@ -468,6 +469,7 @@ export function StudioEngine() {
 
     const updatedMap = new Map(files);
     updatedMap.set(ACTIVE_FILE_PATH, newCode);
+    if (updatedMap.size === 0) return;
     compile(updatedMap).then(html => {
       setCompiledHtml(html);
       if (!html.includes('Compilation Error')) setHasValidPreview(true);
@@ -505,6 +507,7 @@ export function StudioEngine() {
 
     const updatedMap = new Map(files);
     updatedMap.set(ACTIVE_FILE_PATH, files.get(ACTIVE_FILE_PATH) ?? '');
+    if (updatedMap.size === 0) return;
     compile(updatedMap).then(html => {
       setCompiledHtml(html);
       if (!html.includes('Compilation Error')) setHasValidPreview(true);
@@ -1038,6 +1041,7 @@ export function StudioEngine() {
             // Force immediate recompile after restore
             setIsCompiling(true);
             try {
+              if (restoredFiles.size === 0) return;
               const html = await compile(restoredFiles);
               setCompiledHtml(html);
               if (!html.includes('Compilation Error')) {
