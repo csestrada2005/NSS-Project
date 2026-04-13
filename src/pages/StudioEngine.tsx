@@ -396,6 +396,8 @@ export function StudioEngine() {
 
     const flatFiles = fileSystemTreeToMap(template);
 
+    console.log([...flatFiles.keys()]);
+
     for (const [path, content] of flatFiles) {
       updateLocalFile(path, content);
       await saveFile(path, content);
