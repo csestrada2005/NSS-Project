@@ -476,11 +476,18 @@ export class AIOrchestrator {
     // ------------------------------------------------------------------
     // Context Retrieval — fetch design patterns and design context
     // ------------------------------------------------------------------
-    const [patternContext, designContext] = await Promise.all([
-      PatternRetriever.retrieve(input),
-      DesignContextService.getContext(input),
-    ]);
-    console.log('[AIOrchestrator] patternContext chars:', patternContext?.length ?? 0); // TODO: remove after RAG verification
+    let patternContext = '';
+    try {
+      patternContext = await PatternRetriever.retrieve(input);
+      console.log('[AIOrchestrator] PatternRetriever result chars:', patternContext?.length ?? 0); // TODO: remove after RAG verification
+      if (!patternContext || patternContext.length === 0) {
+        console.warn('[AIOrchestrator] PatternRetriever returned empty — check /api/embed-and-search endpoint and Gemini API key');
+      }
+    } catch (err) {
+      console.error('[AIOrchestrator] PatternRetriever threw:', err);
+    }
+
+    const designContext = await DesignContextService.getContext(input);
 
     const { steps, wasTrimmed, originalCount } = await Architect.plan(
       input,

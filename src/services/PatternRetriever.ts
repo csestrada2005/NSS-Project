@@ -10,6 +10,7 @@ interface PatternRow {
 export class PatternRetriever {
   public static async retrieve(query: string, limit = 4): Promise<string> {
     try {
+      console.log('[PatternRetriever] fetching from /api/embed-and-search with query:', query?.slice(0, 100));
       const authHeader = await SupabaseService.getInstance().getAuthHeader();
       const response = await fetch('/api/embed-and-search', {
         method: 'POST',
@@ -25,6 +26,7 @@ export class PatternRetriever {
       }
 
       const data = (await response.json()) as { patterns?: PatternRow[] };
+      console.log('[PatternRetriever] response status:', response.status, '| body preview:', JSON.stringify(data).slice(0, 200));
       const patterns = data.patterns ?? [];
 
       if (patterns.length === 0) {

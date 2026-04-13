@@ -57,7 +57,7 @@ export class IntentClassifier {
       .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
       .join('\n');
 
-    const systemPrompt = `You are an intent classifier for a React web builder AI.
+    const systemPrompt = `You MUST respond with ONLY a valid JSON object. No markdown, no explanation, no code fences. Start your response with { and end with }.\n\nYou are an intent classifier for a React web builder AI.
 Given a user prompt and project context, classify the intent and return ONLY a JSON object matching this TypeScript interface:
 
 interface Intent {
@@ -101,7 +101,13 @@ Additionally output these two fields in your JSON response:
       const cleaned = this.extractJson(text);
       const parsed = JSON.parse(cleaned) as Partial<Intent>;
 
-      if (!parsed.type || !parsed.risk) {
+      const VALID_TYPES = ['create_component', 'modify_component', 'add_route', 'add_feature', 'fix_bug', 'style_change', 'refactor', 'provision_database', 'general', 'new_feature', 'modify_existing', 'add_page', 'database_change'];
+      if (!parsed.type || !VALID_TYPES.includes(parsed.type)) {
+        console.warn('[IntentClassifier] Invalid or missing type in response:', parsed.type, '| raw text preview:', text.slice(0, 200));
+        return DEFAULT_INTENT;
+      }
+
+      if (!parsed.risk) {
         return DEFAULT_INTENT;
       }
 
@@ -121,11 +127,16 @@ Additionally output these two fields in your JSON response:
   }
 
   private static extractJson(text: string): string {
+    // 1. Try fenced code block first (```json ... ``` or ``` ... ```)
     const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
     if (fenced) return fenced[1].trim();
+
+    // 2. Try to find the outermost { } pair
     const start = text.indexOf('{');
     const end = text.lastIndexOf('}');
     if (start !== -1 && end > start) return text.slice(start, end + 1);
-    return text.trim();
+
+    // 3. Nothing found — return empty object so JSON.parse gives {} not throws
+    return '{}';
   }
 }
