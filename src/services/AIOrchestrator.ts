@@ -478,7 +478,14 @@ export class AIOrchestrator {
     // ------------------------------------------------------------------
     let patternContext = '';
     try {
-      patternContext = await PatternRetriever.retrieve(input);
+      const patternQuery = [
+        intent.type,
+        intent.domain ?? '',
+        intent.requiredPatternIds?.join(' ') ?? '',
+        input.slice(0, 120),
+      ].filter(Boolean).join(' ').trim();
+
+      patternContext = await PatternRetriever.retrieve(patternQuery);
       console.log('[AIOrchestrator] PatternRetriever result chars:', patternContext?.length ?? 0); // TODO: remove after RAG verification
       if (!patternContext || patternContext.length === 0) {
         console.warn('[AIOrchestrator] PatternRetriever returned empty — check /api/embed-and-search endpoint and Gemini API key');
