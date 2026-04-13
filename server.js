@@ -398,6 +398,7 @@ app.post('/api/platform-check', (req, res) => {
 // ---------------------------------------------------------------------------
 
 app.post('/api/compile', (req, res) => {
+  console.log('[compile] endpoint hit, file count:', Object.keys(req.body?.files ?? {}).length);
   req.setTimeout(30000);
   const { files } = req.body;
   if (!files || typeof files !== 'object') {
