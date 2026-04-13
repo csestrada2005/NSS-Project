@@ -83,7 +83,7 @@ Additionally output these two fields in your JSON response:
       `USER PROMPT: ${prompt}`;
 
     try {
-      const response = await platformService.callChat({
+      const response = await platformService.callForgeChat({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 768,
         system: systemPrompt,

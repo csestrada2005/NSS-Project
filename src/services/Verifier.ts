@@ -94,7 +94,7 @@ Return ONLY the complete corrected file content. No markdown fences, no explanat
       `Fix the error and return the complete corrected file content:`;
 
     try {
-      const response = await platformService.callChat({
+      const response = await platformService.callForgeChat({
         model: 'claude-sonnet-4-6',
         max_tokens: 8192,
         system: systemPrompt,

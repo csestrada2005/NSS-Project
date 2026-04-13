@@ -907,7 +907,7 @@ export class AIOrchestrator {
     priorMessages: { role: 'user' | 'assistant'; content: string }[] = []
   ): Promise<{ text: string; tokensInput: number; tokensOutput: number }> {
     try {
-      const response = await platformService.callChat({
+      const response = await platformService.callForgeChat({
         model: 'claude-sonnet-4-6',
         max_tokens: 8192,
         system: systemPrompt,

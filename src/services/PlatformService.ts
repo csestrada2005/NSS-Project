@@ -40,6 +40,24 @@ class PlatformService {
     }
   }
 
+  async callForgeChat(body: object): Promise<Response> {
+    try {
+      const baseHeaders = await this.getHeaders();
+      const response = await fetch('/api/chat-forge', {
+        method: 'POST',
+        headers: { ...baseHeaders, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify(body),
+      });
+      this.handleAuthError(response);
+      return response;
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('Session expired')) {
+        toast.error(err.message);
+      }
+      throw err;
+    }
+  }
+
   /** Check which platform services are configured server-side. */
   async checkPlatformServices(): Promise<Record<string, boolean>> {
     try {
