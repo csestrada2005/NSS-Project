@@ -192,6 +192,7 @@ function buildBundleScript(moduleFactories, bootstrapCode) {
   return [
     '(function() {',
     '"use strict";',
+    '  console.log("[Preview] ReactRouterDOM:", typeof window.ReactRouterDOM, Object.keys(window.ReactRouterDOM || {}));',
     '',
     'var __modules = {};',
     'var __cache = {};',
@@ -241,7 +242,7 @@ function generateHTML(bundleScript) {
     '  <script src="https://cdn.tailwindcss.com"><\/script>',
     '  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin><\/script>',
     '  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin><\/script>',
-    '  <script src="https://unpkg.com/react-router-dom@6/dist/umd/react-router-dom.development.js" crossorigin><\/script>',
+    '  <script src="https://unpkg.com/react-router-dom@7/dist/umd/react-router-dom.development.js" crossorigin><\/script>',
     '  <style>body{margin:0;}#root{min-height:100vh;}<\/style>',
     '<\/head>',
     '<body>',
