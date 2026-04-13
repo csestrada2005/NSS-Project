@@ -306,11 +306,11 @@ export class AIOrchestrator {
       await supabase.from('forge_intent_log').insert({
         project_id: params.projectId,
         user_id: user.id,
-        prompt: params.prompt,
+        user_prompt: params.prompt,
         intent_type: params.intentType,
         intent_risk: params.intentRisk,
-        plan_steps: params.planSteps,
-        modified_files: params.modifiedFiles,
+        plan: params.planSteps ?? [],
+        files_modified: params.modifiedFiles ?? [],
         outcome: params.outcome,
         error_message: params.errorMessage,
         duration_ms: params.durationMs,
@@ -539,6 +539,20 @@ export class AIOrchestrator {
       patternContext,
       designContext
     );
+
+    // Sanitize CSS imports — enforce that only src/index.css is used as the global CSS entry
+    for (const [path, content] of modifiedFilesMap) {
+      if (path.endsWith('.tsx') || path.endsWith('.ts')) {
+        const sanitized = content.replace(
+          /import\s+['"][^'"]*(?:globals|global)\.css['"]/g,
+          `import './index.css'`
+        );
+        if (sanitized !== content) {
+          console.warn(`[AIOrchestrator] Rewrote globals.css import in ${path} → index.css`);
+          modifiedFilesMap.set(path, sanitized);
+        }
+      }
+    }
 
     // Collect only the files that actually changed
     const changedPaths: string[] = [];

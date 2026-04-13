@@ -29,6 +29,7 @@ REACT/TAILWIND RULES:
 - Prefer Tailwind utility classes; avoid inline styles unless position math requires it
 - Follow existing file structure and import patterns visible in context
 - Supabase: import { SupabaseService } from '@/services/SupabaseService'; const supabase = SupabaseService.getInstance().client;
+- The global CSS entry file is ALWAYS src/index.css. Never import globals.css, global.css, or any other CSS filename. Never create a new CSS entry file.
 `.trim();
 
 // ---------------------------------------------------------------------------
