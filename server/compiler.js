@@ -294,6 +294,7 @@ function generateErrorHTML(message, stack) {
  * Returns { html } on success or { error } on failure.
  */
 export function compileFiles(filesObj) {
+  console.log('[ServerCompiler] files map keys:', Object.keys(filesObj).slice(0, 30));
   const entryPoint =
     filesObj['src/App.tsx'] ? 'src/App.tsx' :
     filesObj['src/main.tsx'] ? 'src/main.tsx' :
