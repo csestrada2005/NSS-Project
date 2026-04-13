@@ -176,7 +176,7 @@ export class Implementer {
     const userMessage = parts.join('\n');
 
     try {
-      const response = await platformService.callChat({
+      const response = await platformService.callForgeChat({
         model: 'claude-sonnet-4-6',
         max_tokens: 8192,
         system: systemPrompt,

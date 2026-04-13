@@ -18,6 +18,42 @@ export interface BuildStep {
 // ---------------------------------------------------------------------------
 
 export class Architect {
+  private static sanitizeJson(raw: string): string {
+    // Remove raw control characters that break JSON (tabs and newlines inside string values)
+    // We do a targeted approach: replace literal newlines/tabs only inside JSON string values
+    let result = '';
+    let inString = false;
+    let escaped = false;
+    for (let i = 0; i < raw.length; i++) {
+      const ch = raw[i];
+      if (escaped) {
+        result += ch;
+        escaped = false;
+        continue;
+      }
+      if (ch === '\\') {
+        result += ch;
+        escaped = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = !inString;
+        result += ch;
+        continue;
+      }
+      if (inString && (ch === '\n' || ch === '\r')) {
+        result += ' ';
+        continue;
+      }
+      if (inString && ch === '\t') {
+        result += ' ';
+        continue;
+      }
+      result += ch;
+    }
+    return result;
+  }
+
   static async plan(
     prompt: string,
     memoryFormatted: string,
@@ -46,6 +82,7 @@ Do not create test files, story files, or documentation files unless explicitly 
 Do not modify package.json, vite.config.ts, tsconfig.json, or any config file unless the user explicitly asks to add a dependency or change build configuration.
 If the user asks to fix something, only modify files that contain the bug.
 Every step description must explain what the file will contain after the change.
+All description strings must be plain text only — no newlines, no backticks, no special characters.
 
 Return ONLY a valid JSON array. No markdown fences, no explanation before or after.`;
 
@@ -63,7 +100,7 @@ Return ONLY a valid JSON array. No markdown fences, no explanation before or aft
         `- Reasoning: ${intent.reasoning}\n\n` +
         `Plan the implementation as a JSON array of BuildStep objects:`;
 
-      const response = await platformService.callChat({
+      const response = await platformService.callForgeChat({
         model: 'claude-sonnet-4-6',
         max_tokens: 4096,
         system: systemPrompt,
@@ -79,7 +116,7 @@ Return ONLY a valid JSON array. No markdown fences, no explanation before or aft
 
       const text: string = data.content?.[0]?.text ?? '';
       const cleaned = this.extractJsonArray(text);
-      let steps = JSON.parse(cleaned) as BuildStep[];
+      let steps = JSON.parse(this.sanitizeJson(cleaned)) as BuildStep[];
 
       if (!Array.isArray(steps)) return { steps: [], wasTrimmed: false, originalCount: 0 };
 

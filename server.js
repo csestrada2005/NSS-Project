@@ -256,6 +256,19 @@ app.post('/api/ai-action', async (req, res) => {
   }
 });
 
+const WYRD_SYSTEM_PROMPT = `You are Wyrd, an expert AI web builder. You help users build React + TypeScript + Tailwind CSS applications inside the Wyrd Forge IDE.
+
+Your core identity and rules:
+
+You are a code generation engine, not a conversational assistant. Never respond with prose, explanations, or suggestions unless explicitly asked.
+You always produce complete, working file contents. Never truncate, never use placeholder comments.
+Stack: React 18, TypeScript, Tailwind CSS, Vite, react-router-dom v6, Supabase via SupabaseService.getInstance().client
+Imports: use @/ alias for src/ directory (e.g. import { X } from '@/components/X')
+Supabase pattern: import { SupabaseService } from '@/services/SupabaseService'; const supabase = SupabaseService.getInstance().client;
+Never modify package.json, vite.config.ts, or tsconfig.json unless explicitly asked
+Never create test files, story files, or documentation files unless explicitly asked
+When given a system prompt by a specific service (Architect, IntentClassifier, Implementer), that service's system prompt is authoritative and overrides general behavior`;
+
 const NOVY_SYSTEM_PROMPT = `You are Novy, an intelligent business operating system assistant for Nebu Studio System. You help business owners and their teams manage their operations efficiently.
 Your capabilities and knowledge areas:
 - Project management: tracking active/completed/paused projects, milestones, client assignments
@@ -314,6 +327,43 @@ app.post('/api/chat', async (req, res) => {
   } catch (error) {
     console.error('Error proxying to Anthropic:', error);
     res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.post('/api/chat-forge', async (req, res) => {
+  if (!ANTHROPIC_API_KEY) {
+    return res.status(500).json({ error: 'API key missing' });
+  }
+  try {
+    const { model, max_tokens, system, messages } = req.body;
+
+    // Each Forge service sends its own system prompt — respect it exactly.
+    // Fall back to WYRD_SYSTEM_PROMPT only if no system prompt provided.
+    const resolvedSystem = system || WYRD_SYSTEM_PROMPT;
+    const resolvedModel = model || 'claude-sonnet-4-6';
+    const resolvedMaxTokens = max_tokens || 8192;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: resolvedModel,
+        max_tokens: resolvedMaxTokens,
+        system: resolvedSystem,
+        messages,
+      }),
+    });
+
+    const data = await response.json();
+    console.log(`[chat-forge] model=${resolvedModel} status=${response.status} input_tokens=${data.usage?.input_tokens ?? '?'}`);
+    res.status(response.status).json(data);
+  } catch (err) {
+    console.error('[chat-forge] Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1275,9 +1325,11 @@ app.post('/api/embed-and-search', requireAuth, async (req, res) => {
     // Vector similarity search via Supabase RPC
     const { data, error: rpcError } = await supabaseAdmin.rpc('match_forge_patterns', {
       query_embedding: values,
-      match_threshold: 0.7,
+      match_threshold: 0.3,
       match_count: limit,
     });
+
+    console.log('[embed-and-search] patterns found:', data?.length ?? 0, '| rpc error:', rpcError?.message ?? 'none');
 
     if (rpcError) {
       console.error('[embed-and-search]', rpcError);
