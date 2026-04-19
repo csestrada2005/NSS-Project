@@ -33,7 +33,7 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 // Add static serving for vendor directory (e.g. for iframe preview dependencies)
 app.use('/vendor', (req, res, next) => {
-  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   next();
 }, express.static(path.join(__dirname, 'public/vendor')));
 
