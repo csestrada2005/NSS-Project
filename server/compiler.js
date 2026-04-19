@@ -239,7 +239,7 @@ function generateHTML(bundleScript) {
     '<head>',
     '  <meta charset="utf-8">',
     '  <meta name="viewport" content="width=device-width, initial-scale=1.0">',
-    '  <script src="/vendor/tailwindcss.js"><\/script>',
+    '  <link rel="stylesheet" href="/vendor/tailwind-base.css">',
     '  <script src="/vendor/react.development.js"><\/script>',
     '  <script src="/vendor/react-dom.development.js"><\/script>',
     '  <script src="/vendor/react-router-dom.development.js"><\/script>',
