@@ -255,6 +255,7 @@ function generateHTML(bundleScript) {
     '  <link rel="stylesheet" href="/vendor/tailwind-base.css">',
     '  <script src="/vendor/react.development.js"><\/script>',
     '  <script src="/vendor/react-dom.development.js"><\/script>',
+    '  <script src="/vendor/react-router.development.js"><\/script>',
     '  <script src="/vendor/react-router-dom.development.js"><\/script>',
     '  <style>body{margin:0;}#root{min-height:100vh;}<\/style>',
     '<\/head>',
