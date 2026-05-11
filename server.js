@@ -403,7 +403,7 @@ app.post('/api/platform-check', (req, res) => {
 // Phase 2: Server-side compilation
 // ---------------------------------------------------------------------------
 
-app.post('/api/compile', (req, res) => {
+app.post('/api/compile', async (req, res) => {
   console.log('[compile] endpoint hit, file count:', Object.keys(req.body?.files ?? {}).length);
   req.setTimeout(30000);
   const { files } = req.body;
@@ -411,15 +411,15 @@ app.post('/api/compile', (req, res) => {
     return res.status(400).json({ error: 'files object is required' });
   }
   try {
-    const result = compileFiles(files);
+    const result = await compileFiles(files);
     if (result.error) {
       console.error('[Compile] Error:', result.error);
-      return res.json({ error: result.error });
+      return res.status(400).json({ error: result.error, errorDetails: result.errorDetails });
     }
     res.json({ html: result.html });
   } catch (err) {
     console.error('[Compile] Unexpected error:', err);
-    res.status(500).json({ error: 'Compilation failed' });
+    res.status(500).json({ error: err.message || 'Unexpected compile error' });
   }
 });
 
