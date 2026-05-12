@@ -13,6 +13,34 @@ const ALLOWED_DEPS = {
   'tailwind-merge': 'tailwind-merge'
 };
 
+// Plugin que reescribe react-router-dom para sustituir BrowserRouter/HashRouter por MemoryRouter
+// a nivel de import. Necesario porque el preview corre en un iframe sandbox sin allow-same-origin,
+// donde window.history.pushState falla. MemoryRouter no toca window.history.
+function routerShimPlugin() {
+  const SHIM_NAMESPACE = 'router-shim';
+  return {
+    name: 'router-shim',
+    setup(build) {
+      // Interceptar cualquier import de 'react-router-dom' antes de que se resuelva al paquete real
+      build.onResolve({ filter: /^react-router-dom$/ }, args => {
+        return { path: 'react-router-dom-shim', namespace: SHIM_NAMESPACE };
+      });
+
+      // Servir el contenido del módulo virtual
+      build.onLoad({ filter: /.*/, namespace: SHIM_NAMESPACE }, () => {
+        return {
+          contents: `
+            export * from 'react-router-dom-preview';
+            export { MemoryRouter as BrowserRouter, MemoryRouter as HashRouter } from 'react-router-dom-preview';
+          `,
+          loader: 'js',
+          resolveDir: process.cwd()
+        };
+      });
+    }
+  };
+}
+
 // Plugin de virtual file system: hace que esbuild lea archivos desde el filesObj
 function virtualFilesPlugin(files) {
   return {
@@ -241,8 +269,7 @@ export async function compileFiles(filesObj) {
         'react': 'react-preview',
         'react-dom': 'react-dom-preview',
         'react-dom/client': 'react-dom-preview/client',
-        'react/jsx-runtime': 'react-preview/jsx-runtime',
-        'react-router-dom': 'react-router-dom-preview'
+        'react/jsx-runtime': 'react-preview/jsx-runtime'
       },
       banner: {
         js: '// Wyrd Forge preview bundle\n;(function(){var __originalBrowserRouter;'
@@ -250,7 +277,7 @@ export async function compileFiles(filesObj) {
       footer: {
         js: '})();'
       },
-      plugins: [virtualFilesPlugin(filesObj)],
+      plugins: [routerShimPlugin(), virtualFilesPlugin(filesObj)],
       logLevel: 'silent'
     });
 
@@ -264,24 +291,7 @@ export async function compileFiles(filesObj) {
       }
     }
 
-    // Patch en runtime: aliasear BrowserRouter → MemoryRouter en el bundle
-    // (porque el iframe sandbox sin allow-same-origin bloquea window.history)
-    const routerPatch = `
-;(function(){
-  if (typeof window !== 'undefined') {
-    try {
-      var rrd = (typeof __require === 'function' && __require('react-router-dom')) || null;
-      if (rrd && rrd.MemoryRouter && !rrd.__patched) {
-        rrd.BrowserRouter = rrd.MemoryRouter;
-        rrd.HashRouter = rrd.MemoryRouter;
-        rrd.__patched = true;
-      }
-    } catch(e) {}
-  }
-})();
-`;
-
-    const html = generateHTML(bundleJs + '\n' + routerPatch, bundleCss);
+    const html = generateHTML(bundleJs, bundleCss);
     return { html };
 
   } catch (err) {
