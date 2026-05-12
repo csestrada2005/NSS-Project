@@ -261,6 +261,9 @@ export async function compileFiles(filesObj) {
       jsx: 'automatic',
       jsxImportSource: 'react',
       loader: { '.tsx': 'tsx', '.ts': 'ts', '.jsx': 'jsx', '.js': 'js', '.css': 'css' },
+      mainFields: ['module', 'main'],
+      conditions: ['development', 'module', 'browser', 'default'],
+      resolveExtensions: ['.tsx', '.ts', '.jsx', '.js', '.mjs', '.cjs', '.css', '.json'],
       define: {
         'process.env.NODE_ENV': '"development"',
         'global': 'window'
