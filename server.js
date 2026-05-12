@@ -423,6 +423,51 @@ app.post('/api/compile', async (req, res) => {
   }
 });
 
+app.get('/api/_diag/fs', (req, res) => {
+  const fs = require('fs');
+  const path = require('path');
+  const { execSync } = require('child_process');
+
+  function safe(fn, fallback) {
+    try { return fn(); } catch (e) { return { __error: e.message }; }
+  }
+
+  const reactDomBase = path.resolve('node_modules/react-dom-preview');
+  const reactBase = path.resolve('node_modules/react-preview');
+
+  res.json({
+    cwd: process.cwd(),
+    node_version: process.version,
+    npm_version: safe(() => execSync('npm --version').toString().trim(), 'unknown'),
+
+    react_dom_preview: {
+      base_exists: fs.existsSync(reactDomBase),
+      base_contents: safe(() => fs.readdirSync(reactDomBase)),
+      cjs_exists: fs.existsSync(path.join(reactDomBase, 'cjs')),
+      cjs_contents: safe(() => fs.readdirSync(path.join(reactDomBase, 'cjs'))),
+      index_js_exists: fs.existsSync(path.join(reactDomBase, 'index.js')),
+      index_js_head: safe(() =>
+        fs.readFileSync(path.join(reactDomBase, 'index.js'), 'utf8').slice(0, 600)
+      ),
+      package_json: safe(() =>
+        JSON.parse(fs.readFileSync(path.join(reactDomBase, 'package.json'), 'utf8'))
+      )
+    },
+
+    react_preview: {
+      base_exists: fs.existsSync(reactBase),
+      cjs_exists: fs.existsSync(path.join(reactBase, 'cjs')),
+      cjs_contents: safe(() => fs.readdirSync(path.join(reactBase, 'cjs')))
+    },
+
+    env: {
+      NODE_ENV: process.env.NODE_ENV,
+      RENDER: process.env.RENDER,
+      RENDER_SERVICE_NAME: process.env.RENDER_SERVICE_NAME
+    }
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Phase 3: Managed deployment via Vercel
 // ---------------------------------------------------------------------------
