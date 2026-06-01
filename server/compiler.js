@@ -269,10 +269,10 @@ export async function compileFiles(filesObj) {
         'global': 'window'
       },
       alias: {
-        'react': 'react-preview',
-        'react-dom': 'react-dom-preview',
-        'react-dom/client': 'react-dom-preview/client',
-        'react/jsx-runtime': 'react-preview/jsx-runtime'
+        'react': new URL('../node_modules/react-preview/cjs/react.development.js', import.meta.url).pathname,
+        'react-dom': new URL('../node_modules/react-dom-preview/cjs/react-dom.development.js', import.meta.url).pathname,
+        'react-dom/client': new URL('../node_modules/react-dom-preview/cjs/react-dom.development.js', import.meta.url).pathname,
+        'react/jsx-runtime': new URL('../node_modules/react-preview/cjs/react-jsx-runtime.development.js', import.meta.url).pathname
       },
       banner: {
         js: '// Wyrd Forge preview bundle\n;(function(){var __originalBrowserRouter;'
