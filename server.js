@@ -260,7 +260,23 @@ app.get('/api/_diag/fs', (req, res) => {
       ),
       package_json: safe(() =>
         JSON.parse(fs.readFileSync(path.join(reactDomBase, 'package.json'), 'utf8'))
-      )
+      ),
+      client_js_content: safe(() =>
+        fs.readFileSync(path.join(reactDomBase, 'client.js'), 'utf8')
+      ),
+      cjs_has_createRoot: safe(() => {
+        const content = fs.readFileSync(
+          path.join(reactDomBase, 'cjs', 'react-dom.development.js'), 'utf8'
+        );
+        return {
+          has_createRoot: content.includes('createRoot'),
+          has_exports_createRoot: content.includes('exports.createRoot'),
+          first_createRoot_context: (() => {
+            const idx = content.indexOf('exports.createRoot');
+            return idx >= 0 ? content.slice(idx, idx + 120) : 'not found as exports.createRoot';
+          })()
+        };
+      }),
     },
 
     react_preview: {
