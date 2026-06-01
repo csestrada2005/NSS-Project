@@ -1,7 +1,9 @@
 // SQL note: ALTER TABLE payments ADD COLUMN IF NOT EXISTS deal_id uuid REFERENCES deals(id);
 import 'dotenv/config';
 import express from 'express';
+import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 import dns from 'dns/promises';
@@ -235,11 +237,7 @@ app.post('/api/credits/webhook', express.raw({ type: 'application/json' }), asyn
 
 // Diagnostic endpoint — registered BEFORE auth middleware so it is accessible without Authorization header
 app.get('/api/_diag/fs', (req, res) => {
-  const fs = require('fs');
-  const path = require('path');
-  const { execSync } = require('child_process');
-
-  function safe(fn, fallback) {
+  function safe(fn) {
     try { return fn(); } catch (e) { return { __error: e.message }; }
   }
 
@@ -249,7 +247,7 @@ app.get('/api/_diag/fs', (req, res) => {
   res.json({
     cwd: process.cwd(),
     node_version: process.version,
-    npm_version: safe(() => execSync('npm --version').toString().trim(), 'unknown'),
+    npm_version: safe(() => execSync('npm --version').toString().trim()),
 
     react_dom_preview: {
       base_exists: fs.existsSync(reactDomBase),
@@ -269,12 +267,6 @@ app.get('/api/_diag/fs', (req, res) => {
       base_exists: fs.existsSync(reactBase),
       cjs_exists: fs.existsSync(path.join(reactBase, 'cjs')),
       cjs_contents: safe(() => fs.readdirSync(path.join(reactBase, 'cjs')))
-    },
-
-    env: {
-      NODE_ENV: process.env.NODE_ENV,
-      RENDER: process.env.RENDER,
-      RENDER_SERVICE_NAME: process.env.RENDER_SERVICE_NAME
     }
   });
 });
