@@ -304,6 +304,28 @@ app.get('/api/_diag/fs', (req, res) => {
         fs.readdirSync(path.resolve('node_modules/react-dom-preview/node_modules'))
       )
     },
+
+    router_locations: {
+      rrd_base: safe(() => fs.readdirSync(path.resolve('node_modules/react-router-dom-preview'))),
+      rrd_pkg: safe(() => {
+        const p = JSON.parse(fs.readFileSync(path.resolve('node_modules/react-router-dom-preview/package.json'), 'utf8'));
+        return { version: p.version, main: p.main, module: p.module, exports: p.exports, dependencies: p.dependencies };
+      }),
+      rrd_has_cjs: fs.existsSync(path.resolve('node_modules/react-router-dom-preview/dist')),
+      rrd_dist: safe(() => fs.readdirSync(path.resolve('node_modules/react-router-dom-preview/dist'))),
+      react_router_base: safe(() => fs.readdirSync(path.resolve('node_modules/react-router'))),
+      react_router_pkg: safe(() => {
+        const p = JSON.parse(fs.readFileSync(path.resolve('node_modules/react-router/package.json'), 'utf8'));
+        return { version: p.version, main: p.main, module: p.module, exports: p.exports, dependencies: p.dependencies };
+      }),
+      react_router_dist: safe(() => fs.readdirSync(path.resolve('node_modules/react-router/dist'))),
+      remix_router_base: safe(() => fs.readdirSync(path.resolve('node_modules/@remix-run/router'))),
+      remix_router_pkg: safe(() => {
+        const p = JSON.parse(fs.readFileSync(path.resolve('node_modules/@remix-run/router/package.json'), 'utf8'));
+        return { version: p.version, main: p.main, module: p.module, exports: p.exports };
+      }),
+      remix_router_dist: safe(() => fs.readdirSync(path.resolve('node_modules/@remix-run/router/dist')))
+    },
   });
 });
 
