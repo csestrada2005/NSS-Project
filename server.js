@@ -283,7 +283,27 @@ app.get('/api/_diag/fs', (req, res) => {
       base_exists: fs.existsSync(reactBase),
       cjs_exists: fs.existsSync(path.join(reactBase, 'cjs')),
       cjs_contents: safe(() => fs.readdirSync(path.join(reactBase, 'cjs')))
-    }
+    },
+
+    scheduler_locations: {
+      top_level_exists: fs.existsSync(path.resolve('node_modules/scheduler')),
+      top_level_version: safe(() =>
+        JSON.parse(fs.readFileSync(path.resolve('node_modules/scheduler/package.json'), 'utf8')).version
+      ),
+      top_level_cjs: safe(() =>
+        fs.readdirSync(path.resolve('node_modules/scheduler/cjs'))
+      ),
+      nested_in_reactdom_exists: fs.existsSync(path.resolve('node_modules/react-dom-preview/node_modules/scheduler')),
+      nested_version: safe(() =>
+        JSON.parse(fs.readFileSync(path.resolve('node_modules/react-dom-preview/node_modules/scheduler/package.json'), 'utf8')).version
+      ),
+      nested_cjs: safe(() =>
+        fs.readdirSync(path.resolve('node_modules/react-dom-preview/node_modules/scheduler/cjs'))
+      ),
+      reactdom_nested_nm: safe(() =>
+        fs.readdirSync(path.resolve('node_modules/react-dom-preview/node_modules'))
+      )
+    },
   });
 });
 
