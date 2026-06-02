@@ -25,7 +25,13 @@ export class Verifier {
     onRetry?: RetryCallback
   ): Promise<VerifyResult> {
     const MAX_RETRIES = 3;
-    let currentFiles = new Map<string, string>(modifiedFiles);
+    // Compilar el proyecto COMPLETO con los cambios aplicados encima.
+    // Compilar solo modifiedFiles causa "No entrypoint found" porque
+    // main.tsx no suele estar entre los archivos modificados.
+    let currentFiles = new Map<string, string>(originalFiles);
+    for (const [path, content] of modifiedFiles) {
+      currentFiles.set(path, content);
+    }
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       const result = await this.tryCompile(currentFiles);
