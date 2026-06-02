@@ -1,9 +1,7 @@
 // SQL note: ALTER TABLE payments ADD COLUMN IF NOT EXISTS deal_id uuid REFERENCES deals(id);
 import 'dotenv/config';
 import express from 'express';
-import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 import dns from 'dns/promises';
@@ -235,117 +233,9 @@ app.post('/api/credits/webhook', express.raw({ type: 'application/json' }), asyn
   res.status(200).send('OK');
 });
 
-// Diagnostic endpoint — registered BEFORE auth middleware so it is accessible without Authorization header
-app.get('/api/_diag/fs', (req, res) => {
-  function safe(fn) {
-    try { return fn(); } catch (e) { return { __error: e.message }; }
-  }
-
-  const reactDomBase = path.resolve('node_modules/react-dom-preview');
-  const reactBase = path.resolve('node_modules/react-preview');
-
-  res.json({
-    cwd: process.cwd(),
-    node_version: process.version,
-    npm_version: safe(() => execSync('npm --version').toString().trim()),
-
-    react_dom_preview: {
-      base_exists: fs.existsSync(reactDomBase),
-      base_contents: safe(() => fs.readdirSync(reactDomBase)),
-      cjs_exists: fs.existsSync(path.join(reactDomBase, 'cjs')),
-      cjs_contents: safe(() => fs.readdirSync(path.join(reactDomBase, 'cjs'))),
-      index_js_exists: fs.existsSync(path.join(reactDomBase, 'index.js')),
-      index_js_head: safe(() =>
-        fs.readFileSync(path.join(reactDomBase, 'index.js'), 'utf8').slice(0, 600)
-      ),
-      package_json: safe(() =>
-        JSON.parse(fs.readFileSync(path.join(reactDomBase, 'package.json'), 'utf8'))
-      ),
-      client_js_content: safe(() =>
-        fs.readFileSync(path.join(reactDomBase, 'client.js'), 'utf8')
-      ),
-      cjs_has_createRoot: safe(() => {
-        const content = fs.readFileSync(
-          path.join(reactDomBase, 'cjs', 'react-dom.development.js'), 'utf8'
-        );
-        return {
-          has_createRoot: content.includes('createRoot'),
-          has_exports_createRoot: content.includes('exports.createRoot'),
-          first_createRoot_context: (() => {
-            const idx = content.indexOf('exports.createRoot');
-            return idx >= 0 ? content.slice(idx, idx + 120) : 'not found as exports.createRoot';
-          })()
-        };
-      }),
-    },
-
-    react_preview: {
-      base_exists: fs.existsSync(reactBase),
-      cjs_exists: fs.existsSync(path.join(reactBase, 'cjs')),
-      cjs_contents: safe(() => fs.readdirSync(path.join(reactBase, 'cjs')))
-    },
-
-    scheduler_locations: {
-      top_level_exists: fs.existsSync(path.resolve('node_modules/scheduler')),
-      top_level_version: safe(() =>
-        JSON.parse(fs.readFileSync(path.resolve('node_modules/scheduler/package.json'), 'utf8')).version
-      ),
-      top_level_cjs: safe(() =>
-        fs.readdirSync(path.resolve('node_modules/scheduler/cjs'))
-      ),
-      nested_in_reactdom_exists: fs.existsSync(path.resolve('node_modules/react-dom-preview/node_modules/scheduler')),
-      nested_version: safe(() =>
-        JSON.parse(fs.readFileSync(path.resolve('node_modules/react-dom-preview/node_modules/scheduler/package.json'), 'utf8')).version
-      ),
-      nested_cjs: safe(() =>
-        fs.readdirSync(path.resolve('node_modules/react-dom-preview/node_modules/scheduler/cjs'))
-      ),
-      reactdom_nested_nm: safe(() =>
-        fs.readdirSync(path.resolve('node_modules/react-dom-preview/node_modules'))
-      )
-    },
-
-    router_locations: {
-      rrd_base: safe(() => fs.readdirSync(path.resolve('node_modules/react-router-dom-preview'))),
-      rrd_pkg: safe(() => {
-        const p = JSON.parse(fs.readFileSync(path.resolve('node_modules/react-router-dom-preview/package.json'), 'utf8'));
-        return { version: p.version, main: p.main, module: p.module, exports: p.exports, dependencies: p.dependencies };
-      }),
-      rrd_has_cjs: fs.existsSync(path.resolve('node_modules/react-router-dom-preview/dist')),
-      rrd_dist: safe(() => fs.readdirSync(path.resolve('node_modules/react-router-dom-preview/dist'))),
-      react_router_base: safe(() => fs.readdirSync(path.resolve('node_modules/react-router'))),
-      react_router_pkg: safe(() => {
-        const p = JSON.parse(fs.readFileSync(path.resolve('node_modules/react-router/package.json'), 'utf8'));
-        return { version: p.version, main: p.main, module: p.module, exports: p.exports, dependencies: p.dependencies };
-      }),
-      react_router_dist: safe(() => fs.readdirSync(path.resolve('node_modules/react-router/dist'))),
-      remix_router_base: safe(() => fs.readdirSync(path.resolve('node_modules/@remix-run/router'))),
-      remix_router_pkg: safe(() => {
-        const p = JSON.parse(fs.readFileSync(path.resolve('node_modules/@remix-run/router/package.json'), 'utf8'));
-        return { version: p.version, main: p.main, module: p.module, exports: p.exports };
-      }),
-      remix_router_dist: safe(() => fs.readdirSync(path.resolve('node_modules/@remix-run/router/dist')))
-    },
-
-    nested_router: {
-      rrd_nested_nm: safe(() => fs.readdirSync(path.resolve('node_modules/react-router-dom-preview/node_modules'))),
-      nested_rr_exists: fs.existsSync(path.resolve('node_modules/react-router-dom-preview/node_modules/react-router')),
-      nested_rr_pkg: safe(() => {
-        const p = JSON.parse(fs.readFileSync(path.resolve('node_modules/react-router-dom-preview/node_modules/react-router/package.json'), 'utf8'));
-        return { version: p.version, main: p.main, module: p.module, exports: p.exports, dependencies: p.dependencies };
-      }),
-      nested_rr_dist: safe(() => fs.readdirSync(path.resolve('node_modules/react-router-dom-preview/node_modules/react-router/dist'))),
-      nested_remix_exists: fs.existsSync(path.resolve('node_modules/react-router-dom-preview/node_modules/@remix-run/router')),
-      nested_remix_pkg: safe(() => {
-        const p = JSON.parse(fs.readFileSync(path.resolve('node_modules/react-router-dom-preview/node_modules/@remix-run/router/package.json'), 'utf8'));
-        return { version: p.version };
-      })
-    },
-  });
-});
 
 // Apply auth middleware to all /api/* routes
-app.use('/api/', requireAuth);
+app.use("/api/", requireAuth);
 
 // ---------------------------------------------------------------------------
 // Phase 1: Existing AI routes
