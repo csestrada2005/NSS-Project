@@ -234,6 +234,8 @@ export function StudioEngine() {
       return;
     }
 
+    if (isGenerating) return; // no compilar en medio de la generación del AI
+
     const timer = setTimeout(async () => {
       setIsCompiling(true);
       try {
@@ -250,7 +252,7 @@ export function StudioEngine() {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [files]);
+  }, [files, isGenerating]);
 
   // -------------------------------------------------------------------------
   // Memory initialization overlay
