@@ -326,6 +326,21 @@ app.get('/api/_diag/fs', (req, res) => {
       }),
       remix_router_dist: safe(() => fs.readdirSync(path.resolve('node_modules/@remix-run/router/dist')))
     },
+
+    nested_router: {
+      rrd_nested_nm: safe(() => fs.readdirSync(path.resolve('node_modules/react-router-dom-preview/node_modules'))),
+      nested_rr_exists: fs.existsSync(path.resolve('node_modules/react-router-dom-preview/node_modules/react-router')),
+      nested_rr_pkg: safe(() => {
+        const p = JSON.parse(fs.readFileSync(path.resolve('node_modules/react-router-dom-preview/node_modules/react-router/package.json'), 'utf8'));
+        return { version: p.version, main: p.main, module: p.module, exports: p.exports, dependencies: p.dependencies };
+      }),
+      nested_rr_dist: safe(() => fs.readdirSync(path.resolve('node_modules/react-router-dom-preview/node_modules/react-router/dist'))),
+      nested_remix_exists: fs.existsSync(path.resolve('node_modules/react-router-dom-preview/node_modules/@remix-run/router')),
+      nested_remix_pkg: safe(() => {
+        const p = JSON.parse(fs.readFileSync(path.resolve('node_modules/react-router-dom-preview/node_modules/@remix-run/router/package.json'), 'utf8'));
+        return { version: p.version };
+      })
+    },
   });
 });
 
