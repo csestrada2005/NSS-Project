@@ -260,6 +260,7 @@ export async function compileFiles(filesObj) {
       entryPoints: [entry],
       bundle: true,
       write: false,
+      outdir: 'dist',
       format: 'iife',
       target: ['es2020'],
       jsx: 'automatic',
