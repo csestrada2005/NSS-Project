@@ -11,7 +11,10 @@ const ALLOWED_DEPS = {
   'lucide-react': 'lucide-react',
   'clsx': 'clsx',
   'tailwind-merge': 'tailwind-merge',
-  'scheduler': 'scheduler'
+  'scheduler': 'scheduler',
+  'react-router-dom-preview': 'react-router-dom-preview',
+  'react-router': 'react-router',
+  '@remix-run/router': '@remix-run/router'
 };
 
 // Plugin que reescribe react-router-dom para sustituir BrowserRouter/HashRouter por MemoryRouter
@@ -274,7 +277,10 @@ export async function compileFiles(filesObj) {
         'react-dom': new URL('../node_modules/react-dom-preview/cjs/react-dom.development.js', import.meta.url).pathname,
         'react-dom/client': new URL('../node_modules/react-dom-preview/cjs/react-dom.development.js', import.meta.url).pathname,
         'react/jsx-runtime': new URL('../node_modules/react-preview/cjs/react-jsx-runtime.development.js', import.meta.url).pathname,
-        'scheduler': new URL('../node_modules/react-dom-preview/node_modules/scheduler/cjs/scheduler.development.js', import.meta.url).pathname
+        'scheduler': new URL('../node_modules/react-dom-preview/node_modules/scheduler/cjs/scheduler.development.js', import.meta.url).pathname,
+        'react-router-dom-preview': new URL('../node_modules/react-router-dom-preview/dist/react-router-dom.development.js', import.meta.url).pathname,
+        'react-router': new URL('../node_modules/react-router-dom-preview/node_modules/react-router/dist/react-router.development.js', import.meta.url).pathname,
+        '@remix-run/router': new URL('../node_modules/@remix-run/router/dist/router.cjs.js', import.meta.url).pathname
       },
       banner: {
         js: '// Wyrd Forge preview bundle\n;(function(){var __originalBrowserRouter;'
