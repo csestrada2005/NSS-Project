@@ -496,11 +496,13 @@ export class AIOrchestrator {
 
     const designContext = await DesignContextService.getContext(input);
 
+    const blueprint = generateBlueprintFromFiles(files);
     const { steps, wasTrimmed, originalCount } = await Architect.plan(
       input,
       memoryFormatted,
       intent,
-      designContext
+      designContext,
+      blueprint
     );
 
     if (steps.length === 0) {

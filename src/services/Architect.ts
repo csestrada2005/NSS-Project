@@ -58,7 +58,8 @@ export class Architect {
     prompt: string,
     memoryFormatted: string,
     intent: Intent,
-    designContext?: string
+    designContext?: string,
+    blueprint: string = ''
   ): Promise<{ steps: BuildStep[]; wasTrimmed: boolean; originalCount: number }> {
     console.log('[Architect] designContext chars:', designContext?.length ?? 0, '| preview:', designContext?.slice(0, 300)); // TODO: remove after RAG verification
     const systemPrompt = `You are a software architect for a React + TypeScript + Tailwind web builder.
@@ -84,6 +85,12 @@ If the user asks to fix something, only modify files that contain the bug.
 Every step description must explain what the file will contain after the change.
 All description strings must be plain text only — no newlines, no backticks, no special characters.
 
+ROUTING & ENTRY-POINT RULES — critical:
+- The route "/" renders src/pages/Index.tsx. This is the page the user sees first.
+- When the user asks to change "the page", "home page", "landing page", "main page", "página principal", "inicio", or the main screen WITHOUT naming a new route, you MUST include a step with action "modify" on src/pages/Index.tsx. A new standalone component is NOT enough — a component that nothing renders never appears in the preview.
+- If any step has action "create" for a component, you MUST also include a step with action "modify" on the file that renders it (usually src/pages/Index.tsx, or src/App.tsx for routing) that imports and uses that component. That modify step must list the create step in its requires_steps. Never leave a created component unreferenced.
+- Only modify src/App.tsx routing when the user explicitly asks for a new page/route.
+
 Return ONLY a valid JSON array. No markdown fences, no explanation before or after.`;
 
     try {
@@ -91,6 +98,7 @@ Return ONLY a valid JSON array. No markdown fences, no explanation before or aft
       const userMessage =
         designBlock +
         `${memoryFormatted}\n\n` +
+        `PROJECT FILES:\n${blueprint}\n\n` +
         `USER REQUEST: ${prompt}\n\n` +
         `CLASSIFIED INTENT:\n` +
         `- Type: ${intent.type}\n` +
