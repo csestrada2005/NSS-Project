@@ -308,8 +308,8 @@ export function StudioEngine() {
     } else {
       isAutoLoadingTemplate.current = true;
       hasProcessedInitialPrompt.current = true;
-      handleLoadTemplate('landing-page').then(() => {
-        handleSendMessage(initialPrompt);
+      handleLoadTemplate('landing-page').then((loadedFiles) => {
+        handleSendMessage(initialPrompt, undefined, undefined, loadedFiles);
       });
     }
   }, [isProjectReady, isLoading]);
@@ -392,9 +392,9 @@ export function StudioEngine() {
   // -------------------------------------------------------------------------
   // Template loader
   // -------------------------------------------------------------------------
-  const handleLoadTemplate = async (templateKey: string) => {
+  const handleLoadTemplate = async (templateKey: string): Promise<Map<string, string>> => {
     const template = TEMPLATES[templateKey];
-    if (!template) return;
+    if (!template) return new Map();
 
     const flatFiles = fileSystemTreeToMap(template);
 
@@ -406,6 +406,8 @@ export function StudioEngine() {
     }
 
     await saveSnapshot('template_load');
+
+    return flatFiles;
   };
 
   // -------------------------------------------------------------------------
@@ -528,7 +530,8 @@ export function StudioEngine() {
   const handleSendMessage = async (
     message: string,
     onProgress?: (step: number, total: number, file: string) => void,
-    onRetry?: (attempt: number, error: string) => void
+    onRetry?: (attempt: number, error: string) => void,
+    filesOverride?: Map<string, string>
   ): Promise<{ success: boolean; modifiedFiles: string[]; error?: string; warning?: string }> => {
     if (isReadOnly) return { success: false, modifiedFiles: [] };
     setIsGenerating(true);
@@ -538,9 +541,10 @@ export function StudioEngine() {
 
     try {
       lastChangeSource.current = 'ai';
+      const activeFiles = filesOverride ?? files;
       const result = await AIOrchestrator.parseUserCommand(
         message,
-        files,
+        activeFiles,
         selectedElement,
         projectId,
         (step, total, file) => {
