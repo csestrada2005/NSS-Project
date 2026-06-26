@@ -737,7 +737,9 @@ export class AIOrchestrator {
       const data = await response.json();
       if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
 
-      const newContent: string = data.content?.[0]?.text ?? '';
+      const rawText: string = data.content?.[0]?.text ?? '';
+      if (!rawText) return { modifiedFiles: [] };
+      const newContent = this.stripCodeFences(rawText);
       if (!newContent) return { modifiedFiles: [] };
 
       this.notifyFileUpdate(topFile.path, newContent);
@@ -965,6 +967,12 @@ export class AIOrchestrator {
   // -------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------
+
+  private static stripCodeFences(text: string): string {
+    const fenced = text.match(/```(?:tsx?|jsx?|typescript|javascript|css|html)?\s*([\s\S]*?)```/);
+    if (fenced) return fenced[1].trim();
+    return text.trim();
+  }
 
   private static cleanJsonOutput(text: string): string {
     const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
