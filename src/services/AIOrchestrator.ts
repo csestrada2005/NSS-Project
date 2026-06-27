@@ -57,6 +57,7 @@ function selectRelevantFiles(
     if (
       path.includes('node_modules') ||
       path.includes('dist/') ||
+      !path.startsWith('src/') ||
       (!path.endsWith('.tsx') &&
         !path.endsWith('.ts') &&
         !path.endsWith('.jsx') &&
@@ -74,6 +75,21 @@ function selectRelevantFiles(
   }
 
   scored.sort((a, b) => b.score - a.score);
+
+  // Zero-score fallback: when no keyword matched anything, a vague UI edit
+  // should land on the rendered page rather than a service or config file.
+  if (scored.length > 0 && scored[0].score === 0) {
+    const preferred =
+      scored.find(f => f.path === 'src/pages/Index.tsx') ??
+      scored.find(f => f.path === 'src/App.tsx') ??
+      scored.find(f => f.path.endsWith('.tsx'));
+    if (preferred) {
+      const rest = scored.filter(f => f !== preferred);
+      scored.length = 0;
+      scored.push(preferred, ...rest);
+    }
+  }
+
   return scored.slice(0, 5).map(f => ({ path: f.path, content: f.content.slice(0, 3000) }));
 }
 
