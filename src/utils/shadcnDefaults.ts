@@ -177,6 +177,8 @@ export default {
 export function cn(...args: Array<string | false | null | undefined | (string | false | null | undefined)[]>): string {
   return args.flat().filter(Boolean).join(' ');
 }
+
+export default cn;
 `
     }
   }
