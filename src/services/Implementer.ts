@@ -32,6 +32,7 @@ REACT/TAILWIND RULES:
 - The global CSS entry file is ALWAYS src/index.css. Never import globals.css, global.css, or any other CSS filename. Never create a new CSS entry file.
 - DEPENDENCY CONSTRAINT (critical): the preview compiler only resolves react, react-dom, react-dom/client, react-router-dom, and project files via the @/ alias. NEVER import any other npm package — clsx, tailwind-merge, lucide-react, framer-motion, date-fns, etc. are NOT available and break the build with "Could not resolve".
 - For conditional or merged classNames, import cn from '@/lib/utils' (already provided, dependency-free). Never import clsx directly.
+- When importing cn from '@/lib/utils', use a named import: import { cn } from '@/lib/utils'.
 - For icons, use inline <svg> or unicode/emoji. Never import an icon library.
 `.trim();
 
