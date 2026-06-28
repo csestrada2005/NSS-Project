@@ -30,10 +30,10 @@ REACT/TAILWIND RULES:
 - Follow existing file structure and import patterns visible in context
 - Supabase: import { SupabaseService } from '@/services/SupabaseService'; const supabase = SupabaseService.getInstance().client;
 - The global CSS entry file is ALWAYS src/index.css. Never import globals.css, global.css, or any other CSS filename. Never create a new CSS entry file.
-- DEPENDENCY CONSTRAINT (critical): the preview compiler only resolves react, react-dom, react-dom/client, react-router-dom, and project files via the @/ alias. NEVER import any other npm package — clsx, tailwind-merge, lucide-react, framer-motion, date-fns, etc. are NOT available and break the build with "Could not resolve".
+- DEPENDENCY CONSTRAINT (critical): the preview compiler only resolves react, react-dom, react-dom/client, react-router-dom, and project files via the @/ alias. lucide-react and framer-motion are available via esm.sh — you MAY import icons and animations from them. Other unlisted npm packages are NOT available and break the build — clsx, tailwind-merge, lucide-react, framer-motion, date-fns, etc. are NOT available and break the build with "Could not resolve".
 - For conditional or merged classNames, import cn from '@/lib/utils' (already provided, dependency-free). Never import clsx directly.
 - When importing cn from '@/lib/utils', use a named import: import { cn } from '@/lib/utils'.
-- For icons, use inline <svg> or unicode/emoji. Never import an icon library.
+- For icons, you may import from lucide-react (e.g. import { Rocket } from 'lucide-react') or use inline <svg>.
 `.trim();
 
 // ---------------------------------------------------------------------------
