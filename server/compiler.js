@@ -105,7 +105,7 @@ function virtualFilesPlugin(files) {
       });
 
       // Resolver imports de deps externas contra ALLOWED_DEPS
-      build.onResolve({ filter: /^[^.@]/ }, args => {
+      build.onResolve({ filter: /^[^.@\/]/ }, args => {
         const aliased = ALLOWED_DEPS[args.path];
         if (!aliased) {
           return {
