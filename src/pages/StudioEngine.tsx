@@ -229,8 +229,8 @@ export function StudioEngine() {
   useEffect(() => {
     if (files.size === 0) return;
 
-    // Guard: if last change was from a visual edit, we already compiled immediately — skip debounce
-    if (lastChangeSource.current !== 'ai') {
+    // Guard: skip debounce only for immediate visual edits that already re-compiled — skip debounce
+    if (lastChangeSource.current === 'visual') {
       return;
     }
 
