@@ -121,6 +121,19 @@ function virtualFilesPlugin(files) {
   };
 }
 
+// Alias map de esbuild: redirige los bare imports a las builds locales (preview)
+// para garantizar una sola instancia de React/router en todo el bundle.
+const ALIAS = {
+  'react': new URL('../node_modules/react-preview/cjs/react.development.js', import.meta.url).pathname,
+  'react-dom': new URL('../node_modules/react-dom-preview/cjs/react-dom.development.js', import.meta.url).pathname,
+  'react-dom/client': new URL('../node_modules/react-dom-preview/cjs/react-dom.development.js', import.meta.url).pathname,
+  'react/jsx-runtime': new URL('../node_modules/react-preview/cjs/react-jsx-runtime.development.js', import.meta.url).pathname,
+  'scheduler': new URL('../node_modules/react-dom-preview/node_modules/scheduler/cjs/scheduler.development.js', import.meta.url).pathname,
+  'react-router-dom-preview': new URL('../node_modules/react-router-dom-preview/dist/react-router-dom.development.js', import.meta.url).pathname,
+  'react-router': new URL('../node_modules/react-router-dom-preview/node_modules/react-router/dist/react-router.development.js', import.meta.url).pathname,
+  '@remix-run/router': new URL('../node_modules/@remix-run/router/dist/router.cjs.js', import.meta.url).pathname
+};
+
 // Base URL del CDN, configurable vía env para tests / mirrors
 const ESM_BASE = process.env.ESM_CDN_BASE || 'https://esm.sh';
 
@@ -134,28 +147,25 @@ const esmShCache = new Map();
 // proyecto y el alias ganen la resolución primero.
 function esmShResolverPlugin() {
   // Deps que SIEMPRE las maneja el alias local. Nunca deben ir a esm.sh: así
-  // garantizamos una sola instancia de React en todo el bundle.
-  const LOCAL_DEPS = new Set([
-    'react',
-    'react-dom',
-    'react-dom/client',
-    'react-router-dom',
-    'react-router',
-    'react/jsx-runtime',
-    'scheduler'
-  ]);
+  // garantizamos una sola instancia de React en todo el bundle. Se construye a
+  // partir del alias map para que cualquier módulo aliaseado (incluido
+  // react-router-dom-preview, @remix-run/router, etc.) quede cubierto.
+  const LOCAL_MODULES = new Set([...Object.keys(ALIAS), 'react-router-dom']);
 
   return {
     name: 'esm-sh-resolver',
     setup(build) {
       build.onResolve({ filter: /.*/ }, args => {
-        // Relativos y alias del proyecto → los maneja virtualFilesPlugin / alias
-        if (args.path === '.' || args.path.startsWith('src/') || args.path.startsWith('@/')) {
+        // Módulos locales (alias map) y cualquier *-preview → nunca a esm.sh.
+        // Va PRIMERO, gana a TODO (incluso a imports que vienen de dentro de un
+        // módulo esm.sh), para que p.ej. 'react' importado por lucide-react
+        // resuelva al React local: una sola instancia de React en el bundle.
+        if (LOCAL_MODULES.has(args.path) || args.path.endsWith('-preview')) {
           return undefined;
         }
 
-        // Deps con alias local → nunca a esm.sh
-        if (LOCAL_DEPS.has(args.path)) {
+        // Relativos y alias del proyecto → los maneja virtualFilesPlugin / alias
+        if (args.path === '.' || args.path.startsWith('src/') || args.path.startsWith('@/')) {
           return undefined;
         }
 
@@ -340,16 +350,7 @@ export async function compileFiles(filesObj) {
         'process.env.NODE_ENV': '"development"',
         'global': 'window'
       },
-      alias: {
-        'react': new URL('../node_modules/react-preview/cjs/react.development.js', import.meta.url).pathname,
-        'react-dom': new URL('../node_modules/react-dom-preview/cjs/react-dom.development.js', import.meta.url).pathname,
-        'react-dom/client': new URL('../node_modules/react-dom-preview/cjs/react-dom.development.js', import.meta.url).pathname,
-        'react/jsx-runtime': new URL('../node_modules/react-preview/cjs/react-jsx-runtime.development.js', import.meta.url).pathname,
-        'scheduler': new URL('../node_modules/react-dom-preview/node_modules/scheduler/cjs/scheduler.development.js', import.meta.url).pathname,
-        'react-router-dom-preview': new URL('../node_modules/react-router-dom-preview/dist/react-router-dom.development.js', import.meta.url).pathname,
-        'react-router': new URL('../node_modules/react-router-dom-preview/node_modules/react-router/dist/react-router.development.js', import.meta.url).pathname,
-        '@remix-run/router': new URL('../node_modules/@remix-run/router/dist/router.cjs.js', import.meta.url).pathname
-      },
+      alias: ALIAS,
       banner: {
         js: '// Wyrd Forge preview bundle\n;(function(){var __originalBrowserRouter;'
       },
