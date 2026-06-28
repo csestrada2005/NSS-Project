@@ -121,6 +121,73 @@ function virtualFilesPlugin(files) {
   };
 }
 
+// Base URL del CDN, configurable vía env para tests / mirrors
+const ESM_BASE = process.env.ESM_CDN_BASE || 'https://esm.sh';
+
+// Caché module-level keyed por URL. El preview recompila en cada keystroke;
+// sin caché re-fetcheamos lo mismo una y otra vez y pegamos rate limits.
+const esmShCache = new Map();
+
+// Fallback CDN del runtime híbrido: resuelve cualquier bare import de npm que NO
+// esté en el alias map ni sea archivo del proyecto, fetcheándolo desde esm.sh en
+// compile-time. Debe ir DESPUÉS de virtualFilesPlugin para que los archivos del
+// proyecto y el alias ganen la resolución primero.
+function esmShResolverPlugin() {
+  // Deps que SIEMPRE las maneja el alias local. Nunca deben ir a esm.sh: así
+  // garantizamos una sola instancia de React en todo el bundle.
+  const LOCAL_DEPS = new Set([
+    'react',
+    'react-dom',
+    'react-dom/client',
+    'react-router-dom',
+    'react-router',
+    'react/jsx-runtime',
+    'scheduler'
+  ]);
+
+  return {
+    name: 'esm-sh-resolver',
+    setup(build) {
+      build.onResolve({ filter: /.*/ }, args => {
+        // Relativos y alias del proyecto → los maneja virtualFilesPlugin / alias
+        if (args.path === '.' || args.path.startsWith('src/') || args.path.startsWith('@/')) {
+          return undefined;
+        }
+
+        // Deps con alias local → nunca a esm.sh
+        if (LOCAL_DEPS.has(args.path)) {
+          return undefined;
+        }
+
+        // Import transitivo desde dentro de un módulo esm.sh: resolver contra el importer
+        if (args.namespace === 'esmsh' || (args.importer && args.importer.startsWith('http'))) {
+          return { path: new URL(args.path, args.importer).href, namespace: 'esmsh' };
+        }
+
+        // Cualquier otro bare specifier → esm.sh.
+        // ?external es CRÍTICO: evita que esm.sh bundlee su propia copia de React.
+        const url = `${ESM_BASE}/${args.path}?external=react,react-dom,react-router-dom`;
+        return { path: url, namespace: 'esmsh' };
+      });
+
+      build.onLoad({ filter: /.*/, namespace: 'esmsh' }, async args => {
+        if (esmShCache.has(args.path)) {
+          return esmShCache.get(args.path);
+        }
+
+        const res = await fetch(args.path);
+        if (!res.ok) {
+          return { errors: [{ text: `esm.sh fetch ${res.status}: ${args.path}` }] };
+        }
+
+        const result = { contents: await res.text(), loader: 'js' };
+        esmShCache.set(args.path, result);
+        return result;
+      });
+    }
+  };
+}
+
 const PREVIEW_CLIENT_SCRIPT = `
 (function() {
   console.log('Preview Client Active');
@@ -289,7 +356,7 @@ export async function compileFiles(filesObj) {
       footer: {
         js: '})();'
       },
-      plugins: [routerShimPlugin(), virtualFilesPlugin(filesObj)],
+      plugins: [routerShimPlugin(), virtualFilesPlugin(filesObj), esmShResolverPlugin()],
       logLevel: 'silent'
     });
 
