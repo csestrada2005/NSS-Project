@@ -273,7 +273,7 @@ export class AIOrchestrator {
 
       const modifiedPaths: string[] = [];
       for (const file of response.modifiedFiles) {
-        this.notifyFileUpdate(file.path, file.newContent);
+        this.notifyFileUpdate(file.path, this.stripCodeFences(file.newContent));
         modifiedPaths.push(file.path);
 
         if (file.path.startsWith('supabase/functions/') && file.path.endsWith('index.ts')) {
@@ -861,7 +861,7 @@ export class AIOrchestrator {
 
       const modifiedPaths: string[] = [];
       for (const file of response.modifiedFiles) {
-        this.notifyFileUpdate(file.path, file.newContent);
+        this.notifyFileUpdate(file.path, this.stripCodeFences(file.newContent));
         modifiedPaths.push(file.path);
 
         if (file.path.startsWith('supabase/functions/') && file.path.endsWith('index.ts')) {
@@ -918,7 +918,7 @@ export class AIOrchestrator {
 
       const modifiedPaths: string[] = [];
       for (const file of response.modifiedFiles) {
-        this.notifyFileUpdate(file.path, file.newContent);
+        this.notifyFileUpdate(file.path, this.stripCodeFences(file.newContent));
         modifiedPaths.push(file.path);
       }
 
