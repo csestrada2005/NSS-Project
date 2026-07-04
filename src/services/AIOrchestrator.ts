@@ -741,7 +741,18 @@ export class AIOrchestrator {
           'You are a React/Tailwind expert. The user wants a simple change. ' +
           'Return ONLY the complete updated file content. No explanation, ' +
           'no markdown fences. Just the raw file starting from line 1. ' +
-          'Preserve all data-oid attributes exactly as they are.',
+          'Preserve all data-oid attributes exactly as they are.\n\n' +
+          'AVAILABLE RUNTIME (the preview resolves these — use them for richer UI):\n' +
+          '- Locally bundled (fastest, always prefer): react, react-dom, react-router-dom,\n' +
+          '  lucide-react (icons), clsx, tailwind-merge. For classNames use\n' +
+          "  import { cn } from '@/lib/utils' (named import).\n" +
+          '- Any other well-known npm package (framer-motion, class-variance-authority,\n' +
+          '  date-fns, recharts, zustand, etc.) resolves automatically via CDN at compile\n' +
+          '  time. Prefer popular, browser-compatible packages.\n' +
+          '- NEVER import Node-only modules (fs, path, http, express) or packages that\n' +
+          '  require a server — the preview runs entirely in the browser.\n' +
+          '- For animations, framer-motion is available and encouraged for hero sections,\n' +
+          '  transitions, and micro-interactions.',
         messages: [
           {
             role: 'user',
