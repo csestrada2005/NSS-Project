@@ -117,7 +117,7 @@ export function StudioEngine() {
   };
 
   // Phase 4 Fix 2: track whether last file change came from AI
-  const lastChangeSource = useRef<'ai' | 'user'>('user');
+  const lastChangeSource = useRef<'ai' | 'user' | 'visual'>('user');
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const terminalRef = useRef<TerminalRef>(null);
