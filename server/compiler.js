@@ -62,6 +62,11 @@ function virtualFilesPlugin(files) {
     setup(build) {
       // Resolver imports relativos (./, ../) y alias @ contra el filesObj
       build.onResolve({ filter: /^[.@]/ }, args => {
+        // Los relativos que vienen de dentro de un módulo esm.sh no son archivos
+        // del proyecto — deben caer al plugin esm.sh, no al filesystem virtual.
+        if (args.namespace === 'esmsh' || (args.importer && args.importer.startsWith('http')))
+          return undefined;
+
         let resolvedPath;
 
         if (args.path.startsWith('@/')) {
@@ -191,6 +196,20 @@ function esmShResolverPlugin() {
         // ?external es CRÍTICO: evita que esm.sh bundlee su propia copia de React.
         const url = `${ESM_BASE}/${args.path}?external=react,react-dom,react-router-dom`;
         return { path: url, namespace: 'esmsh' };
+      });
+
+      // onResolve ADICIONAL scoped al namespace esmsh: resuelve los imports que
+      // surgen de DENTRO de un módulo esm.sh (paquetes multi-módulo como
+      // framer-motion). Los relativos/absolutos deben resolverse contra el módulo
+      // importador, no contra el filesystem virtual del proyecto.
+      build.onResolve({ filter: /.*/, namespace: 'esmsh' }, args => {
+        // Bare imports externalizados (react, react-dom...) → alias local.
+        if (LOCAL_MODULES.has(args.path) || args.path.endsWith('-preview')) return undefined;
+        // Relativos y absolutos → resolver contra el módulo importador.
+        if (args.path.startsWith('.') || args.path.startsWith('/'))
+          return { path: new URL(args.path, args.importer).href, namespace: 'esmsh' };
+        // Bare specifiers nuevos importados por un módulo CDN → esm.sh con external.
+        return { path: `${ESM_BASE}/${args.path}?external=react,react-dom,react-router-dom`, namespace: 'esmsh' };
       });
 
       build.onLoad({ filter: /.*/, namespace: 'esmsh' }, async args => {
