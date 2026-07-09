@@ -1,6 +1,16 @@
 import * as esbuild from 'esbuild';
 import path from 'path';
 
+// Denylist de Node.js builtins (con y sin prefijo "node:"). Son los únicos
+// specifiers que el gate rechaza: no existen en el browser y no los puede
+// resolver esm.sh. Todo lo demás pasa y se resuelve en compile (ALLOWED_DEPS/
+// alias primero, plugin esm.sh como fallback).
+const NODE_BUILTINS = new Set([
+  'fs', 'path', 'http', 'https', 'net', 'os', 'crypto', 'child_process',
+  'stream', 'zlib', 'url', 'util', 'buffer', 'events', 'worker_threads',
+  'cluster', 'dns', 'tls', 'dgram'
+]);
+
 // Allowlist de deps que el preview puede importar
 const ALLOWED_DEPS = {
   'react': 'react-preview',
@@ -104,17 +114,20 @@ function virtualFilesPlugin(files) {
         return { contents, loader };
       });
 
-      // Resolver imports de deps externas contra ALLOWED_DEPS
+      // Gate de deps externas: sólo rechaza Node.js builtins (con o sin prefijo
+      // "node:"). El resto pasa y lo resuelve el compile: ALLOWED_DEPS/alias vía
+      // build.alias primero, plugin esm.sh como fallback. Si esm.sh no resuelve
+      // un paquete, el error de fetch del plugin lo reporta — no hace falta gate.
       build.onResolve({ filter: /^[^.@\/]/ }, args => {
-        const aliased = ALLOWED_DEPS[args.path];
-        if (!aliased) {
+        const rootModule = args.path.replace(/^node:/, '').split('/')[0];
+        if (NODE_BUILTINS.has(rootModule)) {
           return {
             errors: [{
-              text: `Module "${args.path}" is not in the preview allowlist. Allowed: ${Object.keys(ALLOWED_DEPS).join(', ')}`
+              text: `Module "${args.path}" is a Node.js builtin and cannot run in the browser preview.`
             }]
           };
         }
-        // null = deja que esbuild use su resolución default con el alias aplicado vía build.alias
+        // null = deja que esbuild siga: build.alias / plugin esm.sh resuelven.
         return null;
       });
     }
