@@ -414,6 +414,21 @@ export const PATTERN_DATA: InjectionPattern[] = [
     ],
     "maxTokenEstimate": 450,
     "incompatibleWith": []
+  },
+  {
+    "id": "framer-motion-hero-entrance",
+    "triggerDescription": "Inject this pattern when the user asks for entrance animations, fade-in, slide-up, scroll reveals, hover micro-interactions, animated heroes, or any high-fidelity motion. framer-motion is fully available in the preview runtime (resolved via CDN) and is the preferred tool over CSS transitions for orchestrated or interactive animation.",
+    "dependencies": [
+      "framer-motion"
+    ],
+    "codeContext": "import { motion } from 'framer-motion';\n\nexport const Hero = () => {\n  return (\n    <motion.section\n      className=\"relative flex min-h-screen flex-col items-center justify-center gap-6 bg-slate-950 px-6 text-center\"\n      initial={{ opacity: 0, y: 40 }}\n      animate={{ opacity: 1, y: 0 }}\n      transition={{ duration: 0.6, ease: 'easeOut' }}\n    >\n      <motion.h1\n        className=\"max-w-3xl text-5xl font-bold tracking-tight text-white sm:text-6xl\"\n        initial={{ opacity: 0, y: 24 }}\n        animate={{ opacity: 1, y: 0 }}\n        transition={{ duration: 0.6, ease: 'easeOut', delay: 0.1 }}\n      >\n        Build something people can feel\n      </motion.h1>\n\n      <motion.p\n        className=\"max-w-xl text-lg text-slate-300\"\n        initial={{ opacity: 0, y: 24 }}\n        animate={{ opacity: 1, y: 0 }}\n        transition={{ duration: 0.6, ease: 'easeOut', delay: 0.25 }}\n      >\n        High-fidelity motion, orchestrated with framer-motion and styled with Tailwind.\n      </motion.p>\n\n      <motion.button\n        className=\"rounded-full bg-white px-8 py-3 text-base font-semibold text-slate-950 shadow-lg\"\n        initial={{ opacity: 0, y: 24 }}\n        animate={{ opacity: 1, y: 0 }}\n        transition={{ duration: 0.6, ease: 'easeOut', delay: 0.4 }}\n        whileHover={{ scale: 1.05 }}\n        whileTap={{ scale: 0.97 }}\n      >\n        Get started\n      </motion.button>\n    </motion.section>\n  );\n};",
+    "rules": [
+      "framer-motion IS available in the preview (CDN-resolved). Import it directly: import { motion } from 'framer-motion'. Do NOT fall back to CSS transitions or requestAnimationFrame when the user asks for animation by name or describes orchestrated motion.",
+      "Use initial/animate for entrance, whileHover/whileTap for interaction, AnimatePresence for exit animations.",
+      "Keep durations 0.4–0.8s with ease-out for entrances."
+    ],
+    "maxTokenEstimate": 380,
+    "incompatibleWith": []
   }
 ];
 
