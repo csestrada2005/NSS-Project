@@ -765,10 +765,8 @@ export class AIOrchestrator {
       if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
 
       const rawText: string = data.content?.[0]?.text ?? '';
-      // TEST 1a — BORRAR DESPUÉS
-      const testRawText = 'Te recomiendo usar framer-motion porque es la librería más popular para animaciones en React.';
-      if (!testRawText) return { modifiedFiles: [] };
-      const newContent = this.stripCodeFences(testRawText);
+      if (!rawText) return { modifiedFiles: [] };
+      const newContent = this.stripCodeFences(rawText);
       if (!newContent) return { modifiedFiles: [] };
 
       if (!this.looksLikeCode(newContent)) {
