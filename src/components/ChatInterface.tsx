@@ -7,6 +7,7 @@ interface Message {
   warning?: string;
   errorType?: 'insufficient_credits' | 'compile_error' | 'generic';
   errorDetail?: string;
+  suggestedAction?: string;
 }
 
 interface ChatInterfaceProps {
@@ -15,7 +16,7 @@ interface ChatInterfaceProps {
     message: string,
     onProgress?: (step: number, total: number, file: string) => void,
     onRetry?: (attempt: number, error: string) => void
-  ) => Promise<{ success: boolean; modifiedFiles: string[]; error?: string; warning?: string }>;
+  ) => Promise<{ success: boolean; modifiedFiles: string[]; error?: string; warning?: string; chatResponse?: string; suggestedAction?: string }>;
   selectedElement: { tagName: string; className?: string } | null;
   chatHistory?: { role: 'user' | 'assistant'; content: string }[];
   onHistoryUpdate?: (history: { role: 'user' | 'assistant'; content: string }[]) => void;
@@ -159,7 +160,7 @@ export function ChatInterface({
     scrollToBottom();
   }, [messages, isLoading]);
 
-  const buildAssistantMessage = (result: { success: boolean; modifiedFiles: string[]; error?: string; warning?: string }): { content: string; warning?: string; errorType?: 'insufficient_credits' | 'compile_error' | 'generic'; errorDetail?: string } => {
+  const buildAssistantMessage = (result: { success: boolean; modifiedFiles: string[]; error?: string; warning?: string; chatResponse?: string; suggestedAction?: string }): { content: string; warning?: string; errorType?: 'insufficient_credits' | 'compile_error' | 'generic'; errorDetail?: string; suggestedAction?: string } => {
     if (!result.success) {
       if (result.error === 'INSUFFICIENT_CREDITS') {
         return {
@@ -175,6 +176,9 @@ export function ChatInterface({
         };
       }
       return { content: 'Sorry, something went wrong processing your request.', errorType: 'generic' };
+    }
+    if (result.chatResponse) {
+      return { content: result.chatResponse, warning: result.warning, suggestedAction: result.suggestedAction };
     }
     if (result.modifiedFiles.length > 0) {
       return { content: `Done. Modified: ${result.modifiedFiles.join(', ')}`, warning: result.warning };
@@ -248,7 +252,7 @@ export function ChatInterface({
         }
       }
 
-      const { content, warning, errorType, errorDetail } = buildAssistantMessage(result);
+      const { content, warning, errorType, errorDetail, suggestedAction } = buildAssistantMessage(result);
       onHistoryUpdate?.([
         ...chatHistory,
         { role: 'user' as const, content: userMessage },
@@ -256,7 +260,7 @@ export function ChatInterface({
       ]);
       setMessages(prev => [
         ...prev,
-        { role: 'assistant', content, warning, errorType, errorDetail }
+        { role: 'assistant', content, warning, errorType, errorDetail, suggestedAction }
       ]);
     } catch (error) {
       clearInterval(intervalId);

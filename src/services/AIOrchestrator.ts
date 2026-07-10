@@ -7,7 +7,8 @@ import { NEBU_SCHEMA_CONTEXT } from '../utils/schemaContext';
 import { ProjectMemoryService } from './ProjectMemoryService';
 import { PatternRetriever } from './PatternRetriever';
 import { DesignContextService } from './DesignContextService';
-import { IntentClassifier } from './IntentClassifier';
+import { IntentClassifier, type Intent } from './IntentClassifier';
+import type { ProjectMemory } from './ProjectMemoryService';
 import { Architect, type BuildStep } from './Architect';
 import { Implementer, type ProgressCallback } from './Implementer';
 import { Verifier, type RetryCallback } from './Verifier';
@@ -36,6 +37,8 @@ export interface OrchestratorResult {
   warning?: string;
   tokensInput?: number;
   tokensOutput?: number;
+  chatResponse?: string;
+  suggestedAction?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -409,6 +412,23 @@ export class AIOrchestrator {
           risk: 'medium' as const,
           reasoning: 'No memory available; defaulting to modify_existing.',
         };
+
+    // ------------------------------------------------------------------
+    // Question intent — answer in chat, no file changes
+    // ------------------------------------------------------------------
+    if (intent.type === 'question') {
+      return await this.answerQuestion(
+        input,
+        files,
+        memory,
+        chatHistory,
+        projectId,
+        creditUserId,
+        isFreePrompt,
+        startTime,
+        intent
+      );
+    }
 
     // ------------------------------------------------------------------
     // Fast lane: style/low-risk with a selected element — skip layers 3-5
@@ -791,6 +811,121 @@ export class AIOrchestrator {
       };
     } catch (e) {
       console.error('[AIOrchestrator] Simple lane error:', e);
+      return { modifiedFiles: [], outcome: 'failed' };
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Question lane — answer the user's question in chat, never touch files
+  // -------------------------------------------------------------------------
+
+  private static async answerQuestion(
+    input: string,
+    files: Map<string, string>,
+    memory: ProjectMemory | null,
+    chatHistory: Array<{ role: string; content: string }> | undefined,
+    projectId: string | undefined,
+    creditUserId: string | null,
+    isFreePrompt: boolean,
+    startTime: number,
+    intent: Intent
+  ): Promise<OrchestratorResult> {
+    const blueprint = generateBlueprintFromFiles(files);
+    const memorySummary = memory
+      ? ProjectMemoryService.formatForPrompt(memory)
+      : '';
+
+    const systemPrompt =
+      "You are Wyrd Forge's AI assistant inside a web-builder IDE. The user is " +
+      'asking a question about their project — answer it helpfully and concisely ' +
+      '(under 150 words), in the same language the user wrote in. You have the ' +
+      'project structure below for context. The preview runtime supports react, ' +
+      'react-dom, react-router-dom, lucide-react, clsx, tailwind-merge locally, ' +
+      'and any well-known browser-compatible npm package (framer-motion, recharts, ' +
+      'date-fns, zustand, etc.) via CDN. Do NOT return code files. After your ' +
+      'answer, if the question implies something that could be built or changed, ' +
+      'end with one final line in this exact format:\n' +
+      'SUGGESTED_ACTION: <a short imperative prompt in the user\'s language that ' +
+      'would implement it>\n' +
+      'If nothing actionable applies, omit that line entirely.';
+
+    const contextBlock =
+      `PROJECT STRUCTURE:\n${blueprint}\n\n` +
+      (memorySummary ? `PROJECT MEMORY:\n${memorySummary}\n\n` : '') +
+      `USER QUESTION:\n${input}`;
+
+    const priorMessages = (chatHistory ?? []).map(msg => ({
+      role: msg.role === 'assistant' ? ('assistant' as const) : ('user' as const),
+      content: msg.content,
+    }));
+
+    try {
+      const response = await platformService.callChat({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: [
+          ...priorMessages,
+          { role: 'user' as const, content: contextBlock },
+        ],
+      });
+
+      const data = await response.json();
+      if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+
+      const rawText: string = (data.content?.[0]?.text ?? '').trim();
+
+      // Parse out a trailing SUGGESTED_ACTION line, if present.
+      let answer = rawText;
+      let suggestedAction: string | undefined;
+      const lines = rawText.split('\n');
+      let lastNonEmpty = lines.length - 1;
+      while (lastNonEmpty >= 0 && lines[lastNonEmpty].trim() === '') lastNonEmpty--;
+      if (lastNonEmpty >= 0 && lines[lastNonEmpty].trim().startsWith('SUGGESTED_ACTION:')) {
+        suggestedAction = lines[lastNonEmpty]
+          .trim()
+          .slice('SUGGESTED_ACTION:'.length)
+          .trim();
+        answer = lines.slice(0, lastNonEmpty).join('\n').trim();
+      }
+
+      // Deduct credits (same accounting as runSimpleLane).
+      if (creditUserId) {
+        if (isFreePrompt) {
+          await CreditService.markFreePromptUsed(creditUserId);
+        } else {
+          await CreditService.deductCredits(
+            creditUserId,
+            data.usage?.input_tokens ?? 0,
+            data.usage?.output_tokens ?? 0,
+            projectId
+          );
+        }
+        window.dispatchEvent(new CustomEvent('forge:credits-updated'));
+      }
+
+      if (projectId) {
+        await this.logIntent({
+          projectId,
+          prompt: input,
+          intentType: 'question',
+          intentRisk: intent.risk,
+          modifiedFiles: [],
+          outcome: 'success',
+          durationMs: Date.now() - startTime,
+          requiredPatternIds: intent.requiredPatternIds,
+          domain: intent.domain,
+        });
+      }
+
+      return {
+        modifiedFiles: [],
+        outcome: 'success',
+        chatResponse: answer,
+        suggestedAction,
+      };
+    } catch (e) {
+      console.error('[AIOrchestrator] Question lane error:', e);
       return { modifiedFiles: [], outcome: 'failed' };
     }
   }
