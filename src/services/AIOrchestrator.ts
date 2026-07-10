@@ -769,6 +769,15 @@ export class AIOrchestrator {
       const newContent = this.stripCodeFences(rawText);
       if (!newContent) return { modifiedFiles: [] };
 
+      if (!this.looksLikeCode(newContent)) {
+        console.warn('[AIOrchestrator] Simple lane: model returned non-code output, aborting write');
+        return {
+          modifiedFiles: [],
+          outcome: 'failed',
+          error: `Model returned prose instead of code: ${rawText.slice(0, 300)}`,
+        };
+      }
+
       this.notifyFileUpdate(topFile.path, newContent);
       if (projectId) {
         trackAICall(projectId);
@@ -994,6 +1003,14 @@ export class AIOrchestrator {
   // -------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------
+
+  private static looksLikeCode(text: string): boolean {
+    const firstLine = text.split('\n').find(l => l.trim().length > 0)?.trim() ?? '';
+    const validStart = /^(import\s|export\s|const\s|function\s|type\s|interface\s|\/\/|\/\*|['"]use )/;
+    if (!validStart.test(firstLine)) return false;
+    if (!/\bexport\b/.test(text)) return false;
+    return true;
+  }
 
   private static stripCodeFences(text: string): string {
     const fenced = text.match(/```(?:tsx?|jsx?|typescript|javascript|css|html)?\s*([\s\S]*?)```/);
