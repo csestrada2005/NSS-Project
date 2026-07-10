@@ -853,13 +853,15 @@ export class AIOrchestrator {
       'language the user wrote in. You have the project structure and the most ' +
       'relevant file contents below for context.\n\n' +
       AVAILABLE_RUNTIME_CONTEXT + '\n\n' +
-      'Answer in plain conversational prose. HARD RULES:\n' +
-      '- No markdown headings, no code fences, no bullet lists, no emojis — the chat\n' +
-      '  renders plain text only.\n' +
-      '- Maximum 120 words before the SUGGESTED_ACTION line.\n' +
+      'FORMAT RULES:\n' +
+      '- Markdown is supported: use **bold** and inline `code` freely; short code\n' +
+      '  snippets in fences are OK when they help. Avoid headings and emojis.\n' +
+      '- Be brief: maximum ~120 words of prose. This is a chat, not documentation.\n' +
       '- You can see the project files provided — never ask the user to share code.\n' +
-      '- Never end your answer with a question offering to implement something;\n' +
-      '  the SUGGESTED_ACTION line is the only call to action.\n\n' +
+      '- Packages resolve automatically in the preview; NEVER tell the user to run\n' +
+      '  npm install or any terminal command.\n' +
+      '- Never end with a question offering to implement something; the\n' +
+      '  SUGGESTED_ACTION line is the only call to action.\n\n' +
       'After your answer, if the question implies something that could be built or ' +
       'changed, end with one final line in this exact format:\n' +
       'SUGGESTED_ACTION: <a short imperative prompt in the user\'s language that ' +
