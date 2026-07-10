@@ -532,7 +532,7 @@ export function StudioEngine() {
     onProgress?: (step: number, total: number, file: string) => void,
     onRetry?: (attempt: number, error: string) => void,
     filesOverride?: Map<string, string>
-  ): Promise<{ success: boolean; modifiedFiles: string[]; error?: string; warning?: string }> => {
+  ): Promise<{ success: boolean; modifiedFiles: string[]; error?: string; warning?: string; chatResponse?: string; suggestedAction?: string }> => {
     if (isReadOnly) return { success: false, modifiedFiles: [] };
     setIsGenerating(true);
 
@@ -584,6 +584,8 @@ export function StudioEngine() {
         modifiedFiles: result.modifiedFiles,
         error: result.error,
         warning: result.warning,
+        chatResponse: result.chatResponse,
+        suggestedAction: result.suggestedAction,
       };
     } catch (error) {
       console.error('[StudioEngine] Error processing message:', error);

@@ -14,7 +14,8 @@ export interface Intent {
     | 'style_change'
     | 'add_page'
     | 'database_change'
-    | 'refactor';
+    | 'refactor'
+    | 'question';
   affected_files: string[];
   needs_new_files: boolean;
   risk: 'low' | 'medium' | 'high';
@@ -61,12 +62,15 @@ export class IntentClassifier {
 Given a user prompt and project context, classify the intent and return ONLY a JSON object matching this TypeScript interface:
 
 interface Intent {
-  type: 'new_feature' | 'modify_existing' | 'fix_bug' | 'style_change' | 'add_page' | 'database_change' | 'refactor';
+  type: 'new_feature' | 'modify_existing' | 'fix_bug' | 'style_change' | 'add_page' | 'database_change' | 'refactor' | 'question';
   affected_files: string[];   // file paths likely to be modified
   needs_new_files: boolean;
   risk: 'low' | 'medium' | 'high';
   reasoning: string;          // one sentence explanation
 }
+
+INTENT TYPE NOTES:
+question: The user is asking for information, advice, an explanation, or a recommendation — they are NOT requesting a change to the project. Examples: '¿qué framework de animación me recomiendas?', 'what does this component do?', 'should I use a modal or a drawer here?'. If the message is phrased as a question about options or opinions rather than an instruction to build or modify something, classify it as question. For type=question always return affected_files=[], needs_new_files=false, risk="low".
 
 Return ONLY valid JSON. No markdown fences, no explanation outside the JSON object.
 
@@ -101,7 +105,7 @@ Additionally output these two fields in your JSON response:
       const cleaned = this.extractJson(text);
       const parsed = JSON.parse(cleaned) as Partial<Intent>;
 
-      const VALID_TYPES = ['create_component', 'modify_component', 'add_route', 'add_feature', 'fix_bug', 'style_change', 'refactor', 'provision_database', 'general', 'new_feature', 'modify_existing', 'add_page', 'database_change'];
+      const VALID_TYPES = ['create_component', 'modify_component', 'add_route', 'add_feature', 'fix_bug', 'style_change', 'refactor', 'provision_database', 'general', 'new_feature', 'modify_existing', 'add_page', 'database_change', 'question'];
       if (!parsed.type || !VALID_TYPES.includes(parsed.type)) {
         console.warn('[IntentClassifier] Invalid or missing type in response:', parsed.type, '| raw text preview:', text.slice(0, 200));
         return DEFAULT_INTENT;
