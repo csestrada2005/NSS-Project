@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { Send, Bot, Loader2, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface Message {
@@ -310,7 +311,13 @@ export function ChatInterface({
                   : 'bg-muted text-foreground'
               }`}
             >
-              {msg.content}
+              {msg.role === 'assistant' ? (
+                <div className="text-sm leading-relaxed space-y-2 [&_h1]:text-base [&_h1]:font-bold [&_h2]:text-sm [&_h2]:font-bold [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_p]:my-1 [&_a]:underline [&_a]:text-primary [&_strong]:font-semibold [&_code]:bg-muted [&_code]:rounded [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-[0.85em] [&_pre]:bg-muted [&_pre]:rounded [&_pre]:p-2 [&_pre]:overflow-x-auto [&_pre_code]:bg-transparent [&_pre_code]:p-0">
+                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+                </div>
+              ) : (
+                msg.content
+              )}
               {msg.warning && (
                 <p className="text-yellow-400 text-xs mt-2">⚠️ {msg.warning}</p>
               )}
