@@ -114,6 +114,19 @@ If you cannot fulfill the request, respond with: {"modifiedFiles":[],"installCom
 Never truncate file content. Never use placeholder comments like "// rest of file here".
 `;
 
+const AVAILABLE_RUNTIME_CONTEXT =
+  'AVAILABLE RUNTIME (the preview resolves these — use them for richer UI):\n' +
+  '- Locally bundled (fastest, always prefer): react, react-dom, react-router-dom,\n' +
+  '  lucide-react (icons), clsx, tailwind-merge. For classNames use\n' +
+  "  import { cn } from '@/lib/utils' (named import).\n" +
+  '- Any other well-known npm package (framer-motion, class-variance-authority,\n' +
+  '  date-fns, recharts, zustand, etc.) resolves automatically via CDN at compile\n' +
+  '  time. Prefer popular, browser-compatible packages.\n' +
+  '- NEVER import Node-only modules (fs, path, http, express) or packages that\n' +
+  '  require a server — the preview runs entirely in the browser.\n' +
+  '- For animations, framer-motion is available and encouraged for hero sections,\n' +
+  '  transitions, and micro-interactions.';
+
 const REACT_TAILWIND_RULES = `
 REACT/TAILWIND RULES:
 - Always write complete file contents, never partial updates
@@ -762,17 +775,7 @@ export class AIOrchestrator {
           'Return ONLY the complete updated file content. No explanation, ' +
           'no markdown fences. Just the raw file starting from line 1. ' +
           'Preserve all data-oid attributes exactly as they are.\n\n' +
-          'AVAILABLE RUNTIME (the preview resolves these — use them for richer UI):\n' +
-          '- Locally bundled (fastest, always prefer): react, react-dom, react-router-dom,\n' +
-          '  lucide-react (icons), clsx, tailwind-merge. For classNames use\n' +
-          "  import { cn } from '@/lib/utils' (named import).\n" +
-          '- Any other well-known npm package (framer-motion, class-variance-authority,\n' +
-          '  date-fns, recharts, zustand, etc.) resolves automatically via CDN at compile\n' +
-          '  time. Prefer popular, browser-compatible packages.\n' +
-          '- NEVER import Node-only modules (fs, path, http, express) or packages that\n' +
-          '  require a server — the preview runs entirely in the browser.\n' +
-          '- For animations, framer-motion is available and encouraged for hero sections,\n' +
-          '  transitions, and micro-interactions.',
+          AVAILABLE_RUNTIME_CONTEXT,
         messages: [
           {
             role: 'user',
@@ -835,16 +838,30 @@ export class AIOrchestrator {
       ? ProjectMemoryService.formatForPrompt(memory)
       : '';
 
+    const relevantFiles = selectRelevantFiles(input, files);
+    const fileContext = relevantFiles
+      .slice(0, 2)
+      .map(f => {
+        const fullContent = files.get(f.path) ?? f.content;
+        return `--- FILE: ${f.path} ---\n${fullContent.slice(0, 6000)}`;
+      })
+      .join('\n\n');
+
     const systemPrompt =
       "You are Wyrd Forge's AI assistant inside a web-builder IDE. The user is " +
-      'asking a question about their project — answer it helpfully and concisely ' +
-      '(under 150 words), in the same language the user wrote in. You have the ' +
-      'project structure below for context. The preview runtime supports react, ' +
-      'react-dom, react-router-dom, lucide-react, clsx, tailwind-merge locally, ' +
-      'and any well-known browser-compatible npm package (framer-motion, recharts, ' +
-      'date-fns, zustand, etc.) via CDN. Do NOT return code files. After your ' +
-      'answer, if the question implies something that could be built or changed, ' +
-      'end with one final line in this exact format:\n' +
+      'asking a question about their project — answer it helpfully, in the same ' +
+      'language the user wrote in. You have the project structure and the most ' +
+      'relevant file contents below for context.\n\n' +
+      AVAILABLE_RUNTIME_CONTEXT + '\n\n' +
+      'Answer in plain conversational prose. HARD RULES:\n' +
+      '- No markdown headings, no code fences, no bullet lists, no emojis — the chat\n' +
+      '  renders plain text only.\n' +
+      '- Maximum 120 words before the SUGGESTED_ACTION line.\n' +
+      '- You can see the project files provided — never ask the user to share code.\n' +
+      '- Never end your answer with a question offering to implement something;\n' +
+      '  the SUGGESTED_ACTION line is the only call to action.\n\n' +
+      'After your answer, if the question implies something that could be built or ' +
+      'changed, end with one final line in this exact format:\n' +
       'SUGGESTED_ACTION: <a short imperative prompt in the user\'s language that ' +
       'would implement it>\n' +
       'If nothing actionable applies, omit that line entirely.';
@@ -852,6 +869,7 @@ export class AIOrchestrator {
     const contextBlock =
       `PROJECT STRUCTURE:\n${blueprint}\n\n` +
       (memorySummary ? `PROJECT MEMORY:\n${memorySummary}\n\n` : '') +
+      (fileContext ? `RELEVANT FILES:\n${fileContext}\n\n` : '') +
       `USER QUESTION:\n${input}`;
 
     const priorMessages = (chatHistory ?? []).map(msg => ({
