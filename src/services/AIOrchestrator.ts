@@ -767,7 +767,7 @@ export class AIOrchestrator {
     if (!topFile) return { modifiedFiles: [] };
 
     try {
-      const response = await platformService.callChat({
+      const response = await platformService.callForgeChat({
         model: 'claude-sonnet-4-6',
         max_tokens: 8192,
         system:
@@ -880,7 +880,7 @@ export class AIOrchestrator {
     }));
 
     try {
-      const response = await platformService.callChat({
+      const response = await platformService.callForgeChat({
         model: 'claude-sonnet-4-6',
         max_tokens: 1024,
         system: systemPrompt,
