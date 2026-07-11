@@ -1,6 +1,7 @@
 import { platformService } from './PlatformService';
 import type { BuildStep } from './Architect';
 import type { ProjectMemory } from './ProjectMemoryService';
+import { sanitizeFileContent } from '../utils/sanitizeFileContent';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -20,6 +21,7 @@ const FORMAT_INSTRUCTION = `
 CRITICAL OUTPUT FORMAT: Respond with ONLY the complete file content.
 No markdown fences, no explanation before or after. Just the raw file content starting from line 1.
 Never truncate. Never use placeholder comments like "// rest of file here".
+Never write the file path as the first line of the file content. File content must start directly with code (imports, comments, or declarations).
 `.trim();
 
 const REACT_TAILWIND_RULES = `
@@ -207,7 +209,7 @@ export class Implementer {
       }
 
       const text: string = data.content?.[0]?.text ?? '';
-      return this.stripCodeFences(text);
+      return sanitizeFileContent(this.stripCodeFences(text));
     } catch (e) {
       console.error(`[Implementer] Step ${step.order} failed:`, e);
       return null;

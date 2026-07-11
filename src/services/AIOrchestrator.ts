@@ -1,4 +1,5 @@
 import { updateCode } from '../utils/ast';
+import { sanitizeFileContent } from '../utils/sanitizeFileContent';
 import { contextService } from './ContextService';
 import { SupabaseService } from './SupabaseService';
 import { platformService } from './PlatformService';
@@ -774,7 +775,9 @@ export class AIOrchestrator {
           'You are a React/Tailwind expert. The user wants a simple change. ' +
           'Return ONLY the complete updated file content. No explanation, ' +
           'no markdown fences. Just the raw file starting from line 1. ' +
-          'Preserve all data-oid attributes exactly as they are.\n\n' +
+          'Preserve all data-oid attributes exactly as they are. ' +
+          'Never write the file path as the first line of the file content. File ' +
+          'content must start directly with code (imports, comments, or declarations).\n\n' +
           AVAILABLE_RUNTIME_CONTEXT,
         messages: [
           {
@@ -789,7 +792,8 @@ export class AIOrchestrator {
 
       const rawText: string = data.content?.[0]?.text ?? '';
       if (!rawText) return { modifiedFiles: [] };
-      const newContent = this.stripCodeFences(rawText);
+      let newContent = this.stripCodeFences(rawText);
+      newContent = AIOrchestrator.sanitizeFileContent(newContent);
       if (!newContent) return { modifiedFiles: [] };
 
       if (!this.looksLikeCode(newContent)) {
@@ -1171,6 +1175,10 @@ export class AIOrchestrator {
     const fenced = text.match(/```(?:tsx?|jsx?|typescript|javascript|css|html)?\s*([\s\S]*?)```/);
     if (fenced) return fenced[1].trim();
     return text.trim();
+  }
+
+  static sanitizeFileContent(content: string): string {
+    return sanitizeFileContent(content);
   }
 
   private static cleanJsonOutput(text: string): string {
