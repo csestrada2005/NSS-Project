@@ -35,6 +35,9 @@ export function useProjectFiles(): UseProjectFilesReturn {
 
   /** Fetch all forge_files rows for the project and populate the local Map. */
   const loadFromSupabase = useCallback(async (projectId: string) => {
+    console.log('[useProjectFiles] LOAD PROJECT', { newProjectId: projectId,
+      previousProjectId: activeProjectId.current,
+      leftoverPending: [...pendingWrites.current.keys()] });
     activeProjectId.current = projectId;
     setIsLoading(true);
     try {
@@ -65,6 +68,7 @@ export function useProjectFiles(): UseProjectFilesReturn {
   /** Upsert a single file to Supabase and update the local Map. */
   const saveFile = useCallback(async (path: string, content: string) => {
     const projectId = activeProjectId.current;
+    console.log('[useProjectFiles] saveFile queued', { projectId, path });
     if (!projectId) {
       console.warn('[useProjectFiles] saveFile called before loadFromSupabase — no projectId');
       return;
@@ -88,6 +92,8 @@ export function useProjectFiles(): UseProjectFilesReturn {
       pendingWrites.current.delete(path);
 
       if (writeVersion.current.get(path) !== thisVersion) return;
+
+      console.log('[useProjectFiles] upsert firing', { projectId, path });
 
       const { error } = await supabase
         .from('forge_files')
@@ -113,6 +119,8 @@ export function useProjectFiles(): UseProjectFilesReturn {
   const flushPendingWrites = useCallback(async (): Promise<void> => {
     const promises: Promise<void>[] = [];
     const projectId = activeProjectId.current;
+    console.log('[useProjectFiles] FLUSH', { projectId,
+      pending: [...pendingWrites.current.keys()] });
     if (!projectId) return;
 
     for (const [path, timer] of debounceTimers.current.entries()) {
