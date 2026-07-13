@@ -66,6 +66,10 @@ export class Implementer {
     const completed = new Set<number>();
     const sorted = [...plan].sort((a, b) => a.order - b.order);
 
+    console.log('[Implementer] PLAN:', JSON.stringify(
+      sorted.map(s => ({ order: s.order, action: s.action,
+        file_path: s.file_path, requires: s.requires_steps }))));
+
     // Process with dependency ordering — iterate until all done or no progress
     const maxPasses = plan.length * 2;
     let pass = 0;
@@ -93,6 +97,8 @@ export class Implementer {
         const newContent = await this.executeStep(step, modifiedFiles, memory, patternContext, designContext);
         if (newContent !== null) {
           modifiedFiles.set(step.file_path, newContent);
+        } else {
+          console.warn('[Implementer] STEP RETURNED NULL:', step.order, step.file_path);
         }
         completed.add(step.order);
         progressed = true;
@@ -100,6 +106,13 @@ export class Implementer {
 
       if (!progressed) break;
     }
+
+    if (completed.size < sorted.length) {
+      console.warn('[Implementer] UNEXECUTED STEPS (dep deadlock?):',
+        sorted.filter(s => !completed.has(s.order)).map(s => s.order));
+    }
+
+    console.log('[Implementer] FINAL FILE KEYS:', [...modifiedFiles.keys()]);
 
     return modifiedFiles;
   }
