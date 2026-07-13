@@ -22,6 +22,8 @@ CRITICAL OUTPUT FORMAT: Respond with ONLY the complete file content.
 No markdown fences, no explanation before or after. Just the raw file content starting from line 1.
 Never truncate. Never use placeholder comments like "// rest of file here".
 Never write the file path as the first line of the file content. File content must start directly with code (imports, comments, or declarations).
+When importing components created by other steps of this plan, use the EXACT paths listed under PLAN FILES (with the @/ alias). Never guess paths.
+Never reimplement inline a component that exists as a file in PLAN FILES — import it instead.
 `.trim();
 
 const REACT_TAILWIND_RULES = `
@@ -94,7 +96,12 @@ export class Implementer {
           continue;
         }
 
-        const newContent = await this.executeStep(step, modifiedFiles, memory, patternContext, designContext);
+        const planFiles = sorted.map(s => ({
+          path: s.file_path,
+          done: completed.has(s.order),
+        }));
+
+        const newContent = await this.executeStep(step, modifiedFiles, memory, planFiles, patternContext, designContext);
         if (newContent !== null) {
           modifiedFiles.set(step.file_path, newContent);
         } else {
@@ -153,6 +160,7 @@ export class Implementer {
     step: BuildStep,
     files: Map<string, string>,
     memory: ProjectMemory,
+    planFiles: { path: string; done: boolean }[],
     patternContext: string = '',
     designContext: string = ''
   ): Promise<string | null> {
@@ -181,6 +189,15 @@ export class Implementer {
     parts.push(`STEP ${step.order}: ${step.description}`);
     parts.push(`ACTION: ${step.action}`);
     parts.push(`FILE: ${step.file_path}`);
+
+    if (planFiles.length > 0) {
+      const planList = planFiles
+        .map(f => `- ${f.path} (${f.done ? 'done' : 'pending'})`)
+        .join('\n');
+      parts.push(
+        `\nPLAN FILES (all files created/modified by this build plan):\n${planList}`
+      );
+    }
 
     if (designContext) {
       parts.push(`\nDESIGN SYSTEM CONTEXT:\n${designContext}`);
