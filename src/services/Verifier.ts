@@ -60,6 +60,7 @@ export class Verifier {
     files: Map<string, string>
   ): Promise<{ success: boolean; error?: string }> {
     try {
+      console.log('[Verifier] COMPILING KEYS:', [...files.keys()]);
       const filesObj: Record<string, string> = {};
       for (const [path, content] of files) {
         filesObj[path] = content;
