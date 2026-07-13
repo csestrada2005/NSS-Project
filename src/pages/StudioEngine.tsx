@@ -216,6 +216,8 @@ export function StudioEngine() {
   // -------------------------------------------------------------------------
   useEffect(() => {
     AIOrchestrator.setFileUpdateCallback((path, content) => {
+      console.log('[StudioEngine] file-update event received', { path,
+        activeProject: projectId });
       lastChangeSource.current = 'ai';
       updateLocalFile(path, content);
       // Async save — don't await to keep the callback synchronous
