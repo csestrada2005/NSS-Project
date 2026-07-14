@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Send, Bot, Loader2, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Send, Bot, Loader2, CheckCircle, ChevronDown, ChevronUp, Wand2 } from 'lucide-react';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -187,12 +187,10 @@ export function ChatInterface({
     return { content: 'Done — no files needed changing.', warning: result.warning };
   };
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+  const sendMessage = async (text: string) => {
+    if (!text.trim() || isLoading) return;
 
-    const userMessage = input.trim();
-    setInput('');
-    try { sessionStorage.removeItem('forge_chat_input'); } catch { /* ignore */ }
+    const userMessage = text.trim();
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
 
     startTimeRef.current = Date.now();
@@ -280,12 +278,27 @@ export function ChatInterface({
     }
   };
 
+  const handleSend = () => {
+    if (!input.trim() || isLoading) return;
+    const text = input;
+    setInput('');
+    try { sessionStorage.removeItem('forge_chat_input'); } catch { /* ignore */ }
+    sendMessage(text);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
   };
+
+  // Índice del mensaje del asistente más reciente: sólo ese muestra su botón
+  // de acción sugerida, para no disparar acciones sobre estado viejo.
+  const lastAssistantIndex = messages.reduce(
+    (acc, msg, idx) => (msg.role === 'assistant' ? idx : acc),
+    -1
+  );
 
   return (
     <div className="flex flex-col h-full w-full bg-card">
@@ -323,6 +336,18 @@ export function ChatInterface({
               )}
               {msg.errorType === 'compile_error' && msg.errorDetail && (
                 <CompileErrorDetail errorDetail={msg.errorDetail} />
+              )}
+              {msg.role === 'assistant' && msg.suggestedAction && !isLoading && index === lastAssistantIndex && (
+                <div className="mt-2 pt-2 border-t border-border/50">
+                  <button
+                    onClick={() => sendMessage(msg.suggestedAction!)}
+                    disabled={isLoading}
+                    className="w-full text-left flex items-center gap-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-md px-3 py-2 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Wand2 className="w-4 h-4 shrink-0" />
+                    <span className="line-clamp-2">{msg.suggestedAction}</span>
+                  </button>
+                </div>
               )}
             </div>
           </div>
