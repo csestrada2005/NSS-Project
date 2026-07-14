@@ -170,6 +170,17 @@ function esmShResolverPlugin() {
   // react-router-dom-preview, @remix-run/router, etc.) quede cubierto.
   const LOCAL_MODULES = new Set([...Object.keys(ALIAS), 'react-router-dom']);
 
+  // true si p es un módulo local exacto o un subpath de uno (name + '/...').
+  // El prefix-match evita que subpaths como 'lucide-react/…' o
+  // 'react-dom/client-like' se fuguen al CDN.
+  const isLocalModule = (p) => {
+    if (LOCAL_MODULES.has(p)) return true;
+    for (const name of LOCAL_MODULES) {
+      if (p.startsWith(name + '/')) return true;
+    }
+    return false;
+  };
+
   return {
     name: 'esm-sh-resolver',
     setup(build) {
@@ -178,7 +189,7 @@ function esmShResolverPlugin() {
         // Va PRIMERO, gana a TODO (incluso a imports que vienen de dentro de un
         // módulo esm.sh), para que p.ej. 'react' importado por lucide-react
         // resuelva al React local: una sola instancia de React en el bundle.
-        if (LOCAL_MODULES.has(args.path) || args.path.endsWith('-preview')) {
+        if (isLocalModule(args.path) || args.path.endsWith('-preview')) {
           return undefined;
         }
 
@@ -194,6 +205,8 @@ function esmShResolverPlugin() {
 
         // Cualquier otro bare specifier → esm.sh.
         // ?external es CRÍTICO: evita que esm.sh bundlee su propia copia de React.
+        console.warn('[compiler] CDN fallback:', args.path, '| importer:',
+          args.importer || 'n/a', '| namespace:', args.namespace || 'n/a');
         const url = `${ESM_BASE}/${args.path}?external=react,react-dom,react-router-dom`;
         return { path: url, namespace: 'esmsh' };
       });
@@ -204,7 +217,7 @@ function esmShResolverPlugin() {
       // importador, no contra el filesystem virtual del proyecto.
       build.onResolve({ filter: /.*/, namespace: 'esmsh' }, args => {
         // Bare imports externalizados (react, react-dom...) → alias local.
-        if (LOCAL_MODULES.has(args.path) || args.path.endsWith('-preview')) return undefined;
+        if (isLocalModule(args.path) || args.path.endsWith('-preview')) return undefined;
         // Relativos y absolutos → resolver contra el módulo importador.
         if (args.path.startsWith('.') || args.path.startsWith('/'))
           return { path: new URL(args.path, args.importer).href, namespace: 'esmsh' };
