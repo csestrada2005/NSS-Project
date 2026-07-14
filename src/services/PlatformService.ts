@@ -6,6 +6,18 @@
 import { SupabaseService } from './SupabaseService';
 import { toast } from 'sonner';
 
+/**
+ * Structured compile error propagated from esbuild (server/compiler.js) so the
+ * Verifier auto-fix can identify the exact offending file/line instead of
+ * regex-scraping the flattened error string.
+ */
+export interface CompileErrorDetail {
+  message: string | null;
+  file: string | null;
+  line: number | null;
+  lineText: string | null;
+}
+
 class PlatformService {
   private async getHeaders(): Promise<HeadersInit> {
     const { Authorization } = await SupabaseService.getInstance().getAuthHeader();
@@ -78,7 +90,7 @@ class PlatformService {
   }
 
   /** Compile project files server-side. */
-  async compileSrc(files: Record<string, string>): Promise<{ html?: string; error?: string }> {
+  async compileSrc(files: Record<string, string>): Promise<{ html?: string; error?: string; errorDetail?: CompileErrorDetail | null }> {
     try {
       const headers = await this.getHeaders();
       const response = await fetch('/api/compile', {

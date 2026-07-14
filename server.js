@@ -415,7 +415,7 @@ app.post('/api/compile', async (req, res) => {
     const result = await compileFiles(files);
     if (result.error) {
       console.error('[Compile] Error:', result.error);
-      return res.status(400).json({ error: result.error, errorDetails: result.errorDetails });
+      return res.status(400).json({ error: result.error, errorDetails: result.errorDetails, errorDetail: result.errorDetail ?? null });
     }
     res.json({ html: result.html });
   } catch (err) {

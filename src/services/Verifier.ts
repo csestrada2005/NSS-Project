@@ -1,4 +1,5 @@
 import { platformService } from './PlatformService';
+import type { CompileErrorDetail } from './PlatformService';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -41,13 +42,19 @@ export class Verifier {
       }
 
       const errorMsg = result.error ?? 'Unknown compilation error';
+      const errorDetail = result.errorDetail ?? null;
+
+      // Resolver de antemano el archivo culpable para poder loguearlo por intento.
+      const errorFile = this.identifyErrorFile(errorMsg, errorDetail, currentFiles);
+      console.log('[Verifier] attempt', attempt, '| error file:', errorFile ?? 'UNKNOWN');
+
       onRetry?.(attempt, errorMsg.slice(0, 200));
 
       if (attempt === MAX_RETRIES) {
         return { success: false, error: errorMsg, files: originalFiles };
       }
 
-      const fixed = await this.fixError(errorMsg, currentFiles);
+      const fixed = await this.fixError(errorMsg, errorDetail, currentFiles);
       if (fixed) {
         currentFiles = fixed;
       }
@@ -58,7 +65,7 @@ export class Verifier {
 
   private static async tryCompile(
     files: Map<string, string>
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<{ success: boolean; error?: string; errorDetail?: CompileErrorDetail | null }> {
     try {
       console.log('[Verifier] COMPILING KEYS:', [...files.keys()]);
       const filesObj: Record<string, string> = {};
@@ -69,7 +76,7 @@ export class Verifier {
       const result = await platformService.compileSrc(filesObj);
 
       if (result.error) {
-        return { success: false, error: result.error };
+        return { success: false, error: result.error, errorDetail: result.errorDetail ?? null };
       }
 
       return { success: true };
@@ -78,24 +85,60 @@ export class Verifier {
     }
   }
 
+  /**
+   * Resuelve el archivo culpable de un error de compilación. Prefiere el
+   * errorDetail estructurado que propaga esbuild (file exacto); cae al regex
+   * sobre el texto del error sólo como fallback cuando no hay location.
+   */
+  private static identifyErrorFile(
+    error: string,
+    errorDetail: CompileErrorDetail | null,
+    files: Map<string, string>
+  ): string | null {
+    // 1. Preferir el archivo exacto que reporta esbuild vía errorDetail.
+    if (errorDetail?.file && files.has(errorDetail.file)) {
+      return errorDetail.file;
+    }
+
+    // 2. Fallback: regex sobre el texto del error (comportamiento histórico).
+    const fileMatch = error.match(/(?:src\/[\w/.-]+\.[tj]sx?|[\w/.-]+\.[tj]sx?)/);
+    const regexFile = fileMatch?.[0];
+    if (regexFile && files.has(regexFile)) {
+      return regexFile;
+    }
+
+    return null;
+  }
+
   private static async fixError(
     error: string,
+    errorDetail: CompileErrorDetail | null,
     files: Map<string, string>
   ): Promise<Map<string, string> | null> {
-    // Try to identify the offending file from the error message
-    const fileMatch = error.match(/(?:src\/[\w/.-]+\.[tj]sx?|[\w/.-]+\.[tj]sx?)/);
-    const errorFile = fileMatch?.[0] ?? '';
+    const errorFile = this.identifyErrorFile(error, errorDetail, files);
     const fileContent = errorFile ? (files.get(errorFile) ?? '') : '';
 
     if (!errorFile || !fileContent) {
+      console.warn(
+        '[Verifier] fixError: could not identify offending file for error:',
+        error.slice(0, 200)
+      );
       return null;
     }
 
     const systemPrompt = `You are an expert React + TypeScript engineer fixing a compilation error.
 Return ONLY the complete corrected file content. No markdown fences, no explanation. Just the raw file.`;
 
+    // Incluir línea y lineText exactos cuando esbuild los propaga: le da al
+    // modelo el punto preciso del error en lugar de sólo el mensaje.
+    const locationHint =
+      errorDetail?.line != null && errorDetail.lineText
+        ? `ERROR AT LINE ${errorDetail.line}: ${errorDetail.lineText}\n\n`
+        : '';
+
     const userMessage =
       `COMPILATION ERROR:\n${error.slice(0, 1000)}\n\n` +
+      locationHint +
       `FILE: ${errorFile}\n` +
       `CURRENT CONTENT:\n${fileContent}\n\n` +
       `Fix the error and return the complete corrected file content:`;
