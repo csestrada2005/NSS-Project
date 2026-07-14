@@ -409,9 +409,28 @@ export async function compileFiles(filesObj) {
   } catch (err) {
     const errors = err.errors || [];
     const warnings = err.warnings || [];
+
+    // esbuild entrega cada error como un Message con { text, location }, donde
+    // location = { file, line, column, lineText, ... }. El auto-fix del Verifier
+    // necesita el archivo/línea exactos; aplanar a string los pierde. Extraemos
+    // del primer error un errorDetail estructurado, quitando el prefijo del
+    // namespace virtual del path ("virtual:src/App.tsx" → "src/App.tsx") para
+    // que coincida con las keys del filesObj del proyecto.
+    const first = errors[0];
+    const loc = first?.location;
+    const errorDetail = first
+      ? {
+          message: first.text ?? null,
+          file: loc?.file ? loc.file.replace(/^virtual:/, '') : null,
+          line: loc?.line ?? null,
+          lineText: loc?.lineText ?? null
+        }
+      : null;
+
     return {
       error: errors[0]?.text || err.message || 'esbuild compilation failed',
-      errorDetails: { errors, warnings, message: err.message }
+      errorDetails: { errors, warnings, message: err.message },
+      errorDetail
     };
   }
 }
