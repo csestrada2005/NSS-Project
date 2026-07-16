@@ -13,6 +13,12 @@ export interface VerifyResult {
   files: Map<string, string>;
   tokensInput?: number;
   tokensOutput?: number;
+  /**
+   * Archivo culpable del último intento fallido (el resultado de
+   * identifyErrorFile en el intento final). Campo aditivo: los callers del
+   * heavy lane lo ignoran; el simple lane lo usa para un mensaje honesto.
+   */
+  errorFile?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -51,7 +57,7 @@ export class Verifier {
       onRetry?.(attempt, errorMsg.slice(0, 200));
 
       if (attempt === MAX_RETRIES) {
-        return { success: false, error: errorMsg, files: originalFiles };
+        return { success: false, error: errorMsg, files: originalFiles, errorFile };
       }
 
       const fixed = await this.fixError(errorMsg, errorDetail, currentFiles);
@@ -152,6 +158,8 @@ Return ONLY the complete corrected file content. No markdown fences, no explanat
       });
 
       const data = await response.json();
+      console.log('[Verifier] fixError usage:', data.usage?.input_tokens ?? 0, 'in /',
+        data.usage?.output_tokens ?? 0, 'out');
 
       if (data.error) {
         console.error('[Verifier] Fix API error:', data.error);

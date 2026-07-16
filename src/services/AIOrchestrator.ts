@@ -325,6 +325,7 @@ export class AIOrchestrator {
     intentRisk?: string;
     planSteps?: BuildStep[];
     modifiedFiles: string[];
+    affectedFiles?: string[];
     outcome: 'success' | 'failed';
     errorMessage?: string;
     durationMs: number;
@@ -344,6 +345,7 @@ export class AIOrchestrator {
         intent_risk: params.intentRisk,
         plan: params.planSteps ?? [],
         files_modified: params.modifiedFiles ?? [],
+        affected_files: params.affectedFiles ?? [],
         outcome: params.outcome,
         error_message: params.errorMessage,
         duration_ms: params.durationMs,
@@ -468,6 +470,7 @@ export class AIOrchestrator {
           intentType: intent.type,
           intentRisk: intent.risk,
           modifiedFiles: result.modifiedFiles,
+          affectedFiles: intent.affected_files,
           outcome: result.outcome || 'success',
           durationMs: Date.now() - startTime,
           requiredPatternIds: intent.requiredPatternIds,
@@ -486,7 +489,7 @@ export class AIOrchestrator {
       (intent.requiredPatternIds ?? []).length === 0;
 
     if (isSimpleEdit && files.size > 0) {
-      const result = await this.runSimpleLane(input, files, selectedElement, projectId);
+      const result = await this.runSimpleLane(input, files, selectedElement, intent, projectId);
       if (result.outcome === 'success' && creditUserId) {
         if (isFreePrompt) {
           await CreditService.markFreePromptUsed(creditUserId);
@@ -507,6 +510,7 @@ export class AIOrchestrator {
           intentType: intent.type,
           intentRisk: intent.risk,
           modifiedFiles: result.modifiedFiles,
+          affectedFiles: intent.affected_files,
           outcome: result.outcome || 'success',
           durationMs: Date.now() - startTime,
           requiredPatternIds: intent.requiredPatternIds,
@@ -578,6 +582,7 @@ export class AIOrchestrator {
           intentType: intent.type,
           intentRisk: intent.risk,
           modifiedFiles: result.modifiedFiles,
+          affectedFiles: intent.affected_files,
           outcome: result.outcome || 'success',
           durationMs: Date.now() - startTime,
           requiredPatternIds: intent.requiredPatternIds,
@@ -663,6 +668,7 @@ export class AIOrchestrator {
           intentRisk: intent.risk,
           planSteps: steps,
           modifiedFiles: finalPaths,
+          affectedFiles: intent.affected_files,
           outcome: 'success',
           durationMs: Date.now() - startTime,
           requiredPatternIds: intent.requiredPatternIds,
@@ -693,6 +699,7 @@ export class AIOrchestrator {
           intentRisk: intent.risk,
           planSteps: steps,
           modifiedFiles: [],
+          affectedFiles: intent.affected_files,
           outcome: 'failed',
           errorMessage: verifyResult.error,
           durationMs: Date.now() - startTime,
@@ -760,12 +767,13 @@ export class AIOrchestrator {
   private static async runSimpleLane(
     input: string,
     files: Map<string, string>,
-    _selectedElement: { tagName: string; className?: string } | null,
+    selectedElement: { tagName: string; className?: string } | null,
+    intent: Intent,
     projectId?: string
   ): Promise<OrchestratorResult> {
-    const relevantFiles = selectRelevantFiles(input, files);
-    const topFile = relevantFiles[0];
-    if (!topFile) return { modifiedFiles: [] };
+    const target = await this.resolveTarget(input, files, selectedElement, intent);
+    if (!target) return { modifiedFiles: [] };
+    console.log('[SimpleLane] target:', target.path, '| method:', target.method);
 
     try {
       const response = await platformService.callForgeChat({
@@ -782,7 +790,7 @@ export class AIOrchestrator {
         messages: [
           {
             role: 'user',
-            content: `FILE: ${topFile.path}\n\nCONTENT:\n${topFile.content}\n\nCHANGE REQUESTED: ${input}`,
+            content: `FILE: ${target.path}\n\nCONTENT:\n${target.content}\n\nCHANGE REQUESTED: ${input}`,
           },
         ],
       });
@@ -805,21 +813,200 @@ export class AIOrchestrator {
         };
       }
 
-      this.notifyFileUpdate(topFile.path, newContent);
-      if (projectId) {
-        trackAICall(projectId);
+      // ----------------------------------------------------------------
+      // PIEZA 2 — Verifier post-edición: compilar el cambio antes de escribir.
+      // ----------------------------------------------------------------
+      const verifyResult = await Verifier.verify(
+        new Map([[target.path, newContent]]),
+        files
+      );
+
+      if (verifyResult.success) {
+        // Diff real: cualquier path cuyo contenido difiera del original. El
+        // Verifier pudo reparar un archivo DISTINTO al editado (un huérfano roto
+        // preexistente), así que no asumimos que sólo cambió target.path.
+        const diffPaths: string[] = [];
+        for (const [path, content] of verifyResult.files) {
+          if (!files.has(path) || files.get(path) !== content) {
+            if (!diffPaths.includes(path)) diffPaths.push(path);
+          }
+        }
+        if (!diffPaths.includes(target.path)) diffPaths.push(target.path);
+
+        for (const path of diffPaths) {
+          const content = verifyResult.files.get(path);
+          if (content != null) this.notifyFileUpdate(path, content);
+        }
+
+        if (projectId) {
+          trackAICall(projectId);
+        }
+        this.lastModifiedFiles = diffPaths;
+
+        const otherPaths = diffPaths.filter(p => p !== target.path);
+        return {
+          modifiedFiles: diffPaths,
+          outcome: 'success',
+          tokensInput: data.usage?.input_tokens ?? 0,
+          tokensOutput: data.usage?.output_tokens ?? 0,
+          warning: otherPaths.length > 0
+            ? `Reparé además un error preexistente en: ${otherPaths.join(', ')}`
+            : undefined,
+        };
       }
-      this.lastModifiedFiles = [topFile.path];
-      return {
-        modifiedFiles: [topFile.path],
-        outcome: 'success',
-        tokensInput: data.usage?.input_tokens ?? 0,
-        tokensOutput: data.usage?.output_tokens ?? 0,
-      };
+
+      // Fallo tras los 3 intentos internos del Verifier: no se escribe nada.
+      const errorMsg = verifyResult.error ?? 'Unknown compilation error';
+      const errorFile = verifyResult.errorFile ?? null;
+      const honest =
+        errorFile && errorFile !== target.path
+          ? `No pude aplicar el cambio: existe un error de compilación previo en ${errorFile} que no logré reparar automáticamente. Error: ${errorMsg.slice(0, 200)}`
+          : `No pude aplicar el cambio sin romper la compilación. Error: ${errorMsg.slice(0, 200)}`;
+
+      return { modifiedFiles: [], outcome: 'failed', error: honest };
     } catch (e) {
       console.error('[AIOrchestrator] Simple lane error:', e);
       return { modifiedFiles: [], outcome: 'failed' };
     }
+  }
+
+  /**
+   * ¿Es un archivo de código editable bajo src/? Mismo filtro de
+   * extensión/directorio que usa selectRelevantFiles.
+   */
+  private static isSelectableSrcFile(path: string): boolean {
+    if (
+      path.includes('node_modules') ||
+      path.includes('dist/') ||
+      !path.startsWith('src/')
+    ) {
+      return false;
+    }
+    return (
+      path.endsWith('.tsx') ||
+      path.endsWith('.ts') ||
+      path.endsWith('.jsx') ||
+      path.endsWith('.js')
+    );
+  }
+
+  /**
+   * Targeting en cascada para el simple lane. Resuelve el archivo que PINTA el
+   * elemento que el usuario quiere cambiar, en tres niveles de confianza:
+   *   1) determinista por elemento seleccionado (data-oid → className únicos),
+   *   2) targeting LLM entre candidatos por keywords + intent.affected_files,
+   *   3) fallback histórico: selectRelevantFiles(input, files)[0].
+   */
+  private static async resolveTarget(
+    input: string,
+    files: Map<string, string>,
+    selectedElement: { tagName: string; className?: string } | null,
+    intent: Intent
+  ): Promise<
+    | { path: string; content: string; method: 'data-oid' | 'className' | 'llm' | 'keywords' }
+    | null
+  > {
+    // Universo de candidatos (usado por niveles 2/3, logueado para telemetría):
+    // unión de selectRelevantFiles(...).slice(0, 5) y intent.affected_files
+    // existentes que pasen el mismo filtro. Deduplicado por path, máximo 6.
+    const keywordCandidates = selectRelevantFiles(input, files)
+      .slice(0, 5)
+      .map(f => f.path);
+    const affectedCandidates = (intent.affected_files ?? []).filter(
+      p => files.has(p) && this.isSelectableSrcFile(p)
+    );
+    const candidates: string[] = [];
+    for (const p of [...keywordCandidates, ...affectedCandidates]) {
+      if (!candidates.includes(p)) candidates.push(p);
+    }
+    const cappedCandidates = candidates.slice(0, 6);
+    console.log('[SimpleLane] targeting candidates:', cappedCandidates);
+
+    // ----------------------------------------------------------------
+    // NIVEL 1 — determinista por elemento seleccionado
+    // ----------------------------------------------------------------
+    if (selectedElement) {
+      // El tipo real (TargetElement) declara dataOid; accedemos también a la
+      // forma 'data-oid' por si el objeto río arriba la trae con guión.
+      const dataOid: unknown =
+        (selectedElement as Record<string, unknown>)['dataOid'] ??
+        (selectedElement as Record<string, unknown>)['data-oid'];
+
+      if (typeof dataOid === 'string' && dataOid.length > 0) {
+        const matches: string[] = [];
+        for (const [path, content] of files) {
+          if (!path.startsWith('src/') || !path.endsWith('.tsx')) continue;
+          if (path.includes('node_modules') || path.includes('dist/')) continue;
+          if (content.includes(dataOid)) matches.push(path);
+        }
+        if (matches.length === 1) {
+          return { path: matches[0], content: files.get(matches[0])!, method: 'data-oid' };
+        }
+      } else if (selectedElement.className && selectedElement.className.trim().length > 0) {
+        const cn = selectedElement.className;
+        const matches: string[] = [];
+        for (const [path, content] of files) {
+          if (!this.isSelectableSrcFile(path)) continue;
+          if (content.includes(cn)) matches.push(path);
+        }
+        // Exactamente 1 → determinista. 0 o >1 → la ambigüedad NO se adivina;
+        // seguimos al nivel 2.
+        if (matches.length === 1) {
+          return { path: matches[0], content: files.get(matches[0])!, method: 'className' };
+        }
+      }
+    }
+
+    // ----------------------------------------------------------------
+    // NIVEL 2 — targeting LLM
+    // ----------------------------------------------------------------
+    if (cappedCandidates.length === 1) {
+      const path = cappedCandidates[0];
+      return { path, content: files.get(path)!, method: 'keywords' };
+    }
+
+    if (cappedCandidates.length >= 2) {
+      // La llamada de targeting NUNCA debe romper el lane: try/catch → nivel 3.
+      try {
+        let userMessage = `USER REQUEST: ${input}`;
+        for (const path of cappedCandidates) {
+          const content = files.get(path) ?? '';
+          userMessage += `\n\n--- ${path} ---\n${content.slice(0, 1500)}`;
+        }
+
+        const response = await platformService.callForgeChat({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 256,
+          system:
+            'You choose which source file paints a visual element. Given a user ' +
+            'request and several candidate files, pick the ONE file that renders ' +
+            'the visual element the user wants to change — the leaf component that ' +
+            'contains the relevant JSX, not the page that composes it. Respond with ' +
+            'ONLY a JSON object of the exact shape {"path": "<one of the given paths>"}. ' +
+            'No markdown, no code fences, no explanation.',
+          messages: [{ role: 'user', content: userMessage }],
+        });
+
+        const data = await response.json();
+        if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+
+        const text: string = data.content?.[0]?.text ?? '';
+        const parsed = JSON.parse(this.extractJson(text)) as { path?: unknown };
+        const chosen = parsed?.path;
+        if (typeof chosen === 'string' && files.has(chosen)) {
+          return { path: chosen, content: files.get(chosen)!, method: 'llm' };
+        }
+      } catch (e) {
+        console.warn('[SimpleLane] LLM targeting failed, falling back to keywords:', e);
+      }
+    }
+
+    // ----------------------------------------------------------------
+    // NIVEL 3 — fallback: comportamiento histórico exacto.
+    // ----------------------------------------------------------------
+    const fallback = selectRelevantFiles(input, files)[0];
+    if (!fallback) return null;
+    return { path: fallback.path, content: files.get(fallback.path)!, method: 'keywords' };
   }
 
   // -------------------------------------------------------------------------
@@ -935,6 +1122,7 @@ export class AIOrchestrator {
           intentType: 'question',
           intentRisk: intent.risk,
           modifiedFiles: [],
+          affectedFiles: intent.affected_files,
           outcome: 'success',
           durationMs: Date.now() - startTime,
           requiredPatternIds: intent.requiredPatternIds,
@@ -1179,6 +1367,21 @@ export class AIOrchestrator {
 
   static sanitizeFileContent(content: string): string {
     return sanitizeFileContent(content);
+  }
+
+  /**
+   * Extrae un objeto JSON de la respuesta del modelo, con el mismo patrón
+   * defensivo que IntentClassifier: fence → llaves más externas → '{}'.
+   */
+  private static extractJson(text: string): string {
+    const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fenced) return fenced[1].trim();
+
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start !== -1 && end > start) return text.slice(start, end + 1);
+
+    return '{}';
   }
 
   private static cleanJsonOutput(text: string): string {
