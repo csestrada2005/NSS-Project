@@ -97,6 +97,87 @@ function selectRelevantFiles(
   return scored.slice(0, 5).map(f => ({ path: f.path, content: f.content.slice(0, 3000) }));
 }
 
+/**
+ * Tercera fuente determinista de candidatos para el targeting del simple lane:
+ * los archivos importados estáticamente por las páginas ruteadas (+ App.tsx).
+ * Estos son los componentes que realmente pintan la UI — creados por el
+ * Implementer después del scaffold — y que el scoring por keywords nunca hace
+ * subir cuando el prompt no contiene sus nombres (p. ej. un prompt en español).
+ *
+ * Función pura, sin llamadas de red, un único nivel de profundidad (imports de
+ * las páginas, no recursivo). La extracción de cada archivo va envuelta en
+ * try/catch: un archivo con contenido raro nunca rompe el targeting.
+ */
+function getPageImportFiles(files: Map<string, string>): string[] {
+  // Mismo filtro de directorio/extensión que selectRelevantFiles.
+  const passesFilter = (path: string): boolean => {
+    if (path.includes('node_modules') || path.includes('dist/')) return false;
+    if (!path.startsWith('src/')) return false;
+    return (
+      path.endsWith('.tsx') ||
+      path.endsWith('.ts') ||
+      path.endsWith('.jsx') ||
+      path.endsWith('.js')
+    );
+  };
+
+  // Archivos semilla: páginas ruteadas + App.tsx si existe.
+  const seeds: string[] = [];
+  for (const path of files.keys()) {
+    if (path.startsWith('src/pages/') && path.endsWith('.tsx')) seeds.push(path);
+  }
+  if (files.has('src/App.tsx')) seeds.push('src/App.tsx');
+
+  const importRe = /import\s+[^'"]*from\s+['"]([^'"]+)['"]/g;
+  const result: string[] = [];
+  const seen = new Set<string>();
+
+  for (const seed of seeds) {
+    try {
+      const content = files.get(seed) ?? '';
+      const seedDir = seed.slice(0, seed.lastIndexOf('/')); // p. ej. 'src/pages'
+
+      importRe.lastIndex = 0;
+      let match: RegExpExecArray | null;
+      while ((match = importRe.exec(content)) !== null) {
+        const spec = match[1];
+        let base: string | null = null;
+
+        if (spec.startsWith('@/')) {
+          base = 'src/' + spec.slice(2);
+        } else if (spec.startsWith('./') || spec.startsWith('../')) {
+          // Resolver relativo al directorio de la semilla, normalizando '..'.
+          const parts = seedDir.split('/');
+          for (const seg of spec.split('/')) {
+            if (seg === '' || seg === '.') continue;
+            if (seg === '..') { parts.pop(); continue; }
+            parts.push(seg);
+          }
+          base = parts.join('/');
+        } else {
+          continue; // paquete npm — ignorar
+        }
+
+        if (!base) continue;
+
+        // Probar sufijos: tal cual, +'.tsx', +'.ts', +'/index.tsx'.
+        for (const suffix of ['', '.tsx', '.ts', '/index.tsx']) {
+          const candidate = base + suffix;
+          if (files.has(candidate) && passesFilter(candidate) && !seen.has(candidate)) {
+            seen.add(candidate);
+            result.push(candidate);
+            break;
+          }
+        }
+      }
+    } catch {
+      // Un archivo problemático nunca rompe el targeting.
+    }
+  }
+
+  return result;
+}
+
 function generateBlueprintFromFiles(files: Map<string, string>): string {
   return Array.from(files.keys())
     .filter(p => !p.includes('node_modules') && !p.includes('dist/'))
@@ -906,21 +987,37 @@ export class AIOrchestrator {
     | { path: string; content: string; method: 'data-oid' | 'className' | 'llm' | 'keywords' }
     | null
   > {
-    // Universo de candidatos (usado por niveles 2/3, logueado para telemetría):
-    // unión de selectRelevantFiles(...).slice(0, 5) y intent.affected_files
-    // existentes que pasen el mismo filtro. Deduplicado por path, máximo 6.
-    const keywordCandidates = selectRelevantFiles(input, files)
-      .slice(0, 5)
-      .map(f => f.path);
+    // Universo de candidatos (usado por niveles 2/3, logueado para telemetría).
+    // Orden de prioridad: (a) imports de las páginas ruteadas — los que pintan
+    // píxeles; (b) intent.affected_files válidos — predicción del classifier;
+    // (c) selectRelevantFiles(...).slice(0, 5) — keywords, ahora al final.
+    // Deduplicado por path preservando el orden a→b→c. Cap total: 8.
+    type CandidateSource = 'page-imports' | 'classifier' | 'keywords';
+    const pageImportCandidates = getPageImportFiles(files);
     const affectedCandidates = (intent.affected_files ?? []).filter(
       p => files.has(p) && this.isSelectableSrcFile(p)
     );
-    const candidates: string[] = [];
-    for (const p of [...keywordCandidates, ...affectedCandidates]) {
-      if (!candidates.includes(p)) candidates.push(p);
-    }
-    const cappedCandidates = candidates.slice(0, 6);
-    console.log('[SimpleLane] targeting candidates:', cappedCandidates);
+    const keywordCandidates = selectRelevantFiles(input, files)
+      .slice(0, 5)
+      .map(f => f.path);
+
+    const pool: { path: string; source: CandidateSource }[] = [];
+    const seenCandidates = new Set<string>();
+    const addCandidates = (paths: string[], source: CandidateSource) => {
+      for (const p of paths) {
+        if (seenCandidates.has(p)) continue;
+        seenCandidates.add(p);
+        pool.push({ path: p, source });
+      }
+    };
+    addCandidates(pageImportCandidates, 'page-imports');
+    addCandidates(affectedCandidates, 'classifier');
+    addCandidates(keywordCandidates, 'keywords');
+
+    const cappedPool = pool.slice(0, 8);
+    const cappedCandidates = cappedPool.map(p => p.path);
+    console.log('[SimpleLane] targeting candidates:',
+      JSON.stringify(cappedPool.map(p => ({ path: p.path, source: p.source }))));
 
     // ----------------------------------------------------------------
     // NIVEL 1 — determinista por elemento seleccionado
