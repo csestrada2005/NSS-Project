@@ -19,6 +19,18 @@ export interface VerifyResult {
    * heavy lane lo ignoran; el simple lane lo usa para un mensaje honesto.
    */
   errorFile?: string | null;
+  /**
+   * Total de tryCompile ejecutados en este verify. Una pasada limpia a la
+   * primera es 1; cada fixError seguido de recompilación suma 1. Campo aditivo
+   * usado por los lanes para distinguir "compiló limpio" de "hubo reparación".
+   */
+  attempts: number;
+  /**
+   * Paths cuyo contenido en `files` difiere del original al terminar el verify
+   * (steps del plan Y reparaciones fuera del plan). Vacío cuando el verify
+   * falla, porque en ese caso `files` es el original intacto.
+   */
+  repairedFiles: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -44,7 +56,12 @@ export class Verifier {
       const result = await this.tryCompile(currentFiles);
 
       if (result.success) {
-        return { success: true, files: currentFiles };
+        return {
+          success: true,
+          files: currentFiles,
+          attempts: attempt,
+          repairedFiles: this.diffPaths(currentFiles, originalFiles),
+        };
       }
 
       const errorMsg = result.error ?? 'Unknown compilation error';
@@ -57,7 +74,16 @@ export class Verifier {
       onRetry?.(attempt, errorMsg.slice(0, 200));
 
       if (attempt === MAX_RETRIES) {
-        return { success: false, error: errorMsg, files: originalFiles, errorFile };
+        // Fallo definitivo: devolvemos el original intacto, así que no hay
+        // reparaciones persistibles (repairedFiles vacío).
+        return {
+          success: false,
+          error: errorMsg,
+          files: originalFiles,
+          errorFile,
+          attempts: attempt,
+          repairedFiles: [],
+        };
       }
 
       const fixed = await this.fixError(errorMsg, errorDetail, currentFiles);
@@ -66,7 +92,30 @@ export class Verifier {
       }
     }
 
-    return { success: false, error: 'Max retries exceeded', files: originalFiles };
+    return {
+      success: false,
+      error: 'Max retries exceeded',
+      files: originalFiles,
+      attempts: MAX_RETRIES,
+      repairedFiles: [],
+    };
+  }
+
+  /**
+   * Paths de `files` cuyo contenido difiere del que tenían en `original`
+   * (contenido distinto o archivo nuevo). Orden estable de inserción.
+   */
+  private static diffPaths(
+    files: Map<string, string>,
+    original: Map<string, string>
+  ): string[] {
+    const diff: string[] = [];
+    for (const [path, content] of files) {
+      if (!original.has(path) || original.get(path) !== content) {
+        diff.push(path);
+      }
+    }
+    return diff;
   }
 
   private static async tryCompile(
