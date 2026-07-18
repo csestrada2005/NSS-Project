@@ -45,6 +45,12 @@ export interface OrchestratorResult {
    * Only used to append a telemetry suffix to the logged prompt — no DB column.
    */
   clarifyAsked?: boolean;
+  /**
+   * Total de intentos de compilación del Verifier (verifyResult.attempts).
+   * Lo propaga el simple lane hacia arriba para que su logIntent cablee
+   * compile_attempts sin re-ejecutar el Verifier. undefined si no se verificó.
+   */
+  compileAttempts?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -413,7 +419,8 @@ export class AIOrchestrator {
     modifiedFiles: string[];
     affectedFiles?: string[];
     outcome: 'success' | 'failed';
-    errorMessage?: string;
+    errorMessage?: string | null;
+    compileAttempts?: number;
     durationMs: number;
     requiredPatternIds?: string[];
     domain?: string;
@@ -433,7 +440,8 @@ export class AIOrchestrator {
         files_modified: params.modifiedFiles ?? [],
         affected_files: params.affectedFiles ?? [],
         outcome: params.outcome,
-        error_message: params.errorMessage,
+        error_message: params.errorMessage ?? null,
+        compile_attempts: params.compileAttempts ?? 0,
         duration_ms: params.durationMs,
         required_pattern_ids: params.requiredPatternIds ?? [],
         domain: params.domain ?? 'general',
@@ -598,6 +606,9 @@ export class AIOrchestrator {
           modifiedFiles: result.modifiedFiles,
           affectedFiles: intent.affected_files,
           outcome: result.outcome || 'success',
+          // PIEZA 4 — telemetría cableada del simple lane (ya corrió el Verifier).
+          compileAttempts: result.compileAttempts,
+          errorMessage: result.outcome === 'failed' ? (result.error ?? null) : null,
           durationMs: Date.now() - startTime,
           requiredPatternIds: intent.requiredPatternIds,
           domain: intent.domain,
@@ -704,25 +715,37 @@ export class AIOrchestrator {
       }
     }
 
-    // Collect only the files that actually changed
-    const changedPaths: string[] = [];
-    for (const [path, content] of modifiedFilesMap) {
-      if (!files.has(path) || files.get(path) !== content) {
-        changedPaths.push(path);
-      }
-    }
-
     // ------------------------------------------------------------------
     // LAYER 5 — Verifier: compile-check and auto-fix
     // ------------------------------------------------------------------
     const verifyResult = await Verifier.verify(modifiedFilesMap, files, onRetry);
 
     const finalFiles = verifyResult.files;
-    const finalPaths = changedPaths.filter(p => finalFiles.has(p));
 
     if (verifyResult.success) {
+      // ----------------------------------------------------------------
+      // PIEZA 2 — Diff-write: persistir TODO path cuyo contenido en el
+      // resultado del Verifier difiera del original, no sólo los archivos de
+      // los steps. El Verifier pudo reparar un error preexistente FUERA del
+      // plan (p. ej. ContactSection mientras el plan sólo tocaba HeroSection);
+      // esa reparación compiló verde y debe persistir, no descartarse.
+      // ----------------------------------------------------------------
+      const diffPaths: string[] = [];
+      for (const [path, content] of finalFiles) {
+        if (!files.has(path) || files.get(path) !== content) {
+          if (!diffPaths.includes(path)) diffPaths.push(path);
+        }
+      }
+
+      // Reparaciones fuera del plan: paths del diff que no son file_path de
+      // ningún step. Alimentan el warning honesto.
+      const planPaths = new Set(
+        steps.map(s => s.file_path).filter((p): p is string => !!p)
+      );
+      const extras = diffPaths.filter(p => !planPaths.has(p));
+
       // Notify StudioEngine about each modified file
-      for (const path of finalPaths) {
+      for (const path of diffPaths) {
         const content = finalFiles.get(path)!;
         this.notifyFileUpdate(path, content);
       }
@@ -742,7 +765,7 @@ export class AIOrchestrator {
       // Update memory and record success
       if (projectId) {
         trackAICall(projectId);
-        await ProjectMemoryService.updateAfterChange(projectId, finalPaths, finalFiles);
+        await ProjectMemoryService.updateAfterChange(projectId, diffPaths, finalFiles);
         await ProjectMemoryService.recordAction(projectId, {
           action: input.slice(0, 120),
           outcome: 'success',
@@ -753,25 +776,65 @@ export class AIOrchestrator {
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,
-          modifiedFiles: finalPaths,
+          modifiedFiles: diffPaths,
           affectedFiles: intent.affected_files,
           outcome: 'success',
+          // PIEZA 4 — telemetría cableada: compiló, sin error.
+          compileAttempts: verifyResult.attempts,
+          errorMessage: null,
           durationMs: Date.now() - startTime,
           requiredPatternIds: intent.requiredPatternIds,
           domain: intent.domain,
         });
       }
 
-      this.lastModifiedFiles = finalPaths;
+      this.lastModifiedFiles = diffPaths;
+
+      // ----------------------------------------------------------------
+      // PIEZA 3 — fin del éxito falso. "No files needed changing" SÓLO es
+      // honesto cuando no se persistió nada Y el proyecto compiló limpio a la
+      // primera (attempts === 1). Si hubo reparaciones (diff no vacío) o
+      // intentos extra, el mensaje debe reflejarlo.
+      // ----------------------------------------------------------------
+      const warnings: string[] = [];
+      if (wasTrimmed) {
+        warnings.push(
+          `This request needed ${originalCount} steps. Only the first 6 were built. Send a follow-up to continue.`
+        );
+      }
+      if (extras.length > 0) {
+        warnings.push(`Reparé además un error preexistente en: ${extras.join(', ')}`);
+      }
+      if (diffPaths.length === 0 && verifyResult.attempts > 1) {
+        // Caso raro: hubo reparación durante el verify pero el resultado neto no
+        // difiere del original. No lo reportamos como éxito plano.
+        warnings.push(
+          'Detecté y corregí errores de compilación durante la verificación.'
+        );
+      }
+
       return {
-        modifiedFiles: finalPaths,
+        modifiedFiles: diffPaths,
         steps,
         outcome: 'success',
-        warning: wasTrimmed
-          ? `This request needed ${originalCount} steps. Only the first 6 were built. Send a follow-up to continue.`
-          : undefined,
+        warning: warnings.length > 0 ? warnings.join(' ') : undefined,
       };
     } else {
+      // ----------------------------------------------------------------
+      // PIEZA 3 — verify falló: outcome 'failed', NO persistir nada nuevo,
+      // mensaje honesto con la misma taxonomía del SimpleLane. Si el archivo
+      // culpable está FUERA de los archivos del plan, decirlo explícitamente.
+      // ----------------------------------------------------------------
+      const errorMsg = verifyResult.error ?? 'Unknown compilation error';
+      const errorFile = verifyResult.errorFile ?? null;
+      const planPaths = new Set(
+        steps.map(s => s.file_path).filter((p): p is string => !!p)
+      );
+      const honest =
+        errorFile && !planPaths.has(errorFile)
+          ? `No pude aplicar el cambio: existe un error de compilación previo en ${errorFile} que no logré reparar automáticamente. Error: ${errorMsg.slice(0, 200)}`
+          : `No pude aplicar el cambio sin romper la compilación. Error: ${errorMsg.slice(0, 200)}`;
+
       // Verification failed after all retries — record failure and return error
       if (projectId) {
         await ProjectMemoryService.recordAction(projectId, {
@@ -787,7 +850,9 @@ export class AIOrchestrator {
           modifiedFiles: [],
           affectedFiles: intent.affected_files,
           outcome: 'failed',
-          errorMessage: verifyResult.error,
+          // PIEZA 4 — telemetría cableada: intentos reales + error real.
+          compileAttempts: verifyResult.attempts,
+          errorMessage: errorMsg,
           durationMs: Date.now() - startTime,
           requiredPatternIds: intent.requiredPatternIds,
           domain: intent.domain,
@@ -798,7 +863,7 @@ export class AIOrchestrator {
         modifiedFiles: [],
         steps,
         outcome: 'failed',
-        error: verifyResult.error,
+        error: honest,
       };
     }
   }
@@ -949,6 +1014,7 @@ export class AIOrchestrator {
           outcome: 'success',
           tokensInput: data.usage?.input_tokens ?? 0,
           tokensOutput: data.usage?.output_tokens ?? 0,
+          compileAttempts: verifyResult.attempts,
           warning: otherPaths.length > 0
             ? `Reparé además un error preexistente en: ${otherPaths.join(', ')}`
             : undefined,
@@ -963,7 +1029,12 @@ export class AIOrchestrator {
           ? `No pude aplicar el cambio: existe un error de compilación previo en ${errorFile} que no logré reparar automáticamente. Error: ${errorMsg.slice(0, 200)}`
           : `No pude aplicar el cambio sin romper la compilación. Error: ${errorMsg.slice(0, 200)}`;
 
-      return { modifiedFiles: [], outcome: 'failed', error: honest };
+      return {
+        modifiedFiles: [],
+        outcome: 'failed',
+        error: honest,
+        compileAttempts: verifyResult.attempts,
+      };
     } catch (e) {
       console.error('[AIOrchestrator] Simple lane error:', e);
       return { modifiedFiles: [], outcome: 'failed' };
