@@ -334,6 +334,7 @@ function generateHTML(bundleCode, cssCode) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="/vendor/tailwind-base.css">
+  <script src="/vendor/tailwindcss-browser.js"></script>
   <style>body{margin:0;}#root{min-height:100vh;}${cssCode || ''}</style>
 </head>
 <body>
