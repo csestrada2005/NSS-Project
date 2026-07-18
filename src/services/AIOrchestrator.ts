@@ -40,6 +40,11 @@ export interface OrchestratorResult {
   tokensOutput?: number;
   chatResponse?: string;
   suggestedAction?: string;
+  /**
+   * Simple-lane targeting asked the user to disambiguate instead of editing.
+   * Only used to append a telemetry suffix to the logged prompt — no DB column.
+   */
+  clarifyAsked?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -587,7 +592,7 @@ export class AIOrchestrator {
       if (projectId) {
         await this.logIntent({
           projectId,
-          prompt: input,
+          prompt: result.clarifyAsked ? `${input} [CLARIFY_ASKED]` : input,
           intentType: intent.type,
           intentRisk: intent.risk,
           modifiedFiles: result.modifiedFiles,
@@ -854,6 +859,20 @@ export class AIOrchestrator {
   ): Promise<OrchestratorResult> {
     const target = await this.resolveTarget(input, files, selectedElement, intent);
     if (!target) return { modifiedFiles: [] };
+
+    // Targeting pidió aclaración (ambigüedad genuina): no editamos nada, no
+    // llamamos al Verifier. Devolvemos la pregunta como respuesta de chat; la
+    // respuesta del usuario re-correrá el pipeline como un mensaje nuevo.
+    if ('clarify' in target) {
+      console.log('[SimpleLane] clarify requested:', target.clarify);
+      return {
+        modifiedFiles: [],
+        outcome: 'success',
+        chatResponse: target.clarify,
+        clarifyAsked: true,
+      };
+    }
+
     console.log('[SimpleLane] target:', target.path, '| method:', target.method);
 
     try {
@@ -985,6 +1004,7 @@ export class AIOrchestrator {
     intent: Intent
   ): Promise<
     | { path: string; content: string; method: 'data-oid' | 'className' | 'llm' | 'keywords' }
+    | { clarify: string }
     | null
   > {
     // Universo de candidatos (usado por niveles 2/3, logueado para telemetría).
@@ -1078,9 +1098,27 @@ export class AIOrchestrator {
             'You choose which source file paints a visual element. Given a user ' +
             'request and several candidate files, pick the ONE file that renders ' +
             'the visual element the user wants to change — the leaf component that ' +
-            'contains the relevant JSX, not the page that composes it. Respond with ' +
-            'ONLY a JSON object of the exact shape {"path": "<one of the given paths>"}. ' +
-            'No markdown, no code fences, no explanation.',
+            'contains the relevant JSX, not the page that composes it. ' +
+            'CRITICAL VISIBILITY RULE: a page-level wrapper (files in src/pages/) often has a ' +
+            'background class that is NOT the visible background — child sections covering the ' +
+            'viewport paint their own backgrounds on top of it. When the user refers to a visible ' +
+            'surface (background, color, image of "the page" or an unnamed section), prefer the ' +
+            'SECTION component whose JSX actually paints that visible surface. Only choose a ' +
+            'page file when the user explicitly refers to the whole page/layout or when no ' +
+            'section paints its own background. ' +
+            'AMBIGUITY ESCAPE: if two or more candidates are genuinely defensible AND would ' +
+            'produce visibly different results (e.g. "change the background" in a page with ' +
+            'several sections that each paint their own), do NOT guess. Respond instead with ' +
+            '{"reasoning": ..., "clarify": "<ONE short question in the user\'s language, naming ' +
+            'the concrete options, e.g. ¿El fondo de qué sección: el hero, los productos, o el ' +
+            'contacto?>"}. Use this ONLY for genuine ambiguity — if a reasonable person looking ' +
+            'at the page would know what to change, decide. Asking when you could know is a ' +
+            'failure. ' +
+            'Respond with ONLY a JSON object. To choose a file: ' +
+            '{"reasoning": "<1-2 sentences>", "path": "<one of the given paths>"}. ' +
+            'To ask for clarification: {"reasoning": "<1-2 sentences>", "clarify": "<question>"}. ' +
+            'The reasoning field comes FIRST — reason before you decide. ' +
+            'No markdown, no code fences, no prose outside the JSON.',
           messages: [{ role: 'user', content: userMessage }],
         });
 
@@ -1088,10 +1126,22 @@ export class AIOrchestrator {
         if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
 
         const text: string = data.content?.[0]?.text ?? '';
-        const parsed = JSON.parse(this.extractJson(text)) as { path?: unknown };
+        const parsed = JSON.parse(this.extractJson(text)) as {
+          reasoning?: unknown;
+          path?: unknown;
+          clarify?: unknown;
+        };
+        console.log('[SimpleLane] targeting reasoning:', parsed.reasoning ?? '(none)');
+
         const chosen = parsed?.path;
         if (typeof chosen === 'string' && files.has(chosen)) {
           return { path: chosen, content: files.get(chosen)!, method: 'llm' };
+        }
+
+        // Sin path válido pero con pregunta: escape por ambigüedad genuina.
+        const clarify = parsed?.clarify;
+        if (typeof clarify === 'string' && clarify.trim().length > 0) {
+          return { clarify: clarify.trim() };
         }
       } catch (e) {
         console.warn('[SimpleLane] LLM targeting failed, falling back to keywords:', e);
