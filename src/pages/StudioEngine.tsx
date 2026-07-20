@@ -15,7 +15,7 @@ import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useProjectFiles } from '../hooks/useProjectFiles';
 import '../App.css';
-import { ChatInterface } from '../components/ChatInterface';
+import { ChatInterface, type Message } from '../components/ChatInterface';
 import { Terminal, type TerminalRef } from '../components/Terminal';
 import { PreviewOverlay } from '../components/PreviewOverlay';
 import { InspectorPanel } from '../components/InspectorPanel';
@@ -97,9 +97,11 @@ export function StudioEngine() {
   const [isMenuPanelOpen, setIsMenuPanelOpen] = useState(false);
   const [selectedElement, setSelectedElement] = useState<TargetElement | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [chatHistory, setChatHistory] = useState<
-    { role: 'user' | 'assistant'; content: string }[]
-  >([]);
+  // Historial de chat elevado al padre para que sobreviva a los desmontajes del
+  // CommandModal. Almacena los objetos Message COMPLETOS (role, content y los
+  // opcionales warning/suggestedAction/errorType/errorDetail) que maneja
+  // ChatInterface, no la versión pelada {role, content}.
+  const [chatHistory, setChatHistory] = useState<Message[]>([]);
   const [editMode, setEditMode] = useState<'interaction' | 'visual'>('interaction');
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [selectedFileContent, setSelectedFileContent] = useState<string>('');
@@ -209,6 +211,19 @@ export function StudioEngine() {
     };
 
     init().catch(console.error);
+  }, [projectId]);
+
+  // -------------------------------------------------------------------------
+  // Reset del historial de chat al cambiar de proyecto.
+  //
+  // La ruta es `studio/:projectId` sin `key`, así que navegar entre proyectos
+  // NO remonta StudioEngine: el estado chatHistory sobreviviría. Como ahora
+  // ChatInterface rehidrata messages desde chatHistory, sin este reset el chat
+  // de un proyecto se filtraría al siguiente. Este efecto keyed en projectId es
+  // el mecanismo que garantiza que no haya fuga de historial entre proyectos.
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    setChatHistory([]);
   }, [projectId]);
 
   // -------------------------------------------------------------------------
@@ -564,7 +579,12 @@ export function StudioEngine() {
           );
           onRetry?.(attempt, errorMsg);
         },
-        chatHistory
+        // Aislamiento del contexto del modelo: el display history puede crecer
+        // a 30 mensajes enriquecidos, pero el pipeline de AI sigue recibiendo el
+        // mismo volumen de antes (últimos 10) y en la firma pelada {role,
+        // content} que consume el orchestrator. Display history y model context
+        // son cosas distintas: subir el cap de display no debe multiplicar tokens.
+        chatHistory.slice(-10).map(({ role, content }) => ({ role, content }))
       );
       if (result.modifiedFiles.length > 0) {
         await saveSnapshot('ai_action');
@@ -1017,7 +1037,7 @@ export function StudioEngine() {
                   onSendMessage={handleSendMessage}
                   selectedElement={selectedElement}
                   chatHistory={chatHistory}
-                  onHistoryUpdate={(history) => setChatHistory(history.slice(-10))}
+                  onHistoryUpdate={(history) => setChatHistory(history.slice(-30))}
                 />
               </div>
               <div className={`w-full h-full ${activeBottomTab === 'visual' ? 'block' : 'hidden'}`}>
