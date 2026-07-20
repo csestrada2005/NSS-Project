@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Send, Bot, Loader2, CheckCircle, ChevronDown, ChevronUp, Wand2 } from 'lucide-react';
 
-interface Message {
+export interface Message {
   role: 'user' | 'assistant';
   content: string;
   warning?: string;
@@ -10,6 +10,10 @@ interface Message {
   errorDetail?: string;
   suggestedAction?: string;
 }
+
+// Saludo inicial. Se usa sólo cuando no hay historial rehidratado; extraído a
+// constante para poder detectar (y no duplicar) el estado "sólo saludo".
+const INITIAL_GREETING = 'Hello! How can I help you today?';
 
 interface ChatInterfaceProps {
   isLoading: boolean;
@@ -19,8 +23,8 @@ interface ChatInterfaceProps {
     onRetry?: (attempt: number, error: string) => void
   ) => Promise<{ success: boolean; modifiedFiles: string[]; error?: string; warning?: string; chatResponse?: string; suggestedAction?: string }>;
   selectedElement: { tagName: string; className?: string } | null;
-  chatHistory?: { role: 'user' | 'assistant'; content: string }[];
-  onHistoryUpdate?: (history: { role: 'user' | 'assistant'; content: string }[]) => void;
+  chatHistory?: Message[];
+  onHistoryUpdate?: (history: Message[]) => void;
 }
 
 function BuildProgress({
@@ -136,9 +140,12 @@ export function ChatInterface({
   chatHistory = [],
   onHistoryUpdate,
 }: ChatInterfaceProps) {
-  const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: 'Hello! How can I help you today?' }
-  ]);
+  // Rehidratación: si el padre trae historial (sobreviviente de un cierre del
+  // modal), arrancamos con él. Sólo si está vacío usamos el saludo inicial, de
+  // modo que el saludo no se duplique en remontajes sucesivos.
+  const [messages, setMessages] = useState<Message[]>(() =>
+    chatHistory.length > 0 ? chatHistory : [{ role: 'assistant', content: INITIAL_GREETING }]
+  );
   const [input, setInput] = useState(() => {
     try { return sessionStorage.getItem('forge_chat_input') ?? ''; } catch { return ''; }
   });
@@ -160,6 +167,30 @@ export function ChatInterface({
   useEffect(() => {
     scrollToBottom();
   }, [messages, isLoading]);
+
+  // Persistencia continua: cada cambio en messages (mensaje del usuario,
+  // respuesta del asistente, avisos del Verifier y errores) se sube al estado
+  // del padre con la lista COMPLETA de Message enriquecidos, de modo que cerrar
+  // el modal en cualquier momento no pierda nada.
+  //
+  // onHistoryUpdate se pasa como arrow inline desde StudioEngine (identidad
+  // nueva en cada render), por eso lo leemos vía ref: incluirlo en las deps
+  // provocaría un bucle infinito de re-render/persistencia.
+  const onHistoryUpdateRef = useRef(onHistoryUpdate);
+  useEffect(() => {
+    onHistoryUpdateRef.current = onHistoryUpdate;
+  }, [onHistoryUpdate]);
+
+  useEffect(() => {
+    // No persistimos el estado "sólo saludo": un chat intacto no debe crear
+    // historial (ni reintroducir el saludo en el contexto del modelo).
+    const isBareGreeting =
+      messages.length === 1 &&
+      messages[0].role === 'assistant' &&
+      messages[0].content === INITIAL_GREETING;
+    if (isBareGreeting) return;
+    onHistoryUpdateRef.current?.(messages);
+  }, [messages]);
 
   const buildAssistantMessage = (result: { success: boolean; modifiedFiles: string[]; error?: string; warning?: string; chatResponse?: string; suggestedAction?: string }): { content: string; warning?: string; errorType?: 'insufficient_credits' | 'compile_error' | 'generic'; errorDetail?: string; suggestedAction?: string } => {
     if (!result.success) {
@@ -252,11 +283,8 @@ export function ChatInterface({
       }
 
       const { content, warning, errorType, errorDetail, suggestedAction } = buildAssistantMessage(result);
-      onHistoryUpdate?.([
-        ...chatHistory,
-        { role: 'user' as const, content: userMessage },
-        { role: 'assistant' as const, content },
-      ]);
+      // La persistencia al padre la realiza el efecto sobre `messages`; aquí
+      // sólo actualizamos el estado local con el Message enriquecido completo.
       setMessages(prev => [
         ...prev,
         { role: 'assistant', content, warning, errorType, errorDetail, suggestedAction }
