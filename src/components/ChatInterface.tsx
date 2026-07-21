@@ -146,6 +146,13 @@ export function ChatInterface({
   const [messages, setMessages] = useState<Message[]>(() =>
     chatHistory.length > 0 ? chatHistory : [{ role: 'assistant', content: INITIAL_GREETING }]
   );
+  // Espejo síncrono de `messages`. La continuación del await en sendMessage
+  // sigue viva en el closure aunque la instancia se desmonte (cierre del
+  // modal): entonces `setMessages` es un no-op y el estado no es fiable. El ref
+  // conserva la última lista conocida para poder reportarla al padre
+  // directamente. Se mantiene actualizado por `appendMessage` (síncrono) y por
+  // el efecto sobre `messages` (rehidratación / cualquier otra vía).
+  const messagesRef = useRef<Message[]>(messages);
   const [input, setInput] = useState(() => {
     try { return sessionStorage.getItem('forge_chat_input') ?? ''; } catch { return ''; }
   });
@@ -182,6 +189,10 @@ export function ChatInterface({
   }, [onHistoryUpdate]);
 
   useEffect(() => {
+    // El ref debe seguir a `messages` siempre, incluso en el estado "sólo
+    // saludo", para que `appendMessage` parta de la lista real en el primer
+    // envío.
+    messagesRef.current = messages;
     // No persistimos el estado "sólo saludo": un chat intacto no debe crear
     // historial (ni reintroducir el saludo en el contexto del modelo).
     const isBareGreeting =
@@ -191,6 +202,20 @@ export function ChatInterface({
     if (isBareGreeting) return;
     onHistoryUpdateRef.current?.(messages);
   }, [messages]);
+
+  // Añade un mensaje reportando SIEMPRE al padre, sin depender del estado
+  // propio. Actualiza el ref de forma síncrona (para que envíos encadenados
+  // partan de la lista correcta), intenta el setMessages local (no-op inocuo si
+  // la instancia está desmontada) y llama a onHistoryUpdate directamente para
+  // que el padre —que sigue montado— reciba el historial completo aunque el
+  // componente ya no exista. El doble disparo con el efecto sobre `messages`
+  // (cuando la instancia sigue viva) es idempotente: setChatHistory reemplaza.
+  const appendMessage = (message: Message) => {
+    const next = [...messagesRef.current, message];
+    messagesRef.current = next;
+    setMessages(next);
+    onHistoryUpdateRef.current?.(next);
+  };
 
   const buildAssistantMessage = (result: { success: boolean; modifiedFiles: string[]; error?: string; warning?: string; chatResponse?: string; suggestedAction?: string }): { content: string; warning?: string; errorType?: 'insufficient_credits' | 'compile_error' | 'generic'; errorDetail?: string; suggestedAction?: string } => {
     if (!result.success) {
@@ -222,7 +247,7 @@ export function ChatInterface({
     if (!text.trim() || isLoading) return;
 
     const userMessage = text.trim();
-    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    appendMessage({ role: 'user', content: userMessage });
 
     startTimeRef.current = Date.now();
     setElapsedSeconds(0);
@@ -283,12 +308,10 @@ export function ChatInterface({
       }
 
       const { content, warning, errorType, errorDetail, suggestedAction } = buildAssistantMessage(result);
-      // La persistencia al padre la realiza el efecto sobre `messages`; aquí
-      // sólo actualizamos el estado local con el Message enriquecido completo.
-      setMessages(prev => [
-        ...prev,
-        { role: 'assistant', content, warning, errorType, errorDetail, suggestedAction }
-      ]);
+      // Reportamos al padre directamente: si el modal se cerró durante el await,
+      // la instancia está desmontada y setMessages sería un no-op, pero el padre
+      // (montado) recibe la respuesta enriquecida completa igualmente.
+      appendMessage({ role: 'assistant', content, warning, errorType, errorDetail, suggestedAction });
     } catch (error) {
       clearInterval(intervalId);
       console.error('Error in chat:', error);
@@ -299,10 +322,7 @@ export function ChatInterface({
         }
         return next;
       });
-      setMessages(prev => [
-        ...prev,
-        { role: 'assistant', content: 'Sorry, an unexpected error occurred.' }
-      ]);
+      appendMessage({ role: 'assistant', content: 'Sorry, an unexpected error occurred.' });
     }
   };
 
