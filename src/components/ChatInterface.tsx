@@ -203,6 +203,23 @@ export function ChatInterface({
     onHistoryUpdateRef.current?.(messages);
   }, [messages]);
 
+  // Reconciliación con el prop: una instancia montada DURANTE un pipeline en
+  // vuelo (p. ej. remontada tras cerrar/abrir el modal mientras corre otra
+  // instancia) sólo leyó `chatHistory` en el initializer de useState. Cuando el
+  // padre recibe la respuesta de la continuación en vuelo y hace
+  // `setChatHistory` con un array nuevo (las continuaciones ya entregan
+  // referencias nuevas), este efecto adopta ese historial más completo.
+  //
+  // Regla estricta: adoptamos SÓLO cuando el prop es estrictamente más largo
+  // que el estado local (el padre sabe más). Nunca reemplazamos con un prop de
+  // igual o menor longitud, para no pisar mensajes locales aún no propagados.
+  useEffect(() => {
+    if (chatHistory && chatHistory.length > messagesRef.current.length) {
+      messagesRef.current = chatHistory;
+      setMessages(chatHistory);
+    }
+  }, [chatHistory]);
+
   // Añade un mensaje reportando SIEMPRE al padre, sin depender del estado
   // propio. Actualiza el ref de forma síncrona (para que envíos encadenados
   // partan de la lista correcta), intenta el setMessages local (no-op inocuo si
