@@ -44,8 +44,48 @@ function routerShimPlugin() {
       build.onLoad({ filter: /.*/, namespace: SHIM_NAMESPACE }, () => {
         return {
           contents: `
+            import React from 'react';
+            import { MemoryRouter, useNavigate } from 'react-router-dom-preview';
             export * from 'react-router-dom-preview';
-            export { MemoryRouter as BrowserRouter, MemoryRouter as HashRouter } from 'react-router-dom-preview';
+
+            // Puente de navegación: vive dentro del árbol de React del preview y
+            // traduce postMessage({type:'navigate', path}) en navegación del
+            // MemoryRouter, además de exponer window.__forgeNavigate para que el
+            // interceptor de anchors del PREVIEW_CLIENT_SCRIPT pueda navegar.
+            function NavigationBridge() {
+              const navigate = useNavigate();
+              React.useEffect(() => {
+                window.__forgeNavigate = navigate;
+                const onMessage = (e) => {
+                  if (e.data?.type === 'navigate' && typeof e.data.path === 'string') {
+                    navigate(e.data.path);
+                  }
+                };
+                window.addEventListener('message', onMessage);
+                return () => window.removeEventListener('message', onMessage);
+              }, [navigate]);
+              return null;
+            }
+
+            // Sustituyen a BrowserRouter/HashRouter: montan MemoryRouter con el
+            // NavigationBridge como primer hijo. Los exports nombrados explícitos
+            // tienen prioridad sobre el 'export *' anterior.
+            export function BrowserRouter({ children, ...props }) {
+              return React.createElement(
+                MemoryRouter,
+                props,
+                React.createElement(NavigationBridge),
+                children
+              );
+            }
+            export function HashRouter({ children, ...props }) {
+              return React.createElement(
+                MemoryRouter,
+                props,
+                React.createElement(NavigationBridge),
+                children
+              );
+            }
           `,
           loader: 'js',
           resolveDir: process.cwd()
@@ -266,10 +306,6 @@ const PREVIEW_CLIENT_SCRIPT = `
 
   window.addEventListener('message', (event) => {
     if (event.data.type === 'set-mode') { currentMode = event.data.mode; }
-    else if (event.data.type === 'navigate') {
-      window.history.pushState({}, '', event.data.path);
-      window.dispatchEvent(new PopStateEvent('popstate'));
-    }
   });
 
   window.addEventListener('mouseover', (event) => {
@@ -297,6 +333,31 @@ const PREVIEW_CLIENT_SCRIPT = `
         rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
         layoutContext: getLayoutContext(event.target)
       }, '*');
+    }
+  }, true);
+
+  // Interceptor global de anchors (fase de captura). Solo actúa fuera del modo
+  // visual — en visual el handler de arriba ya hace preventDefault de todo.
+  // Evita que un click en un link interno navegue el iframe de verdad y abandone
+  // el srcdoc (pantalla negra).
+  window.addEventListener('click', (event) => {
+    if (currentMode === 'visual') return;
+    const a = event.target && event.target.closest && event.target.closest('a[href]');
+    if (!a) return;
+    const href = a.getAttribute('href');
+    if (href.charAt(0) === '#') {
+      // Ancla interna: scroll suave al elemento con ese id, si existe.
+      event.preventDefault();
+      const el = document.getElementById(href.slice(1));
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    } else if (href.charAt(0) === '/') {
+      // Ruta interna: delegar al MemoryRouter vía el puente de navegación.
+      // El catch-all (path="*" → NotFound) atiende rutas inexistentes.
+      event.preventDefault();
+      if (window.__forgeNavigate) window.__forgeNavigate(href);
+    } else if (/^(https?:|mailto:|tel:)/i.test(href)) {
+      // Externos: el sandbox no puede honrarlos y navegar rompería el srcdoc.
+      event.preventDefault();
     }
   }, true);
 
@@ -398,7 +459,7 @@ export async function compileFiles(filesObj) {
       },
       alias: ALIAS,
       banner: {
-        js: '// Wyrd Forge preview bundle\n;(function(){var __originalBrowserRouter;'
+        js: '// Wyrd Forge preview bundle\n;(function(){'
       },
       footer: {
         js: '})();'
