@@ -49,6 +49,18 @@ AVAILABLE RUNTIME (the preview resolves these — use them for richer UI):
   require a server — the preview runs entirely in the browser.
 - For animations, framer-motion is available and encouraged for hero sections,
   transitions, and micro-interactions.
+
+NAVIGATION CONTRACT (navbar/menu/footer links must resolve — steps are generated
+separately, so anchors and routes only work if both ends exist):
+- Every navbar/menu/footer navigation entry MUST point to EITHER:
+  (a) a route that exists in this build plan — use react-router <Link to="...">, OR
+  (b) an anchor #id that a section IN THIS SAME PLAN declares.
+- Every top-level page section MUST declare a short semantic id on its outermost
+  element, matching its navbar label lowercased: id="menu", id="about",
+  id="contact", id="testimonials", etc. Verbose ids on inner elements are fine,
+  but the SHORT id MUST exist on the section root.
+- href="#" is FORBIDDEN. A nav entry with no real destination must not be generated.
+- Never link to routes or anchors that this plan does not create.
 `.trim();
 
 // ---------------------------------------------------------------------------

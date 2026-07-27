@@ -227,6 +227,12 @@ REACT/TAILWIND RULES:
 - Prefer Tailwind utility classes; avoid inline styles unless position:absolute math requires it
 - For new components, follow the existing file structure and import patterns visible in the provided context
 - Supabase queries: import via \`import { SupabaseService } from '@/services/SupabaseService'; const supabase = SupabaseService.getInstance().client;\`
+
+NAVIGATION CONTRACT (navbar/menu/footer links must resolve — sections are generated in separate steps, so a link only works if both ends exist in this plan):
+- Every navbar/menu/footer navigation entry MUST point to EITHER (a) a route that exists in this build plan (use react-router \`<Link to="...">\`), OR (b) an anchor #id that a section IN THIS SAME PLAN declares.
+- Every top-level page section MUST declare a short semantic id on its outermost element, matching its navbar label lowercased: id="menu", id="about", id="contact", id="testimonials", etc. Verbose ids on inner elements are fine, but the SHORT id MUST exist on the section root.
+- href="#" is FORBIDDEN. A nav entry with no real destination must not be generated.
+- Never link to routes or anchors that this plan does not create.
 `;
 
 const BACKEND_RULES = `When the user asks for backend features (e.g., 'save this to the database' or 'create a user profile table'), you must perform a 3-step process:
