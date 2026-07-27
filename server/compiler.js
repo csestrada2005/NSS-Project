@@ -45,7 +45,7 @@ function routerShimPlugin() {
         return {
           contents: `
             import React from 'react';
-            import { MemoryRouter, useNavigate } from 'react-router-dom-preview';
+            import { MemoryRouter, useNavigate, useLocation } from 'react-router-dom-preview';
             export * from 'react-router-dom-preview';
 
             // Puente de navegación: vive dentro del árbol de React del preview y
@@ -54,6 +54,7 @@ function routerShimPlugin() {
             // interceptor de anchors del PREVIEW_CLIENT_SCRIPT pueda navegar.
             function NavigationBridge() {
               const navigate = useNavigate();
+              const location = useLocation();
               React.useEffect(() => {
                 window.__forgeNavigate = navigate;
                 const onMessage = (e) => {
@@ -64,6 +65,13 @@ function routerShimPlugin() {
                 window.addEventListener('message', onMessage);
                 return () => window.removeEventListener('message', onMessage);
               }, [navigate]);
+              // Sincronización inversa (preview → panel): cada cambio de ruta dentro
+              // del preview (Links del router, redirecciones, etc.) se notifica al
+              // panel del Studio. Se emite también en el mount inicial para que el
+              // panel arranque sincronizado con la ruta activa.
+              React.useEffect(() => {
+                window.parent.postMessage({ type: 'route-changed', path: location.pathname }, '*');
+              }, [location.pathname]);
               return null;
             }
 

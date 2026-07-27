@@ -667,6 +667,23 @@ export function StudioEngine() {
   // -------------------------------------------------------------------------
   const [activeRoute, setActiveRoute] = useState<string>('/');
 
+  // Sincronización inversa (preview → panel): el NavigationBridge del preview
+  // emite 'route-changed' en cada cambio de ruta interno (Links del router,
+  // redirecciones como el "Return to Home" del 404) y en el mount inicial. Así
+  // el activeRoute del panel refleja la navegación que ocurre dentro del iframe.
+  // Mismo patrón/cleanup que los listeners de mensajes existentes (PreviewOverlay).
+  useEffect(() => {
+    const handleRouteChanged = (event: MessageEvent) => {
+      if (event.data?.type === 'route-changed' && typeof event.data.path === 'string') {
+        // Normalizar: la ruta index del router ('/') es la misma que el panel.
+        const path = event.data.path === '' ? '/' : event.data.path;
+        setActiveRoute(path);
+      }
+    };
+    window.addEventListener('message', handleRouteChanged);
+    return () => window.removeEventListener('message', handleRouteChanged);
+  }, []);
+
   // -------------------------------------------------------------------------
   // Render
   // -------------------------------------------------------------------------
