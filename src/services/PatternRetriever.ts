@@ -1,6 +1,7 @@
 import { SupabaseService } from './SupabaseService';
 
 interface PatternRow {
+  id?: string;
   name: string;
   category: string;
   description: string;
@@ -8,49 +9,142 @@ interface PatternRow {
 }
 
 export class PatternRetriever {
-  public static async retrieve(query: string, limit = 4): Promise<string> {
+  /**
+   * Retrieves architecture patterns from two independent sources and merges them:
+   *
+   *   1. Deterministic — the patterns the IntentClassifier explicitly requested
+   *      (intent.requiredPatternIds) are looked up by id/name directly from
+   *      forge_patterns. Embedding pattern IDs to search them by similarity is
+   *      wrong at the root: IDs are resolved by exact lookup, not vector distance.
+   *   2. Vector — the CLEAN user prompt (no intent.type / domain / pattern IDs /
+   *      prefixes, just the text the user wrote) is sent to /api/embed-and-search
+   *      for semantic similarity.
+   *
+   * Deterministic hits come first, vector hits after, deduped by id (falling
+   * back to name), capped to `limit` total. The output shape handed to the
+   * Architect/Implementer is unchanged — only how the patterns are obtained.
+   */
+  public static async retrieve(
+    query: string,
+    requiredPatternIds: string[] = [],
+    limit = 4,
+  ): Promise<string> {
+    let direct: PatternRow[] = [];
+    let vector: PatternRow[] = [];
+
     try {
-      console.log('[PatternRetriever] fetching from /api/embed-and-search with query:', query?.slice(0, 100));
-      const authHeader = await SupabaseService.getInstance().getAuthHeader();
-      const response = await fetch('/api/embed-and-search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...authHeader,
-        },
-        body: JSON.stringify({ query, limit }),
-      });
-
-      if (!response.ok) {
-        return '';
-      }
-
-      const data = (await response.json()) as { patterns?: PatternRow[] };
-      console.log('[PatternRetriever] response status:', response.status, '| body preview:', JSON.stringify(data).slice(0, 200));
-      const patterns = data.patterns ?? [];
-
-      if (patterns.length === 0) {
-        return '';
-      }
-
-      let resultString = '';
-      for (const pattern of patterns) {
-        const block = `=== PATTERN: ${pattern.name} (${pattern.category}) ===\n${pattern.description}\n${pattern.code_example}\n=== END PATTERN ===`;
-
-        // If adding this block plus the separator (if resultString is not empty)
-        // exceeds 6000 chars, we truncate at the last complete pattern.
-        const separator = resultString.length > 0 ? '\n\n' : '';
-        if (resultString.length + separator.length + block.length > 6000) {
-          break;
-        }
-
-        resultString += separator + block;
-      }
-
-      return resultString;
+      direct = await this.fetchByIds(requiredPatternIds);
     } catch (err) {
-      console.error('[PatternRetriever]', err);
-      return '';
+      console.error('[PatternRetriever] direct lookup failed:', err);
     }
+
+    try {
+      vector = await this.fetchByVector(query, limit);
+    } catch (err) {
+      console.error('[PatternRetriever] vector search failed:', err);
+    }
+
+    console.log('[PatternRetriever] direct:', direct.length, '| vector:', vector.length, '| query:', query);
+
+    // Fusion: deterministic first, vector after, dedup by id (fallback to name),
+    // respecting the total limit the retriever applies today.
+    const merged: PatternRow[] = [];
+    const seen = new Set<string>();
+    for (const pattern of [...direct, ...vector]) {
+      if (!pattern) continue;
+      const key = pattern.id ?? pattern.name;
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      merged.push(pattern);
+      if (merged.length >= limit) break;
+    }
+
+    return this.format(merged);
+  }
+
+  /**
+   * Deterministic source: fetch the classifier-requested patterns directly from
+   * forge_patterns (readable by authenticated users per RLS). The classifier's
+   * IDs can be either an id or a name, so we match against both columns.
+   * Non-existent IDs are simply ignored.
+   */
+  private static async fetchByIds(ids: string[]): Promise<PatternRow[]> {
+    const list = (ids ?? []).map(id => id?.trim()).filter(Boolean) as string[];
+    if (list.length === 0) return [];
+
+    const client = SupabaseService.getInstance().client;
+    const columns = 'id, name, category, description, code_example';
+    const inList = `(${list.map(id => `"${id.replace(/"/g, '')}"`).join(',')})`;
+
+    // Match against both id and name — classifier IDs can be either.
+    const { data, error } = await client
+      .from('forge_patterns')
+      .select(columns)
+      .or(`id.in.${inList},name.in.${inList}`);
+
+    if (!error) {
+      return (data as PatternRow[]) ?? [];
+    }
+
+    // The id column may be a non-text type (e.g. uuid) that rejects slug values
+    // and fails the combined filter. Fall back to matching by name only so the
+    // deterministic source still resolves.
+    const { data: byName, error: nameError } = await client
+      .from('forge_patterns')
+      .select(columns)
+      .in('name', list);
+
+    if (nameError) {
+      console.error('[PatternRetriever] forge_patterns lookup error:', nameError);
+      return [];
+    }
+    return (byName as PatternRow[]) ?? [];
+  }
+
+  /**
+   * Vector source: embed the CLEAN user prompt and similarity-search via the
+   * existing /api/embed-and-search endpoint (threshold 0.3, unchanged).
+   */
+  private static async fetchByVector(query: string, limit: number): Promise<PatternRow[]> {
+    if (!query || query.trim() === '') return [];
+
+    const authHeader = await SupabaseService.getInstance().getAuthHeader();
+    const response = await fetch('/api/embed-and-search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeader,
+      },
+      body: JSON.stringify({ query, limit }),
+    });
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const data = (await response.json()) as { patterns?: PatternRow[] };
+    return data.patterns ?? [];
+  }
+
+  /**
+   * Serializes merged patterns into the Architect/Implementer context format.
+   * Unchanged shape: truncates at the last complete pattern under 6000 chars.
+   */
+  private static format(patterns: PatternRow[]): string {
+    let resultString = '';
+    for (const pattern of patterns) {
+      const block = `=== PATTERN: ${pattern.name} (${pattern.category}) ===\n${pattern.description}\n${pattern.code_example}\n=== END PATTERN ===`;
+
+      // If adding this block plus the separator (if resultString is not empty)
+      // exceeds 6000 chars, we truncate at the last complete pattern.
+      const separator = resultString.length > 0 ? '\n\n' : '';
+      if (resultString.length + separator.length + block.length > 6000) {
+        break;
+      }
+
+      resultString += separator + block;
+    }
+
+    return resultString;
   }
 }

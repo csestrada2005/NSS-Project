@@ -635,14 +635,10 @@ export class AIOrchestrator {
     // ------------------------------------------------------------------
     let patternContext = '';
     try {
-      const patternQuery = [
-        intent.type,
-        intent.domain ?? '',
-        intent.requiredPatternIds?.join(' ') ?? '',
-        input.slice(0, 120),
-      ].filter(Boolean).join(' ').trim();
-
-      patternContext = await PatternRetriever.retrieve(patternQuery);
+      // Vector search uses the CLEAN user prompt only (no intent.type / domain /
+      // pattern IDs / prefixes). The classifier-requested pattern IDs are
+      // resolved separately by the retriever via a deterministic id/name lookup.
+      patternContext = await PatternRetriever.retrieve(input, intent.requiredPatternIds ?? []);
       console.log('[AIOrchestrator] PatternRetriever result chars:', patternContext?.length ?? 0); // TODO: remove after RAG verification
       if (!patternContext || patternContext.length === 0) {
         console.warn('[AIOrchestrator] PatternRetriever returned empty — check /api/embed-and-search endpoint and Gemini API key');
