@@ -74,21 +74,9 @@ export class PatternRetriever {
 
     const client = SupabaseService.getInstance().client;
     const columns = 'id, name, category, description, code_example';
-    const inList = `(${list.map(id => `"${id.replace(/"/g, '')}"`).join(',')})`;
 
-    // Match against both id and name — classifier IDs can be either.
-    const { data, error } = await client
-      .from('forge_patterns')
-      .select(columns)
-      .or(`id.in.${inList},name.in.${inList}`);
-
-    if (!error) {
-      return (data as PatternRow[]) ?? [];
-    }
-
-    // The id column may be a non-text type (e.g. uuid) that rejects slug values
-    // and fails the combined filter. Fall back to matching by name only so the
-    // deterministic source still resolves.
+    // Classifier IDs are names, so match by name first — this is the normal
+    // path and never triggers a 400 from a uuid id column rejecting slugs.
     const { data: byName, error: nameError } = await client
       .from('forge_patterns')
       .select(columns)
@@ -98,7 +86,35 @@ export class PatternRetriever {
       console.error('[PatternRetriever] forge_patterns lookup error:', nameError);
       return [];
     }
-    return (byName as PatternRow[]) ?? [];
+
+    const rows = (byName as PatternRow[]) ?? [];
+    if (rows.length >= list.length) {
+      return rows;
+    }
+
+    // Some requested IDs did not resolve by name — try an additional lookup by
+    // id for the remainder. The id column may be a non-text type (e.g. uuid)
+    // that rejects slug values and returns 400, so this is best-effort only.
+    const resolved = new Set(rows.map(row => row.name));
+    const missing = list.filter(id => !resolved.has(id));
+    try {
+      const { data: byId, error: idError } = await client
+        .from('forge_patterns')
+        .select(columns)
+        .in('id', missing);
+
+      if (!idError && byId) {
+        for (const row of byId as PatternRow[]) {
+          if (!rows.some(existing => existing.id === row.id)) {
+            rows.push(row);
+          }
+        }
+      }
+    } catch {
+      // Tolerate a 400 from an incompatible id column — name results stand.
+    }
+
+    return rows;
   }
 
   /**
