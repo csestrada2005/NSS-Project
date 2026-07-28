@@ -115,6 +115,27 @@ function virtualFilesPlugin(files) {
         if (args.namespace === 'esmsh' || (args.importer && args.importer.startsWith('http')))
           return undefined;
 
+        // Guarda de procedencia: un import relativo cuyo importer es un archivo
+        // REAL en disco (namespace 'file' con ruta absoluta) NO pertenece al
+        // proyecto virtual. Es el caso de un paquete aliaseado multi-archivo:
+        // el barrel ESM de lucide-react (dist/esm/lucide-react.js) reexporta
+        // desde ./icons/*.js, que son archivos de node_modules, no del filesObj.
+        // Se resuelve contra el disco y se sirve por el onLoad nativo de esbuild,
+        // que así puede tree-shakear y empaquetar sólo los iconos importados.
+        // El entrypoint (importer vacío) y los archivos del proyecto (namespace
+        // 'virtual') NO entran aquí: su resolución contra el filesObj queda
+        // byte-a-byte idéntica — la guarda sólo redirige lo que nunca fue virtual.
+        // sideEffects:false: al resolver a mano nos saltamos la lectura del
+        // package.json que hace el resolver nativo, así que reponemos la
+        // marca para que el tree-shaking funcione. Sólo aplica a sub-módulos de
+        // paquetes ESM aliaseados (todos side-effect-free por diseño; los demás
+        // targets del ALIAS son de un solo archivo y nunca llegan hasta aquí).
+        // Sólo imports RELATIVOS ('.'): un specifier con '@' es un paquete con
+        // scope (p.ej. '@remix-run/router') o el alias '@/' del proyecto, nunca
+        // una ruta de disco — esos siguen su camino habitual (alias / filesObj).
+        if (args.path.startsWith('.') && args.namespace === 'file' && args.importer && path.isAbsolute(args.importer))
+          return { path: path.resolve(path.dirname(args.importer), args.path), sideEffects: false };
+
         let resolvedPath;
 
         if (args.path.startsWith('@/')) {
@@ -197,7 +218,14 @@ const ALIAS = {
   'scheduler': new URL('../node_modules/react-dom-preview/node_modules/scheduler/cjs/scheduler.development.js', import.meta.url).pathname,
   'react-router-dom-preview': new URL('../node_modules/react-router-dom-preview/dist/react-router-dom.development.js', import.meta.url).pathname,
   'react-router': new URL('../node_modules/react-router-dom-preview/node_modules/react-router/dist/react-router.development.js', import.meta.url).pathname,
-  '@remix-run/router': new URL('../node_modules/@remix-run/router/dist/router.cjs.js', import.meta.url).pathname
+  '@remix-run/router': new URL('../node_modules/@remix-run/router/dist/router.cjs.js', import.meta.url).pathname,
+  // Builds ESM locales para los helpers de UI que el runtime context promete
+  // "locally bundled". Con el entry ESM, esbuild hace tree-shaking y solo
+  // empaqueta los iconos/utilidades importados; nunca usar cjs/umd aquí (metería
+  // la librería entera de iconos en cada bundle del preview).
+  'lucide-react': new URL('../node_modules/lucide-react/dist/esm/lucide-react.js', import.meta.url).pathname,
+  'clsx': new URL('../node_modules/clsx/dist/clsx.mjs', import.meta.url).pathname,
+  'tailwind-merge': new URL('../node_modules/tailwind-merge/dist/bundle-mjs.mjs', import.meta.url).pathname
 };
 
 // Base URL del CDN, configurable vía env para tests / mirrors
