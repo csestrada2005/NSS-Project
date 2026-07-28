@@ -84,6 +84,7 @@ Do not modify package.json, vite.config.ts, tsconfig.json, or any config file un
 If the user asks to fix something, only modify files that contain the bug.
 Every step description must explain what the file will contain after the change.
 All description strings must be plain text only — no newlines, no backticks, no special characters.
+Plans must never create a step that adds Header/Footer rendering to a page component. Chrome changes belong to Layout.tsx or the chrome components themselves.
 
 ROUTING & ENTRY-POINT RULES — critical:
 - The route "/" renders src/pages/Index.tsx. This is the page the user sees first.

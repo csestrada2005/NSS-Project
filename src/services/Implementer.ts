@@ -61,6 +61,17 @@ separately, so anchors and routes only work if both ends exist):
   but the SHORT id MUST exist on the section root.
 - href="#" is FORBIDDEN. A nav entry with no real destination must not be generated.
 - Never link to routes or anchors that this plan does not create.
+
+CHROME OWNERSHIP:
+- Layout.tsx is the SOLE owner of Header and Footer. It renders them exactly
+  once, around <Outlet />.
+- Page components (src/pages/*) and section components MUST NEVER import or
+  render Header, Footer, or any <header>/<footer> landmark elements. A closing
+  CTA section is fine; a <footer> tag or footer-like block (copyright, nav
+  links repeated) inside a section is FORBIDDEN.
+- When a provided pattern shows Header/Footer usage, apply it INSIDE
+  Layout.tsx only — patterns illustrate structure, they do not license
+  duplicating chrome into pages.
 `.trim();
 
 // ---------------------------------------------------------------------------
