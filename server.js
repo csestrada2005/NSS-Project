@@ -1337,12 +1337,13 @@ app.post('/api/embed-and-search', requireAuth, async (req, res) => {
       match_count: limit,
     });
 
-    console.log('[embed-and-search] patterns found:', data?.length ?? 0, '| rpc error:', rpcError?.message ?? 'none');
-
     if (rpcError) {
+      console.log('[embed-and-search] patterns found:', data?.length ?? 0, '| rpc error:', rpcError.message);
       console.error('[embed-and-search]', rpcError);
       return res.status(500).json({ error: 'Search failed', patterns: [] });
     }
+
+    console.log('[embed-and-search] patterns found:', data?.length ?? 0, '| rpc_status: ok');
 
     return res.json({ patterns: data ?? [] });
   } catch (err) {
