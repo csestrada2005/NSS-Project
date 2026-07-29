@@ -341,6 +341,20 @@ app.post('/api/chat-forge', async (req, res) => {
   if (!ANTHROPIC_API_KEY) {
     return res.status(500).json({ error: 'API key missing' });
   }
+  // ---------------------------------------------------------------------------
+  // Chaos hook (PIEZA 4) — synthetic 529 for testing Implementer step retries.
+  // Double lock so it can never fire in production by accident:
+  //   1. FORGE_CHAOS_ENABLED=true must be set in the server env (absent on
+  //      Render → this whole block is inert regardless of headers).
+  //   2. The request must carry header 'x-forge-chaos: overloaded' (the client
+  //      only attaches it while localStorage 'forge_chaos_529' is a positive
+  //      counter — see Implementer.callStepWithRetry).
+  // ---------------------------------------------------------------------------
+  if (process.env.FORGE_CHAOS_ENABLED === 'true'
+      && req.headers['x-forge-chaos'] === 'overloaded') {
+    return res.status(529).json({ type: 'error',
+      error: { type: 'overloaded_error', message: 'Chaos: synthetic 529' } });
+  }
   try {
     const { model, max_tokens, system, messages } = req.body;
 
