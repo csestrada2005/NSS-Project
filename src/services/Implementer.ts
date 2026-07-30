@@ -1,6 +1,6 @@
-import { platformService } from './PlatformService';
 import type { BuildStep } from './Architect';
 import type { ProjectMemory } from './ProjectMemoryService';
+import { SupabaseService } from './SupabaseService';
 import { sanitizeFileContent } from '../utils/sanitizeFileContent';
 
 // ---------------------------------------------------------------------------
@@ -12,6 +12,19 @@ export type ProgressCallback = (
   totalSteps: number,
   currentFile: string
 ) => void;
+
+/**
+ * Result of executing a build plan. Beyond the produced files, it carries an
+ * honest account of what did NOT get built so the caller can report partial
+ * success instead of silently shipping a half-finished project.
+ */
+export interface ImplementerResult {
+  files: Map<string, string>;
+  /** Steps whose API call failed definitively after all retries. */
+  failedSteps: { step: BuildStep; reason: string }[];
+  /** Steps never attempted because a dependency failed (cascade). */
+  skippedSteps: BuildStep[];
+}
 
 // ---------------------------------------------------------------------------
 // Prompts (mirrors AIOrchestrator rules for consistency)
@@ -79,6 +92,15 @@ CHROME OWNERSHIP:
 // ---------------------------------------------------------------------------
 
 export class Implementer {
+  /**
+   * Reason string set by executeStep when a step fails DEFINITIVELY at the API
+   * layer (after all retries). Read by execute() immediately after the awaited
+   * call — the loop is sequential, so a single static slot is safe. Reset to
+   * null before every executeStep call so a null return with no reason means
+   * "invalid content", not "API failure".
+   */
+  private static lastApiFailure: string | null = null;
+
   static async execute(
     plan: BuildStep[],
     files: Map<string, string>,
@@ -86,25 +108,43 @@ export class Implementer {
     onProgress?: ProgressCallback,
     patternContext?: string,
     designContext?: string
-  ): Promise<Map<string, string>> {
+  ): Promise<ImplementerResult> {
     const modifiedFiles = new Map<string, string>(files);
     const completed = new Set<number>();
+    // `failed` holds both API-failed steps AND cascade-skipped steps, so the
+    // dependency loop can distinguish "failed" from "still pending" and
+    // propagate the cascade to downstream dependents.
+    const failed = new Set<number>();
+    const failedSteps: { step: BuildStep; reason: string }[] = [];
+    const skippedSteps: BuildStep[] = [];
     const sorted = [...plan].sort((a, b) => a.order - b.order);
 
     console.log('[Implementer] PLAN:', JSON.stringify(
       sorted.map(s => ({ order: s.order, action: s.action,
         file_path: s.file_path, requires: s.requires_steps }))));
 
-    // Process with dependency ordering — iterate until all done or no progress
+    // Process with dependency ordering — iterate until all resolved or no progress
     const maxPasses = plan.length * 2;
     let pass = 0;
 
-    while (completed.size < sorted.length && pass < maxPasses) {
+    while (completed.size + failed.size < sorted.length && pass < maxPasses) {
       pass++;
       let progressed = false;
 
       for (const step of sorted) {
-        if (completed.has(step.order)) continue;
+        if (completed.has(step.order) || failed.has(step.order)) continue;
+
+        // Cascade: a step depending on any failed step can never run. Mark it
+        // skipped AND failed so its own dependents cascade too.
+        const depFailed = step.requires_steps.some(dep => failed.has(dep));
+        if (depFailed) {
+          console.warn('[Implementer] STEP SKIPPED (dependency failed):',
+            step.order, step.file_path);
+          skippedSteps.push(step);
+          failed.add(step.order);
+          progressed = true;
+          continue;
+        }
 
         // Only proceed if all dependencies are complete
         const depsReady = step.requires_steps.every(dep => completed.has(dep));
@@ -124,27 +164,47 @@ export class Implementer {
           done: completed.has(s.order),
         }));
 
+        this.lastApiFailure = null;
         const newContent = await this.executeStep(step, modifiedFiles, memory, planFiles, patternContext, designContext);
         if (newContent !== null) {
           modifiedFiles.set(step.file_path, newContent);
+          completed.add(step.order);
+        } else if (this.lastApiFailure) {
+          // Definitive API failure — do NOT mark completed; record the reason
+          // and add to `failed` so dependents cascade into skippedSteps.
+          console.warn('[Implementer] STEP FAILED (API):',
+            step.order, step.file_path, this.lastApiFailure);
+          failedSteps.push({ step, reason: this.lastApiFailure });
+          failed.add(step.order);
         } else {
+          // Pre-existing branch: null from invalid content (not an API failure).
+          // Preserve today's behavior — treat as completed, no partial report.
           console.warn('[Implementer] STEP RETURNED NULL:', step.order, step.file_path);
+          completed.add(step.order);
         }
-        completed.add(step.order);
         progressed = true;
       }
 
       if (!progressed) break;
     }
 
-    if (completed.size < sorted.length) {
+    if (completed.size + failed.size < sorted.length) {
       console.warn('[Implementer] UNEXECUTED STEPS (dep deadlock?):',
-        sorted.filter(s => !completed.has(s.order)).map(s => s.order));
+        sorted.filter(s => !completed.has(s.order) && !failed.has(s.order)).map(s => s.order));
+    }
+
+    if (failedSteps.length > 0) {
+      console.warn('[Implementer] FAILED STEPS:',
+        failedSteps.map(f => ({ order: f.step.order, file: f.step.file_path, reason: f.reason })));
+    }
+    if (skippedSteps.length > 0) {
+      console.warn('[Implementer] SKIPPED STEPS (cascade):',
+        skippedSteps.map(s => ({ order: s.order, file: s.file_path })));
     }
 
     console.log('[Implementer] FINAL FILE KEYS:', [...modifiedFiles.keys()]);
 
-    return modifiedFiles;
+    return { files: modifiedFiles, failedSteps, skippedSteps };
   }
 
   private static truncateFileContent(content: string, maxChars = 18000): string {
@@ -246,27 +306,134 @@ export class Implementer {
 
     const userMessage = parts.join('\n');
 
-    try {
-      const response = await platformService.callForgeChat({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 8192,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userMessage }],
-      });
+    const result = await this.callStepWithRetry({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 8192,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMessage }],
+    });
 
-      const data = await response.json();
-
-      if (data.error) {
-        console.error(`[Implementer] Step ${step.order} API error:`, data.error);
-        return null;
-      }
-
-      const text: string = data.content?.[0]?.text ?? '';
-      return sanitizeFileContent(this.stripCodeFences(text));
-    } catch (e) {
-      console.error(`[Implementer] Step ${step.order} failed:`, e);
+    if ('finalError' in result) {
+      console.error(
+        `[Implementer] Step ${step.order} failed definitively:`,
+        result.finalError
+      );
+      // Publish the reason so execute() classifies this null as an API failure
+      // (see Implementer.lastApiFailure). Returns null COMO HOY.
+      this.lastApiFailure = result.finalError;
       return null;
     }
+
+    const text: string = result.data.content?.[0]?.text ?? '';
+    return sanitizeFileContent(this.stripCodeFences(text));
+  }
+
+  // -------------------------------------------------------------------------
+  // Resilient step call — retry with exponential backoff + jitter.
+  //
+  // Anthropic 529 (overloaded) and transient network/timeout errors during a
+  // single step used to kill it silently. This helper retries the step's chat
+  // call up to 3 times before giving up, and returns a structured result so the
+  // caller can record WHY a step failed instead of dropping it on the floor.
+  //
+  // NOTE: this does its own fetch to /api/chat-forge (rather than going through
+  // PlatformService.callForgeChat) for two reasons: (1) it needs a per-attempt
+  // AbortSignal.timeout on the fetch, and (2) it must attach the chaos-testing
+  // header ONLY here — never on the global PlatformService path.
+  // -------------------------------------------------------------------------
+  private static async callStepWithRetry(
+    body: object
+  ): Promise<{ data: any } | { finalError: string }> {
+    const MAX_ATTEMPTS = 3;
+    const RETRYABLE_STATUS = new Set([429, 500, 503, 529]);
+    const NON_RETRYABLE_STATUS = new Set([400, 401, 403, 413]);
+    const NON_RETRYABLE_ERROR_TYPES = new Set([
+      'invalid_request_error',
+      'authentication_error',
+    ]);
+    const RETRYABLE_ERROR_TYPES = new Set(['overloaded_error', 'api_error']);
+
+    let lastReason = 'unknown error';
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      let retryable = false;
+
+      try {
+        const { Authorization } = await SupabaseService.getInstance().getAuthHeader();
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          Authorization,
+          'anthropic-version': '2023-06-01',
+        };
+
+        // --- Chaos hook (PIEZA 4) -------------------------------------------
+        // Double lock: the server only honors the header when FORGE_CHAOS_ENABLED
+        // is set (see server.js). Client side, we only attach it while
+        // localStorage 'forge_chaos_529' holds a positive counter, decrementing
+        // once per call it's attached to — so a value of N kills exactly the
+        // next N step calls (N=3 kills all 3 attempts of the first step).
+        try {
+          const raw = localStorage.getItem('forge_chaos_529');
+          const remaining = raw ? parseInt(raw, 10) : 0;
+          if (Number.isFinite(remaining) && remaining > 0) {
+            headers['x-forge-chaos'] = 'overloaded';
+            localStorage.setItem('forge_chaos_529', String(remaining - 1));
+          }
+        } catch {
+          // no localStorage (SSR/tests) — chaos simply inert
+        }
+
+        const response = await fetch('/api/chat-forge', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(90_000),
+        });
+
+        if (!response.ok) {
+          const status = response.status;
+          lastReason = `HTTP ${status}`;
+          if (NON_RETRYABLE_STATUS.has(status)) {
+            return { finalError: lastReason };
+          }
+          if (!RETRYABLE_STATUS.has(status)) {
+            // Unlisted status — treat as non-retryable to fail fast.
+            return { finalError: lastReason };
+          }
+          retryable = true; // 429/500/503/529
+        } else {
+          const data = await response.json();
+          if (data.error) {
+            const type: string = data.error.type ?? 'unknown';
+            lastReason = `error:${type}`;
+            if (NON_RETRYABLE_ERROR_TYPES.has(type)) {
+              return { finalError: lastReason };
+            }
+            if (RETRYABLE_ERROR_TYPES.has(type)) {
+              retryable = true;
+            } else {
+              // Unknown error type — fail fast rather than burn retries.
+              return { finalError: lastReason };
+            }
+          } else {
+            return { data };
+          }
+        }
+      } catch (e: any) {
+        // fetch throw (network / TypeError) or AbortSignal.timeout — retryable.
+        const isTimeout = e?.name === 'TimeoutError' || e?.name === 'AbortError';
+        lastReason = isTimeout ? 'timeout' : `network:${e?.message ?? 'fetch failed'}`;
+        retryable = true;
+      }
+
+      if (retryable && attempt < MAX_ATTEMPTS) {
+        console.warn(`[Implementer] Step retry ${attempt}/3 tras ${lastReason}`);
+        const backoff = 1500 * 2 ** (attempt - 1) + Math.floor(Math.random() * 500);
+        await new Promise(resolve => setTimeout(resolve, backoff));
+      }
+    }
+
+    return { finalError: lastReason };
   }
 
   // Look up the files that the given source imports from — provides LLM with

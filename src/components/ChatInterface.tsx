@@ -255,9 +255,12 @@ export function ChatInterface({
       return { content: result.chatResponse, warning: result.warning, suggestedAction: result.suggestedAction };
     }
     if (result.modifiedFiles.length > 0) {
-      return { content: `Done. Modified: ${result.modifiedFiles.join(', ')}`, warning: result.warning };
+      // Propagate suggestedAction here too — on partial success the plan lane
+      // reports 'Done. Modified: ...' with a follow-up action, and the action
+      // button must render alongside the success message, not only chatResponse.
+      return { content: `Done. Modified: ${result.modifiedFiles.join(', ')}`, warning: result.warning, suggestedAction: result.suggestedAction };
     }
-    return { content: 'Done — no files needed changing.', warning: result.warning };
+    return { content: 'Done — no files needed changing.', warning: result.warning, suggestedAction: result.suggestedAction };
   };
 
   const sendMessage = async (text: string) => {

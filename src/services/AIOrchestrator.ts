@@ -694,7 +694,7 @@ export class AIOrchestrator {
     // ------------------------------------------------------------------
     // LAYER 4 — Implementer: execute each step
     // ------------------------------------------------------------------
-    const modifiedFilesMap = await Implementer.execute(
+    const implResult = await Implementer.execute(
       steps,
       files,
       memory!,
@@ -702,6 +702,8 @@ export class AIOrchestrator {
       patternContext,
       designContext
     );
+    const modifiedFilesMap = implResult.files;
+    const { failedSteps, skippedSteps } = implResult;
 
     // Sanitize CSS imports — enforce that only src/index.css is used as the global CSS entry
     for (const [path, content] of modifiedFilesMap) {
@@ -746,6 +748,26 @@ export class AIOrchestrator {
       );
       const extras = diffPaths.filter(p => !planPaths.has(p));
 
+      // ----------------------------------------------------------------
+      // PIEZA 3 — fallo parcial honesto. Algún step murió por sobrecarga
+      // temporal del modelo (529 tras agotar reintentos) o quedó saltado por
+      // cascada de dependencias. El trabajo válido ya está persistido y
+      // compiló, así que el outcome sigue siendo 'success', pero lo avisamos y
+      // ofrecemos completar lo que falta.
+      // ----------------------------------------------------------------
+      const partialSteps: BuildStep[] = [
+        ...failedSteps.map(f => f.step),
+        ...skippedSteps,
+      ];
+      const hasPartial = partialSteps.length > 0;
+      const partialOrders = partialSteps.map(s => s.order).sort((a, b) => a - b);
+      const describeStep = (s: BuildStep): string =>
+        s.file_path || s.description?.slice(0, 60) || `paso ${s.order}`;
+      const firstFailedStep = failedSteps[0]?.step ?? skippedSteps[0];
+      const suggestedAction = hasPartial && firstFailedStep
+        ? `Completa lo que faltó: ${firstFailedStep.description}`
+        : undefined;
+
       // Notify StudioEngine about each modified file
       for (const path of diffPaths) {
         const content = finalFiles.get(path)!;
@@ -774,7 +796,9 @@ export class AIOrchestrator {
         });
         await this.logIntent({
           projectId,
-          prompt: input,
+          // PIEZA 3 — telemetría de fallo parcial: mismo patrón que
+          // [CLARIFY_ASKED], sufijo en el prompt, sin tocar columnas ni enums.
+          prompt: hasPartial ? `${input} [PARTIAL:${partialOrders.join(',')}]` : input,
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,
@@ -814,12 +838,22 @@ export class AIOrchestrator {
           'Detecté y corregí errores de compilación durante la verificación.'
         );
       }
+      if (hasPartial) {
+        const total = steps.length;
+        const completedCount = total - partialSteps.length;
+        const failedList = partialSteps.map(describeStep).join(', ');
+        warnings.push(
+          `Generé ${completedCount} de ${total} pasos. Falló: ${failedList} ` +
+          `por sobrecarga temporal del modelo. Puedes pedirme completar lo que falta.`
+        );
+      }
 
       return {
         modifiedFiles: diffPaths,
         steps,
         outcome: 'success',
         warning: warnings.length > 0 ? warnings.join(' ') : undefined,
+        suggestedAction,
       };
     } else {
       // ----------------------------------------------------------------
