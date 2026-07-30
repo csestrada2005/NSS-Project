@@ -350,8 +350,13 @@ app.post('/api/chat-forge', async (req, res) => {
   //      only attaches it while localStorage 'forge_chaos_529' is a positive
   //      counter — see Implementer.callStepWithRetry).
   // ---------------------------------------------------------------------------
+  if (req.headers['x-forge-chaos']) {
+    console.log('[chat-forge] CHAOS header recibido. FORGE_CHAOS_ENABLED=',
+      process.env.FORGE_CHAOS_ENABLED);
+  }
   if (process.env.FORGE_CHAOS_ENABLED === 'true'
       && req.headers['x-forge-chaos'] === 'overloaded') {
+    console.log('[chat-forge] CHAOS: sirviendo 529 sintético');
     return res.status(529).json({ type: 'error',
       error: { type: 'overloaded_error', message: 'Chaos: synthetic 529' } });
   }
