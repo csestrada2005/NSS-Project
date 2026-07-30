@@ -378,6 +378,13 @@ export class Implementer {
           if (Number.isFinite(remaining) && remaining > 0) {
             headers['x-forge-chaos'] = 'overloaded';
             localStorage.setItem('forge_chaos_529', String(remaining - 1));
+            console.log('[Chaos] header x-forge-chaos adjuntado. Restantes:', remaining - 1);
+          }
+          // Diagnostic guard: the counter is present and positive, yet the header
+          // did NOT end up on this request for whatever branch — surface it so a
+          // silent decrement-without-attach (H1) can't hide.
+          if (remaining > 0 && headers['x-forge-chaos'] !== 'overloaded') {
+            console.warn('[Chaos] contador activo pero header NO adjuntado en esta llamada');
           }
         } catch {
           // no localStorage (SSR/tests) — chaos simply inert
