@@ -4,7 +4,6 @@ import { contextService } from './ContextService';
 import { SupabaseService } from './SupabaseService';
 import { platformService } from './PlatformService';
 import { projectDBService } from './ProjectDBService';
-import { NEBU_SCHEMA_CONTEXT } from '../utils/schemaContext';
 import { ProjectMemoryService } from './ProjectMemoryService';
 import { PatternRetriever } from './PatternRetriever';
 import { DesignContextService } from './DesignContextService';
@@ -369,7 +368,6 @@ export class AIOrchestrator {
     }
 
     const systemPrompt =
-      NEBU_SCHEMA_CONTEXT + '\n\n' +
       'You are an expert Senior React Engineer. Implement the following step from the plan.\n' +
       FORMAT_INSTRUCTION + '\n' +
       REACT_TAILWIND_RULES + '\n' +
@@ -1438,7 +1436,7 @@ export class AIOrchestrator {
     }
 
     const systemPrompt =
-      NEBU_SCHEMA_CONTEXT + projectDbContext + emailContext + '\n\n' +
+      projectDbContext + emailContext + '\n\n' +
       'You are an expert Senior React Engineer.\n' +
       FORMAT_INSTRUCTION + '\n' +
       REACT_TAILWIND_RULES + '\n' +
