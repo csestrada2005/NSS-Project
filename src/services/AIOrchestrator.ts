@@ -13,6 +13,7 @@ import { Architect, type BuildStep } from './Architect';
 import { Implementer, type ProgressCallback } from './Implementer';
 import { Verifier, type RetryCallback } from './Verifier';
 import { CreditService } from './CreditService';
+import { REACT_TAILWIND_RULES } from './promptRules';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -219,20 +220,9 @@ const AVAILABLE_RUNTIME_CONTEXT =
   '- For animations, framer-motion is available and encouraged for hero sections,\n' +
   '  transitions, and micro-interactions.';
 
-const REACT_TAILWIND_RULES = `
-REACT/TAILWIND RULES:
-- Always write complete file contents, never partial updates
-- Use data-oid attributes exactly as they exist in the source — never add, remove, or change them
-- Prefer Tailwind utility classes; avoid inline styles unless position:absolute math requires it
-- For new components, follow the existing file structure and import patterns visible in the provided context
-- Supabase queries: import via \`import { SupabaseService } from '@/services/SupabaseService'; const supabase = SupabaseService.getInstance().client;\`
-
-NAVIGATION CONTRACT (navbar/menu/footer links must resolve — sections are generated in separate steps, so a link only works if both ends exist in this plan):
-- Every navbar/menu/footer navigation entry MUST point to EITHER (a) a route that exists in this build plan (use react-router \`<Link to="...">\`), OR (b) an anchor #id that a section IN THIS SAME PLAN declares.
-- Every top-level page section MUST declare a short semantic id on its outermost element, matching its navbar label lowercased: id="menu", id="about", id="contact", id="testimonials", etc. Verbose ids on inner elements are fine, but the SHORT id MUST exist on the section root.
-- href="#" is FORBIDDEN. A nav entry with no real destination must not be generated.
-- Never link to routes or anchors that this plan does not create.
-`;
+// REACT_TAILWIND_RULES is imported from ./promptRules — the single shared
+// constant used by every generation lane (plan, simple, heavy, and the
+// per-step Implementer), including the anti-template / brand rules.
 
 const BACKEND_RULES = `When the user asks for backend features (e.g., 'save this to the database' or 'create a user profile table'), you must perform a 3-step process:
 1. Generate a valid PostgreSQL CREATE TABLE statement wrapped in a file named \`supabase/migrations/<timestamp>_create_<table_name>.sql\`.
@@ -645,7 +635,9 @@ export class AIOrchestrator {
       console.error('[AIOrchestrator] PatternRetriever threw:', err);
     }
 
-    const designContext = await DesignContextService.getContext(input);
+    // Pass `files` so the per-project DESIGN.md brief is prepended to the
+    // design context and reaches both Architect.plan and the Implementer steps.
+    const designContext = await DesignContextService.getContext(input, files);
 
     const blueprint = generateBlueprintFromFiles(files);
     const { steps, wasTrimmed, originalCount } = await Architect.plan(
@@ -974,6 +966,14 @@ export class AIOrchestrator {
 
     console.log('[SimpleLane] target:', target.path, '| method:', target.method);
 
+    // Design context (incl. the mandatory DESIGN.md brief) must reach the simple
+    // lane edit too, so a one-off tweak still honors the project's palette,
+    // fonts and anti-template rules. Non-blocking: getContext swallows failures.
+    const designContext = await DesignContextService.getContext(input, files);
+    const designBlock = designContext
+      ? `\n\nDESIGN SYSTEM CONTEXT (follow it — colors from --brand-*/tokens, no emojis as UI, no hardcoded hex):\n${designContext}`
+      : '';
+
     try {
       const response = await platformService.callForgeChat({
         model: 'claude-sonnet-4-6',
@@ -985,7 +985,8 @@ export class AIOrchestrator {
           'Preserve all data-oid attributes exactly as they are. ' +
           'Never write the file path as the first line of the file content. File ' +
           'content must start directly with code (imports, comments, or declarations).\n\n' +
-          AVAILABLE_RUNTIME_CONTEXT,
+          AVAILABLE_RUNTIME_CONTEXT +
+          designBlock,
         messages: [
           {
             role: 'user',

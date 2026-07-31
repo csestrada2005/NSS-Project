@@ -51,6 +51,7 @@ import { CommandBubble } from '../components/CommandBubble';
 import { CommandModal } from '../components/CommandModal';
 import { HistoryDrawer } from '../components/HistoryDrawer';
 import { ProjectMemoryService } from '../services/ProjectMemoryService';
+import { DesignBriefService } from '../services/DesignBriefService';
 import CreditBalance from '../components/forge/CreditBalance';
 import { ShareProjectModal } from '../components/forge/ShareProjectModal';
 import { CodePanel } from '../components/studio/CodePanel';
@@ -326,8 +327,13 @@ export function StudioEngine() {
     } else {
       isAutoLoadingTemplate.current = true;
       hasProcessedInitialPrompt.current = true;
-      handleLoadTemplate('landing-page').then((loadedFiles) => {
-        handleSendMessage(initialPrompt, undefined, undefined, loadedFiles);
+      handleLoadTemplate('landing-page').then(async (loadedFiles) => {
+        // New-project scaffold: generate the per-project design brief and
+        // persist DESIGN.md + brand CSS vars + Google Fonts BEFORE the first
+        // generation, so every lane sees the brief. Best-effort — a null result
+        // (API/JSON failure) leaves the scaffold untouched.
+        const briefFiles = await applyDesignBrief(initialPrompt, loadedFiles);
+        handleSendMessage(initialPrompt, undefined, undefined, briefFiles);
       });
     }
   }, [isProjectReady, isLoading]);
@@ -426,6 +432,33 @@ export function StudioEngine() {
     await saveSnapshot('template_load');
 
     return flatFiles;
+  };
+
+  // -------------------------------------------------------------------------
+  // Design brief scaffold — generate DESIGN.md + brand CSS vars + fonts and
+  // persist them onto the freshly-loaded template. Returns the merged files map
+  // (brief applied) so the first generation runs against it. On any failure the
+  // original template files are returned unchanged (never blocks creation).
+  // -------------------------------------------------------------------------
+  const applyDesignBrief = async (
+    prompt: string,
+    templateFiles: Map<string, string>
+  ): Promise<Map<string, string>> => {
+    try {
+      const briefFiles = await DesignBriefService.scaffold(prompt, templateFiles);
+      if (!briefFiles || briefFiles.size === 0) return templateFiles;
+
+      const merged = new Map(templateFiles);
+      for (const [path, content] of briefFiles) {
+        updateLocalFile(path, content);
+        await saveFile(path, content);
+        merged.set(path, content);
+      }
+      return merged;
+    } catch (e) {
+      console.error('[StudioEngine] applyDesignBrief failed, continuing without brief:', e);
+      return templateFiles;
+    }
   };
 
   // -------------------------------------------------------------------------

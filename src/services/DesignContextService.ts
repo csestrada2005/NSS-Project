@@ -1,7 +1,22 @@
 import { SupabaseService } from './SupabaseService';
 
 export class DesignContextService {
-  public static async getContext(productType: string): Promise<string> {
+  /**
+   * Builds the design context injected into every generation lane.
+   *
+   * When the project carries a DESIGN.md (the per-project design brief generated
+   * at scaffold), its contents are prepended verbatim under a mandatory header
+   * so the brief always survives — it is never subject to the RAG truncation cap
+   * and takes precedence over the generic product-type design context below.
+   *
+   * @param productType  the user prompt / product type used for RAG lookup
+   * @param files        optional project files map, used to surface DESIGN.md
+   */
+  public static async getContext(
+    productType: string,
+    files?: Map<string, string>
+  ): Promise<string> {
+    const briefBlock = this.buildBriefBlock(files);
     try {
       const supabase = SupabaseService.getInstance().client;
 
@@ -101,12 +116,26 @@ export class DesignContextService {
         resultString = resultString.substring(0, 2500);
       }
 
-      console.log('[DesignContextService] injected sections:', { colors: !!colorsRow, uiReasoning: !!uiRow, styles: stylesGate, typography: hasTypographyMatch, products: !!productsRow });
+      console.log('[DesignContextService] injected sections:', { colors: !!colorsRow, uiReasoning: !!uiRow, styles: stylesGate, typography: hasTypographyMatch, products: !!productsRow, brief: briefBlock.length > 0 });
 
-      return resultString;
+      // The mandatory project brief is prepended AFTER the RAG cap so it is
+      // never truncated and always leads the context.
+      return briefBlock + resultString;
     } catch (err) {
       console.error('[DesignContextService]', err);
-      return '';
+      // Even if the RAG lookup fails, the mandatory brief must still reach the
+      // lanes when the project has one.
+      return briefBlock;
     }
+  }
+
+  /**
+   * If the project contains a DESIGN.md, returns it wrapped in the mandatory
+   * header so it can be prepended to the design context. Empty string otherwise.
+   */
+  private static buildBriefBlock(files?: Map<string, string>): string {
+    const brief = files?.get('DESIGN.md');
+    if (typeof brief !== 'string' || brief.trim().length === 0) return '';
+    return `PROJECT DESIGN BRIEF (mandatory):\n${brief.trim()}\n\n`;
   }
 }
