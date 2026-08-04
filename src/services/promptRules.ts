@@ -16,6 +16,8 @@ REACT/TAILWIND RULES:
 - Follow existing file structure and import patterns visible in context
 - Supabase: import { SupabaseService } from '@/services/SupabaseService'; const supabase = SupabaseService.getInstance().client;
 - The global CSS entry file is ALWAYS src/index.css. Never import globals.css, global.css, or any other CSS filename. Never create a new CSS entry file.
+- Fonts are already loaded via <link> in index.html. NEVER import fonts — no @import in CSS, no URL imports in JS/TS.
+- Export convention: every component file uses a named export matching the filename (export function ServicesSection...). Importers use the matching named import. Never mix default and named exports for components.
 - For conditional or merged classNames, import cn from '@/lib/utils' (already provided, dependency-free). Never import clsx directly.
 - When importing cn from '@/lib/utils', use a named import: import { cn } from '@/lib/utils'.
 - For icons, you may import from lucide-react (e.g. import { Rocket } from 'lucide-react') or use inline <svg>.
@@ -54,6 +56,9 @@ CHROME OWNERSHIP:
 - When a provided pattern shows Header/Footer usage, apply it INSIDE
   Layout.tsx only — patterns illustrate structure, they do not license
   duplicating chrome into pages.
+
+HERO RULES:
+- Hero sections: commit to the chosen variant. Full-bleed image hero = the image/media spans the full viewport width (w-full, outside any max-width container; the inner text content may be constrained). Split hero = each half fills its allotted space. Never render a full-bleed hero inside a padded/max-width parent.
 
 ANTI-TEMPLATE / BRAND RULES (make every project look intentional, not shadcn-default):
 - NEVER use emojis as visual elements (icons, decorations, headings, buttons, feature cards). Use lucide-react icons instead. Emojis only if the user explicitly asks for them.
