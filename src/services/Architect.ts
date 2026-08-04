@@ -59,9 +59,23 @@ export class Architect {
     memoryFormatted: string,
     intent: Intent,
     designContext?: string,
-    blueprint: string = ''
+    blueprint: string = '',
+    isInitialBuild: boolean = false
   ): Promise<{ steps: BuildStep[]; wasTrimmed: boolean; originalCount: number }> {
     console.log('[Architect] designContext chars:', designContext?.length ?? 0, '| preview:', designContext?.slice(0, 300)); // TODO: remove after RAG verification
+    // Initial build of a brand-new project: the scaffold left the layout chrome
+    // in its template state ("App Name" navbar, single "Home" link, "Your
+    // Company" footer). The plan MUST claim a step to brand it. This does NOT
+    // apply to later edits — by then the chrome is already customized.
+    const initialBuildRule = isInitialBuild
+      ? `
+
+INITIAL-BUILD LAYOUT RULE — MANDATORY (this is the first build of a new project):
+- The project was scaffolded from a template whose src/components/layout/Header.tsx and src/components/layout/Footer.tsx still contain placeholder chrome (brand shows "App Name", a single "Home" nav link, footer says "Your Company"). Leaving them untouched ships a generic navbar.
+- Your plan MUST include a step with action "modify" on src/components/layout/Header.tsx that makes the navbar reflect: (1) the brand name from the design brief, (2) nav links whose anchors/routes point ONLY to sections this same plan creates (respect the navigation contract), and (3) the primary CTA. This step is REQUIRED, not optional.
+- Your plan MUST also include a step with action "modify" on src/components/layout/Footer.tsx that carries the brand name and links consistent with the sections this plan creates.
+- These layout steps count toward the 6-step maximum. Budget for them from the start.`
+      : '';
     const systemPrompt = `You are a software architect for a React + TypeScript + Tailwind web builder.
 Do not write any code. Return only a JSON array of BuildStep objects.
 Each BuildStep must have exactly these fields:
@@ -92,7 +106,7 @@ ROUTING & ENTRY-POINT RULES — critical:
 - If any step has action "create" for a component, you MUST also include a step with action "modify" on the file that renders it (usually src/pages/Index.tsx, or src/App.tsx for routing) that imports and uses that component. That modify step must list the create step in its requires_steps. Never leave a created component unreferenced.
 - Only modify src/App.tsx routing when the user explicitly asks for a new page/route.
 
-Return ONLY a valid JSON array. No markdown fences, no explanation before or after.`;
+Return ONLY a valid JSON array. No markdown fences, no explanation before or after.${initialBuildRule}`;
 
     try {
       const designBlock = designContext ? `DESIGN SYSTEM CONTEXT:\n${designContext}\n\n` : '';

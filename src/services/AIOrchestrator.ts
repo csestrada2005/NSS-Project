@@ -189,6 +189,60 @@ function getPageImportFiles(files: Map<string, string>): string[] {
   return result;
 }
 
+/**
+ * Palette guard — deterministic backstop for the design brief's brand palette.
+ *
+ * The scaffold injects the brief's 5 --brand-* variables into src/index.css.
+ * When the Implementer rewrites index.css it sometimes drops them (regenerating
+ * the file from scratch), which silently breaks every color token in the app.
+ * This re-injects the brief's --brand-* declarations into :root before the file
+ * is persisted.
+ *
+ * The authoritative values come from the project's CURRENT src/index.css (the
+ * scaffolded one). If that file has no brand vars either — no brief was ever
+ * applied — there is nothing to enforce and this is a no-op.
+ *
+ * Returns { guarded: true } only when it actually re-injected, so the caller can
+ * log a single telemetry line.
+ */
+function reinjectBrandPaletteIfDropped(
+  newCss: string,
+  originalCss: string | undefined
+): { css: string; guarded: boolean } {
+  if (typeof originalCss !== 'string') return { css: newCss, guarded: false };
+
+  // Collect the brief's brand declarations from the scaffolded index.css.
+  const declRe = /(--brand-[\w-]+)\s*:\s*([^;]+);/g;
+  const briefVars = new Map<string, string>();
+  let m: RegExpExecArray | null;
+  while ((m = declRe.exec(originalCss)) !== null) {
+    if (!briefVars.has(m[1])) briefVars.set(m[1], m[2].trim());
+  }
+  // A real brief defines exactly 5 --brand-* vars. Fewer means no brief was
+  // applied — nothing authoritative to enforce.
+  if (briefVars.size < 5) return { css: newCss, guarded: false };
+
+  // Which of the brief's vars did the new write drop?
+  const missing = [...briefVars.keys()].filter(v => {
+    const esc = v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return !new RegExp(esc + '\\s*:').test(newCss);
+  });
+  if (missing.length === 0) return { css: newCss, guarded: false };
+
+  const declarations = [...briefVars.entries()]
+    .map(([v, hsl]) => `    ${v}: ${hsl};`)
+    .join('\n');
+  const block = `\n    /* Brand palette (design brief) — re-injected by palette guard */\n${declarations}\n`;
+
+  const rootIdx = newCss.indexOf(':root {');
+  if (rootIdx !== -1) {
+    const insertAt = rootIdx + ':root {'.length;
+    return { css: newCss.slice(0, insertAt) + block + newCss.slice(insertAt), guarded: true };
+  }
+  // No :root block — prepend a fresh one.
+  return { css: `:root {${block}}\n\n${newCss}`, guarded: true };
+}
+
 function generateBlueprintFromFiles(files: Map<string, string>): string {
   return Array.from(files.keys())
     .filter(p => !p.includes('node_modules') && !p.includes('dist/'))
@@ -647,12 +701,19 @@ export class AIOrchestrator {
     const designContext = await DesignContextService.getContext(input, files);
 
     const blueprint = generateBlueprintFromFiles(files);
+    // Initial build of a new project: the scaffolded layout chrome is still in
+    // its template state. We detect this deterministically from the placeholder
+    // brand string the template ships with — once the first build brands the
+    // navbar, "App Name" is gone and this flag is false for every later edit.
+    const headerContent = files.get('src/components/layout/Header.tsx') ?? '';
+    const isInitialBuild = headerContent.includes('App Name');
     const { steps, wasTrimmed, originalCount } = await Architect.plan(
       input,
       memoryFormatted,
       intent,
       designContext,
-      blueprint
+      blueprint,
+      isInitialBuild
     );
 
     if (steps.length === 0) {
@@ -713,6 +774,23 @@ export class AIOrchestrator {
           console.warn(`[AIOrchestrator] Rewrote globals.css import in ${path} → index.css`);
           modifiedFilesMap.set(path, sanitized);
         }
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // Palette guard — if the Implementer's write to src/index.css dropped the
+    // design brief's 5 --brand-* variables, re-inject them into :root before
+    // the file is persisted. Runs before the Verifier so the restored palette
+    // is compile-checked like any other write.
+    // ------------------------------------------------------------------
+    if (modifiedFilesMap.has('src/index.css')) {
+      const { css: guardedCss, guarded } = reinjectBrandPaletteIfDropped(
+        modifiedFilesMap.get('src/index.css')!,
+        files.get('src/index.css')
+      );
+      if (guarded) {
+        modifiedFilesMap.set('src/index.css', guardedCss);
+        console.warn('[AIOrchestrator] Palette guard: re-injected design brief --brand-* vars dropped by the Implementer write to src/index.css');
       }
     }
 
