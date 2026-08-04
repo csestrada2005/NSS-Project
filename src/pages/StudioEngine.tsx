@@ -321,21 +321,51 @@ export function StudioEngine() {
     if (hasProcessedInitialPrompt.current) return;
     if (isAutoLoadingTemplate.current) return;
 
-    if (files.size > 0) {
-      hasProcessedInitialPrompt.current = true;
-      handleSendMessage(initialPrompt);
-    } else {
-      isAutoLoadingTemplate.current = true;
-      hasProcessedInitialPrompt.current = true;
-      handleLoadTemplate('landing-page').then(async (loadedFiles) => {
+    // One-shot consumption of the navigation state, BEFORE dispatching.
+    // initialPrompt travels in location.state, which the browser persists in the
+    // history entry: back-navigation, refresh, or any router restoration would
+    // re-deliver it and re-fire the whole generation. Capture the prompt into a
+    // local, mark it processed, and clear the state from the current history
+    // entry. Same pathname + replace => react-router does NOT remount (the route
+    // match is unchanged), it only drops the stale state.
+    const promptToRun = initialPrompt;
+    hasProcessedInitialPrompt.current = true;
+    navigate(location.pathname, { replace: true, state: null });
+
+    void (async () => {
+      // Belt-and-suspenders persistent idempotency guard: the ref + state clearing
+      // above cover the common cases, but exotic restorations could still slip a
+      // stale state through. If this project already has ANY forge_intent_log row
+      // it is no longer virgin — the initialPrompt must never fire again.
+      try {
+        const supabase = SupabaseService.getInstance().client;
+        const { data, error } = await supabase
+          .from('forge_intent_log')
+          .select('id')
+          .eq('project_id', projectId)
+          .limit(1);
+        if (!error && data && data.length > 0) {
+          console.log('[StudioEngine] initialPrompt suppressed: project has history');
+          return;
+        }
+      } catch {
+        // Query failure: fail open on the first run so a transient DB error does
+        // not block a legitimate initial generation.
+      }
+
+      if (files.size > 0) {
+        handleSendMessage(promptToRun);
+      } else {
+        isAutoLoadingTemplate.current = true;
+        const loadedFiles = await handleLoadTemplate('landing-page');
         // New-project scaffold: generate the per-project design brief and
         // persist DESIGN.md + brand CSS vars + Google Fonts BEFORE the first
         // generation, so every lane sees the brief. Best-effort — a null result
         // (API/JSON failure) leaves the scaffold untouched.
-        const briefFiles = await applyDesignBrief(initialPrompt, loadedFiles);
-        handleSendMessage(initialPrompt, undefined, undefined, briefFiles);
-      });
-    }
+        const briefFiles = await applyDesignBrief(promptToRun, loadedFiles);
+        handleSendMessage(promptToRun, undefined, undefined, briefFiles);
+      }
+    })();
   }, [isProjectReady, isLoading]);
 
   // -------------------------------------------------------------------------
