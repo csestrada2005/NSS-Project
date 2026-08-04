@@ -430,8 +430,15 @@ export class AIOrchestrator {
         user_prompt: params.prompt,
         intent_type: params.intentType,
         intent_risk: params.intentRisk,
-        plan: params.planSteps ?? [],
-        files_modified: params.modifiedFiles ?? [],
+        // Telemetría cableada: escribimos las columnas jsonb que la app lee de
+        // verdad (AIHistoryPanel selecciona plan_steps / modified_files). El
+        // plan del Architect va tal cual (BuildStep[]); si el lane no produjo
+        // plan (simple/fast/question/heavy-fallback) plan_steps queda NULL —
+        // esa ausencia ya es señal útil de qué lane corrió. modified_files
+        // reutiliza los paths efectivamente persistidos (diff/ImplementerResult)
+        // que cada caller ya calcula; en parciales/fallos refleja SOLO lo escrito.
+        plan_steps: params.planSteps ?? null,
+        modified_files: params.modifiedFiles ?? [],
         affected_files: params.affectedFiles ?? [],
         outcome: params.outcome,
         error_message: params.errorMessage ?? null,
