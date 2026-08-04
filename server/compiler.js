@@ -19,6 +19,9 @@ const ALLOWED_DEPS = {
   'react-dom/client': 'react-dom-preview/client',
   'react-router-dom': 'react-router-dom-preview',
   'lucide-react': 'lucide-react',
+  'framer-motion': 'framer-motion',
+  'motion-dom': 'motion-dom',
+  'motion-utils': 'motion-utils',
   'clsx': 'clsx',
   'tailwind-merge': 'tailwind-merge',
   'scheduler': 'scheduler',
@@ -119,7 +122,11 @@ function virtualFilesPlugin(files) {
         // REAL en disco (namespace 'file' con ruta absoluta) NO pertenece al
         // proyecto virtual. Es el caso de un paquete aliaseado multi-archivo:
         // el barrel ESM de lucide-react (dist/esm/lucide-react.js) reexporta
-        // desde ./icons/*.js, que son archivos de node_modules, no del filesObj.
+        // desde ./icons/*.js — y, igual, el de framer-motion (dist/es/index.mjs)
+        // reexporta desde ./components/**, ./render/** — que son archivos de
+        // node_modules, no del filesObj. La guarda es genérica (cualquier import
+        // relativo cuyo importer sea un archivo REAL en disco), así que cubre los
+        // internos de framer-motion exactamente igual que los de lucide-react.
         // Se resuelve contra el disco y se sirve por el onLoad nativo de esbuild,
         // que así puede tree-shakear y empaquetar sólo los iconos importados.
         // El entrypoint (importer vacío) y los archivos del proyecto (namespace
@@ -193,6 +200,22 @@ function virtualFilesPlugin(files) {
       // build.alias primero, plugin esm.sh como fallback. Si esm.sh no resuelve
       // un paquete, el error de fetch del plugin lo reporta — no hace falta gate.
       build.onResolve({ filter: /^[^.@\/]/ }, args => {
+        // Gate de URL imports: un specifier http(s) completo del PROYECTO nunca
+        // debe caer al plugin esm.sh (lo prefijaría → fetch 400). Se rechaza aquí,
+        // en virtualFilesPlugin (registrado ANTES de esmShResolverPlugin), para
+        // que corra antes que el fallback CDN. Se excluye el caso legítimo de una
+        // URL que proviene de DENTRO de un módulo esm.sh (namespace 'esmsh' o
+        // importer http): esos imports transitivos sí son URLs válidas que el
+        // esmShResolverPlugin resuelve contra el módulo importador.
+        if (/^https?:\/\//.test(args.path) &&
+            args.namespace !== 'esmsh' &&
+            !(args.importer && args.importer.startsWith('http'))) {
+          return {
+            errors: [{
+              text: 'URL imports are not supported. Fonts are already loaded in index.html; npm packages must be imported by name.'
+            }]
+          };
+        }
         const rootModule = args.path.replace(/^node:/, '').split('/')[0];
         if (NODE_BUILTINS.has(rootModule)) {
           return {
@@ -224,6 +247,16 @@ const ALIAS = {
   // empaqueta los iconos/utilidades importados; nunca usar cjs/umd aquí (metería
   // la librería entera de iconos en cada bundle del preview).
   'lucide-react': new URL('../node_modules/lucide-react/dist/esm/lucide-react.js', import.meta.url).pathname,
+  // framer-motion vendorizado igual que lucide-react: entry ESM local para que
+  // esbuild tree-shakee y no caiga al fallback CDN de esm.sh en cada compilación.
+  // Su barrel ESM reexporta desde ./components/**, ./render/** (archivos internos
+  // que cubre la guarda de procedencia de imports relativos) y desde los bare
+  // 'motion-dom'/'motion-utils' (su cierre de runtime), que también se aliasean a
+  // sus entries ESM para que todo el paquete se resuelva localmente. 'react' y
+  // 'react/jsx-runtime' que importa internamente ya los cubre el alias local.
+  'framer-motion': new URL('../node_modules/framer-motion/dist/es/index.mjs', import.meta.url).pathname,
+  'motion-dom': new URL('../node_modules/motion-dom/dist/es/index.mjs', import.meta.url).pathname,
+  'motion-utils': new URL('../node_modules/motion-utils/dist/es/index.mjs', import.meta.url).pathname,
   'clsx': new URL('../node_modules/clsx/dist/clsx.mjs', import.meta.url).pathname,
   'tailwind-merge': new URL('../node_modules/tailwind-merge/dist/bundle-mjs.mjs', import.meta.url).pathname
 };
