@@ -52,13 +52,14 @@ class PlatformService {
     }
   }
 
-  async callForgeChat(body: object): Promise<Response> {
+  async callForgeChat(body: object, signal?: AbortSignal): Promise<Response> {
     try {
       const baseHeaders = await this.getHeaders();
       const response = await fetch('/api/chat-forge', {
         method: 'POST',
         headers: { ...baseHeaders, 'anthropic-version': '2023-06-01' },
         body: JSON.stringify(body),
+        signal,
       });
       this.handleAuthError(response);
       return response;
@@ -116,13 +117,14 @@ class PlatformService {
   }
 
   /** Compile project files server-side. */
-  async compileSrc(files: Record<string, string>): Promise<{ html?: string; error?: string; errorDetail?: CompileErrorDetail | null }> {
+  async compileSrc(files: Record<string, string>, signal?: AbortSignal): Promise<{ html?: string; error?: string; errorDetail?: CompileErrorDetail | null }> {
     try {
       const headers = await this.getHeaders();
       const response = await fetch('/api/compile', {
         method: 'POST',
         headers,
         body: JSON.stringify({ files }),
+        signal,
       });
       this.handleAuthError(response);
       return response.json();

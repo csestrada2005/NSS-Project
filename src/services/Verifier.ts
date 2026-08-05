@@ -1,5 +1,6 @@
 import { platformService } from './PlatformService';
 import type { CompileErrorDetail } from './PlatformService';
+import { isAbortError } from '../utils/abort';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -41,7 +42,8 @@ export class Verifier {
   static async verify(
     modifiedFiles: Map<string, string>,
     originalFiles: Map<string, string>,
-    onRetry?: RetryCallback
+    onRetry?: RetryCallback,
+    signal?: AbortSignal
   ): Promise<VerifyResult> {
     const MAX_RETRIES = 3;
     // Compilar el proyecto COMPLETO con los cambios aplicados encima.
@@ -53,7 +55,12 @@ export class Verifier {
     }
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      const result = await this.tryCompile(currentFiles);
+      // Cancelación: si el run fue abortado, no arrancamos otro compile ni fix.
+      // Propagamos como AbortError para que el caller lo distinga de un fallo de
+      // compilación y NO persista ni lance fixes post-cancelación.
+      if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
+
+      const result = await this.tryCompile(currentFiles, signal);
 
       if (result.success) {
         return {
@@ -86,7 +93,7 @@ export class Verifier {
         };
       }
 
-      const fixed = await this.fixError(errorMsg, errorDetail, currentFiles);
+      const fixed = await this.fixError(errorMsg, errorDetail, currentFiles, signal);
       if (fixed) {
         currentFiles = fixed;
       }
@@ -119,7 +126,8 @@ export class Verifier {
   }
 
   private static async tryCompile(
-    files: Map<string, string>
+    files: Map<string, string>,
+    signal?: AbortSignal
   ): Promise<{ success: boolean; error?: string; errorDetail?: CompileErrorDetail | null }> {
     try {
       console.log('[Verifier] COMPILING KEYS:', [...files.keys()]);
@@ -128,7 +136,7 @@ export class Verifier {
         filesObj[path] = content;
       }
 
-      const result = await platformService.compileSrc(filesObj);
+      const result = await platformService.compileSrc(filesObj, signal);
 
       if (result.error) {
         return { success: false, error: result.error, errorDetail: result.errorDetail ?? null };
@@ -136,6 +144,9 @@ export class Verifier {
 
       return { success: true };
     } catch (e) {
+      // Una cancelación durante el compile debe propagarse, no disfrazarse de
+      // error de compilación (que dispararía un fixError post-cancelación).
+      if (isAbortError(e)) throw e;
       return { success: false, error: String(e) };
     }
   }
@@ -168,7 +179,8 @@ export class Verifier {
   private static async fixError(
     error: string,
     errorDetail: CompileErrorDetail | null,
-    files: Map<string, string>
+    files: Map<string, string>,
+    signal?: AbortSignal
   ): Promise<Map<string, string> | null> {
     const errorFile = this.identifyErrorFile(error, errorDetail, files);
     const fileContent = errorFile ? (files.get(errorFile) ?? '') : '';
@@ -204,7 +216,7 @@ Return ONLY the complete corrected file content. No markdown fences, no explanat
         max_tokens: 8192,
         system: systemPrompt,
         messages: [{ role: 'user', content: userMessage }],
-      });
+      }, signal);
 
       const data = await response.json();
       console.log('[Verifier] fixError usage:', data.usage?.input_tokens ?? 0, 'in /',
@@ -222,6 +234,7 @@ Return ONLY the complete corrected file content. No markdown fences, no explanat
       newFiles.set(errorFile, fixedContent);
       return newFiles;
     } catch (e) {
+      if (isAbortError(e)) throw e; // cancelación: no seguir intentando.
       console.error('[Verifier] Fix attempt failed:', e);
       return null;
     }

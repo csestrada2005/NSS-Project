@@ -3,6 +3,7 @@ import type { ProjectMemory } from './ProjectMemoryService';
 import { SupabaseService } from './SupabaseService';
 import { sanitizeFileContent } from '../utils/sanitizeFileContent';
 import { REACT_TAILWIND_RULES } from './promptRules';
+import { withTimeout, isAbortError } from '../utils/abort';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -25,6 +26,18 @@ export interface ImplementerResult {
   failedSteps: { step: BuildStep; reason: string }[];
   /** Steps never attempted because a dependency failed (cascade). */
   skippedSteps: BuildStep[];
+  /**
+   * Steps whose content was actually written to `files` (completed). On a clean
+   * run this is every non-failed step; on a cancelled run it is only the steps
+   * that finished before the abort — the source of truth for what the run can
+   * honestly claim to have produced.
+   */
+  completedSteps: BuildStep[];
+  /**
+   * True when the run was aborted (user "Cancelar"). The in-flight step is
+   * discarded (never written); already-completed steps stay in `files`.
+   */
+  cancelled: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -63,10 +76,12 @@ export class Implementer {
     memory: ProjectMemory,
     onProgress?: ProgressCallback,
     patternContext?: string,
-    designContext?: string
+    designContext?: string,
+    signal?: AbortSignal
   ): Promise<ImplementerResult> {
     const modifiedFiles = new Map<string, string>(files);
     const completed = new Set<number>();
+    let cancelled = false;
     // `failed` holds both API-failed steps AND cascade-skipped steps, so the
     // dependency loop can distinguish "failed" from "still pending" and
     // propagate the cascade to downstream dependents.
@@ -87,7 +102,13 @@ export class Implementer {
       pass++;
       let progressed = false;
 
+      // Cancelación entre steps (semántica cirugía 529): no arrancamos el
+      // siguiente step si el run fue abortado. Lo ya escrito en modifiedFiles se
+      // conserva; el step en vuelo ya se descartó en executeStep.
+      if (signal?.aborted) { cancelled = true; break; }
+
       for (const step of sorted) {
+        if (signal?.aborted) { cancelled = true; break; }
         if (completed.has(step.order) || failed.has(step.order)) continue;
 
         // Cascade: a step depending on any failed step can never run. Mark it
@@ -121,7 +142,12 @@ export class Implementer {
         }));
 
         this.lastApiFailure = null;
-        const newContent = await this.executeStep(step, modifiedFiles, memory, planFiles, patternContext, designContext);
+        const newContent = await this.executeStep(step, modifiedFiles, memory, planFiles, patternContext, designContext, signal);
+
+        // El step en vuelo se abortó: se descarta (no se escribe un archivo a
+        // medias) y NO se contabiliza como fallo del modelo. Salimos del plan.
+        if (signal?.aborted) { cancelled = true; break; }
+
         if (newContent !== null) {
           modifiedFiles.set(step.file_path, newContent);
           completed.add(step.order);
@@ -160,7 +186,8 @@ export class Implementer {
 
     console.log('[Implementer] FINAL FILE KEYS:', [...modifiedFiles.keys()]);
 
-    return { files: modifiedFiles, failedSteps, skippedSteps };
+    const completedSteps = sorted.filter(s => completed.has(s.order));
+    return { files: modifiedFiles, failedSteps, skippedSteps, completedSteps, cancelled };
   }
 
   private static truncateFileContent(content: string, maxChars = 18000): string {
@@ -201,7 +228,8 @@ export class Implementer {
     memory: ProjectMemory,
     planFiles: { path: string; done: boolean }[],
     patternContext: string = '',
-    designContext: string = ''
+    designContext: string = '',
+    signal?: AbortSignal
   ): Promise<string | null> {
     console.log('[Implementer] patternContext chars:', patternContext?.length ?? 0, '| preview:', patternContext?.slice(0, 200)); // TODO: remove after RAG verification
     const rawContent      = files.get(step.file_path) ?? '';
@@ -280,7 +308,7 @@ export class Implementer {
       max_tokens: 8192,
       system: systemPrompt,
       messages: [{ role: 'user', content: userMessage }],
-    });
+    }, signal);
 
     if ('finalError' in result) {
       console.error(
@@ -311,7 +339,8 @@ export class Implementer {
   // header ONLY here — never on the global PlatformService path.
   // -------------------------------------------------------------------------
   private static async callStepWithRetry(
-    body: object
+    body: object,
+    signal?: AbortSignal
   ): Promise<{ data: any } | { finalError: string }> {
     const MAX_ATTEMPTS = 3;
     const RETRYABLE_STATUS = new Set([429, 500, 503, 529]);
@@ -325,7 +354,16 @@ export class Implementer {
     let lastReason = 'unknown error';
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      // Cancelación: no arrancar (ni reintentar) una llamada de un run abortado.
+      // Esto es lo que hace que un retry 529 EN CURSO también respete la señal —
+      // tras el backoff volvemos aquí y salimos sin relanzar el fetch.
+      if (signal?.aborted) return { finalError: 'cancelled' };
+
       let retryable = false;
+
+      // Cada intento combina la señal externa (cancelación) con su propio
+      // timeout de 90s, sin pisar una con la otra.
+      const { signal: attemptSignal, cleanup } = withTimeout(signal, 90_000);
 
       try {
         const { Authorization } = await SupabaseService.getInstance().getAuthHeader();
@@ -363,7 +401,7 @@ export class Implementer {
           method: 'POST',
           headers,
           body: JSON.stringify(body),
-          signal: AbortSignal.timeout(90_000),
+          signal: attemptSignal,
         });
 
         if (!response.ok) {
@@ -396,16 +434,28 @@ export class Implementer {
           }
         }
       } catch (e: any) {
-        // fetch throw (network / TypeError) or AbortSignal.timeout — retryable.
-        const isTimeout = e?.name === 'TimeoutError' || e?.name === 'AbortError';
+        // Cancelación externa: el run fue abortado. No es un timeout retryable —
+        // salimos de inmediato sin consumir más reintentos.
+        if (signal?.aborted || isAbortError(e)) {
+          return { finalError: 'cancelled' }; // finally cleanup() runs on return.
+        }
+        // fetch throw (network / TypeError) or per-call timeout — retryable.
+        const isTimeout = e?.name === 'TimeoutError';
         lastReason = isTimeout ? 'timeout' : `network:${e?.message ?? 'fetch failed'}`;
         retryable = true;
+      } finally {
+        cleanup();
       }
 
       if (retryable && attempt < MAX_ATTEMPTS) {
         console.warn(`[Implementer] Step retry ${attempt}/3 tras ${lastReason}`);
         const backoff = 1500 * 2 ** (attempt - 1) + Math.floor(Math.random() * 500);
-        await new Promise(resolve => setTimeout(resolve, backoff));
+        // Backoff abortable: una cancelación durante la espera del retry corta el
+        // sleep de inmediato; el chequeo al inicio del loop devuelve 'cancelled'.
+        await new Promise<void>(resolve => {
+          const t = setTimeout(resolve, backoff);
+          signal?.addEventListener('abort', () => { clearTimeout(t); resolve(); }, { once: true });
+        });
       }
     }
 

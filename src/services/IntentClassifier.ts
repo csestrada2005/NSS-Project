@@ -42,7 +42,8 @@ export class IntentClassifier {
   static async classify(
     prompt: string,
     memory: ProjectMemory,
-    chatHistory: Array<{ role: string; content: string }> = []
+    chatHistory: Array<{ role: string; content: string }> = [],
+    signal?: AbortSignal
   ): Promise<Intent> {
     const registrySummary = memory.component_registry
       .slice(0, 20)
@@ -92,7 +93,7 @@ Additionally output these two fields in your JSON response:
         max_tokens: 768,
         system: systemPrompt,
         messages: [{ role: 'user', content: userMessage }],
-      });
+      }, signal);
 
       const data = await response.json();
 

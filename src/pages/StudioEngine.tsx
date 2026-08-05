@@ -77,6 +77,16 @@ export function StudioEngine() {
   const hasProcessedInitialPrompt = useRef(false);
   const isAutoLoadingTemplate = useRef(false);
 
+  // CAMBIO 3 (pasajero) — capturado UNA vez en el montaje. Sobrevive al borrado
+  // de location.state (el efecto del initialPrompt limpia el state con replace),
+  // así que sostiene el overlay "Generando…" desde el montaje hasta que arranca
+  // la generación, sin la ventana de flash del scaffold. Se limpia cuando la
+  // generación inicial arranca/termina o cuando se suprime (proyecto con
+  // historial).
+  const [awaitingInitialGeneration, setAwaitingInitialGeneration] = useState<boolean>(
+    () => !!((location.state as { initialPrompt?: string } | null)?.initialPrompt)
+  );
+
   // -------------------------------------------------------------------------
   // File state (replaces WebContainer + FileSystemTree)
   // -------------------------------------------------------------------------
@@ -123,6 +133,12 @@ export function StudioEngine() {
   const [isMenuPanelOpen, setIsMenuPanelOpen] = useState(false);
   const [selectedElement, setSelectedElement] = useState<TargetElement | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  // CAMBIO 2 — cancelación de la generación en curso. El AbortController se crea
+  // por run en handleSendMessage; su signal se propaga a TODAS las llamadas fetch
+  // (chat-forge/compile) del pipeline. `isCancelling` deshabilita el botón
+  // Cancelar durante el cierre para evitar dobles cancelaciones.
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
   // Historial de chat elevado al padre para que sobreviva a los desmontajes del
   // CommandModal. Almacena los objetos Message COMPLETOS (role, content y los
   // opcionales warning/suggestedAction/errorType/errorDetail) que maneja
@@ -146,6 +162,13 @@ export function StudioEngine() {
 
   // Phase 4 Fix 2: track whether last file change came from AI
   const lastChangeSource = useRef<'ai' | 'user' | 'visual'>('user');
+
+  // CAMBIO 1 — el handler de 'preview-runtime-error' se registra con deps []
+  // (no re-suscribe el listener en cada cambio de archivos). Para construir el
+  // prompt del fix con el CONTENIDO ACTUAL de los archivos, leemos la última
+  // versión vía ref en lugar de cerrar sobre el `files` del primer render.
+  const filesRef = useRef(files);
+  filesRef.current = files;
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const terminalRef = useRef<TerminalRef>(null);
@@ -387,6 +410,8 @@ export function StudioEngine() {
           .limit(1);
         if (!error && data && data.length > 0) {
           console.log('[StudioEngine] initialPrompt suppressed: project has history');
+          // CAMBIO 3 — generación suprimida: soltar el overlay de arranque.
+          setAwaitingInitialGeneration(false);
           return;
         }
       } catch {
@@ -394,17 +419,24 @@ export function StudioEngine() {
         // not block a legitimate initial generation.
       }
 
-      if (files.size > 0) {
-        handleSendMessage(promptToRun);
-      } else {
-        isAutoLoadingTemplate.current = true;
-        const loadedFiles = await handleLoadTemplate('landing-page');
-        // New-project scaffold: generate the per-project design brief and
-        // persist DESIGN.md + brand CSS vars + Google Fonts BEFORE the first
-        // generation, so every lane sees the brief. Best-effort — a null result
-        // (API/JSON failure) leaves the scaffold untouched.
-        const briefFiles = await applyDesignBrief(promptToRun, loadedFiles);
-        handleSendMessage(promptToRun, undefined, undefined, briefFiles);
+      try {
+        if (files.size > 0) {
+          await handleSendMessage(promptToRun);
+        } else {
+          isAutoLoadingTemplate.current = true;
+          const loadedFiles = await handleLoadTemplate('landing-page');
+          // New-project scaffold: generate the per-project design brief and
+          // persist DESIGN.md + brand CSS vars + Google Fonts BEFORE the first
+          // generation, so every lane sees the brief. Best-effort — a null result
+          // (API/JSON failure) leaves the scaffold untouched.
+          const briefFiles = await applyDesignBrief(promptToRun, loadedFiles);
+          await handleSendMessage(promptToRun, undefined, undefined, briefFiles);
+        }
+      } finally {
+        // CAMBIO 3 — la generación inicial ya arrancó y terminó (isGenerating y
+        // awaitingFirstBuildCompile toman el relevo del overlay si corresponde);
+        // soltamos el flag de arranque para no dejar el overlay pegado.
+        setAwaitingInitialGeneration(false);
       }
     })();
   }, [isProjectReady, isLoading]);
@@ -659,6 +691,12 @@ export function StudioEngine() {
     setIsGenerating(true);
     setGenerationProgress(null);
 
+    // CAMBIO 2 — un AbortController nuevo por run; su signal se propaga a todo el
+    // pipeline. El botón Cancelar del chat lo aborta.
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+    setIsCancelling(false);
+
     terminalRef.current?.clear();
     terminalRef.current?.write('\r\n\x1b[33m⚡ Starting build...\x1b[0m\r\n');
 
@@ -692,12 +730,16 @@ export function StudioEngine() {
         // mismo volumen de antes (últimos 10) y en la firma pelada {role,
         // content} que consume el orchestrator. Display history y model context
         // son cosas distintas: subir el cap de display no debe multiplicar tokens.
-        chatHistory.slice(-10).map(({ role, content }) => ({ role, content }))
+        chatHistory.slice(-10).map(({ role, content }) => ({ role, content })),
+        abortController.signal
       );
       if (result.modifiedFiles.length > 0) {
         await saveSnapshot('ai_action');
       }
 
+      const cancelled = result.outcome === 'cancelled';
+      // Cancelado cuenta como no-fallo: se preservó lo completado y el mensaje
+      // honesto viaja en chatResponse.
       const success = result.outcome !== 'failed';
       // CAMBIO 2: primera construcción completada con archivos escritos → manten
       // el overlay hasta que su primer compile exitoso aterrice (lo baja el
@@ -705,7 +747,11 @@ export function StudioEngine() {
       if (success && result.modifiedFiles.length > 0 && !hasBuiltProject) {
         setAwaitingFirstBuildCompile(true);
       }
-      if (success) {
+      if (cancelled) {
+        terminalRef.current?.write(
+          `\r\n\x1b[33m⏹ Generación cancelada — ${result.modifiedFiles.length} archivo(s) conservado(s).\x1b[0m\r\n`
+        );
+      } else if (success) {
         terminalRef.current?.write(
           `\r\n\x1b[32m✅ Done — ${result.modifiedFiles.length} file(s) updated.\x1b[0m\r\n`
         );
@@ -730,8 +776,23 @@ export function StudioEngine() {
     } finally {
       setIsGenerating(false);
       setGenerationProgress(null);
+      // CAMBIO 2 — cierre del run: soltamos el controller y rehabilitamos el botón.
+      abortControllerRef.current = null;
+      setIsCancelling(false);
     }
   };
+
+  // CAMBIO 2 — cancelar la generación en curso. Un solo click (sin modal); el
+  // botón se deshabilita durante el cierre para evitar dobles cancelaciones. El
+  // AbortController aborta todas las llamadas fetch del run; el orchestrator
+  // conserva lo completado y devuelve el mensaje honesto.
+  const handleCancelGeneration = useCallback(() => {
+    const controller = abortControllerRef.current;
+    if (!controller || controller.signal.aborted) return;
+    setIsCancelling(true);
+    terminalRef.current?.write('\r\n\x1b[33m⏹ Cancelando…\x1b[0m\r\n');
+    controller.abort();
+  }, []);
 
   // -------------------------------------------------------------------------
   // Download project as ZIP
@@ -786,10 +847,17 @@ export function StudioEngine() {
   const fileTree = mapToFileSystemTree(files); // for legacy components (InspectorPanel, StateGraph, SettingsModal, HistoryDrawer)
   const hasPreview = hasValidPreview;
 
-  // CAMBIO 2: overlay de generación. Solo en la PRIMERA construcción (sin bundle
-  // propio todavía) y mientras la generación corre o esperamos su primer compile.
+  // CAMBIO 3 (pasajero) — overlay sin flash. Antes el overlay solo aparecía
+  // cuando isGenerating pasaba a true, dejando una ventana de 1-2s donde el
+  // iframe pintaba el scaffold crudo. Ahora, si el proyecto llegó con un
+  // initialPrompt pendiente de disparar, el overlay se muestra DESDE EL MONTAJE
+  // (awaitingInitialGeneration) y cae con el primer compile, como hoy.
+  //
+  // Overlay de generación. Solo en la PRIMERA construcción (sin bundle propio
+  // todavía): mientras la generación corre, esperamos su primer compile, o hay
+  // una generación inicial pendiente de arrancar.
   const showGeneratingOverlay =
-    !hasBuiltProject && (isGenerating || awaitingFirstBuildCompile);
+    !hasBuiltProject && (isGenerating || awaitingFirstBuildCompile || awaitingInitialGeneration);
 
   // -------------------------------------------------------------------------
   // Navigate panel state (panel extraído a src/components/studio/NavigatePanel)
@@ -841,28 +909,40 @@ export function StudioEngine() {
       if (reportedRuntimeErrors.current.has(signature)) return;
       reportedRuntimeErrors.current.add(signature);
 
-      const fixPrompt = [
-        'Corrige este error de runtime que ocurre en el preview.',
-        '',
-        `Error: ${message ?? '(sin mensaje)'}`,
-        `Ubicación: ${where}${lineno ? `:${lineno}` : ''}`,
-        stack ? `\nStack:\n${stack}` : '',
-        componentStack ? `\nComponent stack:\n${componentStack}` : '',
-      ].filter(Boolean).join('\n');
+      // CAMBIO 1 — fix dirigido con contexto automático. El prompt se enriquece
+      // con el archivo implicado (resuelto vía component_registry / fallback por
+      // nombre) + sus imports directos e instrucción de fix mínimo. La
+      // construcción es async (lee la project memory); si no resuelve el archivo,
+      // el helper degrada solo a error+stack. El mensaje del chat se añade dentro
+      // del async para llevar ya el prompt final.
+      const errorInfo = { message, filename, lineno, componentName, componentStack, stack };
+      void (async () => {
+        let memory = null;
+        try {
+          memory = projectId ? await ProjectMemoryService.get(projectId) : null;
+        } catch {
+          // memory no disponible → el helper degrada al comportamiento actual.
+        }
+        const fixPrompt = AIOrchestrator.buildRuntimeErrorFixPrompt(
+          errorInfo,
+          filesRef.current,
+          memory
+        );
 
-      setChatHistory(prev => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: `⚠ Error de runtime en el preview: ${message ?? 'error desconocido'} en ${where}`,
-          actionLabel: 'Corregir con AI',
-          suggestedAction: fixPrompt,
-        } as Message,
-      ].slice(-30));
+        setChatHistory(prev => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: `⚠ Error de runtime en el preview: ${message ?? 'error desconocido'} en ${where}`,
+            actionLabel: 'Corregir con AI',
+            suggestedAction: fixPrompt,
+          } as Message,
+        ].slice(-30));
+      })();
     };
     window.addEventListener('message', handleRuntimeError);
     return () => window.removeEventListener('message', handleRuntimeError);
-  }, []);
+  }, [projectId]);
 
   // Cada nueva carga del preview (nuevo srcdoc) reinicia el dedup de errores de
   // runtime del lado del Studio, en línea con el dedup por-carga del iframe.
@@ -1202,6 +1282,8 @@ export function StudioEngine() {
                   selectedElement={selectedElement}
                   chatHistory={chatHistory}
                   onHistoryUpdate={(history) => setChatHistory(history.slice(-30))}
+                  onCancel={handleCancelGeneration}
+                  isCancelling={isCancelling}
                 />
               </div>
               <div className={`w-full h-full ${activeBottomTab === 'visual' ? 'block' : 'hidden'}`}>
