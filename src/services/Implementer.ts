@@ -252,6 +252,19 @@ export class Implementer {
       parts.push(`\nIMPORTED FILES CONTEXT:\n${trimmedImports}`);
     }
 
+    // Site data contract: src/data/site.ts is the single source of truth for
+    // contact/brand facts. It is tiny (~15 lines) and its SHAPE is fixed
+    // (address object, hours array), so include it in EVERY step's context —
+    // except the step editing site.ts itself, which already sees it as CURRENT
+    // FILE CONTENT. This kills the "component assumed a shape it never saw" bug
+    // class (e.g. treating siteInfo.hours as a string and calling .map on it).
+    const siteTs = files.get('src/data/site.ts');
+    if (siteTs && step.file_path !== 'src/data/site.ts') {
+      parts.push(
+        `\nSITE DATA CONTRACT (src/data/site.ts — import facts from here; use these EXACT field shapes):\n${siteTs}`
+      );
+    }
+
     if (trimmedContent) {
       parts.push(`\nCURRENT FILE CONTENT:\n${trimmedContent}`);
     }
