@@ -14,6 +14,7 @@ import { Implementer, type ProgressCallback } from './Implementer';
 import { Verifier, type RetryCallback } from './Verifier';
 import { CreditService } from './CreditService';
 import { REACT_TAILWIND_RULES } from './promptRules';
+import { DesignBriefService } from './DesignBriefService';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -189,27 +190,42 @@ function getPageImportFiles(files: Map<string, string>): string[] {
   return result;
 }
 
+/** Parse the heading/body font families out of the project's DESIGN.md. */
+function parseFontsFromDesignMd(
+  md: string | undefined
+): { heading: string; body: string } | null {
+  if (typeof md !== 'string') return null;
+  const heading = md.match(/\*\*Headings:\*\*\s*(.+)/)?.[1]?.trim();
+  const body = md.match(/\*\*Body:\*\*\s*(.+)/)?.[1]?.trim();
+  if (!heading || !body) return null;
+  return { heading, body };
+}
+
 /**
- * Palette guard — deterministic backstop for the design brief's brand palette.
+ * Design-brief guard — deterministic backstop for the WHOLE brief block in
+ * src/index.css, not just the palette.
  *
- * The scaffold injects the brief's 5 --brand-* variables into src/index.css.
- * When the Implementer rewrites index.css it sometimes drops them (regenerating
- * the file from scratch), which silently breaks every color token in the app.
- * This re-injects the brief's --brand-* declarations into :root before the file
- * is persisted.
+ * The scaffold wires three things into index.css: (a) the 5 --brand-* variables
+ * under :root, (b) a `body` rule (brand background/foreground + the brief's body
+ * font) and (c) an h1–h6 rule with the brief's heading font. When the Implementer
+ * rewrites index.css it sometimes drops the palette AND this base wiring, which
+ * silently breaks the app's colors and typography. This restores whichever parts
+ * were dropped before the file is persisted.
  *
- * The authoritative values come from the project's CURRENT src/index.css (the
- * scaffolded one). If that file has no brand vars either — no brief was ever
- * applied — there is nothing to enforce and this is a no-op.
+ * Authoritative sources: the brand vars come from the project's CURRENT
+ * src/index.css (the scaffolded one); the font families come from DESIGN.md (the
+ * persisted brief). If the current CSS has no brand vars — no brief was ever
+ * applied — this is a no-op.
  *
- * Returns { guarded: true } only when it actually re-injected, so the caller can
- * log a single telemetry line.
+ * Returns { guarded: true, restored } listing which parts it restored, so the
+ * caller can log a single telemetry line.
  */
-function reinjectBrandPaletteIfDropped(
+function reinjectBrandBriefIfDropped(
   newCss: string,
-  originalCss: string | undefined
-): { css: string; guarded: boolean } {
-  if (typeof originalCss !== 'string') return { css: newCss, guarded: false };
+  originalCss: string | undefined,
+  designMd: string | undefined
+): { css: string; guarded: boolean; restored: string[] } {
+  if (typeof originalCss !== 'string') return { css: newCss, guarded: false, restored: [] };
 
   // Collect the brief's brand declarations from the scaffolded index.css.
   const declRe = /(--brand-[\w-]+)\s*:\s*([^;]+);/g;
@@ -220,27 +236,50 @@ function reinjectBrandPaletteIfDropped(
   }
   // A real brief defines exactly 5 --brand-* vars. Fewer means no brief was
   // applied — nothing authoritative to enforce.
-  if (briefVars.size < 5) return { css: newCss, guarded: false };
+  if (briefVars.size < 5) return { css: newCss, guarded: false, restored: [] };
 
-  // Which of the brief's vars did the new write drop?
-  const missing = [...briefVars.keys()].filter(v => {
+  let css = newCss;
+  const restored: string[] = [];
+
+  // --- (a) Brand palette variables in :root ---------------------------------
+  const missingVars = [...briefVars.keys()].filter(v => {
     const esc = v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return !new RegExp(esc + '\\s*:').test(newCss);
+    return !new RegExp(esc + '\\s*:').test(css);
   });
-  if (missing.length === 0) return { css: newCss, guarded: false };
-
-  const declarations = [...briefVars.entries()]
-    .map(([v, hsl]) => `    ${v}: ${hsl};`)
-    .join('\n');
-  const block = `\n    /* Brand palette (design brief) — re-injected by palette guard */\n${declarations}\n`;
-
-  const rootIdx = newCss.indexOf(':root {');
-  if (rootIdx !== -1) {
-    const insertAt = rootIdx + ':root {'.length;
-    return { css: newCss.slice(0, insertAt) + block + newCss.slice(insertAt), guarded: true };
+  if (missingVars.length > 0) {
+    const declarations = [...briefVars.entries()]
+      .map(([v, hsl]) => `    ${v}: ${hsl};`)
+      .join('\n');
+    const block = `\n    /* Brand palette (design brief) — re-injected by brief guard */\n${declarations}\n`;
+    const rootIdx = css.indexOf(':root {');
+    if (rootIdx !== -1) {
+      const insertAt = rootIdx + ':root {'.length;
+      css = css.slice(0, insertAt) + block + css.slice(insertAt);
+    } else {
+      css = `:root {${block}}\n\n${css}`;
+    }
+    restored.push('brand palette');
   }
-  // No :root block — prepend a fresh one.
-  return { css: `:root {${block}}\n\n${newCss}`, guarded: true };
+
+  // --- (b) body wiring + (c) headings font ----------------------------------
+  // Font families come from DESIGN.md. Without them we cannot restore typography
+  // (but the palette above is still enforced).
+  const fonts = parseFontsFromDesignMd(designMd);
+  if (fonts) {
+    const hasBodyBg = css.includes('hsl(var(--brand-bg))');
+    const hasBodyFg = css.includes('hsl(var(--brand-fg))');
+    const hasBodyFont = css.includes(`'${fonts.body}'`);
+    const hasHeadingFont = css.includes(`'${fonts.heading}'`);
+    if (!hasBodyBg || !hasBodyFg || !hasBodyFont || !hasHeadingFont) {
+      // Rebuild the whole base block (idempotent via the sentinel markers).
+      css = css.replace(DesignBriefService.baseBlockRegex(), '').trimEnd();
+      css = `${css}\n\n${DesignBriefService.buildBaseCss(fonts.heading, fonts.body)}\n`;
+      if (!hasBodyBg || !hasBodyFg || !hasBodyFont) restored.push('body wiring');
+      if (!hasHeadingFont) restored.push('headings font');
+    }
+  }
+
+  return { css, guarded: restored.length > 0, restored };
 }
 
 function generateBlueprintFromFiles(files: Map<string, string>): string {
@@ -778,19 +817,21 @@ export class AIOrchestrator {
     }
 
     // ------------------------------------------------------------------
-    // Palette guard — if the Implementer's write to src/index.css dropped the
-    // design brief's 5 --brand-* variables, re-inject them into :root before
-    // the file is persisted. Runs before the Verifier so the restored palette
-    // is compile-checked like any other write.
+    // Design-brief guard — if the Implementer's write to src/index.css dropped
+    // any part of the brief block (the 5 --brand-* vars, the body background/
+    // foreground/font wiring, or the h1–h6 heading font), restore it before the
+    // file is persisted. Font families are read from DESIGN.md. Runs before the
+    // Verifier so the restored CSS is compile-checked like any other write.
     // ------------------------------------------------------------------
     if (modifiedFilesMap.has('src/index.css')) {
-      const { css: guardedCss, guarded } = reinjectBrandPaletteIfDropped(
+      const { css: guardedCss, guarded, restored } = reinjectBrandBriefIfDropped(
         modifiedFilesMap.get('src/index.css')!,
-        files.get('src/index.css')
+        files.get('src/index.css'),
+        files.get('DESIGN.md')
       );
       if (guarded) {
         modifiedFilesMap.set('src/index.css', guardedCss);
-        console.warn('[AIOrchestrator] Palette guard: re-injected design brief --brand-* vars dropped by the Implementer write to src/index.css');
+        console.warn(`[AIOrchestrator] Brief guard: restored ${restored.join(', ')} dropped by the Implementer write to src/index.css`);
       }
     }
 

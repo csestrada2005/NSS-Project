@@ -22,6 +22,18 @@ export interface BrandColor {
   hsl: string;
 }
 
+/**
+ * Single source of truth for the site's contact/business facts. Produced by the
+ * brief so no component invents its own (which used to yield a Santiago address
+ * in Contact and a Madrid address in Footer for the same project).
+ */
+export interface SiteFacts {
+  address: string; // calle, ciudad, país — coherent with each other and the domain
+  phone: string;   // formatted for the chosen country
+  email: string;   // domain derived from the brand name
+  hours: string;   // per-day or a range
+}
+
 export interface DesignBrief {
   brand_name: string;
   tagline: string;
@@ -30,6 +42,7 @@ export interface DesignBrief {
   palette: BrandColor[];
   fonts: { heading: string; body: string };
   imagery: string;
+  facts?: SiteFacts;
 }
 
 /** The 5 brand CSS variables the brief must define, in order. */
@@ -143,6 +156,21 @@ export class DesignBriefService {
       palette.push({ var: v, hsl });
     }
 
+    // Facts are best-effort: a valid brief without a usable facts block still
+    // scaffolds (site.ts falls back to a placeholder). Only attach facts when
+    // all four fields are present.
+    let facts: SiteFacts | undefined;
+    const factsRaw = o.facts as Record<string, unknown> | undefined;
+    if (factsRaw && typeof factsRaw === 'object') {
+      const address = str(factsRaw.address);
+      const phone = str(factsRaw.phone);
+      const email = str(factsRaw.email);
+      const hours = str(factsRaw.hours);
+      if (address && phone && email && hours) {
+        facts = { address, phone, email, hours };
+      }
+    }
+
     return {
       brand_name,
       tagline,
@@ -151,6 +179,7 @@ export class DesignBriefService {
       palette,
       fonts: { heading, body },
       imagery,
+      facts,
     };
   }
 
@@ -181,11 +210,19 @@ export class DesignBriefService {
       '    { "var": "--brand-muted", "hsl": "..." }\n' +
       '  ],\n' +
       '  "fonts": { "heading": string, "body": string },  // real Google Fonts family names\n' +
-      '  "imagery": string       // 1 line: photographic style for the domain\n' +
+      '  "imagery": string,      // 1 line: photographic style for the domain\n' +
+      '  "facts": {              // the site\'s real-sounding contact data — ONE coherent set\n' +
+      '    "address": string,    // street, city, country — all coherent with each other and the domain\n' +
+      '    "phone": string,      // formatted for the chosen country\n' +
+      '    "email": string,      // domain derived from the brand name (e.g. hello@brandname.com)\n' +
+      '    "hours": string       // business hours, per-day or a range\n' +
+      '  }\n' +
       '}\n' +
       'The hsl values must be raw HSL channels WITHOUT the hsl() wrapper (e.g. ' +
       '"210 40% 96%"), so they can be dropped straight into CSS variables. ' +
-      'Ensure --brand-fg has strong contrast against --brand-bg.';
+      'Ensure --brand-fg has strong contrast against --brand-bg. The facts block ' +
+      'must be internally consistent: the city and country in the address, the ' +
+      'phone country code and the email domain must all belong to the same brand.';
 
     try {
       const response = await platformService.callForgeChat({
@@ -325,6 +362,113 @@ export class DesignBriefService {
   }
 
   // -------------------------------------------------------------------------
+  // Base wiring — body + headings. Kept between sentinel comments so both the
+  // scaffold and the brief guard (AIOrchestrator) can locate, strip and rewrite
+  // exactly this block without touching the rest of index.css.
+  // -------------------------------------------------------------------------
+
+  static readonly BASE_START = '/* design-brief:base:start */';
+  static readonly BASE_END = '/* design-brief:base:end */';
+
+  /** Fresh regex matching the sentinel-wrapped base block (no shared lastIndex). */
+  static baseBlockRegex(): RegExp {
+    return /\/\* design-brief:base:start \*\/[\s\S]*?\/\* design-brief:base:end \*\/\n?/g;
+  }
+
+  private static fontStack(name: string): string {
+    return `'${name}', ui-sans-serif, system-ui, sans-serif`;
+  }
+
+  /**
+   * The brief's base wiring: body background/foreground/font and heading font.
+   * Same output used at scaffold time and when the guard restores a dropped
+   * block, so the two never drift.
+   */
+  static buildBaseCss(headingFont: string, bodyFont: string): string {
+    return [
+      this.BASE_START,
+      '@layer base {',
+      '  body {',
+      '    background-color: hsl(var(--brand-bg));',
+      '    color: hsl(var(--brand-fg));',
+      `    font-family: ${this.fontStack(bodyFont)};`,
+      '  }',
+      '  h1, h2, h3, h4, h5, h6 {',
+      `    font-family: ${this.fontStack(headingFont)};`,
+      '  }',
+      '}',
+      this.BASE_END,
+    ].join('\n');
+  }
+
+  /** Append (idempotently) the brief's base wiring to the end of index.css. */
+  static injectBaseCss(css: string, brief: DesignBrief): string {
+    const stripped = css.replace(this.baseBlockRegex(), '').trimEnd();
+    return `${stripped}\n\n${this.buildBaseCss(brief.fonts.heading, brief.fonts.body)}\n`;
+  }
+
+  // -------------------------------------------------------------------------
+  // Single-source site data — src/data/site.ts
+  // -------------------------------------------------------------------------
+
+  private static tsLiteral(value: string): string {
+    return `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+  }
+
+  /** src/data/site.ts built from the brief (facts + brand identity). */
+  static toSiteTs(brief: DesignBrief): string {
+    const f = brief.facts;
+    return this.renderSiteTs({
+      name: brief.brand_name,
+      tagline: brief.tagline,
+      address: f?.address ?? 'Set your address in src/data/site.ts',
+      phone: f?.phone ?? '+1 (555) 000-0000',
+      email: f?.email ?? 'hello@example.com',
+      hours: f?.hours ?? 'Mon–Fri 9:00–18:00',
+    });
+  }
+
+  /**
+   * Minimal placeholder site.ts for when no brief could be produced. Keeps the
+   * single-source contract intact so components always have siteInfo to import.
+   */
+  static placeholderSiteTs(): string {
+    return this.renderSiteTs({
+      name: 'Your Company',
+      tagline: 'Your tagline goes here',
+      address: 'Set your address in src/data/site.ts',
+      phone: '+1 (555) 000-0000',
+      email: 'hello@example.com',
+      hours: 'Mon–Fri 9:00–18:00',
+    });
+  }
+
+  private static renderSiteTs(info: {
+    name: string;
+    tagline: string;
+    address: string;
+    phone: string;
+    email: string;
+    hours: string;
+  }): string {
+    return [
+      '// Single source of truth for the site\'s contact and brand data.',
+      '// Every component MUST import contact/brand facts from here — never inline them.',
+      'export const siteInfo = {',
+      `  name: ${this.tsLiteral(info.name)},`,
+      `  tagline: ${this.tsLiteral(info.tagline)},`,
+      `  address: ${this.tsLiteral(info.address)},`,
+      `  phone: ${this.tsLiteral(info.phone)},`,
+      `  email: ${this.tsLiteral(info.email)},`,
+      `  hours: ${this.tsLiteral(info.hours)},`,
+      '} as const;',
+      '',
+      'export type SiteInfo = typeof siteInfo;',
+      '',
+    ].join('\n');
+  }
+
+  // -------------------------------------------------------------------------
   // Scaffold orchestration
   // -------------------------------------------------------------------------
 
@@ -341,14 +485,23 @@ export class DesignBriefService {
     files: Map<string, string>
   ): Promise<Map<string, string> | null> {
     const brief = await this.generate(prompt);
-    if (!brief) return null;
+
+    // Fallback: the brief failed but the single-source contract must still hold.
+    // Write a placeholder src/data/site.ts and continue — never block scaffold.
+    if (!brief) {
+      const out = new Map<string, string>();
+      out.set('src/data/site.ts', this.placeholderSiteTs());
+      console.log('[DesignBriefService] scaffold: brief unavailable, wrote placeholder src/data/site.ts');
+      return out;
+    }
 
     const out = new Map<string, string>();
     out.set('DESIGN.md', this.toMarkdown(brief));
 
     const css = files.get('src/index.css');
     if (typeof css === 'string') {
-      out.set('src/index.css', this.injectCssVars(css, brief));
+      // Vars first (into :root), then the body/headings wiring at the end.
+      out.set('src/index.css', this.injectBaseCss(this.injectCssVars(css, brief), brief));
     }
 
     const html = files.get('index.html');
@@ -356,8 +509,12 @@ export class DesignBriefService {
       out.set('index.html', this.injectFontLink(html, brief));
     }
 
+    // Single source of truth for the site's contact + brand data.
+    out.set('src/data/site.ts', this.toSiteTs(brief));
+
     console.log('[DesignBriefService] scaffold produced files:', [...out.keys()],
-      '| brand:', brief.brand_name, '| direction:', brief.design_direction);
+      '| brand:', brief.brand_name, '| direction:', brief.design_direction,
+      '| facts:', brief.facts ? 'from brief' : 'placeholder');
 
     return out;
   }

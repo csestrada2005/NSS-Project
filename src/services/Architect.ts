@@ -99,6 +99,7 @@ If the user asks to fix something, only modify files that contain the bug.
 Every step description must explain what the file will contain after the change.
 All description strings must be plain text only — no newlines, no backticks, no special characters.
 Plans must never create a step that adds Header/Footer rendering to a page component. Chrome changes belong to Layout.tsx or the chrome components themselves.
+When a step is a contact, footer, or about section (or any section that shows the address, phone, email, business hours, brand name or tagline), its description MUST explicitly state that it consumes siteInfo from src/data/site.ts. Never plan a step that hardcodes contact data — there is one single source for those facts.
 
 ROUTING & ENTRY-POINT RULES — critical:
 - The route "/" renders src/pages/Index.tsx. This is the page the user sees first.

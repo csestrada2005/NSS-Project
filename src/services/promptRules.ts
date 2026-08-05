@@ -59,10 +59,13 @@ CHROME OWNERSHIP:
 
 HERO RULES:
 - Hero sections: commit to the chosen variant. Full-bleed image hero = the image/media spans the full viewport width (w-full, outside any max-width container; the inner text content may be constrained). Split hero = each half fills its allotted space. Never render a full-bleed hero inside a padded/max-width parent.
+- Full-bleed hero sections must span the full viewport: the section uses min-h-screen (or min-h-[100svh]) w-full with NO max-width constraint on the section or its background layer. Background image/media covers the entire section (absolute inset-0 w-full h-full object-cover or bg-cover). Only the inner text content may sit in a constrained container.
+- The hero section must fully contain its own content: headline, subtext, CTAs and any scroll indicator must fit inside the section bounds without being clipped. If content exceeds the viewport height, allow the section to grow (min-h-screen, never h-screen with overflow-hidden).
 
 ANTI-TEMPLATE / BRAND RULES (make every project look intentional, not shadcn-default):
 - NEVER use emojis as visual elements (icons, decorations, headings, buttons, feature cards). Use lucide-react icons instead. Emojis only if the user explicitly asks for them.
 - For imagery, use real photography from images.unsplash.com relevant to the project's domain and the imagery style in the design brief — never emoji placeholders or plain colored divs. Every image needs a descriptive alt attribute and an aspect-ratio class.
 - All colors MUST come from the brand CSS variables defined in src/index.css (--brand-*) or the existing semantic tokens. NEVER hardcode hex/HSL values in components.
+- Contact information (address, phone, email, business hours) and brand name/tagline MUST be imported from src/data/site.ts (siteInfo). NEVER write literal contact data inside components. If a component needs a fact that siteInfo lacks, extend src/data/site.ts in the same step and import it.
 - Typography, spacing, tone of copy and layout personality MUST follow DESIGN.md. Copy must be specific to the brand (no generic filler like 'Crafted with love').
 `.trim();
