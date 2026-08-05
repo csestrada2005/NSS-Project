@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Send, Bot, Loader2, CheckCircle, ChevronDown, ChevronUp, Wand2 } from 'lucide-react';
+import { Send, Bot, Loader2, CheckCircle, ChevronDown, ChevronUp, Wand2, Square } from 'lucide-react';
 
 export interface Message {
   role: 'user' | 'assistant';
@@ -30,6 +30,11 @@ interface ChatInterfaceProps {
   selectedElement: { tagName: string; className?: string } | null;
   chatHistory?: Message[];
   onHistoryUpdate?: (history: Message[]) => void;
+  // CAMBIO 2 — cancelación. `onCancel` aborta la generación en curso; sólo se
+  // muestra mientras `isLoading`. `isCancelling` deshabilita el botón durante el
+  // cierre para evitar dobles cancelaciones.
+  onCancel?: () => void;
+  isCancelling?: boolean;
 }
 
 function BuildProgress({
@@ -144,6 +149,8 @@ export function ChatInterface({
   selectedElement,
   chatHistory = [],
   onHistoryUpdate,
+  onCancel,
+  isCancelling = false,
 }: ChatInterfaceProps) {
   // Rehidratación: si el padre trae historial (sobreviviente de un cierre del
   // modal), arrancamos con él. Sólo si está vacío usamos el saludo inicial, de
@@ -466,13 +473,27 @@ export function ChatInterface({
             className="flex-1 bg-accent text-foreground border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={isLoading}
           />
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || isLoading}
-            className="bg-primary text-white p-2 rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          </button>
+          {isLoading && onCancel ? (
+            // CAMBIO 2 — botón Cancelar: visible sólo durante la generación. Un
+            // click (sin modal). Deshabilitado mientras se cierra la cancelación.
+            <button
+              onClick={onCancel}
+              disabled={isCancelling}
+              title="Cancelar generación"
+              className="flex items-center gap-1.5 bg-destructive/90 text-white px-3 py-2 rounded-md hover:bg-destructive disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+            >
+              {isCancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Square className="w-4 h-4" />}
+              <span>{isCancelling ? 'Cancelando…' : 'Cancelar'}</span>
+            </button>
+          ) : (
+            <button
+              onClick={handleSend}
+              disabled={!input.trim() || isLoading}
+              className="bg-primary text-white p-2 rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            </button>
+          )}
         </div>
       </div>
     </div>

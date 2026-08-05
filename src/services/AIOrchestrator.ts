@@ -15,6 +15,7 @@ import { Verifier, type RetryCallback } from './Verifier';
 import { CreditService } from './CreditService';
 import { REACT_TAILWIND_RULES } from './promptRules';
 import { DesignBriefService } from './DesignBriefService';
+import { isAbortError } from '../utils/abort';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -34,7 +35,7 @@ interface LLMResponse {
 export interface OrchestratorResult {
   modifiedFiles: string[];
   steps?: BuildStep[];
-  outcome?: 'success' | 'failed';
+  outcome?: 'success' | 'failed' | 'cancelled';
   error?: string;
   warning?: string;
   tokensInput?: number;
@@ -644,7 +645,7 @@ export class AIOrchestrator {
     planSteps?: BuildStep[];
     modifiedFiles: string[];
     affectedFiles?: string[];
-    outcome: 'success' | 'failed';
+    outcome: 'success' | 'failed' | 'cancelled';
     errorMessage?: string | null;
     compileAttempts?: number;
     durationMs: number;
@@ -684,6 +685,92 @@ export class AIOrchestrator {
     }
   }
 
+  /**
+   * Persiste (vía notifyFileUpdate) todo path de `modifiedFiles` cuyo contenido
+   * difiera del original y devuelve esos paths. Usado por las ramas de
+   * cancelación del plan lane: escribe SOLO lo realmente completado (steps que
+   * terminaron antes del abort), nunca un archivo a medias.
+   */
+  private static persistCompleted(
+    modifiedFiles: Map<string, string>,
+    original: Map<string, string>
+  ): string[] {
+    const written: string[] = [];
+    for (const [path, content] of modifiedFiles) {
+      if (!original.has(path) || original.get(path) !== content) {
+        this.notifyFileUpdate(path, content);
+        written.push(path);
+      }
+    }
+    return written;
+  }
+
+  /**
+   * CAMBIO 2 — cierre honesto de un run cancelado. Cobra el mínimo disponible
+   * (granularidad per-intent que soporta CreditService hoy: marca el free-prompt
+   * o deduce 0 tokens — SOLO si algo se produjo), registra el intent con
+   * outcome='cancelled' y los archivos realmente escritos, y devuelve el mensaje
+   * honesto para el chat. `writtenPaths` ya fue persistido por el caller.
+   */
+  private static async finalizeCancelled(params: {
+    input: string;
+    intent: Intent;
+    writtenPaths: string[];
+    projectId?: string;
+    creditUserId: string | null;
+    isFreePrompt: boolean;
+    startTime: number;
+    planSteps?: BuildStep[];
+    compileAttempts?: number;
+  }): Promise<OrchestratorResult> {
+    const { writtenPaths, projectId, creditUserId, isFreePrompt } = params;
+
+    // Créditos: sólo cobramos si el run llegó a producir archivos completos. Un
+    // abort sin salida útil no quema el free-prompt del usuario. La granularidad
+    // es la del intent (CreditService no cobra por token en el plan lane hoy).
+    if (creditUserId && writtenPaths.length > 0) {
+      if (isFreePrompt) {
+        await CreditService.markFreePromptUsed(creditUserId);
+      } else {
+        await CreditService.deductCredits(creditUserId, 0, 0, projectId);
+      }
+      window.dispatchEvent(new CustomEvent('forge:credits-updated'));
+    }
+
+    if (projectId) {
+      if (writtenPaths.length > 0) {
+        trackAICall(projectId);
+        await ProjectMemoryService.recordAction(projectId, {
+          action: params.input.slice(0, 120),
+          outcome: 'cancelled',
+        });
+      }
+      await this.logIntent({
+        projectId,
+        prompt: `${params.input} [CANCELLED]`,
+        intentType: params.intent.type,
+        intentRisk: params.intent.risk,
+        planSteps: params.planSteps,
+        modifiedFiles: writtenPaths,
+        affectedFiles: params.intent.affected_files,
+        outcome: 'cancelled',
+        compileAttempts: params.compileAttempts,
+        errorMessage: null,
+        durationMs: Date.now() - params.startTime,
+        requiredPatternIds: params.intent.requiredPatternIds,
+        domain: params.intent.domain,
+      });
+    }
+
+    this.lastModifiedFiles = writtenPaths;
+    const n = writtenPaths.length;
+    return {
+      modifiedFiles: writtenPaths,
+      outcome: 'cancelled',
+      chatResponse: `Generación cancelada — se conservaron ${n} archivo${n === 1 ? '' : 's'} completado${n === 1 ? '' : 's'}.`,
+    };
+  }
+
   static async parseUserCommand(
     input: string,
     files: Map<string, string>,
@@ -691,7 +778,8 @@ export class AIOrchestrator {
     projectId?: string,
     onProgress?: ProgressCallback,
     onRetry?: RetryCallback,
-    chatHistory?: Array<{ role: string; content: string }>
+    chatHistory?: Array<{ role: string; content: string }>,
+    signal?: AbortSignal
   ): Promise<OrchestratorResult> {
     this.retryCount = 0;
     const startTime = Date.now();
@@ -747,7 +835,7 @@ export class AIOrchestrator {
     // LAYER 2 — IntentClassifier: classify the user prompt
     // ------------------------------------------------------------------
     const intent = memory
-      ? await IntentClassifier.classify(input, memory, chatHistory)
+      ? await IntentClassifier.classify(input, memory, chatHistory, signal)
       : {
           type: 'modify_existing' as const,
           affected_files: [],
@@ -769,7 +857,8 @@ export class AIOrchestrator {
         creditUserId,
         isFreePrompt,
         startTime,
-        intent
+        intent,
+        signal
       );
     }
 
@@ -781,7 +870,7 @@ export class AIOrchestrator {
       (intent.type === 'style_change' || intent.risk === 'low') &&
       !(intent.requiredPatternIds && intent.requiredPatternIds.length > 0)
     ) {
-      const result = await this.runFastLane(input, files, selectedElement);
+      const result = await this.runFastLane(input, files, selectedElement, signal);
       if (result.outcome === 'success' && creditUserId) {
         if (isFreePrompt) {
           await CreditService.markFreePromptUsed(creditUserId);
@@ -816,7 +905,7 @@ export class AIOrchestrator {
       (intent.requiredPatternIds ?? []).length === 0;
 
     if (isSimpleEdit && files.size > 0) {
-      const result = await this.runSimpleLane(input, files, selectedElement, intent, projectId);
+      const result = await this.runSimpleLane(input, files, selectedElement, intent, projectId, signal);
       if (result.outcome === 'success' && creditUserId) {
         if (isFreePrompt) {
           await CreditService.markFreePromptUsed(creditUserId);
@@ -891,12 +980,22 @@ export class AIOrchestrator {
       intent,
       designContext,
       blueprint,
-      isInitialBuild
+      isInitialBuild,
+      signal
     );
+
+    // Cancelación durante la clasificación/planificación: nada se escribió aún.
+    // Cerramos el intent como cancelado (0 archivos) y evitamos que un plan
+    // vacío por abort caiga al heavy lane.
+    if (signal?.aborted) {
+      return await this.finalizeCancelled({
+        input, intent, writtenPaths: [], projectId, creditUserId, isFreePrompt, startTime,
+      });
+    }
 
     if (steps.length === 0) {
       // Architect returned nothing — fall back to the legacy heavy lane
-      const result = await this.runHeavyLane(input, files, selectedElement, projectId);
+      const result = await this.runHeavyLane(input, files, selectedElement, projectId, signal);
       if (result.outcome === 'success' && creditUserId) {
         if (isFreePrompt) {
           await CreditService.markFreePromptUsed(creditUserId);
@@ -936,10 +1035,26 @@ export class AIOrchestrator {
       memory!,
       onProgress,
       patternContext,
-      designContext
+      designContext,
+      signal
     );
     const modifiedFilesMap = implResult.files;
     const { failedSteps, skippedSteps } = implResult;
+
+    // CAMBIO 2 — cancelación durante el plan: el step en vuelo ya se descartó en
+    // el Implementer; persistimos SÓLO los steps completos y cerramos el intent
+    // como cancelado. NO llamamos al Verifier (no fixes post-cancelación); el
+    // preview se recompila solo cuando StudioEngine recibe estos archivos.
+    if (implResult.cancelled || signal?.aborted) {
+      const writtenPaths = this.persistCompleted(modifiedFilesMap, files);
+      if (projectId && writtenPaths.length > 0) {
+        await ProjectMemoryService.updateAfterChange(projectId, writtenPaths, modifiedFilesMap);
+      }
+      return await this.finalizeCancelled({
+        input, intent, writtenPaths, projectId, creditUserId, isFreePrompt, startTime,
+        planSteps: implResult.completedSteps,
+      });
+    }
 
     // Sanitize CSS imports — enforce that only src/index.css is used as the global CSS entry
     for (const [path, content] of modifiedFilesMap) {
@@ -990,7 +1105,25 @@ export class AIOrchestrator {
     // ------------------------------------------------------------------
     // LAYER 5 — Verifier: compile-check and auto-fix
     // ------------------------------------------------------------------
-    const verifyResult = await Verifier.verify(modifiedFilesMap, files, onRetry);
+    let verifyResult;
+    try {
+      verifyResult = await Verifier.verify(modifiedFilesMap, files, onRetry, signal);
+    } catch (e) {
+      // Cancelación durante el verify: no se lanzan más fixes. Persistimos los
+      // steps ya completos (los archivos que el Implementer terminó) y cerramos
+      // como cancelado, igual que un abort mid-plan.
+      if (isAbortError(e)) {
+        const writtenPaths = this.persistCompleted(modifiedFilesMap, files);
+        if (projectId && writtenPaths.length > 0) {
+          await ProjectMemoryService.updateAfterChange(projectId, writtenPaths, modifiedFilesMap);
+        }
+        return await this.finalizeCancelled({
+          input, intent, writtenPaths, projectId, creditUserId, isFreePrompt, startTime,
+          planSteps: implResult.completedSteps,
+        });
+      }
+      throw e;
+    }
 
     const finalFiles = verifyResult.files;
 
@@ -1179,7 +1312,8 @@ export class AIOrchestrator {
   private static async runFastLane(
     input: string,
     files: Map<string, string>,
-    selectedElement: { tagName: string; className?: string }
+    selectedElement: { tagName: string; className?: string },
+    signal?: AbortSignal
   ): Promise<OrchestratorResult> {
     const filePath = 'src/App.tsx';
     const fileContent = files.get(filePath);
@@ -1194,6 +1328,7 @@ export class AIOrchestrator {
           userPrompt: input,
           selectedElementContext: `<${selectedElement.tagName} className='${selectedElement.className || ''}' />`,
         }),
+        signal,
       });
 
       const data = await response.json();
@@ -1210,6 +1345,7 @@ export class AIOrchestrator {
       this.lastModifiedFiles = [filePath];
       return { modifiedFiles: [filePath], outcome: 'success' };
     } catch (e) {
+      if (isAbortError(e)) return { modifiedFiles: [], outcome: 'cancelled' };
       console.error('[AIOrchestrator] Fast lane error:', e);
       return { modifiedFiles: [] };
     }
@@ -1224,9 +1360,10 @@ export class AIOrchestrator {
     files: Map<string, string>,
     selectedElement: { tagName: string; className?: string } | null,
     intent: Intent,
-    projectId?: string
+    projectId?: string,
+    signal?: AbortSignal
   ): Promise<OrchestratorResult> {
-    const target = await this.resolveTarget(input, files, selectedElement, intent);
+    const target = await this.resolveTarget(input, files, selectedElement, intent, signal);
     if (!target) return { modifiedFiles: [] };
 
     // Targeting pidió aclaración (ambigüedad genuina): no editamos nada, no
@@ -1282,7 +1419,7 @@ export class AIOrchestrator {
             content: `FILE: ${target.path}\n\nCONTENT:\n${target.content}\n\nCHANGE REQUESTED: ${input}`,
           },
         ],
-      });
+      }, signal);
 
       const data = await response.json();
       if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
@@ -1307,7 +1444,9 @@ export class AIOrchestrator {
       // ----------------------------------------------------------------
       const verifyResult = await Verifier.verify(
         new Map([[target.path, newContent]]),
-        files
+        files,
+        undefined,
+        signal
       );
 
       if (verifyResult.success) {
@@ -1360,6 +1499,15 @@ export class AIOrchestrator {
         compileAttempts: verifyResult.attempts,
       };
     } catch (e) {
+      // Cancelación: el simple lane no persiste nada hasta el éxito, así que un
+      // abort deja 0 archivos. Cerramos como cancelado (no como fallo).
+      if (isAbortError(e)) {
+        return {
+          modifiedFiles: [],
+          outcome: 'cancelled',
+          chatResponse: 'Generación cancelada — se conservaron 0 archivos completados.',
+        };
+      }
       console.error('[AIOrchestrator] Simple lane error:', e);
       return { modifiedFiles: [], outcome: 'failed' };
     }
@@ -1396,7 +1544,8 @@ export class AIOrchestrator {
     input: string,
     files: Map<string, string>,
     selectedElement: { tagName: string; className?: string } | null,
-    intent: Intent
+    intent: Intent,
+    signal?: AbortSignal
   ): Promise<
     | { path: string; content: string; method: 'data-oid' | 'className' | 'llm' | 'keywords' }
     | { clarify: string }
@@ -1515,7 +1664,7 @@ export class AIOrchestrator {
             'The reasoning field comes FIRST — reason before you decide. ' +
             'No markdown, no code fences, no prose outside the JSON.',
           messages: [{ role: 'user', content: userMessage }],
-        });
+        }, signal);
 
         const data = await response.json();
         if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
@@ -1539,6 +1688,9 @@ export class AIOrchestrator {
           return { clarify: clarify.trim() };
         }
       } catch (e) {
+        // Una cancelación no debe degradar a keywords (eso dispararía la edición):
+        // se propaga para que runSimpleLane la cierre como cancelada.
+        if (isAbortError(e)) throw e;
         console.warn('[SimpleLane] LLM targeting failed, falling back to keywords:', e);
       }
     }
@@ -1564,7 +1716,8 @@ export class AIOrchestrator {
     creditUserId: string | null,
     isFreePrompt: boolean,
     startTime: number,
-    intent: Intent
+    intent: Intent,
+    signal?: AbortSignal
   ): Promise<OrchestratorResult> {
     const blueprint = generateBlueprintFromFiles(files);
     const memorySummary = memory
@@ -1621,7 +1774,7 @@ export class AIOrchestrator {
           ...priorMessages,
           { role: 'user' as const, content: contextBlock },
         ],
-      });
+      }, signal);
 
       const data = await response.json();
       if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
@@ -1679,6 +1832,13 @@ export class AIOrchestrator {
         suggestedAction,
       };
     } catch (e) {
+      if (isAbortError(e)) {
+        return {
+          modifiedFiles: [],
+          outcome: 'cancelled',
+          chatResponse: 'Generación cancelada.',
+        };
+      }
       console.error('[AIOrchestrator] Question lane error:', e);
       return { modifiedFiles: [], outcome: 'failed' };
     }
@@ -1692,7 +1852,8 @@ export class AIOrchestrator {
     input: string,
     files: Map<string, string>,
     selectedElement: { tagName: string; className?: string } | null,
-    projectId?: string
+    projectId?: string,
+    signal?: AbortSignal
   ): Promise<OrchestratorResult> {
     const relevantFiles = selectRelevantFiles(input, files);
     const blueprint = generateBlueprintFromFiles(files);
@@ -1764,7 +1925,7 @@ export class AIOrchestrator {
       `USER REQUEST:\n${input}`;
 
     try {
-      const rawResponse = await this.callLLMWithUsage(userMessage, systemPrompt);
+      const rawResponse = await this.callLLMWithUsage(userMessage, systemPrompt, [], signal);
       const cleanJson = this.cleanJsonOutput(rawResponse.text);
       const response: LLMResponse = JSON.parse(cleanJson);
 
@@ -1794,6 +1955,7 @@ export class AIOrchestrator {
         tokensOutput: rawResponse.tokensOutput,
       };
     } catch (error) {
+      if (isAbortError(error)) return { modifiedFiles: [], outcome: 'cancelled' };
       console.error('[AIOrchestrator] Heavy lane error:', error);
       return { modifiedFiles: [] };
     }
@@ -1845,16 +2007,18 @@ export class AIOrchestrator {
   static async callLLM(
     userMessage: string,
     systemPrompt: string,
-    priorMessages: { role: 'user' | 'assistant'; content: string }[] = []
+    priorMessages: { role: 'user' | 'assistant'; content: string }[] = [],
+    signal?: AbortSignal
   ): Promise<string> {
-    const result = await this.callLLMWithUsage(userMessage, systemPrompt, priorMessages);
+    const result = await this.callLLMWithUsage(userMessage, systemPrompt, priorMessages, signal);
     return result.text;
   }
 
   static async callLLMWithUsage(
     userMessage: string,
     systemPrompt: string,
-    priorMessages: { role: 'user' | 'assistant'; content: string }[] = []
+    priorMessages: { role: 'user' | 'assistant'; content: string }[] = [],
+    signal?: AbortSignal
   ): Promise<{ text: string; tokensInput: number; tokensOutput: number }> {
     try {
       const response = await platformService.callForgeChat({
@@ -1865,7 +2029,7 @@ export class AIOrchestrator {
           ...priorMessages,
           { role: 'user' as const, content: userMessage },
         ],
-      });
+      }, signal);
 
       const data = await response.json();
 
@@ -1884,9 +2048,190 @@ export class AIOrchestrator {
         tokensOutput: data.usage?.output_tokens ?? 0,
       };
     } catch (error) {
+      // Cancelación: propagar para que el heavy lane la cierre como cancelada,
+      // en vez de disfrazarla de "modifiedFiles: []" (que se leería como éxito).
+      if (isAbortError(error)) throw error;
       console.error('[AIOrchestrator] Error calling LLM:', error);
       return { text: JSON.stringify({ modifiedFiles: [] }), tokensInput: 0, tokensOutput: 0 };
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // CAMBIO 1 — Fix dirigido con contexto automático
+  //
+  // Construye el prompt del botón "Corregir con AI" de un 'preview-runtime-error'
+  // con: el error + stack, el CONTENIDO COMPLETO del archivo implicado y hasta 3
+  // imports directos de proyecto (relativos/@), priorizando los que aparecen en
+  // el stack. Instrucción explícita de fix mínimo. Si el archivo no se resuelve,
+  // degrada al comportamiento actual (solo error + stack). El prompt viaja DENTRO
+  // del flujo del intent normal — el simple lane lo procesa con su targeting.
+  // -------------------------------------------------------------------------
+
+  static buildRuntimeErrorFixPrompt(
+    errorInfo: {
+      message?: string;
+      filename?: string;
+      lineno?: number;
+      componentName?: string;
+      componentStack?: string;
+      stack?: string;
+    },
+    files: Map<string, string>,
+    memory: ProjectMemory | null
+  ): string {
+    const { message, filename, lineno, componentName, componentStack, stack } = errorInfo;
+    const where = componentName || filename || 'el preview';
+
+    const MINIMAL_INSTRUCTION =
+      'Fix ONLY the reported error with the minimal change. Do not rebuild or ' +
+      'rewrite components beyond what the error requires.';
+
+    const header = [
+      'Corrige este error de runtime que ocurre en el preview.',
+      MINIMAL_INSTRUCTION,
+      '',
+      `Error: ${message ?? '(sin mensaje)'}`,
+      `Ubicación: ${where}${lineno ? `:${lineno}` : ''}`,
+      stack ? `\nStack:\n${stack}` : '',
+      componentStack ? `\nComponent stack:\n${componentStack}` : '',
+    ];
+
+    // a. Resolver el archivo implicado.
+    const resolvedPath = this.resolveErrorFilePath(errorInfo, files, memory);
+    if (!resolvedPath) return header.filter(Boolean).join('\n'); // degradar
+
+    const fileContent = files.get(resolvedPath) ?? '';
+
+    // b. Imports directos de proyecto (máx 3), priorizando los del stack.
+    const importPaths = this.resolveDirectProjectImports(resolvedPath, fileContent, files);
+    const stackText = `${componentStack ?? ''}\n${stack ?? ''}`;
+    const extra = this.prioritizeByStack(importPaths, stackText).slice(0, 3);
+
+    const parts = [
+      ...header,
+      `\nArchivo implicado (${resolvedPath}) — CONTENIDO COMPLETO:\n${fileContent}`,
+    ];
+    for (const p of extra) {
+      parts.push(`\nImport directo (${p}):\n${files.get(p) ?? ''}`);
+    }
+    return parts.filter(Boolean).join('\n');
+  }
+
+  /**
+   * Resuelve el path del archivo que originó el error de runtime. Prioridad:
+   * (1) componentName / nombres del componentStack → component_registry de la
+   * project memory; (2) fallback: nombre de componente ↔ nombre de archivo en
+   * los files; (3) fallback: basename del filename del payload.
+   */
+  private static resolveErrorFilePath(
+    errorInfo: { componentName?: string; componentStack?: string; filename?: string },
+    files: Map<string, string>,
+    memory: ProjectMemory | null
+  ): string | null {
+    const { componentName, componentStack, filename } = errorInfo;
+
+    const names: string[] = [];
+    if (componentName) names.push(componentName);
+    if (componentStack) {
+      // React componentStack: líneas tipo "    in Foo (created by Bar)".
+      const re = /(?:^|\n)\s*(?:in|at)\s+([A-Z][A-Za-z0-9_]*)/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(componentStack)) !== null) names.push(m[1]);
+    }
+
+    // 1. component_registry (nombre → path).
+    const registry = memory?.component_registry ?? [];
+    for (const name of names) {
+      const hit = registry.find(e => e.name === name);
+      if (hit && files.has(hit.path)) return hit.path;
+    }
+
+    // 2. Fallback: nombre de componente ↔ basename de archivo.
+    for (const name of names) {
+      for (const path of files.keys()) {
+        if (!path.startsWith('src/')) continue;
+        const base = path.split('/').pop() ?? '';
+        if (base === `${name}.tsx` || base === `${name}.ts` || base === `${name}.jsx`) {
+          return path;
+        }
+      }
+    }
+
+    // 3. Fallback: basename del filename del payload (puede venir como URL).
+    if (filename) {
+      const base = filename.split(/[\\/]/).pop()?.split('?')[0] ?? '';
+      if (base && (base.endsWith('.tsx') || base.endsWith('.ts') || base.endsWith('.jsx') || base.endsWith('.js'))) {
+        for (const path of files.keys()) {
+          if (path === base || path.endsWith('/' + base)) return path;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Paths de proyecto (src/…) importados directamente por `content` vía
+   * especificadores relativos (./ ../) o alias @/. Un solo nivel, sin recursión.
+   * Ignora paquetes npm. Deduplicado, preservando el orden de aparición.
+   */
+  private static resolveDirectProjectImports(
+    fromPath: string,
+    content: string,
+    files: Map<string, string>
+  ): string[] {
+    const dir = fromPath.slice(0, fromPath.lastIndexOf('/'));
+    const importRe = /import\s+[^'"]*from\s+['"]([^'"]+)['"]/g;
+    const out: string[] = [];
+    const seen = new Set<string>();
+    let m: RegExpExecArray | null;
+
+    while ((m = importRe.exec(content)) !== null) {
+      const spec = m[1];
+      let base: string | null = null;
+
+      if (spec.startsWith('@/')) {
+        base = 'src/' + spec.slice(2);
+      } else if (spec.startsWith('./') || spec.startsWith('../')) {
+        const parts = dir.split('/');
+        for (const seg of spec.split('/')) {
+          if (seg === '' || seg === '.') continue;
+          if (seg === '..') { parts.pop(); continue; }
+          parts.push(seg);
+        }
+        base = parts.join('/');
+      } else {
+        continue; // paquete npm
+      }
+      if (!base) continue;
+
+      for (const suffix of ['', '.tsx', '.ts', '/index.tsx', '.jsx', '.js']) {
+        const cand = base + suffix;
+        if (files.has(cand) && !seen.has(cand)) {
+          seen.add(cand);
+          out.push(cand);
+          break;
+        }
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Ordena `paths` poniendo primero aquellos cuyo nombre de archivo aparece en
+   * el texto del stack (candidatos más probables de estar implicados en el error).
+   * Orden estable para el resto.
+   */
+  private static prioritizeByStack(paths: string[], stackText: string): string[] {
+    const inStack = (p: string): boolean => {
+      const base = (p.split('/').pop() ?? '').replace(/\.(tsx?|jsx?)$/, '');
+      if (!base) return false;
+      return new RegExp(`\\b${base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(stackText);
+    };
+    return paths
+      .map((p, i) => ({ p, i, hit: inStack(p) }))
+      .sort((a, b) => (Number(b.hit) - Number(a.hit)) || (a.i - b.i))
+      .map(x => x.p);
   }
 
   // -------------------------------------------------------------------------

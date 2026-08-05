@@ -60,7 +60,8 @@ export class Architect {
     intent: Intent,
     designContext?: string,
     blueprint: string = '',
-    isInitialBuild: boolean = false
+    isInitialBuild: boolean = false,
+    signal?: AbortSignal
   ): Promise<{ steps: BuildStep[]; wasTrimmed: boolean; originalCount: number }> {
     console.log('[Architect] designContext chars:', designContext?.length ?? 0, '| preview:', designContext?.slice(0, 300)); // TODO: remove after RAG verification
     // Initial build of a brand-new project: the scaffold left the layout chrome
@@ -129,7 +130,7 @@ Return ONLY a valid JSON array. No markdown fences, no explanation before or aft
         max_tokens: 4096,
         system: systemPrompt,
         messages: [{ role: 'user', content: userMessage }],
-      });
+      }, signal);
 
       const data = await response.json();
 
