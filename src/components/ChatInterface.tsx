@@ -9,6 +9,11 @@ export interface Message {
   errorType?: 'insufficient_credits' | 'compile_error' | 'generic';
   errorDetail?: string;
   suggestedAction?: string;
+  // Etiqueta corta opcional para el botón de acción. Cuando está presente, el
+  // botón muestra este texto en vez del prompt completo de `suggestedAction`
+  // (que puede ser largo, p.ej. un error de runtime + stack). El onClick sigue
+  // enviando `suggestedAction` íntegro al pipeline.
+  actionLabel?: string;
 }
 
 // Saludo inicial. Se usa sólo cuando no hay historial rehidratado; extraído a
@@ -413,7 +418,7 @@ export function ChatInterface({
                     className="w-full text-left flex items-center gap-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-md px-3 py-2 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Wand2 className="w-4 h-4 shrink-0" />
-                    <span className="line-clamp-2">{msg.suggestedAction}</span>
+                    <span className="line-clamp-2">{msg.actionLabel ?? msg.suggestedAction}</span>
                   </button>
                 </div>
               )}
