@@ -70,6 +70,32 @@ class PlatformService {
     }
   }
 
+  /**
+   * Ask the server for a pool of verified Unsplash images for the given search
+   * keywords. The Unsplash key lives only on the server. Best-effort: returns []
+   * on any error or when no images are found, so the scaffold falls back to
+   * writing DESIGN.md without an image pool.
+   */
+  async searchImages(
+    keywords: string[]
+  ): Promise<{ url: string; description: string; author_name: string; author_link: string }[]> {
+    try {
+      const headers = await this.getHeaders();
+      const response = await fetch('/api/images/search', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ keywords }),
+      });
+      this.handleAuthError(response);
+      if (!response.ok) return [];
+      const data = await response.json();
+      return Array.isArray(data?.images) ? data.images : [];
+    } catch (err) {
+      console.warn('[PlatformService] searchImages failed:', err);
+      return [];
+    }
+  }
+
   /** Check which platform services are configured server-side. */
   async checkPlatformServices(): Promise<Record<string, boolean>> {
     try {

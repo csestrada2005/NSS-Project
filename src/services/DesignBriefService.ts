@@ -66,7 +66,21 @@ export interface DesignBrief {
   palette: BrandColor[];
   fonts: { heading: string; body: string };
   imagery: string;
+  /**
+   * 3–4 concrete, photographable English search terms derived from the domain
+   * and the imagery style. Used to build the verified image pool. Never empty:
+   * validate() falls back to a single keyword derived from the prompt domain.
+   */
+  imagery_keywords: string[];
   facts?: SiteFacts;
+}
+
+/** One verified image from the Unsplash-backed pool (server /api/images/search). */
+export interface PoolImage {
+  url: string;
+  description: string;
+  author_name: string;
+  author_link: string;
 }
 
 /** The 5 brand CSS variables the brief must define, in order. */
@@ -213,6 +227,17 @@ export class DesignBriefService {
       }
     }
 
+    // imagery_keywords: same shape discipline as the rest of the brief
+    // (Array.isArray + non-empty strings). A missing/invalid field is not fatal
+    // — it is left empty here and generate() derives a fallback from the prompt.
+    const imagery_keywords: string[] = [];
+    if (Array.isArray(o.imagery_keywords)) {
+      for (const kw of o.imagery_keywords) {
+        const s = str(kw);
+        if (s) imagery_keywords.push(s);
+      }
+    }
+
     return {
       brand_name,
       tagline,
@@ -221,8 +246,32 @@ export class DesignBriefService {
       palette,
       fonts: { heading, body },
       imagery,
+      imagery_keywords,
       facts,
     };
+  }
+
+  /**
+   * Derive a single, best-effort English search keyword from the user's prompt
+   * domain — the fallback when the brief omits imagery_keywords. Strips
+   * punctuation and generic build/site filler, then takes the first meaningful
+   * token (defaulting to "business" so the pool search always has something).
+   */
+  private static deriveFallbackKeyword(prompt: string): string {
+    const STOP = new Set([
+      'a', 'an', 'the', 'for', 'with', 'and', 'or', 'to', 'of', 'my', 'our', 'your',
+      'build', 'create', 'make', 'design', 'want', 'need', 'please',
+      'website', 'site', 'app', 'application', 'page', 'landing', 'web',
+      'simple', 'modern', 'clean', 'nice', 'small', 'new',
+    ]);
+    const words = (prompt || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .split(' ')
+      .filter((w) => w.length > 2 && !STOP.has(w));
+    return words[0] || 'business';
   }
 
   // -------------------------------------------------------------------------
@@ -253,6 +302,7 @@ export class DesignBriefService {
       '  ],\n' +
       '  "fonts": { "heading": string, "body": string },  // real Google Fonts family names\n' +
       '  "imagery": string,      // 1 line: photographic style for the domain\n' +
+      '  "imagery_keywords": [string, string, string],  // 3-4 CONCRETE, photographable English search terms derived from the domain and imagery (e.g. bakery: ["artisan bread", "bakery interior", "pastry closeup", "baker hands dough"])\n' +
       '  "facts": {              // the site\'s real-sounding contact data — ONE coherent set\n' +
       '    "address": {          // an OBJECT with these three string fields\n' +
       '      "street": string,   // street line, e.g. "123 Market St"\n' +
@@ -293,6 +343,12 @@ export class DesignBriefService {
       const brief = this.validate(parsed);
       if (!brief) {
         console.warn('[DesignBriefService] Brief JSON failed validation, skipping.');
+        return null;
+      }
+      // Fallback: guarantee at least one search keyword for the image pool.
+      if (brief.imagery_keywords.length === 0) {
+        brief.imagery_keywords = [this.deriveFallbackKeyword(prompt)];
+        console.warn('[DesignBriefService] imagery_keywords missing, derived fallback:', brief.imagery_keywords);
       }
       return brief;
     } catch (e) {
@@ -345,6 +401,37 @@ export class DesignBriefService {
       `emoji placeholders or plain colored divs. Every image needs a descriptive alt`,
       `attribute and an aspect-ratio class.`,
       ``,
+    ].join('\n');
+  }
+
+  /**
+   * Append the verified image pool to DESIGN.md. Each row is one real Unsplash
+   * photo; the model must pick BY DESCRIPTION (never invent URLs). The author is
+   * included inline as attribution. Returns the markdown unchanged when the pool
+   * is empty (caller then keeps today's no-pool fallback behavior).
+   */
+  static appendImagePool(markdown: string, images: PoolImage[]): string {
+    if (!Array.isArray(images) || images.length === 0) return markdown;
+
+    const cell = (s: string) => (s || '').replace(/\r?\n/g, ' ').replace(/\|/g, '\\|').trim();
+    const rows = images
+      .map((img) => {
+        const attribution = img.author_name ? ` (Photo by ${cell(img.author_name)})` : '';
+        return `| ${cell(img.url)} | ${cell(img.description)}${attribution} |`;
+      })
+      .join('\n');
+
+    return [
+      markdown.trimEnd(),
+      '',
+      '## Approved Image Pool',
+      '',
+      'Use ONLY these images. Choose by description. Keep URL params as given.',
+      '',
+      '| URL | Description |',
+      '| --- | --- |',
+      rows,
+      '',
     ].join('\n');
   }
 
@@ -723,7 +810,24 @@ export class DesignBriefService {
     }
 
     const out = new Map<string, string>();
-    out.set('DESIGN.md', this.toMarkdown(brief));
+
+    // Build the verified image pool from the brief's keywords and append it to
+    // DESIGN.md so the model chooses real photos by description instead of
+    // inventing images.unsplash.com IDs. Best-effort: on empty/failed search we
+    // write DESIGN.md without the pool (today's fallback behavior).
+    let designMd = this.toMarkdown(brief);
+    try {
+      const pool = await platformService.searchImages(brief.imagery_keywords);
+      if (pool.length > 0) {
+        designMd = this.appendImagePool(designMd, pool);
+        console.log(`[DesignBriefService] image pool: added ${pool.length} verified images to DESIGN.md`);
+      } else {
+        console.log('[DesignBriefService] image pool empty — DESIGN.md without pool (fallback)');
+      }
+    } catch (e) {
+      console.warn('[DesignBriefService] image search failed — DESIGN.md without pool:', e);
+    }
+    out.set('DESIGN.md', designMd);
 
     const css = files.get('src/index.css');
     if (typeof css === 'string') {
