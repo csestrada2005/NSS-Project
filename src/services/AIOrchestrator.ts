@@ -1100,6 +1100,16 @@ export class AIOrchestrator {
       ? `\n\nDESIGN SYSTEM CONTEXT (follow it — colors from --brand-*/tokens, no emojis as UI, no hardcoded hex):\n${designContext}`
       : '';
 
+    // Site data contract: always surface src/data/site.ts (single source of
+    // truth for contact/brand facts, ~15 lines, fixed shape) so a one-off edit
+    // consumes siteInfo with the exact field shapes and never assumes a shape it
+    // never saw. Skip only when the edit target IS site.ts (already in CONTENT).
+    const siteTs = files.get('src/data/site.ts');
+    const siteBlock =
+      siteTs && target.path !== 'src/data/site.ts'
+        ? `\n\nSITE DATA CONTRACT (src/data/site.ts — import facts from here; use these EXACT field shapes. hours is an array of {days, open, close}):\n${siteTs}`
+        : '';
+
     try {
       const response = await platformService.callForgeChat({
         model: 'claude-sonnet-4-6',
@@ -1112,7 +1122,8 @@ export class AIOrchestrator {
           'Never write the file path as the first line of the file content. File ' +
           'content must start directly with code (imports, comments, or declarations).\n\n' +
           AVAILABLE_RUNTIME_CONTEXT +
-          designBlock,
+          designBlock +
+          siteBlock,
         messages: [
           {
             role: 'user',

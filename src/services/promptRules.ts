@@ -67,5 +67,6 @@ ANTI-TEMPLATE / BRAND RULES (make every project look intentional, not shadcn-def
 - For imagery, use real photography from images.unsplash.com relevant to the project's domain and the imagery style in the design brief — never emoji placeholders or plain colored divs. Every image needs a descriptive alt attribute and an aspect-ratio class.
 - All colors MUST come from the brand CSS variables defined in src/index.css (--brand-*) or the existing semantic tokens. NEVER hardcode hex/HSL values in components.
 - Contact information (address, phone, email, business hours) and brand name/tagline MUST be imported from src/data/site.ts (siteInfo). NEVER write literal contact data inside components. If a component needs a fact that siteInfo lacks, extend src/data/site.ts in the same step and import it.
+- When consuming siteInfo, use the exact field structure shown in src/data/site.ts from the file context. hours is an array of {days, open, close} objects. Never assume a different shape.
 - Typography, spacing, tone of copy and layout personality MUST follow DESIGN.md. Copy must be specific to the brand (no generic filler like 'Crafted with love').
 `.trim();

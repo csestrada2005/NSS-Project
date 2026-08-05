@@ -22,16 +22,40 @@ export interface BrandColor {
   hsl: string;
 }
 
+/** One row of business hours. `hours` is ALWAYS an array of these. */
+export interface SiteHours {
+  days: string;  // e.g. "Mon–Fri" or "Saturday"
+  open: string;  // e.g. "9:00"
+  close: string; // e.g. "18:00"
+}
+
 /**
  * Single source of truth for the site's contact/business facts. Produced by the
  * brief so no component invents its own (which used to yield a Santiago address
  * in Contact and a Madrid address in Footer for the same project).
+ *
+ * The SHAPE here is deterministic (code, not the brief). The brief only supplies
+ * values; anything that does not match this shape is rejected in validate() so a
+ * consumer never receives, say, `hours` as a string and crashes on `.map()`.
  */
 export interface SiteFacts {
-  address: string; // calle, ciudad, país — coherent with each other and the domain
-  phone: string;   // formatted for the chosen country
-  email: string;   // domain derived from the brand name
-  hours: string;   // per-day or a range
+  address: { street: string; city: string; country: string }; // coherent with each other and the domain
+  phone: string;         // formatted for the chosen country
+  email: string;         // domain derived from the brand name
+  hours: SiteHours[];    // ALWAYS a non-empty array of {days, open, close}
+}
+
+/**
+ * The exact, fixed shape written into src/data/site.ts. Matches the template in
+ * renderSiteTs one-to-one so every produced site.ts compiles against it.
+ */
+export interface SiteInfoShape {
+  name: string;
+  tagline: string;
+  address: { street: string; city: string; country: string };
+  phone: string;
+  email: string;
+  hours: SiteHours[];
 }
 
 export interface DesignBrief {
@@ -158,16 +182,34 @@ export class DesignBriefService {
 
     // Facts are best-effort: a valid brief without a usable facts block still
     // scaffolds (site.ts falls back to a placeholder). Only attach facts when
-    // all four fields are present.
+    // the WHOLE shape validates — address as {street,city,country}, and hours as
+    // a non-empty array of {days,open,close}. A partial/mistyped facts block is
+    // discarded so site.ts never gets written with a shape a consumer can't use.
     let facts: SiteFacts | undefined;
     const factsRaw = o.facts as Record<string, unknown> | undefined;
     if (factsRaw && typeof factsRaw === 'object') {
-      const address = str(factsRaw.address);
+      const addrRaw = factsRaw.address as Record<string, unknown> | undefined;
+      const street = addrRaw && typeof addrRaw === 'object' ? str(addrRaw.street) : null;
+      const city = addrRaw && typeof addrRaw === 'object' ? str(addrRaw.city) : null;
+      const country = addrRaw && typeof addrRaw === 'object' ? str(addrRaw.country) : null;
+
       const phone = str(factsRaw.phone);
       const email = str(factsRaw.email);
-      const hours = str(factsRaw.hours);
-      if (address && phone && email && hours) {
-        facts = { address, phone, email, hours };
+
+      const hours: SiteHours[] = [];
+      if (Array.isArray(factsRaw.hours)) {
+        for (const entry of factsRaw.hours) {
+          if (!entry || typeof entry !== 'object') continue;
+          const e = entry as Record<string, unknown>;
+          const days = str(e.days);
+          const open = str(e.open);
+          const close = str(e.close);
+          if (days && open && close) hours.push({ days, open, close });
+        }
+      }
+
+      if (street && city && country && phone && email && hours.length > 0) {
+        facts = { address: { street, city, country }, phone, email, hours };
       }
     }
 
@@ -212,10 +254,16 @@ export class DesignBriefService {
       '  "fonts": { "heading": string, "body": string },  // real Google Fonts family names\n' +
       '  "imagery": string,      // 1 line: photographic style for the domain\n' +
       '  "facts": {              // the site\'s real-sounding contact data — ONE coherent set\n' +
-      '    "address": string,    // street, city, country — all coherent with each other and the domain\n' +
+      '    "address": {          // an OBJECT with these three string fields\n' +
+      '      "street": string,   // street line, e.g. "123 Market St"\n' +
+      '      "city": string,     // city\n' +
+      '      "country": string   // country — coherent with the city and phone code\n' +
+      '    },\n' +
       '    "phone": string,      // formatted for the chosen country\n' +
       '    "email": string,      // domain derived from the brand name (e.g. hello@brandname.com)\n' +
-      '    "hours": string       // business hours, per-day or a range\n' +
+      '    "hours": [            // an ARRAY with AT LEAST ONE object (never a string)\n' +
+      '      { "days": string, "open": string, "close": string }  // e.g. { "days": "Mon–Fri", "open": "9:00", "close": "18:00" }\n' +
+      '    ]\n' +
       '  }\n' +
       '}\n' +
       'The hsl values must be raw HSL channels WITHOUT the hsl() wrapper (e.g. ' +
@@ -415,17 +463,57 @@ export class DesignBriefService {
     return `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
   }
 
+  /**
+   * The deterministic fallback values for site.ts. Every field is already the
+   * exact shape the fixed template expects, so rendering these ALWAYS compiles.
+   */
+  private static readonly SITE_FALLBACK: SiteInfoShape = {
+    name: 'Your Company',
+    tagline: 'Your tagline goes here',
+    address: {
+      street: 'Set your address in src/data/site.ts',
+      city: 'Your City',
+      country: 'Your Country',
+    },
+    phone: '+1 (555) 000-0000',
+    email: 'hello@example.com',
+    hours: [{ days: 'Mon–Fri', open: '9:00', close: '18:00' }],
+  };
+
+  /**
+   * Coerce a brief into the fixed site.ts shape, applying the fallback field by
+   * field so the result NEVER violates the template. `validate()` already
+   * guarantees `brief.facts` (when present) matches the shape via typeof checks
+   * and Array.isArray, but we re-guard here so toSiteTs can never emit a site.ts
+   * that fails to compile — the schema is code, not the brief.
+   */
+  private static coerceSiteInfo(brief: DesignBrief): SiteInfoShape {
+    const fb = this.SITE_FALLBACK;
+    const f = brief.facts;
+    const validHours =
+      f && Array.isArray(f.hours) && f.hours.length > 0 &&
+      f.hours.every(
+        h => h && typeof h.days === 'string' && typeof h.open === 'string' && typeof h.close === 'string'
+      );
+    const validAddress =
+      f && f.address && typeof f.address === 'object' &&
+      typeof f.address.street === 'string' &&
+      typeof f.address.city === 'string' &&
+      typeof f.address.country === 'string';
+
+    return {
+      name: typeof brief.brand_name === 'string' && brief.brand_name ? brief.brand_name : fb.name,
+      tagline: typeof brief.tagline === 'string' && brief.tagline ? brief.tagline : fb.tagline,
+      address: validAddress ? f!.address : fb.address,
+      phone: f && typeof f.phone === 'string' && f.phone ? f.phone : fb.phone,
+      email: f && typeof f.email === 'string' && f.email ? f.email : fb.email,
+      hours: validHours ? f!.hours : fb.hours,
+    };
+  }
+
   /** src/data/site.ts built from the brief (facts + brand identity). */
   static toSiteTs(brief: DesignBrief): string {
-    const f = brief.facts;
-    return this.renderSiteTs({
-      name: brief.brand_name,
-      tagline: brief.tagline,
-      address: f?.address ?? 'Set your address in src/data/site.ts',
-      phone: f?.phone ?? '+1 (555) 000-0000',
-      email: f?.email ?? 'hello@example.com',
-      hours: f?.hours ?? 'Mon–Fri 9:00–18:00',
-    });
+    return this.renderSiteTs(this.coerceSiteInfo(brief));
   }
 
   /**
@@ -433,34 +521,39 @@ export class DesignBriefService {
    * single-source contract intact so components always have siteInfo to import.
    */
   static placeholderSiteTs(): string {
-    return this.renderSiteTs({
-      name: 'Your Company',
-      tagline: 'Your tagline goes here',
-      address: 'Set your address in src/data/site.ts',
-      phone: '+1 (555) 000-0000',
-      email: 'hello@example.com',
-      hours: 'Mon–Fri 9:00–18:00',
-    });
+    return this.renderSiteTs(this.SITE_FALLBACK);
   }
 
-  private static renderSiteTs(info: {
-    name: string;
-    tagline: string;
-    address: string;
-    phone: string;
-    email: string;
-    hours: string;
-  }): string {
+  /**
+   * Render the FIXED site.ts template. The schema (field names, address object,
+   * hours array) is hardcoded here — the brief only fills in the string values —
+   * so a consumer can rely on `siteInfo.hours.map(...)` never crashing.
+   */
+  private static renderSiteTs(info: SiteInfoShape): string {
+    const hoursRows = info.hours
+      .map(
+        h =>
+          `  { days: ${this.tsLiteral(h.days)}, open: ${this.tsLiteral(h.open)}, close: ${this.tsLiteral(h.close)} },`
+      )
+      .join('\n');
+
     return [
       '// Single source of truth for the site\'s contact and brand data.',
       '// Every component MUST import contact/brand facts from here — never inline them.',
+      '// SHAPE IS FIXED: address is an object, hours is an array of {days, open, close}.',
       'export const siteInfo = {',
       `  name: ${this.tsLiteral(info.name)},`,
       `  tagline: ${this.tsLiteral(info.tagline)},`,
-      `  address: ${this.tsLiteral(info.address)},`,
+      '  address: {',
+      `    street: ${this.tsLiteral(info.address.street)},`,
+      `    city: ${this.tsLiteral(info.address.city)},`,
+      `    country: ${this.tsLiteral(info.address.country)},`,
+      '  },',
       `  phone: ${this.tsLiteral(info.phone)},`,
       `  email: ${this.tsLiteral(info.email)},`,
-      `  hours: ${this.tsLiteral(info.hours)},`,
+      '  hours: [',
+      hoursRows,
+      '  ],',
       '} as const;',
       '',
       'export type SiteInfo = typeof siteInfo;',
