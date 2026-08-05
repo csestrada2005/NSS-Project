@@ -352,6 +352,75 @@ function esmShResolverPlugin() {
   };
 }
 
+// CAMBIO 1 — Captura de errores PRE-BUNDLE.
+//
+// Este script se inyecta como PRIMER <script> del <head>, antes incluso del
+// vendor de tailwind y del bundle, para que los listeners de error estén
+// montados cuando el módulo del bundle se evalúa. Antes, los listeners vivían
+// dentro del PREVIEW_CLIENT_SCRIPT, que va DESPUÉS del bundle: un error en la
+// evaluación top-level del módulo (p. ej. `null.x` a nivel superior) explotaba
+// sin listeners montados → nada llegaba al chat. Sólo se capturaban los errores
+// dentro del render de React (vía el ErrorBoundary).
+//
+// Sin dependencias de nada más del cliente: sólo el registro de los listeners
+// 'error'/'unhandledrejection', el Set de deduplicación y el postMessage al
+// parent. Conserva el formato actual ('preview-runtime-error') — el listener de
+// StudioEngine no cambia.
+const PREVIEW_ERROR_CAPTURE_SCRIPT = `
+(function() {
+  // Deduplicación por carga: un loop de re-render de React dispararía window.onerror
+  // en bucle. Cada firma de error se reporta UNA sola vez por carga del preview
+  // (el srcdoc se regenera en cada compilación → el Set arranca vacío en cada carga).
+  var __forgeReportedErrors = new Set();
+  function reportRuntimeError(payload) {
+    var signature = [payload.message, payload.filename, payload.lineno, payload.source]
+      .map(function (v) { return v == null ? '' : String(v); })
+      .join('|');
+    if (__forgeReportedErrors.has(signature)) return;
+    __forgeReportedErrors.add(signature);
+    var message = { type: 'preview-runtime-error' };
+    for (var key in payload) {
+      if (Object.prototype.hasOwnProperty.call(payload, key)) message[key] = payload[key];
+    }
+    window.parent.postMessage(message, '*');
+  }
+
+  // Heurística módulo-vs-render (CAMBIO 1d): si el error salta antes de que React
+  // haya montado (el #root aún no tiene hijos), el código falló al CARGAR
+  // (evaluación top-level del bundle), no dentro del render de un componente ya
+  // montado. El div #root se parsea antes que el <script> del bundle, así que
+  // cuando el error top-level dispara este handler el elemento ya existe en el
+  // DOM y basta consultar si tiene hijos. Con esto el mensaje del chat puede
+  // distinguir "El código falló al cargar" de "Error en <componente>". El prompt
+  // del fix dirigido funciona igual con ambos (stack + archivo).
+  function errorSource() {
+    var root = document.getElementById('root');
+    if (!root || root.childElementCount === 0) return 'module-evaluation';
+    return 'window-error';
+  }
+
+  window.addEventListener('error', function (event) {
+    reportRuntimeError({
+      message: event.message,
+      filename: event.filename,
+      lineno: event.lineno,
+      colno: event.colno,
+      stack: event.error && event.error.stack ? event.error.stack : null,
+      source: errorSource()
+    });
+  });
+
+  window.addEventListener('unhandledrejection', function (event) {
+    var reason = event.reason;
+    reportRuntimeError({
+      message: 'Unhandled promise rejection: ' + ((reason && reason.message) || reason),
+      stack: reason && reason.stack ? reason.stack : null,
+      source: errorSource()
+    });
+  });
+})();
+`;
+
 const PREVIEW_CLIENT_SCRIPT = `
 (function() {
   console.log('Preview Client Active');
@@ -430,47 +499,10 @@ const PREVIEW_CLIENT_SCRIPT = `
     }
   }, true);
 
-  // Captura de errores runtime del iframe (P0-4). Antes morían en silencio
-  // (pantalla blanca sin información) porque el 'preview-error' que se emitía no
-  // tenía consumidor. Ahora se emite 'preview-runtime-error' con la misma
-  // convención plana del NavigationBridge (type + campos al nivel superior) y el
-  // listener del StudioEngine lo muestra en el chat.
-  //
-  // Deduplicación por carga: un loop de re-render de React dispararía window.onerror
-  // en bucle. Cada firma de error se reporta UNA sola vez por carga del preview
-  // (el srcdoc se regenera en cada compilación → el Set arranca vacío en cada carga).
-  var __forgeReportedErrors = new Set();
-  function reportRuntimeError(payload) {
-    var signature = [payload.message, payload.filename, payload.lineno, payload.source]
-      .map(function (v) { return v == null ? '' : String(v); })
-      .join('|');
-    if (__forgeReportedErrors.has(signature)) return;
-    __forgeReportedErrors.add(signature);
-    var message = { type: 'preview-runtime-error' };
-    for (var key in payload) {
-      if (Object.prototype.hasOwnProperty.call(payload, key)) message[key] = payload[key];
-    }
-    window.parent.postMessage(message, '*');
-  }
-
-  window.addEventListener('error', (event) => {
-    reportRuntimeError({
-      message: event.message,
-      filename: event.filename,
-      lineno: event.lineno,
-      colno: event.colno,
-      stack: event.error?.stack || null,
-      source: 'window-error'
-    });
-  });
-
-  window.addEventListener('unhandledrejection', (event) => {
-    reportRuntimeError({
-      message: 'Unhandled promise rejection: ' + (event.reason?.message || event.reason),
-      stack: event.reason?.stack || null,
-      source: 'unhandledrejection'
-    });
-  });
+  // CAMBIO 1 — el registro de los listeners de error ('error'/'unhandledrejection')
+  // se movió al PREVIEW_ERROR_CAPTURE_SCRIPT, que se inyecta como PRIMER script del
+  // <head> (antes del bundle), para capturar también los errores de la evaluación
+  // top-level del módulo. Aquí sólo quedan los modos/anchors/navegación.
 })();
 `;
 
@@ -486,6 +518,12 @@ function generateHTML(bundleCode, cssCode) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- CAMBIO 1 — captura de errores PRE-BUNDLE: PRIMER script del <head>, antes
+       del vendor de tailwind y del bundle, para que los listeners de error estén
+       montados cuando el módulo del bundle se evalúa. -->
+  <script>
+${PREVIEW_ERROR_CAPTURE_SCRIPT}
+  </script>
   <link rel="stylesheet" href="/vendor/tailwind-base.css">
   <script src="/vendor/tailwindcss-browser.js"></script>
   <style>body{margin:0;}#root{min-height:100vh;}${cssCode || ''}</style>
@@ -501,6 +539,9 @@ ${PREVIEW_CLIENT_SCRIPT}
 </body>
 </html>`;
 }
+
+// Exportados para tests unitarios (verifican el orden de inyección del CAMBIO 1).
+export { generateHTML, PREVIEW_ERROR_CAPTURE_SCRIPT, PREVIEW_CLIENT_SCRIPT };
 
 function generateErrorHTML(message, details) {
   const safeMessage = escapeHtml(message || 'Unknown compile error');

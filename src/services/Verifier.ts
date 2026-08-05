@@ -71,6 +71,13 @@ export class Verifier {
         };
       }
 
+      // CAMBIO 2 — cancelación durante el compile: si la señal se abortó mientras
+      // corría tryCompile, NO contamos el intento como un fallo de compilación ni
+      // disparamos el retry-handler (onRetry pinta "Fixing compile error…"). Se
+      // intercepta ANTES del conteo de retries y de cualquier mensaje de fallo,
+      // propagando el AbortError para que el caller cierre como cancelado.
+      if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
+
       const errorMsg = result.error ?? 'Unknown compilation error';
       const errorDetail = result.errorDetail ?? null;
 

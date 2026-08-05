@@ -35,6 +35,11 @@ interface ChatInterfaceProps {
   // cierre para evitar dobles cancelaciones.
   onCancel?: () => void;
   isCancelling?: boolean;
+  // CAMBIO 4 — mensaje inyectado desde fuera del chat (botón "Completar proyecto"
+  // del overlay post-cancelación). Cuando cambia a un string no vacío, se envía
+  // por el flujo normal del chat y se notifica al padre para que lo limpie.
+  injectedMessage?: string | null;
+  onInjectedConsumed?: () => void;
 }
 
 function BuildProgress({
@@ -151,6 +156,8 @@ export function ChatInterface({
   onHistoryUpdate,
   onCancel,
   isCancelling = false,
+  injectedMessage,
+  onInjectedConsumed,
 }: ChatInterfaceProps) {
   // Rehidratación: si el padre trae historial (sobreviviente de un cierre del
   // modal), arrancamos con él. Sólo si está vacío usamos el saludo inicial, de
@@ -372,6 +379,20 @@ export function ChatInterface({
       handleSend();
     }
   };
+
+  // CAMBIO 4 — auto-envío del mensaje inyectado desde el overlay ("Completar
+  // proyecto"). Se dispara por el flujo normal del chat (sendMessage), una sola
+  // vez por valor. El ref evita doble envío bajo StrictMode / re-render antes de
+  // que el padre limpie el prop.
+  const injectedSentRef = useRef<string | null>(null);
+  useEffect(() => {
+    const msg = injectedMessage?.trim();
+    if (!msg || isLoading) return;
+    if (injectedSentRef.current === msg) return;
+    injectedSentRef.current = msg;
+    sendMessage(msg);
+    onInjectedConsumed?.();
+  }, [injectedMessage, isLoading]);
 
   // Índice del mensaje del asistente más reciente: sólo ese muestra su botón
   // de acción sugerida, para no disparar acciones sobre estado viejo.

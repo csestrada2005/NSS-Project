@@ -22,6 +22,7 @@ import { InspectorPanel } from '../components/InspectorPanel';
 import { AIOrchestrator } from '../services/AIOrchestrator';
 import { SupabaseService } from '../services/SupabaseService';
 import { compile, isPreviewError } from '../services/BrowserCompiler';
+import { isAbortError } from '../utils/abort';
 import { updateCode, updateJSXProp, type TargetElement } from '../utils/ast';
 import { fileSystemTreeToMap, mapToFileSystemTree } from '../utils/context';
 import JSZip from 'jszip';
@@ -139,6 +140,18 @@ export function StudioEngine() {
   // Cancelar durante el cierre para evitar dobles cancelaciones.
   const abortControllerRef = useRef<AbortController | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
+  // CAMBIO 4 — estado post-cancelación honesto. Cuando un intent cierra con
+  // outcome='cancelled' y todavía no hay build completo (hasBuiltProject=false),
+  // el preview muestra la navbar generada sobre el template crudo — un estado
+  // engañoso. `cancelledInfo` sostiene un overlay honesto ("Generación cancelada
+  // — N componentes conservados" + "Completar proyecto") hasta que el primer
+  // compile de una generación posterior lo reemplaza. Se limpia al arrancar la
+  // siguiente generación.
+  const [cancelledInfo, setCancelledInfo] = useState<{ count: number } | null>(null);
+  // CAMBIO 4 — puente para enviar por el flujo normal del chat desde el botón
+  // "Completar proyecto" del overlay (fuera del ChatInterface). Al setearse, el
+  // ChatInterface lo auto-envía y lo consume.
+  const [pendingChatSend, setPendingChatSend] = useState<string | null>(null);
   // Historial de chat elevado al padre para que sobreviva a los desmontajes del
   // CommandModal. Almacena los objetos Message COMPLETOS (role, content y los
   // opcionales warning/suggestedAction/errorType/errorDetail) que maneja
@@ -690,6 +703,10 @@ export function StudioEngine() {
     if (isReadOnly) return { success: false, modifiedFiles: [] };
     setIsGenerating(true);
     setGenerationProgress(null);
+    // CAMBIO 4 — una nueva generación supersede cualquier overlay de cancelación
+    // previo: el overlay "Generando…" toma el relevo y, si esta corrida completa,
+    // el estado cancelado no debe reaparecer.
+    setCancelledInfo(null);
 
     // CAMBIO 2 — un AbortController nuevo por run; su signal se propaga a todo el
     // pipeline. El botón Cancelar del chat lo aborta.
@@ -741,13 +758,16 @@ export function StudioEngine() {
       // Cancelado cuenta como no-fallo: se preservó lo completado y el mensaje
       // honesto viaja en chatResponse.
       const success = result.outcome !== 'failed';
-      // CAMBIO 2: primera construcción completada con archivos escritos → manten
-      // el overlay hasta que su primer compile exitoso aterrice (lo baja el
-      // efecto de compilación), evitando el flash del scaffold entre medias.
-      if (success && result.modifiedFiles.length > 0 && !hasBuiltProject) {
+      // CAMBIO 2/4: una cancelación NO es una construcción completa. No marcamos
+      // awaitingFirstBuildCompile (que bajaría el overlay de generación y dejaría
+      // que el compile del template a medias marcara hasBuiltProject=true,
+      // ocultando el estado engañoso). Sólo una corrida no cancelada lo hace.
+      if (success && !cancelled && result.modifiedFiles.length > 0 && !hasBuiltProject) {
         setAwaitingFirstBuildCompile(true);
       }
       if (cancelled) {
+        // CAMBIO 4 — sostener el overlay honesto post-cancelación.
+        setCancelledInfo({ count: result.modifiedFiles.length });
         terminalRef.current?.write(
           `\r\n\x1b[33m⏹ Generación cancelada — ${result.modifiedFiles.length} archivo(s) conservado(s).\x1b[0m\r\n`
         );
@@ -770,6 +790,20 @@ export function StudioEngine() {
         suggestedAction: result.suggestedAction,
       };
     } catch (error) {
+      // CAMBIO 2 — última red de seguridad de la ruta de cancelación: una
+      // cancelación que se propagó como throw (p. ej. abortada durante la
+      // clasificación/planificación, antes de que ningún lane la capturara) NO
+      // debe cerrar por la ruta de fallo ("Failed after 3 retries"). La tratamos
+      // como cancelación honesta: en ese punto no se persistió ningún archivo.
+      if (isAbortError(error) || abortController.signal.aborted) {
+        setCancelledInfo({ count: 0 });
+        terminalRef.current?.write('\r\n\x1b[33m⏹ Generación cancelada.\x1b[0m\r\n');
+        return {
+          success: true,
+          modifiedFiles: [],
+          chatResponse: 'Generación cancelada — se conservaron 0 archivos.',
+        };
+      }
       console.error('[StudioEngine] Error processing message:', error);
       terminalRef.current?.write('\r\n\x1b[31m❌ Unexpected error.\x1b[0m\r\n');
       return { success: false, modifiedFiles: [] };
@@ -859,6 +893,23 @@ export function StudioEngine() {
   const showGeneratingOverlay =
     !hasBuiltProject && (isGenerating || awaitingFirstBuildCompile || awaitingInitialGeneration);
 
+  // CAMBIO 4 — overlay honesto post-cancelación. Sólo cuando hay un cierre
+  // cancelado registrado, no hay build completo todavía (hasBuiltProject=false)
+  // y no está corriendo una generación (el overlay "Generando…" tiene prioridad).
+  // Cae solo cuando hasBuiltProject pasa a true con el primer compile de una
+  // generación posterior.
+  const showCancelledOverlay =
+    !!cancelledInfo && !hasBuiltProject && !showGeneratingOverlay;
+
+  // CAMBIO 4 — prompt de "Completar proyecto": viaja por el flujo normal del chat.
+  const COMPLETE_PROJECT_PROMPT =
+    'Completa el proyecto: conserva los componentes existentes y genera las secciones y páginas que faltan.';
+  const handleCompleteProject = useCallback(() => {
+    setActiveBottomTab('chat');
+    setIsCommandModalOpen(true);
+    setPendingChatSend(COMPLETE_PROJECT_PROMPT);
+  }, [COMPLETE_PROJECT_PROMPT]);
+
   // -------------------------------------------------------------------------
   // Navigate panel state (panel extraído a src/components/studio/NavigatePanel)
   // -------------------------------------------------------------------------
@@ -895,8 +946,13 @@ export function StudioEngine() {
   useEffect(() => {
     const handleRuntimeError = (event: MessageEvent) => {
       if (event.data?.type !== 'preview-runtime-error') return;
-      const { message, filename, lineno, componentName, componentStack, stack } = event.data;
+      const { message, filename, lineno, componentName, componentStack, stack, source } = event.data;
       const where = componentName || filename || 'el preview';
+      // CAMBIO 1d — cuando el error llega de la evaluación top-level del módulo
+      // (antes de que React monte), el código falló al CARGAR: el mensaje del
+      // chat lo dice así en vez de nombrar un componente inexistente. El prompt
+      // del fix dirigido funciona igual con ambos (stack + archivo).
+      const isModuleEval = source === 'module-evaluation';
 
       // Dedup por carga: un mismo error de render llega por DOS vías (el
       // ErrorBoundary y window.onerror), con prefijos distintos ("Uncaught ",
@@ -933,7 +989,9 @@ export function StudioEngine() {
           ...prev,
           {
             role: 'assistant',
-            content: `⚠ Error de runtime en el preview: ${message ?? 'error desconocido'} en ${where}`,
+            content: isModuleEval
+              ? `⚠ El código falló al cargar: ${message ?? 'error desconocido'}`
+              : `⚠ Error de runtime en el preview: ${message ?? 'error desconocido'} en ${where}`,
             actionLabel: 'Corregir con AI',
             suggestedAction: fixPrompt,
           } as Message,
@@ -1253,6 +1311,45 @@ export function StudioEngine() {
                       Paso {generationProgress.step}/{generationProgress.total} · {generationProgress.file}
                     </div>
                   )}
+                  {/* CAMBIO 3 — botón Cancelar en el overlay de generación. Mismo
+                      handler (handleCancelGeneration) y confirmación de un click
+                      que el del chat; deshabilitado durante el cierre. */}
+                  {isGenerating && (
+                    <button
+                      onClick={handleCancelGeneration}
+                      disabled={isCancelling}
+                      title="Cancelar generación"
+                      className="mt-2 flex items-center gap-1.5 bg-destructive/90 text-white px-4 py-2 rounded-md hover:bg-destructive disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+                    >
+                      {isCancelling
+                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                        : <XIcon className="w-4 h-4" />}
+                      <span>{isCancelling ? 'Cancelando…' : 'Cancelar'}</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* CAMBIO 4 — overlay honesto tras cancelar: en vez de dejar ver la
+                  navbar generada sobre el template crudo, se informa cuántos
+                  componentes se conservaron y se ofrece completar el proyecto por
+                  el flujo normal del chat. Cae con el primer compile de una
+                  generación posterior (hasBuiltProject → true). */}
+              {showCancelledOverlay && (
+                <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-4 bg-background px-6 text-center">
+                  <div className="text-sm font-medium text-foreground">
+                    Generación cancelada — {cancelledInfo!.count} componente{cancelledInfo!.count === 1 ? '' : 's'} conservado{cancelledInfo!.count === 1 ? '' : 's'}
+                  </div>
+                  <div className="text-xs text-muted-foreground max-w-[80%]">
+                    Se conservó lo que ya se había generado. Puedes completar el resto cuando quieras.
+                  </div>
+                  <button
+                    onClick={handleCompleteProject}
+                    className="mt-1 flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-md hover:bg-primary/90 transition-colors text-sm"
+                  >
+                    <Flame className="w-4 h-4" />
+                    <span>Completar proyecto</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -1284,6 +1381,8 @@ export function StudioEngine() {
                   onHistoryUpdate={(history) => setChatHistory(history.slice(-30))}
                   onCancel={handleCancelGeneration}
                   isCancelling={isCancelling}
+                  injectedMessage={pendingChatSend}
+                  onInjectedConsumed={() => setPendingChatSend(null)}
                 />
               </div>
               <div className={`w-full h-full ${activeBottomTab === 'visual' ? 'block' : 'hidden'}`}>
