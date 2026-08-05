@@ -8,6 +8,7 @@
     "start": "node server.js",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "node --test \"server/*.test.js\"",
     "preview": "vite preview",
     "seed:patterns": "npx ts-node scripts/seed-patterns.ts",
     "embed:patterns": "npx ts-node scripts/embed-patterns.ts"

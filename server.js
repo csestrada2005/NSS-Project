@@ -8,6 +8,7 @@ import dns from 'dns/promises';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 import { compileFiles } from './server/compiler.js';
+import { searchUnsplash } from './server/unsplash.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,6 +31,9 @@ const SUPABASE_MANAGEMENT_TOKEN = process.env.SUPABASE_MANAGEMENT_TOKEN;
 const SUPABASE_ORG_ID = process.env.SUPABASE_ORG_ID;
 const ENCRYPTION_SECRET = process.env.ENCRYPTION_SECRET || 'default-secret-32-chars-padding!!';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+// Unsplash access key — used ONLY here on the server to build a per-project pool
+// of real, described photos. It must never reach the repo or the client.
+const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY;
 
 // Add static serving for vendor directory (e.g. for iframe preview dependencies)
 app.use('/vendor', (req, res, next) => {
@@ -390,6 +394,32 @@ app.post('/api/chat-forge', async (req, res) => {
   } catch (err) {
     console.error('[chat-forge] Error:', err);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Verified image pool — POST /api/images/search
+//
+// The scaffold calls this with the brief's imagery_keywords to build a pool of
+// REAL, described Unsplash photos the model can choose from (instead of
+// inventing images.unsplash.com IDs). The access key lives ONLY here, on the
+// server. Auth is the shared requireAuth middleware applied to all /api/* routes.
+//
+// Never 500: on a missing key or any downstream failure we answer { images: [] }
+// so the scaffold cleanly falls back to writing DESIGN.md without a pool.
+// ---------------------------------------------------------------------------
+app.post('/api/images/search', async (req, res) => {
+  try {
+    if (!UNSPLASH_ACCESS_KEY) {
+      return res.json({ images: [] });
+    }
+    const { keywords } = req.body || {};
+    const result = await searchUnsplash({ keywords, accessKey: UNSPLASH_ACCESS_KEY });
+    console.log(`[images/search] keywords=${Array.isArray(keywords) ? keywords.length : 0} → ${result.images.length} images`);
+    res.json(result);
+  } catch (err) {
+    console.error('[images/search] Error:', err);
+    res.json({ images: [] });
   }
 });
 

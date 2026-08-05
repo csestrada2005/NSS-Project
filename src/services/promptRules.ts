@@ -64,7 +64,7 @@ HERO RULES:
 
 ANTI-TEMPLATE / BRAND RULES (make every project look intentional, not shadcn-default):
 - NEVER use emojis as visual elements (icons, decorations, headings, buttons, feature cards). Use lucide-react icons instead. Emojis only if the user explicitly asks for them.
-- For imagery, use real photography from images.unsplash.com relevant to the project's domain and the imagery style in the design brief — never emoji placeholders or plain colored divs. Every image needs a descriptive alt attribute and an aspect-ratio class.
+- For images: if DESIGN.md contains an Approved Image Pool, use ONLY URLs from that pool, selecting each image by its description to match the section's content. Never invent images.unsplash.com URLs. Reuse pool images across sections only when unavoidable. Every image keeps a descriptive alt attribute and an aspect-ratio class. If no pool exists, fall back to the previous behavior.
 - All colors MUST come from the brand CSS variables defined in src/index.css (--brand-*) or the existing semantic tokens. NEVER hardcode hex/HSL values in components.
 - Contact information (address, phone, email, business hours) and brand name/tagline MUST be imported from src/data/site.ts (siteInfo). NEVER write literal contact data inside components. If a component needs a fact that siteInfo lacks, extend src/data/site.ts in the same step and import it.
 - When consuming siteInfo, use the exact field structure shown in src/data/site.ts from the file context. hours is an array of {days, open, close} objects. Never assume a different shape.
