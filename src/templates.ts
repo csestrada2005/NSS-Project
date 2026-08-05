@@ -288,8 +288,6 @@ export default App;
           'Index.tsx': {
               file: {
                   contents: `
-import React from 'react';
-
 const Index = () => {
   return (
     <div className="flex flex-col items-center justify-center min-h-[80vh] text-center">
@@ -311,7 +309,6 @@ export default Index;
           'NotFound.tsx': {
               file: {
                   contents: `
-import React from "react";
 import { Link } from "react-router-dom";
 
 const NotFound = () => {
@@ -348,7 +345,6 @@ export default NotFound;
                   'Layout.tsx': {
                       file: {
                           contents: `
-import React from 'react';
 import { Outlet } from 'react-router-dom';
 import Header from './Header';
 import Footer from './Footer';
@@ -372,7 +368,6 @@ export default Layout;
                   'Header.tsx': {
                       file: {
                           contents: `
-import React from 'react';
 import { Link } from 'react-router-dom';
 
 const Header = () => {
@@ -397,8 +392,6 @@ export default Header;
                   'Footer.tsx': {
                       file: {
                           contents: `
-import React from 'react';
-
 const Footer = () => {
   return (
     <footer className="border-t bg-gray-50 mt-auto">
