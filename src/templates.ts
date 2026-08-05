@@ -163,14 +163,85 @@ const commonSrc = {
   'main.tsx': {
     file: {
       contents: `
-import { StrictMode } from 'react'
+import { StrictMode, Component } from 'react'
+import type { ErrorInfo, ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
 
+// ErrorBoundary del preview (P0-4). Sin él, un error de render deja la pantalla
+// en blanco sin pista de qué falló. Aquí se muestra un fallback neutro y se
+// reporta al Studio (window.parent) el error con su componentStack real, misma
+// convención plana que el resto de mensajes del preview (type + campos planos).
+interface PreviewErrorBoundaryState {
+  error: Error | null
+  componentName: string
+}
+
+class PreviewErrorBoundary extends Component<{ children: ReactNode }, PreviewErrorBoundaryState> {
+  state: PreviewErrorBoundaryState = { error: null, componentName: '' }
+
+  static getDerivedStateFromError(error: Error): Partial<PreviewErrorBoundaryState> {
+    return { error }
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    const componentStack = info.componentStack || ''
+    // Primera línea del componentStack: "    in ContactSection (created by App)"
+    // (o "    at ContactSection" en versiones nuevas de React).
+    const match = componentStack.match(/(?:in|at)\\s+([A-Za-z0-9_$]+)/)
+    const componentName = match ? match[1] : 'un componente'
+    this.setState({ componentName })
+    try {
+      window.parent.postMessage({
+        type: 'preview-runtime-error',
+        message: error.message,
+        stack: error.stack || null,
+        componentStack,
+        componentName,
+        source: 'error-boundary',
+      }, '*')
+    } catch {
+      /* window.parent inaccesible: no romper el fallback por el reporte */
+    }
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div
+          style={{
+            minHeight: '100vh',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            padding: '24px',
+            textAlign: 'center',
+            background: '#0a0a0f',
+            color: '#e5e7eb',
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+          }}
+        >
+          <div style={{ fontSize: '15px', fontWeight: 600 }}>
+            Something went wrong in {this.state.componentName}
+          </div>
+          <div style={{ fontSize: '13px', color: '#9ca3af', maxWidth: '480px' }}>
+            {this.state.error.message}
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <PreviewErrorBoundary>
+      <App />
+    </PreviewErrorBoundary>
   </StrictMode>,
 )
       `

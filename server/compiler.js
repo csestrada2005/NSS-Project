@@ -430,23 +430,46 @@ const PREVIEW_CLIENT_SCRIPT = `
     }
   }, true);
 
+  // Captura de errores runtime del iframe (P0-4). Antes morían en silencio
+  // (pantalla blanca sin información) porque el 'preview-error' que se emitía no
+  // tenía consumidor. Ahora se emite 'preview-runtime-error' con la misma
+  // convención plana del NavigationBridge (type + campos al nivel superior) y el
+  // listener del StudioEngine lo muestra en el chat.
+  //
+  // Deduplicación por carga: un loop de re-render de React dispararía window.onerror
+  // en bucle. Cada firma de error se reporta UNA sola vez por carga del preview
+  // (el srcdoc se regenera en cada compilación → el Set arranca vacío en cada carga).
+  var __forgeReportedErrors = new Set();
+  function reportRuntimeError(payload) {
+    var signature = [payload.message, payload.filename, payload.lineno, payload.source]
+      .map(function (v) { return v == null ? '' : String(v); })
+      .join('|');
+    if (__forgeReportedErrors.has(signature)) return;
+    __forgeReportedErrors.add(signature);
+    var message = { type: 'preview-runtime-error' };
+    for (var key in payload) {
+      if (Object.prototype.hasOwnProperty.call(payload, key)) message[key] = payload[key];
+    }
+    window.parent.postMessage(message, '*');
+  }
+
   window.addEventListener('error', (event) => {
-    window.parent.postMessage({
-      type: 'preview-error',
+    reportRuntimeError({
       message: event.message,
       filename: event.filename,
       lineno: event.lineno,
       colno: event.colno,
-      stack: event.error?.stack
-    }, '*');
+      stack: event.error?.stack || null,
+      source: 'window-error'
+    });
   });
 
   window.addEventListener('unhandledrejection', (event) => {
-    window.parent.postMessage({
-      type: 'preview-error',
+    reportRuntimeError({
       message: 'Unhandled promise rejection: ' + (event.reason?.message || event.reason),
-      stack: event.reason?.stack
-    }, '*');
+      stack: event.reason?.stack || null,
+      source: 'unhandledrejection'
+    });
   });
 })();
 `;

@@ -21,7 +21,7 @@ import { PreviewOverlay } from '../components/PreviewOverlay';
 import { InspectorPanel } from '../components/InspectorPanel';
 import { AIOrchestrator } from '../services/AIOrchestrator';
 import { SupabaseService } from '../services/SupabaseService';
-import { compile } from '../services/BrowserCompiler';
+import { compile, isPreviewError } from '../services/BrowserCompiler';
 import { updateCode, updateJSXProp, type TargetElement } from '../utils/ast';
 import { fileSystemTreeToMap, mapToFileSystemTree } from '../utils/context';
 import JSZip from 'jszip';
@@ -90,6 +90,30 @@ export function StudioEngine() {
   const [isCompiling, setIsCompiling] = useState(false);
   const [isIndexing, setIsIndexing] = useState(false);
   const memoryInitialized = useRef<boolean>(false);
+
+  // -------------------------------------------------------------------------
+  // CAMBIO 2 — overlay "Generando tu proyecto…"
+  //
+  // hasBuiltProject = true significa que el proyecto ya tiene un bundle propio:
+  // o completó una generación en esta sesión, o al entrar ya tenía historial de
+  // intents (proyecto ya construido). En ese caso NO se muestra el overlay en
+  // generaciones sucesivas — solo aplica a la PRIMERA construcción, para no
+  // enseñar el scaffold crudo de React+Vite (template flash).
+  //
+  // awaitingFirstBuildCompile tapa el hueco entre que termina la primera
+  // generación (isGenerating → false) y llega su primer compile: sin él el
+  // scaffold parpadearía ~300ms antes de mostrar el resultado real.
+  const [hasBuiltProject, setHasBuiltProject] = useState(false);
+  const [awaitingFirstBuildCompile, setAwaitingFirstBuildCompile] = useState(false);
+  const [generationProgress, setGenerationProgress] =
+    useState<{ step: number; total: number; file: string } | null>(null);
+
+  // CAMBIO 1 — dedup de errores de runtime reportados al chat. El mismo error
+  // puede llegar dos veces en la misma carga (window.onerror + ErrorBoundary);
+  // este Set evita duplicar el mensaje de sistema. Se vacía en cada nueva carga
+  // del preview (cambio de compiledHtml) para que un bug persistente vuelva a
+  // reportarse tras cada recompilación.
+  const reportedRuntimeErrors = useRef<Set<string>>(new Set());
 
   // -------------------------------------------------------------------------
   // UI state
@@ -203,6 +227,16 @@ export function StudioEngine() {
       await loadFromSupabase(projectId);
       setIsProjectReady(true);
 
+      // CAMBIO 2: un proyecto con historial de intents ya está construido — tiene
+      // bundle propio, así que las generaciones futuras NO muestran el overlay
+      // "Generando…" (solo la primera construcción lo necesita).
+      const { data: intentRows } = await supabase
+        .from('forge_intent_log')
+        .select('id')
+        .eq('project_id', projectId)
+        .limit(1);
+      if (intentRows && intentRows.length > 0) setHasBuiltProject(true);
+
       // Fetch is_public status after files are loaded
       const { data: projectRow } = await supabase
         .from('forge_projects')
@@ -260,8 +294,15 @@ export function StudioEngine() {
       try {
         const html = await compile(files);
         setCompiledHtml(html);
-        if (!html.includes('Compilation Error')) {
-          setHasValidPreview(true);
+        const compiledOk = !isPreviewError(html);
+        if (compiledOk) setHasValidPreview(true);
+        // CAMBIO 2: el primer compile tras la primera generación baja el overlay
+        // pase lo que pase, para que un error (compilación o red) sea visible en
+        // vez de quedar tapado por "Generando…". Solo un compile exitoso marca el
+        // proyecto como construido (bundle propio).
+        if (awaitingFirstBuildCompile) {
+          setAwaitingFirstBuildCompile(false);
+          if (compiledOk) setHasBuiltProject(true);
         }
       } catch (e: any) {
         console.error('[StudioEngine] Compile error:', e);
@@ -542,7 +583,7 @@ export function StudioEngine() {
     if (updatedMap.size === 0) return;
     compile(updatedMap).then(html => {
       setCompiledHtml(html);
-      if (!html.includes('Compilation Error')) setHasValidPreview(true);
+      if (!isPreviewError(html)) setHasValidPreview(true);
     }).catch(e => console.error('[StudioEngine] immediate compile error:', e));
   };
 
@@ -563,7 +604,7 @@ export function StudioEngine() {
     if (updatedMap.size === 0) return;
     compile(updatedMap).then(html => {
       setCompiledHtml(html);
-      if (!html.includes('Compilation Error')) setHasValidPreview(true);
+      if (!isPreviewError(html)) setHasValidPreview(true);
     }).catch(e => console.error('[StudioEngine] immediate compile error:', e));
 
     setSelectedElement(prev => prev ? { ...prev, className: newClassName } : null);
@@ -601,7 +642,7 @@ export function StudioEngine() {
     if (updatedMap.size === 0) return;
     compile(updatedMap).then(html => {
       setCompiledHtml(html);
-      if (!html.includes('Compilation Error')) setHasValidPreview(true);
+      if (!isPreviewError(html)) setHasValidPreview(true);
     }).catch(e => console.error('[StudioEngine] immediate compile error:', e));
   };
 
@@ -616,6 +657,7 @@ export function StudioEngine() {
   ): Promise<{ success: boolean; modifiedFiles: string[]; error?: string; warning?: string; chatResponse?: string; suggestedAction?: string }> => {
     if (isReadOnly) return { success: false, modifiedFiles: [] };
     setIsGenerating(true);
+    setGenerationProgress(null);
 
     terminalRef.current?.clear();
     terminalRef.current?.write('\r\n\x1b[33m⚡ Starting build...\x1b[0m\r\n');
@@ -632,6 +674,8 @@ export function StudioEngine() {
           terminalRef.current?.write(
             `\r\n\x1b[32m  [${step}/${total}] Writing ${file}\x1b[0m`
           );
+          // CAMBIO 2: alimenta la línea secundaria del overlay de generación.
+          setGenerationProgress({ step, total, file });
           onProgress?.(step, total, file);
         },
         (attempt, errorMsg) => {
@@ -655,6 +699,12 @@ export function StudioEngine() {
       }
 
       const success = result.outcome !== 'failed';
+      // CAMBIO 2: primera construcción completada con archivos escritos → manten
+      // el overlay hasta que su primer compile exitoso aterrice (lo baja el
+      // efecto de compilación), evitando el flash del scaffold entre medias.
+      if (success && result.modifiedFiles.length > 0 && !hasBuiltProject) {
+        setAwaitingFirstBuildCompile(true);
+      }
       if (success) {
         terminalRef.current?.write(
           `\r\n\x1b[32m✅ Done — ${result.modifiedFiles.length} file(s) updated.\x1b[0m\r\n`
@@ -679,6 +729,7 @@ export function StudioEngine() {
       return { success: false, modifiedFiles: [] };
     } finally {
       setIsGenerating(false);
+      setGenerationProgress(null);
     }
   };
 
@@ -725,6 +776,11 @@ export function StudioEngine() {
   const fileTree = mapToFileSystemTree(files); // for legacy components (InspectorPanel, StateGraph, SettingsModal, HistoryDrawer)
   const hasPreview = hasValidPreview;
 
+  // CAMBIO 2: overlay de generación. Solo en la PRIMERA construcción (sin bundle
+  // propio todavía) y mientras la generación corre o esperamos su primer compile.
+  const showGeneratingOverlay =
+    !hasBuiltProject && (isGenerating || awaitingFirstBuildCompile);
+
   // -------------------------------------------------------------------------
   // Navigate panel state (panel extraído a src/components/studio/NavigatePanel)
   // -------------------------------------------------------------------------
@@ -746,6 +802,85 @@ export function StudioEngine() {
     window.addEventListener('message', handleRouteChanged);
     return () => window.removeEventListener('message', handleRouteChanged);
   }, []);
+
+  // -------------------------------------------------------------------------
+  // CAMBIO 1 (c/d) — errores de runtime del preview → mensaje honesto en el chat
+  //
+  // El PREVIEW_CLIENT_SCRIPT (window.onerror/unhandledrejection) y el
+  // ErrorBoundary del preview emiten { type: 'preview-runtime-error', ... } con
+  // el stack REAL. Aquí se traduce a un mensaje de sistema en el chat con la
+  // acción "Corregir con AI": un prompt prellenado con el error y stack reales.
+  // NO se auto-dispara el fix — el usuario decide (misma filosofía de
+  // consentimiento que el fix del initialPrompt). La fila en forge_intent_log
+  // solo se crea si el usuario dispara el fix, porque el stack viaja dentro del
+  // user_prompt y es el pipeline quien registra el intent al procesarlo.
+  useEffect(() => {
+    const handleRuntimeError = (event: MessageEvent) => {
+      if (event.data?.type !== 'preview-runtime-error') return;
+      const { message, filename, lineno, componentName, componentStack, stack } = event.data;
+      const where = componentName || filename || 'el preview';
+
+      // Dedup por carga: un mismo error de render llega por DOS vías (el
+      // ErrorBoundary y window.onerror), con prefijos distintos ("Uncaught ",
+      // "Unhandled promise rejection: "). Normalizamos el mensaje para colapsar
+      // ambas en una sola entrada de chat por carga del preview.
+      const signature = String(message ?? '')
+        .replace(/^Uncaught\s+/i, '')
+        .replace(/^Unhandled promise rejection:\s*/i, '')
+        .trim();
+      if (reportedRuntimeErrors.current.has(signature)) return;
+      reportedRuntimeErrors.current.add(signature);
+
+      const fixPrompt = [
+        'Corrige este error de runtime que ocurre en el preview.',
+        '',
+        `Error: ${message ?? '(sin mensaje)'}`,
+        `Ubicación: ${where}${lineno ? `:${lineno}` : ''}`,
+        stack ? `\nStack:\n${stack}` : '',
+        componentStack ? `\nComponent stack:\n${componentStack}` : '',
+      ].filter(Boolean).join('\n');
+
+      setChatHistory(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: `⚠ Error de runtime en el preview: ${message ?? 'error desconocido'} en ${where}`,
+          actionLabel: 'Corregir con AI',
+          suggestedAction: fixPrompt,
+        } as Message,
+      ].slice(-30));
+    };
+    window.addEventListener('message', handleRuntimeError);
+    return () => window.removeEventListener('message', handleRuntimeError);
+  }, []);
+
+  // Cada nueva carga del preview (nuevo srcdoc) reinicia el dedup de errores de
+  // runtime del lado del Studio, en línea con el dedup por-carga del iframe.
+  useEffect(() => {
+    reportedRuntimeErrors.current = new Set();
+  }, [compiledHtml]);
+
+  // -------------------------------------------------------------------------
+  // CAMBIO 3 — reintento manual del compile ante un error de RED del cliente.
+  // La página de error de red del preview emite { type: 'preview-retry-compile' }
+  // al pulsar "Reintentar"; aquí se recompila con los archivos actuales.
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    const handleRetryCompile = (event: MessageEvent) => {
+      if (event.data?.type !== 'preview-retry-compile') return;
+      if (files.size === 0) return;
+      setIsCompiling(true);
+      compile(files)
+        .then(html => {
+          setCompiledHtml(html);
+          if (!isPreviewError(html)) setHasValidPreview(true);
+        })
+        .catch(e => console.error('[StudioEngine] retry compile error:', e))
+        .finally(() => setIsCompiling(false));
+    };
+    window.addEventListener('message', handleRetryCompile);
+    return () => window.removeEventListener('message', handleRetryCompile);
+  }, [files]);
 
   // -------------------------------------------------------------------------
   // Render
@@ -1014,6 +1149,22 @@ export function StudioEngine() {
                   <Loader2 className="animate-spin w-8 h-8 text-muted-foreground" />
                 </div>
               )}
+
+              {/* CAMBIO 2: overlay "Generando tu proyecto…" — tapa el scaffold
+                  crudo de React+Vite durante la primera construcción. Brand Wyrd:
+                  fondo neutro + spinner + paso actual. z-40 deja accesibles el
+                  botón de menú y los badges (z-50). */}
+              {showGeneratingOverlay && (
+                <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-4 bg-background">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                  <div className="text-sm font-medium text-foreground">Generando tu proyecto…</div>
+                  {generationProgress && (
+                    <div className="text-xs text-muted-foreground font-mono max-w-[80%] truncate">
+                      Paso {generationProgress.step}/{generationProgress.total} · {generationProgress.file}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </Panel>
         </Group>
@@ -1096,7 +1247,7 @@ export function StudioEngine() {
               if (restoredFiles.size === 0) return;
               const html = await compile(restoredFiles);
               setCompiledHtml(html);
-              if (!html.includes('Compilation Error')) {
+              if (!isPreviewError(html)) {
                 setHasValidPreview(true);
               }
             } catch (e) {
