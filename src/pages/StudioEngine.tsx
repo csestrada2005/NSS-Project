@@ -737,16 +737,26 @@ export function StudioEngine() {
   // Download project as ZIP
   // -------------------------------------------------------------------------
   const downloadProject = async () => {
+    // Flush any in-flight local writes so the zip reflects the freshest client
+    // state (forge_files / the in-memory filesObj), then package every project
+    // file preserving its real folder structure (src/…, public/…, package.json,
+    // index.html, DESIGN.md). Client-side only — no server call, no LLM.
     await flushPendingWrites();
     const zip = new JSZip();
     for (const [path, content] of files) {
       zip.file(path, content);
     }
     const blob = await zip.generateAsync({ type: 'blob' });
+    const slug =
+      (currentProjectName || 'project')
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'project';
     const objectUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = objectUrl;
-    a.download = 'project.zip';
+    a.download = `${slug}.zip`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -1206,6 +1216,8 @@ export function StudioEngine() {
                   onCodeEdit={handleCodeEdit}
                   onSaveAndRun={saveAndRun}
                   isSaving={isSaving}
+                  onDownloadZip={downloadProject}
+                  isGenerating={isGenerating}
                 />
               </div>
               <div className={`w-full h-full ${activeBottomTab === 'navigate' ? 'flex' : 'hidden'}`}>

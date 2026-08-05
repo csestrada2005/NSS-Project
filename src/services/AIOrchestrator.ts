@@ -350,6 +350,69 @@ const BACKEND_RULES = `When the user asks for backend features (e.g., 'save this
 8. If you need a Shadcn component (e.g., sheet, accordion, dialog) that is not currently in the src/components/ui folder, you MUST include 'npx shadcn-ui@latest add [component-name]' in the 'installCommands' array in your JSON response.`;
 
 // ---------------------------------------------------------------------------
+// Dependency audit (P0-2) — deterministic, no LLM
+// ---------------------------------------------------------------------------
+
+/**
+ * Curated dependency versions for the export audit. The preview runtime vendors
+ * or aliases these bare imports (see server/compiler.js), so a generated project
+ * compiles inside Wyrd even when they are absent from its package.json. An
+ * EXPORTED zip has no such runtime — every imported package must be declared for
+ * `npm install && vite build` to succeed outside Wyrd. Versions are pinned to
+ * ranges compatible with the template's React 18 baseline. Anything imported but
+ * missing from this table is still added, as "latest", with a warning.
+ *
+ * Includes the packages named in AVAILABLE_RUNTIME_CONTEXT plus the template's
+ * own runtime deps (react, react-dom, react-router-dom + the shadcn set).
+ */
+const KNOWN_DEP_VERSIONS: Record<string, string> = {
+  // Explicitly runtime-vendored / encouraged
+  'framer-motion': '^11.0.0',
+  'lucide-react': '^0.446.0',
+  clsx: '^2.1.1',
+  'tailwind-merge': '^2.5.2',
+  'react-router-dom': '^6.26.2',
+  // Common well-known packages the preview resolves via esm.sh
+  'class-variance-authority': '^0.7.0',
+  'tailwindcss-animate': '^1.0.7',
+  '@radix-ui/react-slot': '^1.0.2',
+  'date-fns': '^4.1.0',
+  recharts: '^2.12.0',
+  zustand: '^4.5.0',
+  sonner: '^1.5.0',
+  'react-markdown': '^9.0.0',
+  // Template runtime baseline
+  react: '^18.3.1',
+  'react-dom': '^18.3.1',
+};
+
+/** Node built-in module names never added as npm deps by the audit. */
+const NODE_BUILTINS = new Set([
+  'fs', 'path', 'http', 'https', 'os', 'crypto', 'stream', 'util', 'events',
+  'child_process', 'url', 'querystring', 'zlib', 'net', 'tls', 'dns', 'buffer',
+  'assert', 'process',
+]);
+
+/**
+ * Resolve a bare import specifier to its npm package name, or null when the
+ * specifier is not an npm package (relative path, `@/` alias, protocol URL,
+ * Node builtin-shaped, or malformed). Scoped packages keep `@scope/name`;
+ * subpaths (e.g. `framer-motion/dist`) collapse to the package root.
+ */
+function packageNameFromSpecifier(spec: string): string | null {
+  if (!spec) return null;
+  if (spec.startsWith('.') || spec.startsWith('/')) return null; // relative / absolute
+  if (spec.startsWith('@/')) return null;                        // path alias
+  if (spec.includes('://') || spec.startsWith('node:') || spec.startsWith('data:')) return null;
+  if (spec.startsWith('@')) {
+    const parts = spec.split('/');
+    return parts.length >= 2 ? `${parts[0]}/${parts[1]}` : null;
+  }
+  const name = spec.split('/')[0];
+  return /^[a-z0-9~][a-z0-9-._]*$/.test(name) ? name : null;
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -393,6 +456,82 @@ export class AIOrchestrator {
 
   private static notifyFileUpdate(path: string, content: string) {
     this.fileUpdateCallback?.(path, content);
+  }
+
+  // -------------------------------------------------------------------------
+  // Dependency audit (P0-2) — keep package.json in sync with imports so the
+  // exported zip builds outside Wyrd. Deterministic, no LLM.
+  // -------------------------------------------------------------------------
+
+  /**
+   * Cross the bare imports of the just-written .ts/.tsx files against the
+   * project's package.json `dependencies`. For every imported package that is
+   * absent, add it with its curated KNOWN_DEP_VERSIONS version (or "latest" +
+   * warning when unknown). Returns the updated package.json { path, content } to
+   * persist, or null when nothing changed / no package.json exists.
+   *
+   * `writtenFiles` are the files persisted in this step/edit; `allFiles` is the
+   * full project map (source of the current package.json when this step did not
+   * rewrite it). Pure aside from console logging — one line per dep added.
+   */
+  private static auditDependencies(
+    writtenFiles: Map<string, string>,
+    allFiles: Map<string, string>
+  ): { path: string; content: string } | null {
+    const pkgRaw = writtenFiles.get('package.json') ?? allFiles.get('package.json');
+    if (typeof pkgRaw !== 'string') return null;
+
+    let pkg: Record<string, unknown>;
+    try {
+      pkg = JSON.parse(pkgRaw) as Record<string, unknown>;
+    } catch {
+      console.warn('[AIOrchestrator] dep audit: package.json is not valid JSON, skipping');
+      return null;
+    }
+
+    const deps = (pkg.dependencies ?? {}) as Record<string, string>;
+    const devDeps = (pkg.devDependencies ?? {}) as Record<string, string>;
+
+    // Extract bare imports from every written .ts/.tsx. Matches both
+    // `import ... from '<spec>'` / `export ... from '<spec>'` and dynamic
+    // `import('<spec>')`.
+    const importRe =
+      /(?:import|export)\s+(?:[^'"]*?\s+from\s+)?['"]([^'"]+)['"]|import\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+    const needed = new Set<string>();
+    for (const [path, content] of writtenFiles) {
+      if (!path.endsWith('.ts') && !path.endsWith('.tsx')) continue;
+      if (typeof content !== 'string') continue;
+      importRe.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = importRe.exec(content)) !== null) {
+        const spec = m[1] ?? m[2];
+        const name = packageNameFromSpecifier(spec);
+        if (name) needed.add(name);
+      }
+    }
+
+    const added: string[] = [];
+    for (const name of needed) {
+      if (name in deps || name in devDeps || NODE_BUILTINS.has(name)) continue;
+      const version = KNOWN_DEP_VERSIONS[name];
+      if (version) {
+        deps[name] = version;
+        console.log(`[AIOrchestrator] dep audit: added ${name}@${version} to package.json`);
+      } else {
+        deps[name] = 'latest';
+        console.warn(`[AIOrchestrator] dep audit: ${name} not in KNOWN_DEP_VERSIONS — added as "latest"`);
+      }
+      added.push(name);
+    }
+
+    if (added.length === 0) return null;
+
+    // Re-emit dependencies alphabetically for a stable, reviewable diff.
+    const sortedDeps: Record<string, string> = {};
+    for (const k of Object.keys(deps).sort()) sortedDeps[k] = deps[k];
+    pkg.dependencies = sortedDeps;
+
+    return { path: 'package.json', content: JSON.stringify(pkg, null, 2) + '\n' };
   }
 
   // -------------------------------------------------------------------------
@@ -833,6 +972,19 @@ export class AIOrchestrator {
         modifiedFilesMap.set('src/index.css', guardedCss);
         console.warn(`[AIOrchestrator] Brief guard: restored ${restored.join(', ')} dropped by the Implementer write to src/index.css`);
       }
+    }
+
+    // ------------------------------------------------------------------
+    // Dependency audit (P0-2) — after the Implementer's writes, ensure every
+    // bare import in the written .ts/.tsx is declared in the project's
+    // package.json so the exported zip builds outside Wyrd. The preview runtime
+    // resolves these via vendor/alias/esm.sh, but an offline `npm install` does
+    // not. Deterministic, no LLM. Added to the write set so the update is
+    // verified and persisted alongside the step's files.
+    // ------------------------------------------------------------------
+    const depAudit = this.auditDependencies(modifiedFilesMap, files);
+    if (depAudit) {
+      modifiedFilesMap.set(depAudit.path, depAudit.content);
     }
 
     // ------------------------------------------------------------------

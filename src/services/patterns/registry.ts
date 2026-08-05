@@ -417,7 +417,7 @@ export const PATTERN_DATA: InjectionPattern[] = [
   },
   {
     "id": "framer-motion-hero-entrance",
-    "triggerDescription": "Inject this pattern when the user asks for entrance animations, fade-in, slide-up, scroll reveals, hover micro-interactions, animated heroes, or any high-fidelity motion. framer-motion is fully available in the preview runtime (resolved via CDN) and is the preferred tool over CSS transitions for orchestrated or interactive animation.",
+    "triggerDescription": "Inject this pattern when the user asks for entrance animations, fade-in, slide-up, scroll reveals, hover micro-interactions, animated heroes, or any high-fidelity motion. framer-motion is fully available in the preview runtime (vendored in the preview runtime) and is the preferred tool over CSS transitions for orchestrated or interactive animation.",
     "dependencies": [
       "framer-motion"
     ],

@@ -1,3 +1,4 @@
+import { Download } from 'lucide-react';
 import { FileExplorer } from '../FileExplorer';
 
 // ---------------------------------------------------------------------------
@@ -19,6 +20,13 @@ interface CodePanelProps {
   onCodeEdit: (newContent: string) => void;
   onSaveAndRun: () => void;
   isSaving: boolean;
+  /** Package every project file into a zip and trigger a client-side download. */
+  onDownloadZip: () => void;
+  /**
+   * True while an AI generation is running. The download is disabled meanwhile
+   * so users never export a half-generated intermediate state.
+   */
+  isGenerating: boolean;
 }
 
 export function CodePanel({
@@ -29,6 +37,8 @@ export function CodePanel({
   onCodeEdit,
   onSaveAndRun,
   isSaving,
+  onDownloadZip,
+  isGenerating,
 }: CodePanelProps) {
   return (
     <div className="flex w-full h-full bg-background">
@@ -41,13 +51,24 @@ export function CodePanel({
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         <div className="h-10 border-b border-border flex items-center justify-between px-4 bg-card shrink-0">
           <span className="text-sm text-muted-foreground truncate">{selectedFilePath || 'No file selected'}</span>
-          <button
-            onClick={onSaveAndRun}
-            disabled={!selectedFilePath || isSaving}
-            className="px-3 py-1 bg-primary hover:bg-primary/90 text-white text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSaving ? 'Saving...' : 'Save & Run'}
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={onDownloadZip}
+              disabled={isGenerating}
+              title={isGenerating ? 'Espera a que termine la generación' : 'Download the whole project as a .zip'}
+              className="flex items-center gap-1.5 px-3 py-1 bg-secondary hover:bg-secondary/80 text-secondary-foreground text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Download size={13} />
+              Download ZIP
+            </button>
+            <button
+              onClick={onSaveAndRun}
+              disabled={!selectedFilePath || isSaving}
+              className="px-3 py-1 bg-primary hover:bg-primary/90 text-white text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSaving ? 'Saving...' : 'Save & Run'}
+            </button>
+          </div>
         </div>
         <textarea
           value={selectedFileContent}

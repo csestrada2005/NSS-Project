@@ -410,6 +410,124 @@ export class DesignBriefService {
   }
 
   // -------------------------------------------------------------------------
+  // SEO scaffold (P0-3) — title, meta description, Open Graph / Twitter cards,
+  // robots.txt and a brand favicon. Generated projects used to ship with the
+  // template's "Vite + React" title and no metadata; this gives every new
+  // project sane, brand-derived SEO from the first scaffold. Idempotent via the
+  // SEO_MARKER attribute so re-running never duplicates tags.
+  // -------------------------------------------------------------------------
+
+  static readonly SEO_MARKER = 'data-brief-seo';
+
+  /** Neutral SEO fallbacks used when no brief could be produced. */
+  static readonly SEO_FALLBACK = {
+    title: 'Your App',
+    description: 'A modern website built with Wyrd.',
+    brandInitial: 'W',
+    primaryHsl: '222 47% 40%',
+  };
+
+  private static escapeHtmlAttr(value: string): string {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  /** `<title>` text: "{brand} — {tagline}". */
+  static buildSeoTitle(brandName: string, tagline: string): string {
+    return `${brandName} — ${tagline}`;
+  }
+
+  /**
+   * A ~150-char meta description derived from the tagline (and tone as a second
+   * sentence when it fits). Collapses whitespace and truncates on a word
+   * boundary with an ellipsis so it never exceeds ~155 chars.
+   */
+  static buildMetaDescription(tagline: string, tone: string): string {
+    const raw = tone ? `${tagline}. ${tone}` : tagline;
+    const collapsed = raw.replace(/\s+/g, ' ').trim();
+    const LIMIT = 155;
+    if (collapsed.length <= LIMIT) return collapsed;
+    const cut = collapsed.slice(0, LIMIT);
+    const lastSpace = cut.lastIndexOf(' ');
+    return (lastSpace > 80 ? cut.slice(0, lastSpace) : cut).trimEnd() + '…';
+  }
+
+  /**
+   * Inject title + meta description + Open Graph + Twitter card + favicon link
+   * into <head>. Replaces the template's <title> and strips any previously
+   * injected SEO tags (SEO_MARKER) so the operation is idempotent.
+   */
+  static injectSeo(html: string, opts: { title: string; description: string }): string {
+    const marker = this.SEO_MARKER;
+    const t = this.escapeHtmlAttr(opts.title);
+    const d = this.escapeHtmlAttr(opts.description);
+
+    // Drop any prior SEO-marked tags so re-running does not duplicate them.
+    let out = html.replace(
+      new RegExp(`[ \\t]*<(?:meta|link)[^>]*${marker}[^>]*>\\s*\\n?`, 'g'),
+      ''
+    );
+
+    // Title: replace the existing one, or add one before </head>.
+    if (/<title>[\s\S]*?<\/title>/.test(out)) {
+      out = out.replace(/<title>[\s\S]*?<\/title>/, `<title>${t}</title>`);
+    } else if (out.includes('</head>')) {
+      out = out.replace('</head>', `    <title>${t}</title>\n  </head>`);
+    }
+
+    const tags =
+      `    <meta name="description" content="${d}" ${marker} />\n` +
+      `    <meta property="og:title" content="${t}" ${marker} />\n` +
+      `    <meta property="og:description" content="${d}" ${marker} />\n` +
+      `    <meta property="og:type" content="website" ${marker} />\n` +
+      `    <meta name="twitter:card" content="summary_large_image" ${marker} />\n` +
+      `    <link rel="icon" type="image/svg+xml" href="/favicon.svg" ${marker} />\n`;
+
+    if (out.includes('</head>')) {
+      return out.replace('</head>', `${tags}  </head>`);
+    }
+    return tags + out;
+  }
+
+  /** Standard permissive robots.txt for public sites. */
+  static robotsTxt(): string {
+    return ['User-agent: *', 'Allow: /', ''].join('\n');
+  }
+
+  /**
+   * Pick a readable text color (near-black or white) for a letter drawn over the
+   * given HSL background, based on its lightness channel (the last `%` value).
+   */
+  private static faviconTextColor(hsl: string): string {
+    const matches = hsl.match(/(\d+(?:\.\d+)?)%/g);
+    const lightness = matches && matches.length > 0
+      ? parseFloat(matches[matches.length - 1])
+      : 50;
+    return lightness > 60 ? '#111827' : '#ffffff';
+  }
+
+  /**
+   * A self-contained SVG favicon: the brand's initial centered on a rounded
+   * square filled with --brand-primary. The HSL channels are inlined (a favicon
+   * is a standalone document and cannot read index.css variables). Valid SVG —
+   * never a broken placeholder.
+   */
+  static buildFaviconSvg(brandInitial: string, primaryHsl: string): string {
+    const letter = this.escapeHtmlAttr((brandInitial || 'W').trim().charAt(0).toUpperCase() || 'W');
+    const text = this.faviconTextColor(primaryHsl);
+    return [
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">`,
+      `  <rect width="64" height="64" rx="12" fill="hsl(${primaryHsl})" />`,
+      `  <text x="32" y="32" dy="0.35em" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="38" font-weight="700" fill="${text}">${letter}</text>`,
+      `</svg>`,
+      '',
+    ].join('\n');
+  }
+
+  // -------------------------------------------------------------------------
   // Base wiring — body + headings. Kept between sentinel comments so both the
   // scaffold and the brief guard (AIOrchestrator) can locate, strip and rewrite
   // exactly this block without touching the rest of index.css.
@@ -580,11 +698,27 @@ export class DesignBriefService {
     const brief = await this.generate(prompt);
 
     // Fallback: the brief failed but the single-source contract must still hold.
-    // Write a placeholder src/data/site.ts and continue — never block scaffold.
+    // Write a placeholder src/data/site.ts and neutral SEO, then continue —
+    // never block scaffold.
     if (!brief) {
       const out = new Map<string, string>();
       out.set('src/data/site.ts', this.placeholderSiteTs());
-      console.log('[DesignBriefService] scaffold: brief unavailable, wrote placeholder src/data/site.ts');
+      out.set('public/robots.txt', this.robotsTxt());
+      out.set(
+        'public/favicon.svg',
+        this.buildFaviconSvg(this.SEO_FALLBACK.brandInitial, this.SEO_FALLBACK.primaryHsl)
+      );
+      const html = files.get('index.html');
+      if (typeof html === 'string') {
+        out.set(
+          'index.html',
+          this.injectSeo(html, {
+            title: this.SEO_FALLBACK.title,
+            description: this.SEO_FALLBACK.description,
+          })
+        );
+      }
+      console.log('[DesignBriefService] scaffold: brief unavailable, wrote placeholder src/data/site.ts + neutral SEO');
       return out;
     }
 
@@ -599,8 +733,19 @@ export class DesignBriefService {
 
     const html = files.get('index.html');
     if (typeof html === 'string') {
-      out.set('index.html', this.injectFontLink(html, brief));
+      // Brand fonts first, then SEO (title/description/OG/twitter/favicon link).
+      const withFonts = this.injectFontLink(html, brief);
+      out.set('index.html', this.injectSeo(withFonts, {
+        title: this.buildSeoTitle(brief.brand_name, brief.tagline),
+        description: this.buildMetaDescription(brief.tagline, brief.tone),
+      }));
     }
+
+    // SEO assets: permissive robots.txt + brand favicon (initial over --brand-primary).
+    out.set('public/robots.txt', this.robotsTxt());
+    const primaryHsl =
+      brief.palette.find(c => c.var === '--brand-primary')?.hsl ?? this.SEO_FALLBACK.primaryHsl;
+    out.set('public/favicon.svg', this.buildFaviconSvg(brief.brand_name, primaryHsl));
 
     // Single source of truth for the site's contact + brand data.
     out.set('src/data/site.ts', this.toSiteTs(brief));
