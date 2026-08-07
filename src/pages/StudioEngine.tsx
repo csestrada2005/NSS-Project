@@ -742,6 +742,18 @@ export function StudioEngine() {
     filesOverride?: Map<string, string>
   ): Promise<{ success: boolean; modifiedFiles: string[]; error?: string; warning?: string; chatResponse?: string; suggestedAction?: string }> => {
     if (isReadOnly) return { success: false, modifiedFiles: [] };
+
+    // Persistencia del mensaje del usuario: embudo común de TODOS los envíos.
+    // El input del chat, el mensaje inyectado y el initialPrompt (que entra por
+    // aquí directamente, sin pasar por ChatInterface) confluyen en esta función,
+    // así que persistir aquí garantiza que el PRIMER prompt del proyecto quede en
+    // el historial. project_id (projectId) y user_id (resuelto dentro de
+    // persistMessage vía auth.getUser) están disponibles en este punto: el flujo
+    // del initialPrompt corre post-auth y post-carga del proyecto. Fire-and-forget
+    // como el resto — persistChatMessage ya suprime modo lectura y falta de
+    // projectId, y el servicio traga sus propios errores.
+    persistChatMessage('user', message);
+
     setIsGenerating(true);
     setGenerationProgress(null);
     // CAMBIO 4 — una nueva generación supersede cualquier overlay de cancelación
