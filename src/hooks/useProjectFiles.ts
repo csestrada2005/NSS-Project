@@ -8,6 +8,7 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { SupabaseService } from '../services/SupabaseService';
+import { stripDataOid } from '../utils/stripDataOid';
 
 export interface UseProjectFilesReturn {
   files: Map<string, string>;
@@ -95,10 +96,14 @@ export function useProjectFiles(): UseProjectFilesReturn {
 
       console.log('[useProjectFiles] upsert firing', { projectId, path });
 
+      // CAMBIO 2 — data-oid is Visual-mode preview instrumentation and must
+      // never reach the persisted source. The in-memory Map above keeps it (so
+      // the live preview / Visual mode still work); only what hits forge_files
+      // is stripped.
       const { error } = await supabase
         .from('forge_files')
         .upsert(
-          { project_id: projectId, path, content },
+          { project_id: projectId, path, content: stripDataOid(content) },
           { onConflict: 'project_id,path' }
         );
 
@@ -129,10 +134,12 @@ export function useProjectFiles(): UseProjectFilesReturn {
       if (content !== undefined) {
         promises.push(
           (async () => {
+            // CAMBIO 2 — strip data-oid before it reaches forge_files (same
+            // rule as the debounced saveFile path).
             const { error } = await supabase
               .from('forge_files')
               .upsert(
-                { project_id: projectId, path, content },
+                { project_id: projectId, path, content: stripDataOid(content) },
                 { onConflict: 'project_id,path' }
               );
             if (error) {

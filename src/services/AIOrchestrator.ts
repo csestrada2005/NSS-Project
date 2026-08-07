@@ -59,9 +59,52 @@ export interface OrchestratorResult {
 // File relevance scoring — used by the legacy heavy lane and plan steps
 // ---------------------------------------------------------------------------
 
+/** Same directory/extension gate selectRelevantFiles uses for candidates. */
+function isEditableSrcPath(path: string): boolean {
+  if (path.includes('node_modules') || path.includes('dist/')) return false;
+  if (!path.startsWith('src/')) return false;
+  return (
+    path.endsWith('.tsx') ||
+    path.endsWith('.ts') ||
+    path.endsWith('.jsx') ||
+    path.endsWith('.js')
+  );
+}
+
+/**
+ * Per-file cap for SECONDARY (support) context files. Target files are exempt.
+ */
+const SECONDARY_FILE_CAP = 3000;
+/**
+ * Global safety guard for the whole relevant-files block. When the assembled
+ * context exceeds this, secondary files are trimmed first — target files are
+ * never touched.
+ */
+const RELEVANT_CONTEXT_TOTAL_CAP = 50_000;
+
+/**
+ * CAMBIO 1 — tiered relevant-file context.
+ *
+ * Historically every file was sliced to 3000 chars, so a target file the intent
+ * actually edits (e.g. a 6.7 KB HeroSection) reached the model at ~half its
+ * length and the model replied "the code is incomplete" — while the system
+ * prompt demands it never truncate output. Now:
+ *
+ *  - TARGET files (paths the intent will modify: the classifier's affected_files
+ *    or a step's file_path) are always included with their COMPLETE content, no
+ *    slice.
+ *  - SECONDARY files (keyword-scored support context) keep the 3000-char cap.
+ *  - A global guard (~50k chars) trims secondaries first — never targets — and
+ *    logs once when it acts.
+ *
+ * `targetPaths` are matched against the project files and the editable-src gate;
+ * anything invalid is ignored. With no targets the behavior matches the legacy
+ * top-5 keyword selection (now with the global guard as a backstop).
+ */
 function selectRelevantFiles(
   userMessage: string,
-  files: Map<string, string>
+  files: Map<string, string>,
+  targetPaths: Iterable<string> = []
 ): { path: string; content: string }[] {
   const keywords = userMessage
     .split(/[\s\p{P}]+/u)
@@ -71,15 +114,7 @@ function selectRelevantFiles(
   const scored: { path: string; content: string; score: number }[] = [];
 
   for (const [path, content] of files) {
-    if (
-      path.includes('node_modules') ||
-      path.includes('dist/') ||
-      !path.startsWith('src/') ||
-      (!path.endsWith('.tsx') &&
-        !path.endsWith('.ts') &&
-        !path.endsWith('.jsx') &&
-        !path.endsWith('.js'))
-    ) continue;
+    if (!isEditableSrcPath(path)) continue;
 
     const nameLower = path.toLowerCase();
     const contentSnippet = content.slice(0, 2000).toLowerCase();
@@ -107,7 +142,55 @@ function selectRelevantFiles(
     }
   }
 
-  return scored.slice(0, 5).map(f => ({ path: f.path, content: f.content.slice(0, 3000) }));
+  // Target set: real, editable src files the intent will modify.
+  const targetSet = new Set<string>();
+  for (const p of targetPaths) {
+    if (files.has(p) && isEditableSrcPath(p)) targetSet.add(p);
+  }
+
+  // Targets first (full content), then the top secondaries by score (capped),
+  // excluding anything already surfaced as a target.
+  const targetEntries = [...targetSet].map(p => ({
+    path: p,
+    content: files.get(p)!,
+    isTarget: true,
+  }));
+  const secondaryEntries = scored
+    .filter(f => !targetSet.has(f.path))
+    .slice(0, 5)
+    .map(f => ({
+      path: f.path,
+      content: f.content.slice(0, SECONDARY_FILE_CAP),
+      isTarget: false,
+    }));
+
+  const entries = [...targetEntries, ...secondaryEntries];
+
+  // Global guard: if the whole block is too large, shrink/drop secondaries from
+  // the lowest-priority end inward. Target content is never trimmed.
+  let total = entries.reduce((n, e) => n + e.content.length, 0);
+  if (total > RELEVANT_CONTEXT_TOTAL_CAP) {
+    const before = total;
+    for (let i = secondaryEntries.length - 1; i >= 0 && total > RELEVANT_CONTEXT_TOTAL_CAP; i--) {
+      const e = secondaryEntries[i];
+      const over = total - RELEVANT_CONTEXT_TOTAL_CAP;
+      if (e.content.length <= over) {
+        total -= e.content.length;
+        e.content = '';
+      } else {
+        e.content = e.content.slice(0, e.content.length - over);
+        total -= over;
+      }
+    }
+    console.warn(
+      `[AIOrchestrator] context guard: relevant-file block ${before} chars > ${RELEVANT_CONTEXT_TOTAL_CAP} cap; ` +
+      `trimmed secondary files to ${total} chars (target files kept in full)`
+    );
+  }
+
+  return entries
+    .filter(e => e.isTarget || e.content.length > 0)
+    .map(e => ({ path: e.path, content: e.content }));
 }
 
 /**
@@ -995,7 +1078,7 @@ export class AIOrchestrator {
 
     if (steps.length === 0) {
       // Architect returned nothing — fall back to the legacy heavy lane
-      const result = await this.runHeavyLane(input, files, selectedElement, projectId, signal);
+      const result = await this.runHeavyLane(input, files, selectedElement, projectId, intent, signal);
       if (result.outcome === 'success' && creditUserId) {
         if (isFreePrompt) {
           await CreditService.markFreePromptUsed(creditUserId);
@@ -1853,9 +1936,13 @@ export class AIOrchestrator {
     files: Map<string, string>,
     selectedElement: { tagName: string; className?: string } | null,
     projectId?: string,
+    intent?: Intent,
     signal?: AbortSignal
   ): Promise<OrchestratorResult> {
-    const relevantFiles = selectRelevantFiles(input, files);
+    // CAMBIO 1 — the classifier's affected_files are the TARGET files this edit
+    // will touch; they reach the model with their COMPLETE content (no 3000-char
+    // slice), which is exactly what the "código incompleto" bug needed.
+    const relevantFiles = selectRelevantFiles(input, files, intent?.affected_files ?? []);
     const blueprint = generateBlueprintFromFiles(files);
 
     let relevantContext = '';
