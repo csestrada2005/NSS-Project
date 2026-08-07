@@ -30,6 +30,11 @@ interface ChatInterfaceProps {
   selectedElement: { tagName: string; className?: string } | null;
   chatHistory?: Message[];
   onHistoryUpdate?: (history: Message[]) => void;
+  // Persistencia real: se invoca por cada mensaje DEFINITIVO que entra al chat
+  // (prompt del usuario al enviarse, respuesta final del assistant al cerrar el
+  // intent, mensajes de sistema visibles). Fire-and-forget en el padre — nunca
+  // bloquea el chat. Los estados de progreso transitorios NO pasan por aquí.
+  onPersistMessage?: (role: 'user' | 'assistant', content: string) => void;
   // CAMBIO 2 — cancelación. `onCancel` aborta la generación en curso; sólo se
   // muestra mientras `isLoading`. `isCancelling` deshabilita el botón durante el
   // cierre para evitar dobles cancelaciones.
@@ -154,6 +159,7 @@ export function ChatInterface({
   selectedElement,
   chatHistory = [],
   onHistoryUpdate,
+  onPersistMessage,
   onCancel,
   isCancelling = false,
   injectedMessage,
@@ -207,6 +213,15 @@ export function ChatInterface({
     onHistoryUpdateRef.current = onHistoryUpdate;
   }, [onHistoryUpdate]);
 
+  // Mismo patrón vía ref que onHistoryUpdate: la continuación del await en
+  // sendMessage puede resolver tras el desmontaje de esta instancia (cierre del
+  // modal). El ref garantiza que appendMessage llame siempre a la última versión
+  // del callback y que la persistencia dispare aunque el componente ya no exista.
+  const onPersistMessageRef = useRef(onPersistMessage);
+  useEffect(() => {
+    onPersistMessageRef.current = onPersistMessage;
+  }, [onPersistMessage]);
+
   useEffect(() => {
     // El ref debe seguir a `messages` siempre, incluso en el estado "sólo
     // saludo", para que `appendMessage` parta de la lista real en el primer
@@ -233,7 +248,21 @@ export function ChatInterface({
   // que el estado local (el padre sabe más). Nunca reemplazamos con un prop de
   // igual o menor longitud, para no pisar mensajes locales aún no propagados.
   useEffect(() => {
-    if (chatHistory && chatHistory.length > messagesRef.current.length) {
+    if (!chatHistory || chatHistory.length === 0) return;
+    // Caso carga inicial async (persistencia): el chat arranca con el saludo
+    // pelado (length 1) mientras el fetch de forge_chat_messages vuela. Cuando
+    // resuelve, un historial de UN solo mensaje no superaría el length del
+    // saludo y la regla estricta lo bloquearía. Por eso: si el estado local es
+    // sólo el saludo, adoptamos cualquier historial no vacío. En cualquier otro
+    // caso mantenemos la regla estricta (adoptar sólo si el prop es más largo),
+    // para no pisar mensajes locales aún no propagados al padre.
+    const isBareGreeting =
+      messagesRef.current.length === 1 &&
+      messagesRef.current[0].role === 'assistant' &&
+      messagesRef.current[0].content === INITIAL_GREETING;
+    const shouldAdopt =
+      chatHistory.length > messagesRef.current.length || isBareGreeting;
+    if (shouldAdopt) {
       messagesRef.current = chatHistory;
       setMessages(chatHistory);
     }
@@ -251,6 +280,11 @@ export function ChatInterface({
     messagesRef.current = next;
     setMessages(next);
     onHistoryUpdateRef.current?.(next);
+    // Persistencia real: cada mensaje que pasa por appendMessage es DEFINITIVO
+    // (prompt del usuario, respuesta final del assistant, error inesperado
+    // visible). Los estados de progreso transitorios ("Creating…") viven en
+    // progressLines, no en messages, así que nunca llegan aquí. Fire-and-forget.
+    onPersistMessageRef.current?.(message.role, message.content);
   };
 
   const buildAssistantMessage = (result: { success: boolean; modifiedFiles: string[]; error?: string; warning?: string; chatResponse?: string; suggestedAction?: string }): { content: string; warning?: string; errorType?: 'insufficient_credits' | 'compile_error' | 'generic'; errorDetail?: string; suggestedAction?: string } => {
