@@ -1,6 +1,7 @@
 import * as Babel from '@babel/standalone';
 import type { FileSystemTree } from '@webcontainer/api';
 import type { Node, Edge } from '@xyflow/react';
+import { updateCodeByOrdinal, updateJSXPropByOrdinal } from './jsxOrdinal';
 
 export interface PropDef {
   name: string;
@@ -8,10 +9,24 @@ export interface PropDef {
   options?: string[];
 }
 
+/**
+ * A selected element, resolved to its SOURCE identity.
+ *
+ * PR-2: the deterministic visual editor localizes edits by `ordinal` (the N-th
+ * native element of `filePath`, matching the compiler's data-oid numbering) with
+ * `tagName` as a safety hint. `dataOid` carries the full "{slug}:{ordinal}" oid
+ * for consumers that still key off it (AIOrchestrator's targeting). `instanceCount`
+ * is how many DOM nodes share this oid (>1 for elements rendered inside .map()).
+ */
 export interface TargetElement {
   tagName: string;
   className?: string;
   dataOid?: string;
+  filePath?: string;
+  ordinal?: number;
+  textContent?: string;
+  instanceCount?: number;
+  hasChildElements?: boolean;
 }
 
 export interface GraphData {
@@ -138,9 +153,22 @@ export const updateCode = (
   options: { classNameMode?: 'replace' | 'merge' } = { classNameMode: 'merge' },
   onNotFound?: (message: string) => void
 ): string => {
-  const { tagName, dataOid } = target;
+  const { tagName, dataOid, ordinal } = target;
   const { className: newClassName, textContent: newTextContent } = updates;
   const { classNameMode } = options;
+
+  // PR-2 reconnection: when the selection carries an `ordinal`, localize by the
+  // N-th native element (matching the compiler's data-oid numbering) instead of
+  // matching a `data-oid` attribute that the persisted source never contains.
+  if (typeof ordinal === 'number' && Number.isFinite(ordinal) && ordinal >= 0) {
+    return updateCodeByOrdinal(
+      fileContent,
+      { tagName, ordinal },
+      { className: newClassName, textContent: newTextContent },
+      { classNameMode },
+      onNotFound,
+    );
+  }
 
   if (!dataOid) {
     console.warn('updateCode: no dataOid provided, skipping');
@@ -405,7 +433,12 @@ export const updateJSXProp = (
   propName: string,
   propValue: string | boolean | number
 ): string => {
-  const { tagName, dataOid } = target;
+  const { tagName, dataOid, ordinal } = target;
+
+  // PR-2 reconnection: prefer ordinal localization when available.
+  if (typeof ordinal === 'number' && Number.isFinite(ordinal) && ordinal >= 0) {
+    return updateJSXPropByOrdinal(fileContent, { tagName, ordinal }, propName, propValue);
+  }
 
   const plugin = ({ types: t }: any) => ({
     visitor: {
