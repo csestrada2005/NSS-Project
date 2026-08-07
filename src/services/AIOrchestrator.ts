@@ -1490,7 +1490,6 @@ export class AIOrchestrator {
           'You are a React/Tailwind expert. The user wants a simple change. ' +
           'Return ONLY the complete updated file content. No explanation, ' +
           'no markdown fences. Just the raw file starting from line 1. ' +
-          'Preserve all data-oid attributes exactly as they are. ' +
           'Never write the file path as the first line of the file content. File ' +
           'content must start directly with code (imports, comments, or declarations).\n\n' +
           AVAILABLE_RUNTIME_CONTEXT +
