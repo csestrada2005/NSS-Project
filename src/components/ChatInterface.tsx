@@ -280,11 +280,17 @@ export function ChatInterface({
     messagesRef.current = next;
     setMessages(next);
     onHistoryUpdateRef.current?.(next);
-    // Persistencia real: cada mensaje que pasa por appendMessage es DEFINITIVO
-    // (prompt del usuario, respuesta final del assistant, error inesperado
-    // visible). Los estados de progreso transitorios ("Creating…") viven en
-    // progressLines, no en messages, así que nunca llegan aquí. Fire-and-forget.
-    onPersistMessageRef.current?.(message.role, message.content);
+    // Persistencia real: cada mensaje DEFINITIVO del assistant (respuesta final,
+    // error inesperado visible) que pasa por appendMessage se persiste aquí. Los
+    // estados de progreso transitorios ("Creating…") viven en progressLines, no en
+    // messages, así que nunca llegan aquí. Fire-and-forget.
+    //
+    // El mensaje del USUARIO NO se persiste en este camino: se escribe al inicio
+    // de handleSendMessage (embudo común de todos los envíos, incluido el
+    // initialPrompt que no pasa por aquí). Persistirlo también aquí lo duplicaría.
+    if (message.role !== 'user') {
+      onPersistMessageRef.current?.(message.role, message.content);
+    }
   };
 
   const buildAssistantMessage = (result: { success: boolean; modifiedFiles: string[]; error?: string; warning?: string; chatResponse?: string; suggestedAction?: string }): { content: string; warning?: string; errorType?: 'insufficient_credits' | 'compile_error' | 'generic'; errorDetail?: string; suggestedAction?: string } => {
