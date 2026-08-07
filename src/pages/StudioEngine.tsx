@@ -52,6 +52,7 @@ import { CommandBubble } from '../components/CommandBubble';
 import { CommandModal } from '../components/CommandModal';
 import { HistoryDrawer } from '../components/HistoryDrawer';
 import { ProjectMemoryService } from '../services/ProjectMemoryService';
+import { ChatPersistenceService } from '../services/ChatPersistenceService';
 import { DesignBriefService } from '../services/DesignBriefService';
 import CreditBalance from '../components/forge/CreditBalance';
 import { ShareProjectModal } from '../components/forge/ShareProjectModal';
@@ -286,17 +287,57 @@ export function StudioEngine() {
   }, [projectId]);
 
   // -------------------------------------------------------------------------
-  // Reset del historial de chat al cambiar de proyecto.
+  // Reset + rehidratación del historial de chat al cambiar de proyecto.
   //
   // La ruta es `studio/:projectId` sin `key`, así que navegar entre proyectos
   // NO remonta StudioEngine: el estado chatHistory sobreviviría. Como ahora
   // ChatInterface rehidrata messages desde chatHistory, sin este reset el chat
   // de un proyecto se filtraría al siguiente. Este efecto keyed en projectId es
   // el mecanismo que garantiza que no haya fuga de historial entre proyectos.
+  //
+  // ORDEN CRÍTICO contra la carrera: el reset síncrono `setChatHistory([])` se
+  // ejecuta al TOPE del efecto, ANTES de disparar el fetch async — así el reset
+  // siempre ocurre antes de que la carga resuelva. La carga lleva un guard de
+  // projectId vigente vía el flag `cancelled` atado al cleanup del efecto: si el
+  // projectId cambia mientras el fetch vuela, React corre el cleanup (marca
+  // cancelled=true) antes del nuevo efecto, y el resultado stale se descarta. Un
+  // fetch tardío de un proyecto anterior nunca pisa el chat del proyecto actual.
   // -------------------------------------------------------------------------
   useEffect(() => {
+    // 1. Reset síncrono: limpia cualquier historial del proyecto anterior.
     setChatHistory([]);
+    if (!projectId) return;
+
+    // 2. Carga async con guard de projectId vigente.
+    let cancelled = false;
+    ChatPersistenceService.loadRecent(projectId)
+      .then((messages) => {
+        if (cancelled) return; // el projectId cambió mientras el fetch volaba.
+        if (messages.length === 0) return;
+        // Guard extra contra la carrera con actividad local: si el usuario ya
+        // generó mensajes reales mientras el fetch volaba (prev no vacío), NO
+        // los pisamos con el historial cargado. El saludo pelado no se propaga
+        // al padre, así que prev vacío == "aún no hay mensajes reales".
+        setChatHistory((prev) => (prev.length === 0 ? messages : prev));
+      })
+      .catch((err) => console.warn('[StudioEngine] chat history load failed:', err));
+
+    return () => {
+      cancelled = true;
+    };
   }, [projectId]);
+
+  // Persiste un mensaje DEFINITIVO del chat en forge_chat_messages. Fire-and-
+  // forget: NO se hace await (jamás bloquea el chat) y el servicio ya traga sus
+  // propios errores a log. Se suprime en modo lectura (un visor sin permiso no
+  // debe escribir) y sin projectId.
+  const persistChatMessage = useCallback(
+    (role: 'user' | 'assistant', content: string) => {
+      if (isReadOnly || !projectId) return;
+      void ChatPersistenceService.persistMessage(projectId, role, content);
+    },
+    [isReadOnly, projectId],
+  );
 
   // -------------------------------------------------------------------------
   // AI callback registration
@@ -985,17 +1026,22 @@ export function StudioEngine() {
           memory
         );
 
+        const runtimeErrorContent = isModuleEval
+          ? `⚠ El código falló al cargar: ${message ?? 'error desconocido'}`
+          : `⚠ Error de runtime en el preview: ${message ?? 'error desconocido'} en ${where}`;
         setChatHistory(prev => [
           ...prev,
           {
             role: 'assistant',
-            content: isModuleEval
-              ? `⚠ El código falló al cargar: ${message ?? 'error desconocido'}`
-              : `⚠ Error de runtime en el preview: ${message ?? 'error desconocido'} en ${where}`,
+            content: runtimeErrorContent,
             actionLabel: 'Corregir con AI',
             suggestedAction: fixPrompt,
           } as Message,
         ].slice(-30));
+        // Mensaje de sistema visible (error de runtime) → definitivo, se
+        // persiste. No guardamos suggestedAction/actionLabel: sólo el contenido
+        // visible; el botón "Corregir con AI" es efímero de esta sesión.
+        persistChatMessage('assistant', runtimeErrorContent);
       })();
     };
     window.addEventListener('message', handleRuntimeError);
@@ -1379,6 +1425,7 @@ export function StudioEngine() {
                   selectedElement={selectedElement}
                   chatHistory={chatHistory}
                   onHistoryUpdate={(history) => setChatHistory(history.slice(-30))}
+                  onPersistMessage={persistChatMessage}
                   onCancel={handleCancelGeneration}
                   isCancelling={isCancelling}
                   injectedMessage={pendingChatSend}
