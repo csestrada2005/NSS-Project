@@ -466,7 +466,9 @@ app.post('/api/compile', async (req, res) => {
       console.error('[Compile] Error:', result.error);
       return res.status(400).json({ error: result.error, errorDetails: result.errorDetails, errorDetail: result.errorDetail ?? null });
     }
-    res.json({ html: result.html });
+    // CAMBIO 2 — oidMap (slug → path completo) viaja junto al html para que el
+    // consumidor (PR-2) pueda resolver un data-oid del DOM a su archivo real.
+    res.json({ html: result.html, oidMap: result.oidMap ?? {} });
   } catch (err) {
     console.error('[Compile] Unexpected error:', err);
     res.status(500).json({ error: err.message || 'Unexpected compile error' });

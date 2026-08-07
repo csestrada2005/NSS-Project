@@ -65,9 +65,27 @@ function isNetworkError(err: any): boolean {
   return /failed to fetch|networkerror|network error|load failed|timeout|connection/.test(msg);
 }
 
-export async function compile(files: Map<string, string>): Promise<string> {
+/**
+ * oidMap (CAMBIO 2): slug → path completo del archivo del proyecto. El data-oid
+ * del DOM codifica el slug; este mapa lo resuelve al archivo real. Lo entrega el
+ * compilador y lo consumirá PR-2 (picker / fast lane / targeting). Vacío cuando
+ * el compile no instrumentó nada o falló.
+ */
+export type OidMap = Record<string, string>;
+
+export interface CompileResult {
+  html: string;
+  oidMap: OidMap;
+}
+
+/**
+ * Núcleo del compile: POSTea los archivos a /api/compile y devuelve { html,
+ * oidMap }. `compile()` (abajo) es un wrapper que expone sólo el html para los
+ * callers históricos; `compileWithMeta()` expone el resultado completo.
+ */
+async function compileRequest(files: Map<string, string>): Promise<CompileResult> {
   if (files.size === 0) {
-    return generateLoadingHTML();
+    return { html: generateLoadingHTML(), oidMap: {} };
   }
 
   const body = JSON.stringify({ files: Object.fromEntries(files) });
@@ -86,7 +104,7 @@ export async function compile(files: Map<string, string>): Promise<string> {
       });
 
       if (response.status === 401) {
-        return generateErrorHTML('Session expired. Please refresh the page to continue building.');
+        return { html: generateErrorHTML('Session expired. Please refresh the page to continue building.'), oidMap: {} };
       }
 
       // El servidor respondió: cualquier error a partir de aquí es de compilación
@@ -98,21 +116,22 @@ export async function compile(files: Map<string, string>): Promise<string> {
           const data = await response.json();
           msg = data.error || msg;
         } catch { /* ignore */ }
-        return generateErrorHTML(msg);
+        return { html: generateErrorHTML(msg), oidMap: {} };
       }
 
       const data = await response.json();
-      if (data.error) return generateErrorHTML(data.error);
+      if (data.error) return { html: generateErrorHTML(data.error), oidMap: {} };
       const html = data.html as string;
       if (html && html.includes('Invalid or expired session')) {
-        return generateErrorHTML('Session expired. Please refresh the page to continue building.');
+        return { html: generateErrorHTML('Session expired. Please refresh the page to continue building.'), oidMap: {} };
       }
-      return html;
+      const oidMap: OidMap = (data.oidMap && typeof data.oidMap === 'object') ? data.oidMap : {};
+      return { html, oidMap };
     } catch (err: any) {
       if (!isNetworkError(err)) {
         // Error inesperado del cliente (no de red): no reintentamos y no
         // prometemos un auto-fix que no va a ocurrir.
-        return generateNetworkErrorHTML();
+        return { html: generateNetworkErrorHTML(), oidMap: {} };
       }
       lastNetworkError = err;
       if (attempt < NETWORK_RETRY_ATTEMPTS) {
@@ -124,7 +143,24 @@ export async function compile(files: Map<string, string>): Promise<string> {
 
   // Agotados los reintentos automáticos de red: estado honesto + reintento manual.
   console.error('[BrowserCompiler] Network error reaching /api/compile:', lastNetworkError);
-  return generateNetworkErrorHTML();
+  return { html: generateNetworkErrorHTML(), oidMap: {} };
+}
+
+/**
+ * Compile all project files into a self-contained HTML string for srcdoc.
+ * Signature unchanged (returns the html string) so existing callers work as-is.
+ */
+export async function compile(files: Map<string, string>): Promise<string> {
+  const { html } = await compileRequest(files);
+  return html;
+}
+
+/**
+ * Like compile(), but also returns the oidMap (CAMBIO 2). Used by StudioEngine's
+ * main compile so it can stash slug → path for PR-2's consumers.
+ */
+export async function compileWithMeta(files: Map<string, string>): Promise<CompileResult> {
+  return compileRequest(files);
 }
 
 // ---------------------------------------------------------------------------

@@ -21,7 +21,7 @@ import { PreviewOverlay } from '../components/PreviewOverlay';
 import { InspectorPanel } from '../components/InspectorPanel';
 import { AIOrchestrator } from '../services/AIOrchestrator';
 import { SupabaseService } from '../services/SupabaseService';
-import { compile, isPreviewError } from '../services/BrowserCompiler';
+import { compile, compileWithMeta, isPreviewError, type OidMap } from '../services/BrowserCompiler';
 import { isAbortError } from '../utils/abort';
 import { updateCode, updateJSXProp, type TargetElement } from '../utils/ast';
 import { fileSystemTreeToMap, mapToFileSystemTree } from '../utils/context';
@@ -183,6 +183,11 @@ export function StudioEngine() {
   // versión vía ref en lugar de cerrar sobre el `files` del primer render.
   const filesRef = useRef(files);
   filesRef.current = files;
+
+  // CAMBIO 2 — oidMap del último compile (slug → path completo). Lo puebla el
+  // compilador (data-oid nace en compile-time) y aquí sólo se guarda para PR-2
+  // (picker / fast lane / targeting determinista). Sin consumidores todavía.
+  const oidMapRef = useRef<OidMap>({});
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const terminalRef = useRef<TerminalRef>(null);
@@ -369,7 +374,11 @@ export function StudioEngine() {
     const timer = setTimeout(async () => {
       setIsCompiling(true);
       try {
-        const html = await compile(files);
+        const { html, oidMap } = await compileWithMeta(files);
+        // CAMBIO 2 — guardar el oidMap de cada compile para PR-2 (sin consumidores
+        // aún). Sólo se pisa con un mapa poblado: un compile con error de red o de
+        // compilación devuelve {} y no debe borrar el último mapa válido.
+        if (Object.keys(oidMap).length > 0) oidMapRef.current = oidMap;
         setCompiledHtml(html);
         const compiledOk = !isPreviewError(html);
         if (compiledOk) setHasValidPreview(true);

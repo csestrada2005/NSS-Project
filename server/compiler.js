@@ -1,5 +1,106 @@
 import * as esbuild from 'esbuild';
 import path from 'path';
+import * as babelParser from '@babel/parser';
+import _traverse from '@babel/traverse';
+
+// @babel/traverse ships as CJS; under Node ESM the callable lands on .default.
+const traverse = _traverse.default ?? _traverse;
+
+// ---------------------------------------------------------------------------
+// CAMBIO 1 — Compile-time data-oid instrumentation.
+//
+// The Visual editor needs a stable per-element handle on the preview DOM so a
+// click can be resolved back to the exact JSX element it came from. That handle
+// (`data-oid`) is born HERE, in the compiler, lives only in the bundle/DOM, and
+// NEVER touches the persisted source (the strip-on-persist guard in
+// useProjectFiles enforces the other half of that contract).
+//
+// The oid format is `{fileSlug}:{ordinal}` where fileSlug is the file's project
+// path without its extension (e.g. "src/components/HeroSection") and ordinal is
+// the 0-based index of the native element in document order within that file.
+// Same source → same oids (deterministic), so a re-compile keeps handles stable.
+//
+// Only NATIVE HTML elements (lowercase tag: div, section, h1, img, button, …)
+// are instrumented — a component tag (Uppercase) is not a DOM host, so the oid
+// belongs to the native element it ultimately renders, never to the component.
+//
+// Robustness contract: the transform must never break valid JSX (spread props,
+// self-closing tags, template-literal props, multiline tags) and must never
+// tumble a compile. It works off the Babel AST and splices short attribute
+// strings into the ORIGINAL source at exact byte offsets — no whole-file
+// regeneration — so it inserts no newlines and error line numbers stay aligned
+// with the source the model sees. Any parse/traverse failure is caught by the
+// caller, which then compiles that file UNINSTRUMENTED and logs.
+// ---------------------------------------------------------------------------
+
+// Instrument a single source file. Returns { code, count } where count is the
+// number of native elements that received a data-oid. Throws on any parse /
+// traverse error — the caller is responsible for the uninstrumented fallback.
+function instrumentSource(source, fileSlug) {
+  const ast = babelParser.parse(source, {
+    sourceType: 'module',
+    // typescript + jsx cover every .tsx/.jsx form the projects emit.
+    plugins: ['jsx', 'typescript'],
+    errorRecovery: false,
+  });
+
+  // Collected edits over the ORIGINAL source, each { start, end, text }. Applied
+  // back-to-front so earlier offsets stay valid as we splice.
+  const edits = [];
+  let ordinal = 0;
+
+  traverse(ast, {
+    JSXOpeningElement(nodePath) {
+      const nameNode = nodePath.node.name;
+      // Only simple tag names. Member (Foo.Bar) and namespaced (svg:a) names are
+      // never native DOM hosts we target, so skip them.
+      if (!nameNode || nameNode.type !== 'JSXIdentifier') return;
+      const tag = nameNode.name;
+      // Components are Uppercase (or start with non-letter like React.Fragment
+      // shorthands, already excluded above). Native HTML tags are lowercase.
+      if (!/^[a-z]/.test(tag)) return;
+
+      const oid = `${fileSlug}:${ordinal}`;
+      ordinal += 1;
+
+      // The compiler is the single authority: a legacy residual data-oid on the
+      // element is replaced, not duplicated.
+      const existing = nodePath.node.attributes.find(
+        (a) =>
+          a.type === 'JSXAttribute' &&
+          a.name &&
+          a.name.type === 'JSXIdentifier' &&
+          a.name.name === 'data-oid'
+      );
+
+      if (existing) {
+        edits.push({ start: existing.start, end: existing.end, text: `data-oid="${oid}"` });
+      } else {
+        // Insert right after the tag name: `<div` → `<div data-oid="…"`. Works
+        // for self-closing, spread props, multiline and template-literal props
+        // alike, because nothing after the tag name is touched.
+        const insertPos = nameNode.end;
+        edits.push({ start: insertPos, end: insertPos, text: ` data-oid="${oid}"` });
+      }
+    },
+  });
+
+  if (edits.length === 0) return { code: source, count: 0 };
+
+  edits.sort((a, b) => b.start - a.start);
+  let out = source;
+  for (const e of edits) {
+    out = out.slice(0, e.start) + e.text + out.slice(e.end);
+  }
+  return { code: out, count: ordinal };
+}
+
+// fileSlug = project path minus its extension. The oid encodes this slug; the
+// compile response's oidMap resolves slug → full path for the consumer (PR-2).
+function fileSlugFor(filePath) {
+  const ext = path.posix.extname(filePath);
+  return ext ? filePath.slice(0, -ext.length) : filePath;
+}
 
 // Denylist de Node.js builtins (con y sin prefijo "node:"). Son los únicos
 // specifiers que el gate rechaza: no existen en el browser y no los puede
@@ -106,8 +207,10 @@ function routerShimPlugin() {
   };
 }
 
-// Plugin de virtual file system: hace que esbuild lea archivos desde el filesObj
-function virtualFilesPlugin(files) {
+// Plugin de virtual file system: hace que esbuild lea archivos desde el filesObj.
+// `oidMap` es un colector (slug → path completo) que se puebla por cada archivo
+// .tsx/.jsx del proyecto que se instrumenta con éxito (CAMBIO 1/2).
+function virtualFilesPlugin(files, oidMap) {
   return {
     name: 'virtual-files',
     setup(build) {
@@ -182,8 +285,8 @@ function virtualFilesPlugin(files) {
 
       // Cargar contenido desde el filesObj
       build.onLoad({ filter: /.*/, namespace: 'virtual' }, args => {
-        const contents = files[args.path];
-        if (!contents) {
+        const rawContents = files[args.path];
+        if (!rawContents) {
           return { errors: [{ text: `File not found in virtual FS: ${args.path}` }] };
         }
         const ext = path.posix.extname(args.path);
@@ -192,6 +295,24 @@ function virtualFilesPlugin(files) {
         else if (ext === '.js') loader = 'js';
         else if (ext === '.jsx') loader = 'jsx';
         else if (ext === '.css') loader = 'css';
+
+        // CAMBIO 1 — inyección de data-oid en compile-time. SÓLO archivos .tsx/.jsx
+        // del proyecto (namespace 'virtual'); nunca vendored/node_modules/esm.sh
+        // (esos viven en otros namespaces / se sirven desde disco). Ante CUALQUIER
+        // fallo del transform, este archivo se compila SIN instrumentar y se loguea
+        // — la instrumentación jamás puede tumbar un compile.
+        let contents = rawContents;
+        if (ext === '.tsx' || ext === '.jsx') {
+          const slug = fileSlugFor(args.path);
+          try {
+            const { code, count } = instrumentSource(rawContents, slug);
+            contents = code;
+            if (count > 0 && oidMap) oidMap[slug] = args.path;
+          } catch (err) {
+            console.warn('[compiler] data-oid instrumentation skipped for',
+              args.path, '—', err && err.message ? err.message : err);
+          }
+        }
         return { contents, loader };
       });
 
@@ -540,8 +661,9 @@ ${PREVIEW_CLIENT_SCRIPT}
 </html>`;
 }
 
-// Exportados para tests unitarios (verifican el orden de inyección del CAMBIO 1).
-export { generateHTML, PREVIEW_ERROR_CAPTURE_SCRIPT, PREVIEW_CLIENT_SCRIPT };
+// Exportados para tests unitarios (verifican el orden de inyección del CAMBIO 1
+// y el transform de instrumentación data-oid).
+export { generateHTML, PREVIEW_ERROR_CAPTURE_SCRIPT, PREVIEW_CLIENT_SCRIPT, instrumentSource, fileSlugFor };
 
 function generateErrorHTML(message, details) {
   const safeMessage = escapeHtml(message || 'Unknown compile error');
@@ -572,6 +694,11 @@ export async function compileFiles(filesObj) {
     };
   }
 
+  // CAMBIO 2 — colector de oids. Se puebla en el onLoad de virtualFilesPlugin
+  // por cada archivo .tsx/.jsx del proyecto instrumentado (slug → path completo)
+  // y viaja en la respuesta de compile para el consumidor (PR-2).
+  const oidMap = {};
+
   try {
     const result = await esbuild.build({
       entryPoints: [entry],
@@ -597,7 +724,7 @@ export async function compileFiles(filesObj) {
       footer: {
         js: '})();'
       },
-      plugins: [routerShimPlugin(), virtualFilesPlugin(filesObj), esmShResolverPlugin()],
+      plugins: [routerShimPlugin(), virtualFilesPlugin(filesObj, oidMap), esmShResolverPlugin()],
       logLevel: 'silent'
     });
 
@@ -612,7 +739,7 @@ export async function compileFiles(filesObj) {
     }
 
     const html = generateHTML(bundleJs, bundleCss);
-    return { html };
+    return { html, oidMap };
 
   } catch (err) {
     const errors = err.errors || [];

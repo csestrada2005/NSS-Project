@@ -5,18 +5,20 @@
  * WHY THIS EXISTS
  * ---------------
  * The Visual editor needs a stable per-element handle (`data-oid`) on the
- * preview DOM so a click can be resolved back to the exact JSX element. That
- * instrumentation belongs to the PREVIEW ONLY. It leaked into the persisted
- * source because the edit lanes feed the full (already-instrumented) file back
- * to the model and instruct it to "preserve all data-oid attributes", so every
- * round the model reproduces them and the write funnel saves them to
- * forge_files. Once present they self-perpetuate: they bloat context, waste
- * tokens, and would ship in an export.
+ * preview DOM so a click can be resolved back to the exact JSX element. As of
+ * the compile-time instrumentation change, those oids are born in the COMPILER
+ * (server/compiler.js) and live ONLY in the bundle/DOM — the persisted source
+ * and the in-memory file map never carry them.
  *
- * The rule (see CAMBIO 2): the srcdoc/preview MAY carry data-oid; the source
- * file NEVER does. This helper is applied at the single persistence chokepoint
- * (the forge_files upsert in useProjectFiles) — the in-memory file map keeps its
- * instrumentation so the live preview and Visual mode are unaffected.
+ * This helper stays as the defense-in-depth half of that contract: it guarantees
+ * no data-oid can reach forge_files by any write path, covering (a) legacy
+ * residuals from before compile-time instrumentation and (b) any stray oid a
+ * model might reproduce. The compiler is the single authority; the source is
+ * NEVER instrumented.
+ *
+ * The rule: the srcdoc/preview MAY carry data-oid; the source file NEVER does.
+ * This helper is applied at the persistence chokepoints (the forge_files upserts
+ * in useProjectFiles — both the debounced saveFile and the flush path).
  *
  * The regex is intentionally conservative: it matches the JSX/HTML attribute
  * forms Babel emits (`data-oid="..."`) plus the single-quote and

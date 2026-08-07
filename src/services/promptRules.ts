@@ -11,7 +11,6 @@
 export const REACT_TAILWIND_RULES = `
 REACT/TAILWIND RULES:
 - Always write complete file contents, never partial updates
-- Preserve all existing data-oid attributes exactly — never add, remove, or change them
 - Prefer Tailwind utility classes; avoid inline styles unless position math requires it
 - Follow existing file structure and import patterns visible in context
 - Supabase: import { SupabaseService } from '@/services/SupabaseService'; const supabase = SupabaseService.getInstance().client;
