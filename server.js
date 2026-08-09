@@ -460,17 +460,31 @@ app.post('/api/compile', async (req, res) => {
   if (!files || typeof files !== 'object') {
     return res.status(400).json({ error: 'files object is required' });
   }
+  // CAMBIO 5 — observabilidad del compile. Los 502 del gateway (OOM/timeout de
+  // Render) NO son logueables por este proceso — mueren en la puerta de enlace —
+  // pero sí podemos loguear cada error REAL de compilación y cada compile de
+  // duración anómala (>10s), que suele preceder a esos 502 bajo carga.
+  const startedAt = Date.now();
   try {
     const result = await compileFiles(files);
+    const durationMs = Date.now() - startedAt;
+    if (durationMs > 10000) {
+      console.warn(`[compile] SLOW: ${durationMs}ms (file count: ${Object.keys(files).length})`);
+    }
     if (result.error) {
-      console.error('[Compile] Error:', result.error);
+      // Una línea por error real de compilación (primeras ~200 chars).
+      console.error('[compile] ERROR:', String(result.error).slice(0, 200));
       return res.status(400).json({ error: result.error, errorDetails: result.errorDetails, errorDetail: result.errorDetail ?? null });
     }
     // CAMBIO 2 — oidMap (slug → path completo) viaja junto al html para que el
     // consumidor (PR-2) pueda resolver un data-oid del DOM a su archivo real.
     res.json({ html: result.html, oidMap: result.oidMap ?? {} });
   } catch (err) {
-    console.error('[Compile] Unexpected error:', err);
+    const durationMs = Date.now() - startedAt;
+    if (durationMs > 10000) {
+      console.warn(`[compile] SLOW: ${durationMs}ms before throw (file count: ${Object.keys(files).length})`);
+    }
+    console.error('[compile] ERROR:', String(err?.message || err).slice(0, 200));
     res.status(500).json({ error: err.message || 'Unexpected compile error' });
   }
 });

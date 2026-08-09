@@ -20,7 +20,7 @@ import { Terminal, type TerminalRef } from '../components/Terminal';
 import { PropertyPanel } from '../components/studio/PropertyPanel';
 import { AIOrchestrator } from '../services/AIOrchestrator';
 import { SupabaseService } from '../services/SupabaseService';
-import { compile, compileWithMeta, isPreviewError, type OidMap } from '../services/BrowserCompiler';
+import { compileWithMeta, isPreviewError, type OidMap } from '../services/BrowserCompiler';
 import { isAbortError } from '../utils/abort';
 import { updateCode, type TargetElement } from '../utils/ast';
 import { fileSystemTreeToMap, mapToFileSystemTree } from '../utils/context';
@@ -366,46 +366,106 @@ export function StudioEngine() {
   }, [updateLocalFile, saveFile]);
 
   // -------------------------------------------------------------------------
-  // Debounced compilation whenever files change
+  // CAMBIO 1 — Gobierno de la tasa de compiles del panel visual.
+  //
+  // (a) Debounce: los cambios aplican al DOM al instante (optimista) pero el
+  //     compile se dispara UNA vez, 600ms después del último cambio.
+  // (b) Serialización: nunca más de un compile en vuelo por proyecto. Si llega
+  //     otro job con uno en vuelo, se encola SÓLO el más reciente (drop del
+  //     intermedio). `runExclusive` es el único portón por el que pasan TODOS
+  //     los compiles del cliente, así que las ráfagas de stepper ya no abren N
+  //     compiles concurrentes contra esbuild.
+  // -------------------------------------------------------------------------
+  const COMPILE_DEBOUNCE_MS = 600;
+  const compileInFlightRef = useRef(false);
+  const pendingCompileJobRef = useRef<null | (() => Promise<void>)>(null);
+
+  const runExclusive = useCallback((job: () => Promise<void>): void => {
+    if (compileInFlightRef.current) {
+      // Uno en vuelo: quedarnos SÓLO con el estado más reciente.
+      pendingCompileJobRef.current = job;
+      return;
+    }
+    compileInFlightRef.current = true;
+    void (async () => {
+      try {
+        await job();
+      } finally {
+        compileInFlightRef.current = false;
+        const next = pendingCompileJobRef.current;
+        if (next) {
+          pendingCompileJobRef.current = null;
+          runExclusive(next);
+        }
+      }
+    })();
+  }, []);
+
+  // CAMBIO 3 — el estado de error del preview SIEMPRE refleja el último compile.
+  // Un compile exitoso limpia el estado de error (reemplaza el html del overlay
+  // "Compilation failed"); combinado con la serialización de CAMBIO 1, un compile
+  // viejo con error nunca puede aterrizar después de uno nuevo exitoso.
+  const applyPreviewHtml = useCallback((html: string) => {
+    setCompiledHtml(html);
+    if (!isPreviewError(html)) setHasValidPreview(true);
+  }, []);
+
+  // Lectura por ref para que la lógica del compile no re-cree callbacks ni
+  // re-programe el debounce en cada cambio de este flag.
+  const awaitingFirstBuildCompileRef = useRef(false);
+  awaitingFirstBuildCompileRef.current = awaitingFirstBuildCompile;
+
+  // -------------------------------------------------------------------------
+  // Debounced compilation whenever files change (fuente NO visual: AI, restore…)
   // -------------------------------------------------------------------------
   useEffect(() => {
     if (files.size === 0) return;
 
-    // Guard: skip debounce only for immediate visual edits that already re-compiled — skip debounce
+    // Los edits visuales gobiernan su propio compile (debounce + verify con
+    // veredicto en applyVisualEdit); aquí no recompilamos por ellos.
     if (lastChangeSource.current === 'visual') {
       return;
     }
 
     if (isGenerating) return; // no compilar en medio de la generación del AI
 
-    const timer = setTimeout(async () => {
-      setIsCompiling(true);
-      try {
-        const { html, oidMap } = await compileWithMeta(files);
-        // CAMBIO 2 — guardar el oidMap de cada compile para PR-2 (sin consumidores
-        // aún). Sólo se pisa con un mapa poblado: un compile con error de red o de
-        // compilación devuelve {} y no debe borrar el último mapa válido.
-        if (Object.keys(oidMap).length > 0) oidMapRef.current = oidMap;
-        setCompiledHtml(html);
-        const compiledOk = !isPreviewError(html);
-        if (compiledOk) setHasValidPreview(true);
-        // CAMBIO 2: el primer compile tras la primera generación baja el overlay
-        // pase lo que pase, para que un error (compilación o red) sea visible en
-        // vez de quedar tapado por "Generando…". Solo un compile exitoso marca el
-        // proyecto como construido (bundle propio).
-        if (awaitingFirstBuildCompile) {
-          setAwaitingFirstBuildCompile(false);
-          if (compiledOk) setHasBuiltProject(true);
+    const timer = setTimeout(() => {
+      runExclusive(async () => {
+        setIsCompiling(true);
+        try {
+          const { html, oidMap, verdict } = await compileWithMeta(files);
+          // CAMBIO 2 — guardar el oidMap de cada compile para PR-2 (sin consumidores
+          // aún). Sólo se pisa con un mapa poblado: un compile con error de red o de
+          // compilación devuelve {} y no debe borrar el último mapa válido.
+          if (Object.keys(oidMap).length > 0) oidMapRef.current = oidMap;
+          const firstBuild = awaitingFirstBuildCompileRef.current;
+          // CAMBIO 2b — servidor ocupado en RÉGIMEN (ya hubo un build): NO pintamos
+          // error, conservamos el último preview bueno; se reintenta al próximo
+          // cambio. En el PRIMER build sí pintamos (aunque sea la página "servidor
+          // ocupado" con reintento): un overlay "Generando…" sin salida es peor.
+          if (verdict === 'server-error' && !firstBuild) {
+            // no-op: conservar el preview actual
+          } else {
+            setCompiledHtml(html);
+            const compiledOk = !isPreviewError(html);
+            if (compiledOk) setHasValidPreview(true);
+            // El primer compile tras la primera generación baja el overlay pase lo
+            // que pase (error visible), pero sólo un compile OK marca hasBuiltProject.
+            if (firstBuild) {
+              setAwaitingFirstBuildCompile(false);
+              if (compiledOk) setHasBuiltProject(true);
+            }
+          }
+        } catch (e) {
+          console.error('[StudioEngine] Compile error:', e);
+        } finally {
+          setIsCompiling(false);
         }
-      } catch (e: any) {
-        console.error('[StudioEngine] Compile error:', e);
-      } finally {
-        setIsCompiling(false);
-      }
-    }, 300);
+      });
+    }, COMPILE_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [files, isGenerating]);
+  }, [files, isGenerating, runExclusive]);
 
   // -------------------------------------------------------------------------
   // Memory initialization overlay
@@ -576,14 +636,17 @@ export function StudioEngine() {
         toast.message('Recompilando para sincronizar…');
         if (files.size > 0) {
           setIsCompiling(true);
-          compileWithMeta(files)
-            .then(({ html, oidMap }) => {
+          runExclusive(async () => {
+            try {
+              const { html, oidMap, verdict } = await compileWithMeta(filesRef.current);
               if (Object.keys(oidMap).length > 0) oidMapRef.current = oidMap;
-              setCompiledHtml(html);
-              if (!isPreviewError(html)) setHasValidPreview(true);
-            })
-            .catch(e => console.error('[StudioEngine] resync compile error:', e))
-            .finally(() => setIsCompiling(false));
+              if (verdict !== 'server-error') applyPreviewHtml(html);
+            } catch (e) {
+              console.error('[StudioEngine] resync compile error:', e);
+            } finally {
+              setIsCompiling(false);
+            }
+          });
         }
         return;
       }
@@ -601,7 +664,7 @@ export function StudioEngine() {
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, [files]);
+  }, [files, runExclusive, applyPreviewHtml]);
 
   // -------------------------------------------------------------------------
   // Keyboard shortcuts (Ctrl+Z / Ctrl+Y handled by browser native undo in textarea)
@@ -729,23 +792,85 @@ export function StudioEngine() {
   // Visual editing handlers (PR-2 — deterministic, zero-LLM)
   //
   // Every edit targets selectedElement.filePath (resolved from the oidMap) and
-  // localizes the exact source element by ordinal. Flow (CAMBIO 3e): optimistic
-  // apply-visual-edit to the iframe first (no flash), then mutate the source via
-  // updateCode → save → immediate recompile. If updateCode can't locate the
-  // element safely, or the recompile fails, we revert and toast honestly —
-  // never a speculative mutation.
+  // localizes the exact source element by ordinal. Flujo (CAMBIO 1 + 2):
+  //  1. Reflejo optimista en el iframe (sin flash) y mutación de la fuente por
+  //     ordinal → save. Esto ocurre por CADA ajuste, al instante.
+  //  2. El compile de verificación NO se dispara por ajuste: se debouncea 600ms
+  //     tras el último cambio y pasa por runExclusive (uno en vuelo). Una ráfaga
+  //     de stepper = un solo compile del estado final.
+  //  3. Veredicto del compile (CAMBIO 2):
+  //       ok            → adoptar el html compilado.
+  //       compile-error → el cambio rompió la compilación → revertir al estado
+  //                       previo a la ráfaga y avisar.
+  //       server-error  → NO revertir (la edición AST es sintácticamente segura
+  //                       por construcción): conservar y avisar honestamente.
+  //       network-error → flujo de red existente (página con reintento manual).
   // -------------------------------------------------------------------------
 
-  // Recompile from the CURRENT files map (used to roll back an optimistic edit).
-  const recompileCurrent = useCallback(() => {
-    if (files.size === 0) return;
-    compile(files)
-      .then(html => {
-        setCompiledHtml(html);
-        if (!isPreviewError(html)) setHasValidPreview(true);
-      })
-      .catch(e => console.error('[StudioEngine] revert compile error:', e));
-  }, [files]);
+  // Debounce + baseline de reversión de la ráfaga de edits visuales en curso.
+  // `visualBaselineRef` guarda, por archivo tocado, su contenido PREVIO al primer
+  // edit del lote; si la verificación falla como compile-error, es a ahí a donde
+  // revertimos (no perdemos un last-good por no haberlo capturado).
+  const visualCompileTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const visualBaselineRef = useRef<Map<string, string>>(new Map());
+
+  const runVisualVerify = useCallback(() => {
+    const baseline = visualBaselineRef.current;
+    if (baseline.size === 0) return;
+    // Cerramos el lote actual: los edits que lleguen durante el compile abren un
+    // lote nuevo con su propio baseline.
+    const revertMap = new Map(baseline);
+    visualBaselineRef.current = new Map();
+
+    runExclusive(async () => {
+      setIsCompiling(true);
+      try {
+        const current = filesRef.current;
+        const { html, oidMap, verdict } = await compileWithMeta(current, {
+          onServerRetry: () => toast.message('Servidor ocupado — reintentando…'),
+        });
+        if (Object.keys(oidMap).length > 0) oidMapRef.current = oidMap;
+
+        if (verdict === 'ok') {
+          applyPreviewHtml(html);
+          return;
+        }
+        if (verdict === 'server-error') {
+          // CAMBIO 2b — no revertir: se conserva la edición local.
+          toast.message('No pude verificar el cambio — se guardó; el preview se actualizará al reconectar');
+          return;
+        }
+        if (verdict === 'network-error') {
+          // CAMBIO 2c — flujo de red existente: mostrar la página con reintento.
+          applyPreviewHtml(html);
+          return;
+        }
+
+        // CAMBIO 2a — compile-error: el cambio rompió la compilación → revertir.
+        toast.error('El cambio rompió la compilación — revertido');
+        for (const [path, original] of revertMap) {
+          updateLocalFile(path, original);
+          void saveFile(path, original);
+        }
+        const reverted = new Map(filesRef.current);
+        for (const [path, original] of revertMap) reverted.set(path, original);
+        const revertRes = await compileWithMeta(reverted);
+        applyPreviewHtml(revertRes.html);
+      } catch (e) {
+        console.error('[StudioEngine] visual verify compile error:', e);
+      } finally {
+        setIsCompiling(false);
+      }
+    });
+  }, [runExclusive, applyPreviewHtml, updateLocalFile, saveFile]);
+
+  const scheduleVisualVerify = useCallback(() => {
+    if (visualCompileTimerRef.current) clearTimeout(visualCompileTimerRef.current);
+    visualCompileTimerRef.current = setTimeout(() => {
+      visualCompileTimerRef.current = null;
+      runVisualVerify();
+    }, COMPILE_DEBOUNCE_MS);
+  }, [runVisualVerify]);
 
   const applyVisualEdit = useCallback(
     async (updates: { className?: string; textContent?: string }, options?: { classNameMode?: 'replace' | 'merge' }) => {
@@ -775,8 +900,17 @@ export function StudioEngine() {
       const newCode = updateCode(code, el, updates, options, () => { notFound = true; });
       if (notFound) {
         toast.error('No pude aplicar el cambio con seguridad — usa el chat');
-        recompileCurrent(); // undo the optimistic DOM change
+        // Undo the optimistic DOM change by re-rendering the compiled truth.
+        runExclusive(async () => {
+          const { html } = await compileWithMeta(filesRef.current);
+          applyPreviewHtml(html);
+        });
         return;
+      }
+
+      // Baseline del lote: contenido PREVIO al primer edit de cada archivo tocado.
+      if (!visualBaselineRef.current.has(filePath)) {
+        visualBaselineRef.current.set(filePath, code);
       }
 
       updateLocalFile(filePath, newCode);
@@ -788,26 +922,10 @@ export function StudioEngine() {
         setSelectedElement(prev => (prev ? { ...prev, textContent: updates.textContent } : null));
       }
 
-      // (3) Immediate recompile; on failure, revert the source and recompile.
-      const updatedMap = new Map(files);
-      updatedMap.set(filePath, newCode);
-      compile(updatedMap)
-        .then(html => {
-          if (isPreviewError(html)) {
-            toast.error('El cambio rompió la compilación — revertido');
-            updateLocalFile(filePath, code);
-            void saveFile(filePath, code);
-            compile(files)
-              .then(setCompiledHtml)
-              .catch(e => console.error('[StudioEngine] revert compile error:', e));
-            return;
-          }
-          setCompiledHtml(html);
-          setHasValidPreview(true);
-        })
-        .catch(e => console.error('[StudioEngine] immediate compile error:', e));
+      // (3) Verificación gobernada: debounce 600ms + un solo compile en vuelo.
+      scheduleVisualVerify();
     },
-    [selectedElement, files, updateLocalFile, saveFile, recompileCurrent],
+    [selectedElement, files, updateLocalFile, saveFile, runExclusive, applyPreviewHtml, scheduleVisualVerify],
   );
 
   const handleApplyClassName = useCallback(
@@ -1164,17 +1282,24 @@ export function StudioEngine() {
       if (event.data?.type !== 'preview-retry-compile') return;
       if (files.size === 0) return;
       setIsCompiling(true);
-      compile(files)
-        .then(html => {
-          setCompiledHtml(html);
-          if (!isPreviewError(html)) setHasValidPreview(true);
-        })
-        .catch(e => console.error('[StudioEngine] retry compile error:', e))
-        .finally(() => setIsCompiling(false));
+      runExclusive(async () => {
+        try {
+          const { html, oidMap, verdict } = await compileWithMeta(filesRef.current);
+          if (Object.keys(oidMap).length > 0) oidMapRef.current = oidMap;
+          // Un reintento manual sí pinta el resultado, sea cual sea (incluida la
+          // página "servidor ocupado"), para dar feedback honesto al usuario.
+          applyPreviewHtml(html);
+          void verdict;
+        } catch (e) {
+          console.error('[StudioEngine] retry compile error:', e);
+        } finally {
+          setIsCompiling(false);
+        }
+      });
     };
     window.addEventListener('message', handleRetryCompile);
     return () => window.removeEventListener('message', handleRetryCompile);
-  }, [files]);
+  }, [files, runExclusive, applyPreviewHtml]);
 
   // -------------------------------------------------------------------------
   // Render
@@ -1580,9 +1705,14 @@ export function StudioEngine() {
             setIsCompiling(true);
             try {
               if (restoredFiles.size === 0) return;
-              const html = await compile(restoredFiles);
-              setCompiledHtml(html);
-              if (!isPreviewError(html)) {
+              const { html, oidMap, verdict } = await compileWithMeta(restoredFiles);
+              if (Object.keys(oidMap).length > 0) oidMapRef.current = oidMap;
+              // CAMBIO 2b — servidor ocupado: no pintamos error tras un restore;
+              // conservamos lo restaurado y el compile se reintentará solo.
+              if (verdict !== 'server-error') {
+                setCompiledHtml(html);
+              }
+              if (verdict === 'ok') {
                 setHasValidPreview(true);
               }
             } catch (e) {

@@ -796,6 +796,48 @@ export class AIOrchestrator {
   }
 
   /**
+   * CAMBIO 4 — ¿el estado actual del proyecto compila? Compila el proyecto
+   * completo vía /api/compile. Ante un error de servidor/red devolvemos false
+   * (no afirmamos una salud que no pudimos verificar) para que el flujo normal
+   * siga su curso en vez de cortocircuitar sobre información incompleta.
+   */
+  private static async currentStateCompiles(
+    files: Map<string, string>,
+    signal?: AbortSignal
+  ): Promise<boolean> {
+    try {
+      const filesObj: Record<string, string> = {};
+      for (const [path, content] of files) filesObj[path] = content;
+      const result = await platformService.compileSrc(filesObj, signal);
+      return !result.error;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * CAMBIO 4 — ¿este fix nace de un error de runtime reportado? Dos señales:
+   *  1. El prompt es el del botón "Corregir con AI" (buildRuntimeErrorFixPrompt),
+   *     que arranca con "Corrige este error de runtime…".
+   *  2. El último turno del asistente en el chat es un aviso de runtime (⚠ …):
+   *     el usuario está respondiendo a un error recién mostrado.
+   * Si ninguna se cumple, un "arregla el preview" sobre un proyecto sano no
+   * tiene un error activo que reparar.
+   */
+  private static hasReportedRuntimeError(
+    input: string,
+    chatHistory?: Array<{ role: string; content: string }>
+  ): boolean {
+    if (/^\s*Corrige este error de runtime/i.test(input)) return true;
+    const lastAssistant = [...(chatHistory ?? [])].reverse().find((m) => m.role === 'assistant');
+    const content = lastAssistant?.content ?? '';
+    return (
+      content.includes('Error de runtime en el preview') ||
+      content.includes('El código falló al cargar')
+    );
+  }
+
+  /**
    * Persiste (vía notifyFileUpdate) todo path de `modifiedFiles` cuyo contenido
    * difiera del original y devuelve esos paths. Usado por las ramas de
    * cancelación del plan lane: escribe SOLO lo realmente completado (steps que
@@ -970,6 +1012,52 @@ export class AIOrchestrator {
         intent,
         signal
       );
+    }
+
+    // ------------------------------------------------------------------
+    // CAMBIO 4 — veredicto honesto del fix sobre proyecto sano.
+    //
+    // Un fix_bug sobre un proyecto que compila y sin error de runtime activo no
+    // tiene nada que reparar: en vez de arrancar el pipeline y cerrar como
+    // failed/0-attempts, respondemos pidiendo qué comportamiento se ve mal y
+    // cerramos con outcome='success'. Cuando el fix SÍ nace de un error de
+    // runtime (botón "Corregir con AI" o un ⚠ reciente en el chat), NO
+    // cortocircuitamos: hay algo concreto que arreglar.
+    // ------------------------------------------------------------------
+    if (
+      intent.type === 'fix_bug' &&
+      files.size > 0 &&
+      !this.hasReportedRuntimeError(input, chatHistory)
+    ) {
+      const compiles = await this.currentStateCompiles(files, signal);
+      if (signal?.aborted) {
+        return await this.finalizeCancelled({
+          input, intent, writtenPaths: [], projectId, creditUserId, isFreePrompt, startTime,
+        });
+      }
+      if (compiles) {
+        if (projectId) {
+          await this.logIntent({
+            projectId,
+            prompt: input,
+            intentType: intent.type,
+            intentRisk: intent.risk,
+            modifiedFiles: [],
+            affectedFiles: intent.affected_files,
+            outcome: 'success',
+            compileAttempts: 1,
+            durationMs: Date.now() - startTime,
+            requiredPatternIds: intent.requiredPatternIds,
+            domain: intent.domain,
+          });
+        }
+        return {
+          modifiedFiles: [],
+          outcome: 'success',
+          chatResponse:
+            'El proyecto compila y no encuentro errores activos — ¿qué comportamiento ves mal?',
+        };
+      }
     }
 
     // ------------------------------------------------------------------
