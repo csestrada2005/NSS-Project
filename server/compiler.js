@@ -546,54 +546,134 @@ const PREVIEW_CLIENT_SCRIPT = `
 (function() {
   console.log('Preview Client Active');
   let currentMode = 'interaction';
-  let hoverRafId = null;
+  let selectedOid = null;
 
-  function getLayoutContext(element) {
-    const computedStyle = window.getComputedStyle(element);
-    const parentComputedStyle = element.parentElement ? window.getComputedStyle(element.parentElement) : {};
-    return {
-      display: computedStyle.display,
-      position: computedStyle.position,
-      parentDisplay: parentComputedStyle.display || '',
-      parentPosition: parentComputedStyle.position || '',
-      offsetTop: element.offsetTop,
-      offsetLeft: element.offsetLeft,
-      offsetWidth: element.offsetWidth,
-      offsetHeight: element.offsetHeight
-    };
+  // PR-2 — Modo Visual determinista. El picker vive DENTRO del iframe y trabaja
+  // sobre data-oid (que el compilador estampó en cada elemento nativo). Resalta y
+  // selecciona el elemento FUENTE; como un oid puede repetirse en el DOM (N
+  // instancias de un .map()), la selección resalta TODAS las instancias del mismo
+  // oid. El scroll NUNCA se intercepta (no tocamos wheel/touch): sólo hover y
+  // click. El resaltado se hace con outline (no afecta layout) vía clases propias.
+  var HILITE_STYLE_ID = '__forge-visual-hilite';
+  function ensureHiliteStyle() {
+    if (document.getElementById(HILITE_STYLE_ID)) return;
+    var style = document.createElement('style');
+    style.id = HILITE_STYLE_ID;
+    style.textContent =
+      '.__forge-hover{outline:2px dashed #E54D5B !important;outline-offset:-1px !important;cursor:pointer !important;}' +
+      '.__forge-selected{outline:2px solid #E54D5B !important;outline-offset:-1px !important;box-shadow:0 0 0 3px rgba(229,77,91,0.25) !important;}';
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  function clearClass(cls) {
+    var nodes = document.querySelectorAll('.' + cls);
+    for (var i = 0; i < nodes.length; i++) nodes[i].classList.remove(cls);
+  }
+
+  // Ancestro más cercano con data-oid (incluido el propio target).
+  function nearestOid(el) {
+    if (!el || !el.closest) return null;
+    return el.closest('[data-oid]');
+  }
+
+  function markSelected(oid) {
+    clearClass('__forge-selected');
+    if (!oid) return;
+    var nodes = document.querySelectorAll('[data-oid="' + oid + '"]');
+    for (var i = 0; i < nodes.length; i++) nodes[i].classList.add('__forge-selected');
+  }
+
+  function deselect() {
+    selectedOid = null;
+    clearClass('__forge-selected');
+    clearClass('__forge-hover');
+    window.parent.postMessage({ type: 'element-deselected' }, '*');
   }
 
   window.addEventListener('message', (event) => {
-    if (event.data.type === 'set-mode') { currentMode = event.data.mode; }
+    var data = event.data || {};
+    if (data.type === 'set-mode') {
+      currentMode = data.mode;
+      if (currentMode === 'visual') {
+        ensureHiliteStyle();
+      } else {
+        clearClass('__forge-hover');
+        clearClass('__forge-selected');
+        selectedOid = null;
+      }
+    } else if (data.type === 'clear-selection') {
+      selectedOid = null;
+      clearClass('__forge-hover');
+      clearClass('__forge-selected');
+    } else if (data.type === 'apply-visual-edit') {
+      // Reflejo optimista (CAMBIO 3e): aplica el cambio a TODAS las instancias del
+      // oid antes de que llegue la recompilación, para que no haya parpadeo. Nunca
+      // toca el fuente — updateCode escribe el fuente SIN oids (strip-on-persist).
+      var nodes = document.querySelectorAll('[data-oid="' + data.oid + '"]');
+      for (var i = 0; i < nodes.length; i++) {
+        var node = nodes[i];
+        if (typeof data.className === 'string') {
+          node.setAttribute('class', data.className);
+        }
+        if (typeof data.text === 'string' && nodes.length === 1) {
+          node.textContent = data.text;
+        }
+      }
+      // setAttribute('class', …) pisó la clase de selección: repónla.
+      if (selectedOid === data.oid) markSelected(selectedOid);
+    }
   });
 
-  window.addEventListener('mouseover', (event) => {
-    if (currentMode === 'visual' && event.target) {
-      if (hoverRafId) cancelAnimationFrame(hoverRafId);
-      hoverRafId = requestAnimationFrame(() => {
-        const rect = event.target.getBoundingClientRect();
-        window.parent.postMessage({
-          type: 'element-hovered',
-          tagName: event.target.tagName,
-          rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height }
-        }, '*');
-      });
+  window.addEventListener('mousemove', (event) => {
+    if (currentMode !== 'visual') return;
+    var el = nearestOid(event.target);
+    var prev = document.querySelector('.__forge-hover');
+    if (prev && prev !== el) prev.classList.remove('__forge-hover');
+    // No pintar hover sobre lo ya seleccionado (evita doble borde).
+    if (el && !el.classList.contains('__forge-selected')) {
+      el.classList.add('__forge-hover');
     }
   }, true);
 
   window.addEventListener('click', (event) => {
-    if (currentMode === 'visual' && event.target) {
-      event.preventDefault();
-      event.stopPropagation();
-      const rect = event.target.getBoundingClientRect();
-      window.parent.postMessage({
-        type: 'element-clicked',
-        tagName: event.target.tagName,
-        rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
-        layoutContext: getLayoutContext(event.target)
-      }, '*');
-    }
+    if (currentMode !== 'visual') return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    var el = nearestOid(event.target);
+    if (!el) { deselect(); return; }
+
+    var oid = el.getAttribute('data-oid');
+    selectedOid = oid;
+    clearClass('__forge-hover');
+    markSelected(oid);
+
+    var instanceCount = document.querySelectorAll('[data-oid="' + oid + '"]').length;
+    var className = el.getAttribute('class') || '';
+    // Quitar nuestras clases de resaltado del className reportado al fuente.
+    className = className.replace(/\\b__forge-(hover|selected)\\b/g, '').replace(/\\s+/g, ' ').trim();
+    var text = (el.textContent || '').trim().slice(0, 200);
+
+    window.parent.postMessage({
+      type: 'element-selected',
+      payload: {
+        oid: oid,
+        tagName: el.tagName.toLowerCase(),
+        className: className,
+        textContent: text,
+        instanceCount: instanceCount,
+        // Editar el texto reemplaza los hijos; si el elemento contiene otros
+        // elementos, el panel deshabilita la edición de texto (sería destructiva).
+        hasChildElements: el.children.length > 0
+      }
+    }, '*');
   }, true);
+
+  window.addEventListener('keydown', (event) => {
+    if (currentMode === 'visual' && event.key === 'Escape') {
+      deselect();
+    }
+  });
 
   // Interceptor global de anchors (fase de captura). Solo actúa fuera del modo
   // visual — en visual el handler de arriba ya hace preventDefault de todo.

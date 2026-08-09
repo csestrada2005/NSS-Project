@@ -720,6 +720,33 @@ export class AIOrchestrator {
   // Main command parser — wires the 5-layer agentic architecture
   // -------------------------------------------------------------------------
 
+  // CAMBIO 5 — was the previous turn a clarification question the user is now
+  // answering? Authoritative signal: the project's most recent forge_intent_log
+  // row carries the [CLARIFY_ASKED] marker the simple lane writes. If so, return
+  // the last assistant message (the question itself) so the targeting prompt can
+  // echo it and forbid re-asking. Fails open (returns null) on any error.
+  private static async resolvePriorClarifyQuestion(
+    projectId: string | undefined,
+    chatHistory?: Array<{ role: string; content: string }>,
+  ): Promise<string | null> {
+    if (!projectId || !chatHistory || chatHistory.length === 0) return null;
+    try {
+      const supabase = SupabaseService.getInstance().client;
+      const { data } = await supabase
+        .from('forge_intent_log')
+        .select('user_prompt')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      const lastPrompt = data?.[0]?.user_prompt as string | undefined;
+      if (!lastPrompt || !lastPrompt.includes('[CLARIFY_ASKED]')) return null;
+      const lastAssistant = [...chatHistory].reverse().find(m => m.role === 'assistant');
+      return lastAssistant?.content?.trim() || null;
+    } catch {
+      return null;
+    }
+  }
+
   private static async logIntent(params: {
     projectId: string;
     prompt: string;
@@ -947,9 +974,17 @@ export class AIOrchestrator {
 
     // ------------------------------------------------------------------
     // Fast lane: style/low-risk with a selected element — skip layers 3-5
+    //
+    // CAMBIO 4 — no more hardcoded 'src/App.tsx'. The fast lane only runs when the
+    // selection resolved to a real file (selectedElement.filePath from the oidMap);
+    // without one we fall through to the simple lane rather than editing App.tsx
+    // blindly.
     // ------------------------------------------------------------------
+    const fastLaneFilePath = (selectedElement as { filePath?: string } | null)?.filePath;
     if (
       selectedElement &&
+      typeof fastLaneFilePath === 'string' &&
+      files.has(fastLaneFilePath) &&
       (intent.type === 'style_change' || intent.risk === 'low') &&
       !(intent.requiredPatternIds && intent.requiredPatternIds.length > 0)
     ) {
@@ -980,6 +1015,19 @@ export class AIOrchestrator {
     }
 
     // ------------------------------------------------------------------
+    // CAMBIO 5 — clarification follow-up context. If the previous turn ended by
+    // asking the user a clarifying question (logged with the [CLARIFY_ASKED]
+    // marker), this message is their answer: carry the prior question into the
+    // targeting prompt with a firm "do NOT ask again" so the lane decides instead
+    // of looping. The previous question is the last assistant message in the
+    // display history.
+    // ------------------------------------------------------------------
+    const previousClarifyQuestion = await this.resolvePriorClarifyQuestion(
+      projectId,
+      chatHistory,
+    );
+
+    // ------------------------------------------------------------------
     // Fast path: simple/low-risk edits skip Architect + Implementer + Verifier
     // ------------------------------------------------------------------
     const isSimpleEdit =
@@ -988,7 +1036,7 @@ export class AIOrchestrator {
       (intent.requiredPatternIds ?? []).length === 0;
 
     if (isSimpleEdit && files.size > 0) {
-      const result = await this.runSimpleLane(input, files, selectedElement, intent, projectId, signal);
+      const result = await this.runSimpleLane(input, files, selectedElement, intent, projectId, signal, previousClarifyQuestion);
       if (result.outcome === 'success' && creditUserId) {
         if (isFreePrompt) {
           await CreditService.markFreePromptUsed(creditUserId);
@@ -1395,10 +1443,13 @@ export class AIOrchestrator {
   private static async runFastLane(
     input: string,
     files: Map<string, string>,
-    selectedElement: { tagName: string; className?: string },
+    selectedElement: { tagName: string; className?: string; filePath?: string; ordinal?: number; dataOid?: string },
     signal?: AbortSignal
   ): Promise<OrchestratorResult> {
-    const filePath = 'src/App.tsx';
+    // CAMBIO 4 — target the real file the selection resolved to (no hardcode). The
+    // caller only enters the fast lane when filePath is set and exists.
+    const filePath = selectedElement.filePath;
+    if (!filePath) return { modifiedFiles: [] };
     const fileContent = files.get(filePath);
     if (!fileContent) return { modifiedFiles: [] };
 
@@ -1444,9 +1495,10 @@ export class AIOrchestrator {
     selectedElement: { tagName: string; className?: string } | null,
     intent: Intent,
     projectId?: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    previousClarifyQuestion?: string | null
   ): Promise<OrchestratorResult> {
-    const target = await this.resolveTarget(input, files, selectedElement, intent, signal);
+    const target = await this.resolveTarget(input, files, selectedElement, intent, signal, previousClarifyQuestion);
     if (!target) return { modifiedFiles: [] };
 
     // Targeting pidió aclaración (ambigüedad genuina): no editamos nada, no
@@ -1627,7 +1679,8 @@ export class AIOrchestrator {
     files: Map<string, string>,
     selectedElement: { tagName: string; className?: string } | null,
     intent: Intent,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    previousClarifyQuestion?: string | null
   ): Promise<
     | { path: string; content: string; method: 'data-oid' | 'className' | 'llm' | 'keywords' }
     | { clarify: string }
@@ -1712,6 +1765,14 @@ export class AIOrchestrator {
       // La llamada de targeting NUNCA debe romper el lane: try/catch → nivel 3.
       try {
         let userMessage = `USER REQUEST: ${input}`;
+        // CAMBIO 5 — the user is answering a prior clarification: echo the question
+        // and forbid re-asking, so this turn resolves to a file instead of looping.
+        if (previousClarifyQuestion) {
+          userMessage =
+            `PREVIOUS CLARIFYING QUESTION (you asked this last turn; the USER REQUEST below is their answer — ` +
+            `do NOT ask for clarification again, use their answer to pick the file): ${previousClarifyQuestion}\n\n` +
+            userMessage;
+        }
         for (const path of cappedCandidates) {
           const content = files.get(path) ?? '';
           userMessage += `\n\n--- ${path} ---\n${content.slice(0, 1500)}`;
@@ -1721,6 +1782,9 @@ export class AIOrchestrator {
           model: 'claude-haiku-4-5-20251001',
           max_tokens: 256,
           system:
+            (previousClarifyQuestion
+              ? 'The user is answering a clarifying question you asked last turn — you MUST choose a file now and MUST NOT return "clarify" again. '
+              : '') +
             'You choose which source file paints a visual element. Given a user ' +
             'request and several candidate files, pick the ONE file that renders ' +
             'the visual element the user wants to change — the leaf component that ' +

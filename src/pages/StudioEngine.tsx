@@ -17,13 +17,12 @@ import { useProjectFiles } from '../hooks/useProjectFiles';
 import '../App.css';
 import { ChatInterface, type Message } from '../components/ChatInterface';
 import { Terminal, type TerminalRef } from '../components/Terminal';
-import { PreviewOverlay } from '../components/PreviewOverlay';
-import { InspectorPanel } from '../components/InspectorPanel';
+import { PropertyPanel } from '../components/studio/PropertyPanel';
 import { AIOrchestrator } from '../services/AIOrchestrator';
 import { SupabaseService } from '../services/SupabaseService';
 import { compile, compileWithMeta, isPreviewError, type OidMap } from '../services/BrowserCompiler';
 import { isAbortError } from '../utils/abort';
-import { updateCode, updateJSXProp, type TargetElement } from '../utils/ast';
+import { updateCode, type TargetElement } from '../utils/ast';
 import { fileSystemTreeToMap, mapToFileSystemTree } from '../utils/context';
 import JSZip from 'jszip';
 import {
@@ -62,9 +61,17 @@ import { NavigatePanel } from '../components/studio/NavigatePanel';
 type TabType = 'chat' | 'visual' | 'code' | 'navigate';
 type ViewportMode = 'mobile' | 'tablet' | 'desktop';
 
-
-// Active file for AST updates (Inspector) — single-page apps live here
-const ACTIVE_FILE_PATH = 'src/App.tsx';
+// PR-2: parse a compile-time oid ("{fileSlug}:{ordinal}") into its parts. The
+// slug is a project path minus extension (never contains a colon), so we split on
+// the LAST colon. `ordinal` is the 0-based native-element index within the file.
+function parseOid(oid: string): { slug: string; ordinal: number } | null {
+  const idx = oid.lastIndexOf(':');
+  if (idx < 0) return null;
+  const slug = oid.slice(0, idx);
+  const ordinal = parseInt(oid.slice(idx + 1), 10);
+  if (!slug || Number.isNaN(ordinal)) return null;
+  return { slug, ordinal };
+}
 
 export function StudioEngine() {
   // -------------------------------------------------------------------------
@@ -516,20 +523,84 @@ export function StudioEngine() {
   }, [isProjectReady, isLoading, files.size]);
 
   // -------------------------------------------------------------------------
-  // Phase 4 Fix 2: clear stale element selection after AI modifies App.tsx
+  // Clear stale element selection after the AI modifies files — the ordinals a
+  // selection depends on may have shifted. Only AI edits clear it; visual/user
+  // edits keep the selection (they mutate a known element deterministically).
   // -------------------------------------------------------------------------
-  const prevAppContent = useRef<string | null>(null);
   useEffect(() => {
-    const appContent = files.get(ACTIVE_FILE_PATH) ?? null;
-    if (
-      appContent !== null &&
-      appContent !== prevAppContent.current &&
-      lastChangeSource.current === 'ai'
-    ) {
+    if (lastChangeSource.current === 'ai') {
       iframeRef.current?.contentWindow?.postMessage({ type: 'clear-selection' }, '*');
-      setSelectedElement(null);
+      setSelectedElement(prev => (prev ? null : prev));
     }
-    prevAppContent.current = appContent;
+  }, [files]);
+
+  // -------------------------------------------------------------------------
+  // PR-2 — Visual mode wiring
+  // -------------------------------------------------------------------------
+
+  // Push the current edit mode into the iframe picker. Re-sent on an interval so a
+  // preview reload (new srcdoc) re-syncs without a race.
+  useEffect(() => {
+    const send = () =>
+      iframeRef.current?.contentWindow?.postMessage({ type: 'set-mode', mode: editMode }, '*');
+    send();
+    const interval = setInterval(send, 1000);
+    return () => clearInterval(interval);
+  }, [editMode]);
+
+  // Leaving visual mode drops any selection (and its panel).
+  useEffect(() => {
+    if (editMode !== 'visual') setSelectedElement(null);
+  }, [editMode]);
+
+  // Bridge (CAMBIO 2): the in-iframe picker posts 'element-selected' with the oid;
+  // resolve it to { filePath, ordinal } via the last compile's oidMap. A stale map
+  // that can't resolve the file triggers an honest toast + a fresh recompile.
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      const data = event.data;
+      if (data?.type === 'element-deselected') {
+        setSelectedElement(null);
+        return;
+      }
+      if (data?.type !== 'element-selected') return;
+
+      const p = data.payload ?? {};
+      const parsed = typeof p.oid === 'string' ? parseOid(p.oid) : null;
+      if (!parsed) {
+        setSelectedElement(null);
+        return;
+      }
+      const filePath = oidMapRef.current[parsed.slug];
+      if (!filePath) {
+        toast.message('Recompilando para sincronizar…');
+        if (files.size > 0) {
+          setIsCompiling(true);
+          compileWithMeta(files)
+            .then(({ html, oidMap }) => {
+              if (Object.keys(oidMap).length > 0) oidMapRef.current = oidMap;
+              setCompiledHtml(html);
+              if (!isPreviewError(html)) setHasValidPreview(true);
+            })
+            .catch(e => console.error('[StudioEngine] resync compile error:', e))
+            .finally(() => setIsCompiling(false));
+        }
+        return;
+      }
+
+      setSelectedElement({
+        tagName: p.tagName,
+        className: p.className,
+        dataOid: p.oid,
+        filePath,
+        ordinal: parsed.ordinal,
+        textContent: p.textContent,
+        instanceCount: p.instanceCount,
+        hasChildElements: p.hasChildElements,
+      });
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
   }, [files]);
 
   // -------------------------------------------------------------------------
@@ -655,91 +726,99 @@ export function StudioEngine() {
   };
 
   // -------------------------------------------------------------------------
-  // Visual editing handlers
+  // Visual editing handlers (PR-2 — deterministic, zero-LLM)
+  //
+  // Every edit targets selectedElement.filePath (resolved from the oidMap) and
+  // localizes the exact source element by ordinal. Flow (CAMBIO 3e): optimistic
+  // apply-visual-edit to the iframe first (no flash), then mutate the source via
+  // updateCode → save → immediate recompile. If updateCode can't locate the
+  // element safely, or the recompile fails, we revert and toast honestly —
+  // never a speculative mutation.
   // -------------------------------------------------------------------------
-  const handleElementSelect = (element: TargetElement) => {
-    setSelectedElement(element);
-  };
 
-  const handleTextUpdate = async (newText: string) => {
-    if (!selectedElement) return;
-    const code = files.get(ACTIVE_FILE_PATH);
-    if (!code) return;
+  // Recompile from the CURRENT files map (used to roll back an optimistic edit).
+  const recompileCurrent = useCallback(() => {
+    if (files.size === 0) return;
+    compile(files)
+      .then(html => {
+        setCompiledHtml(html);
+        if (!isPreviewError(html)) setHasValidPreview(true);
+      })
+      .catch(e => console.error('[StudioEngine] revert compile error:', e));
+  }, [files]);
 
-    lastChangeSource.current = 'user';
-    const newCode = updateCode(code, selectedElement, { textContent: newText }, undefined, (msg) => {
-      toast.error(msg);
-    });
-    updateLocalFile(ACTIVE_FILE_PATH, newCode);
-    await saveFile(ACTIVE_FILE_PATH, newCode);
+  const applyVisualEdit = useCallback(
+    async (updates: { className?: string; textContent?: string }, options?: { classNameMode?: 'replace' | 'merge' }) => {
+      const el = selectedElement;
+      if (!el || !el.filePath || typeof el.ordinal !== 'number') {
+        toast.error('No pude aplicar el cambio con seguridad — usa el chat');
+        return;
+      }
+      const filePath = el.filePath;
+      const code = files.get(filePath);
+      if (!code) {
+        toast.error('No pude aplicar el cambio con seguridad — usa el chat');
+        return;
+      }
 
-    const updatedMap = new Map(files);
-    updatedMap.set(ACTIVE_FILE_PATH, newCode);
-    if (updatedMap.size === 0) return;
-    compile(updatedMap).then(html => {
-      setCompiledHtml(html);
-      if (!isPreviewError(html)) setHasValidPreview(true);
-    }).catch(e => console.error('[StudioEngine] immediate compile error:', e));
-  };
+      // (1) Optimistic reflection in the iframe — all instances of the oid.
+      if (el.dataOid) {
+        iframeRef.current?.contentWindow?.postMessage(
+          { type: 'apply-visual-edit', oid: el.dataOid, className: updates.className, text: updates.textContent },
+          '*',
+        );
+      }
 
-  const handleClassUpdate = async (newClassName: string) => {
-    if (!selectedElement) return;
-    const code = files.get(ACTIVE_FILE_PATH);
-    if (!code) return;
+      // (2) Mutate the source by ordinal.
+      lastChangeSource.current = 'visual';
+      let notFound = false;
+      const newCode = updateCode(code, el, updates, options, () => { notFound = true; });
+      if (notFound) {
+        toast.error('No pude aplicar el cambio con seguridad — usa el chat');
+        recompileCurrent(); // undo the optimistic DOM change
+        return;
+      }
 
-    lastChangeSource.current = 'user';
-    const newCode = updateCode(code, selectedElement, { className: newClassName }, { classNameMode: 'replace' }, (msg) => {
-      toast.error(msg);
-    });
-    updateLocalFile(ACTIVE_FILE_PATH, newCode);
-    await saveFile(ACTIVE_FILE_PATH, newCode);
+      updateLocalFile(filePath, newCode);
+      await saveFile(filePath, newCode);
+      if (updates.className !== undefined) {
+        setSelectedElement(prev => (prev ? { ...prev, className: updates.className } : null));
+      }
+      if (updates.textContent !== undefined) {
+        setSelectedElement(prev => (prev ? { ...prev, textContent: updates.textContent } : null));
+      }
 
-    const updatedMap = new Map(files);
-    updatedMap.set(ACTIVE_FILE_PATH, newCode);
-    if (updatedMap.size === 0) return;
-    compile(updatedMap).then(html => {
-      setCompiledHtml(html);
-      if (!isPreviewError(html)) setHasValidPreview(true);
-    }).catch(e => console.error('[StudioEngine] immediate compile error:', e));
+      // (3) Immediate recompile; on failure, revert the source and recompile.
+      const updatedMap = new Map(files);
+      updatedMap.set(filePath, newCode);
+      compile(updatedMap)
+        .then(html => {
+          if (isPreviewError(html)) {
+            toast.error('El cambio rompió la compilación — revertido');
+            updateLocalFile(filePath, code);
+            void saveFile(filePath, code);
+            compile(files)
+              .then(setCompiledHtml)
+              .catch(e => console.error('[StudioEngine] revert compile error:', e));
+            return;
+          }
+          setCompiledHtml(html);
+          setHasValidPreview(true);
+        })
+        .catch(e => console.error('[StudioEngine] immediate compile error:', e));
+    },
+    [selectedElement, files, updateLocalFile, saveFile, recompileCurrent],
+  );
 
-    setSelectedElement(prev => prev ? { ...prev, className: newClassName } : null);
-  };
+  const handleApplyClassName = useCallback(
+    (newClassName: string) => applyVisualEdit({ className: newClassName }, { classNameMode: 'replace' }),
+    [applyVisualEdit],
+  );
 
-  const handlePropUpdate = async (name: string, value: string | boolean | number) => {
-    if (!selectedElement) return;
-    const code = files.get(ACTIVE_FILE_PATH);
-    if (!code) return;
-
-    lastChangeSource.current = 'user';
-    const newCode = updateJSXProp(code, selectedElement, name, value);
-    updateLocalFile(ACTIVE_FILE_PATH, newCode);
-    await saveFile(ACTIVE_FILE_PATH, newCode);
-  };
-
-  const handleStyleUpdate = async (newStyles: Record<string, string>) => {
-    lastChangeSource.current = 'user';
-    if (!selectedElement) return;
-    let currentClass = selectedElement.className || '';
-    const newClassSegment = Object.values(newStyles).join(' ');
-
-    if (newStyles.transform) {
-      currentClass = currentClass.replace(/\btranslate-[xy]-[^\s]+\s?/g, '');
-    }
-    if (newStyles.dimensions) {
-      currentClass = currentClass.replace(/\bw-[^\s]+\s?/g, '').replace(/\bh-[^\s]+\s?/g, '');
-    }
-
-    const finalClass = `${currentClass} ${newClassSegment}`.trim();
-    await handleClassUpdate(finalClass);
-
-    const updatedMap = new Map(files);
-    updatedMap.set(ACTIVE_FILE_PATH, files.get(ACTIVE_FILE_PATH) ?? '');
-    if (updatedMap.size === 0) return;
-    compile(updatedMap).then(html => {
-      setCompiledHtml(html);
-      if (!isPreviewError(html)) setHasValidPreview(true);
-    }).catch(e => console.error('[StudioEngine] immediate compile error:', e));
-  };
+  const handleApplyText = useCallback(
+    (newText: string) => applyVisualEdit({ textContent: newText }),
+    [applyVisualEdit],
+  );
 
   // -------------------------------------------------------------------------
   // AI chat handler
@@ -940,7 +1019,7 @@ export function StudioEngine() {
   // -------------------------------------------------------------------------
   // Derived state
   // -------------------------------------------------------------------------
-  const fileTree = mapToFileSystemTree(files); // for legacy components (InspectorPanel, StateGraph, SettingsModal, HistoryDrawer)
+  const fileTree = mapToFileSystemTree(files); // for legacy components (StateGraph, SettingsModal, HistoryDrawer)
   const hasPreview = hasValidPreview;
 
   // CAMBIO 3 (pasajero) — overlay sin flash. Antes el overlay solo aparecía
@@ -1223,8 +1302,10 @@ export function StudioEngine() {
                 </div>
               ) : hasPreview ? (
                 <div className={`relative w-full h-full ${viewportMode !== 'desktop' ? 'bg-zinc-900 flex items-start justify-center' : ''}`}>
-                  {/* Edit mode toolbar */}
-                  <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-card border border-border rounded-lg flex overflow-hidden shadow-lg">
+                  {/* Edit mode toolbar. z-50 keeps the Interaction/Visual toggle
+                      above the property panel (z-40) — previously the visual-mode
+                      overlay glass pane sat on top of it and swallowed the click. */}
+                  <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-card border border-border rounded-lg flex overflow-hidden shadow-lg">
                     <button
                       onClick={() => setEditMode('interaction')}
                       className={`px-3 py-1.5 text-xs font-medium transition-colors ${editMode === 'interaction' ? 'bg-red-600 text-white' : 'text-muted-foreground hover:text-foreground'}`}
@@ -1305,13 +1386,6 @@ export function StudioEngine() {
                         className="w-full h-full border-none"
                         title="Preview"
                       />
-                      <PreviewOverlay
-                        iframeRef={iframeRef}
-                        onElementSelect={handleElementSelect}
-                        editMode={editMode}
-                        onUpdateStyle={handleStyleUpdate}
-                        onUpdateText={handleTextUpdate}
-                      />
                     </div>
                   ) : (
                     <div
@@ -1329,23 +1403,23 @@ export function StudioEngine() {
                           className="w-full h-full border border-zinc-600 rounded-t-lg"
                           title="Preview"
                         />
-                        <PreviewOverlay
-                          iframeRef={iframeRef}
-                          onElementSelect={handleElementSelect}
-                          editMode={editMode}
-                          onUpdateStyle={handleStyleUpdate}
-                          onUpdateText={handleTextUpdate}
-                        />
                       </div>
                     </div>
                   )}
 
+                  {/* PR-2 — deterministic property panel (the heart). Shown when a
+                      source element is selected in visual mode. */}
                   {editMode === 'visual' && selectedElement && (
-                    <InspectorPanel
-                      selectedElement={selectedElement}
-                      onUpdateStyle={handleClassUpdate}
-                      onUpdateProp={handlePropUpdate}
-                      fileTree={fileTree}
+                    <PropertyPanel
+                      key={`${selectedElement.filePath}:${selectedElement.ordinal}`}
+                      element={selectedElement}
+                      projectCss={files.get('src/index.css') ?? ''}
+                      onApplyClassName={handleApplyClassName}
+                      onApplyText={handleApplyText}
+                      onClose={() => {
+                        iframeRef.current?.contentWindow?.postMessage({ type: 'clear-selection' }, '*');
+                        setSelectedElement(null);
+                      }}
                     />
                   )}
                 </div>
