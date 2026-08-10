@@ -94,6 +94,51 @@ function formatSnapshotDate(dateStr: string): string {
   return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 }
 
+// Recorte determinista para labels de snapshot: colapsa espacios y trunca a
+// `max` caracteres con elipsis. Sin LLM, mismo resultado para el mismo input.
+function truncateLabel(text: string, max: number): string {
+  const t = text.replace(/\s+/g, ' ').trim();
+  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
+}
+
+// Nombre de componente a partir de un path del proyecto: basename sin extensión
+// ("src/components/HeroSection.tsx" → "HeroSection").
+function componentNameFromPath(filePath: string): string {
+  const base = filePath.split('/').pop() ?? filePath;
+  return base.replace(/\.[^./]+$/, '') || base;
+}
+
+// Resumen corto y DETERMINISTA de una sesión de guardado visual, derivado de las
+// propiedades tocadas (className → "estilo", text → "texto") y de los archivos
+// afectados (→ nombre de componente). Sin LLM. Ej.: "estilo y texto en HeroSection".
+function summarizeVisualEdits(
+  touchedFiles: string[],
+  byFile: Map<string, PendingVisualEdit[]>,
+): string {
+  const props = new Set<string>();
+  for (const path of touchedFiles) {
+    for (const e of byFile.get(path) ?? []) {
+      props.add(e.property === 'className' ? 'estilo' : 'texto');
+    }
+  }
+  // Orden fijo: "estilo" antes que "texto", para que el mismo set produzca
+  // siempre el mismo texto.
+  const propLabel = ['estilo', 'texto'].filter((p) => props.has(p)).join(' y ');
+
+  const components: string[] = [];
+  for (const path of touchedFiles) {
+    const name = componentNameFromPath(path);
+    if (!components.includes(name)) components.push(name);
+  }
+  const compLabel = components.length <= 2
+    ? components.join(' y ')
+    : `${components.slice(0, 2).join(', ')} y ${components.length - 2} más`;
+
+  if (!propLabel) return compLabel;
+  if (!compLabel) return propLabel;
+  return `${propLabel} en ${compLabel}`;
+}
+
 export function StudioEngine() {
   // -------------------------------------------------------------------------
   // Routing
@@ -782,6 +827,22 @@ export function StudioEngine() {
             .delete()
             .in('id', excess.map((r) => r.id));
         }
+
+        // Retención de pre_restore: sólo el MÁS reciente sobrevive. Cada restore
+        // deja un "Antes de restaurar"; acumularlos ensucia el drawer sin aportar
+        // (el punto de vuelta útil es siempre el último). Podamos los anteriores.
+        const { data: preRestores } = await supabase
+          .from('forge_snapshots')
+          .select('id')
+          .eq('project_id', projectId)
+          .eq('trigger', 'pre_restore')
+          .order('created_at', { ascending: false });
+        if (preRestores && preRestores.length > 1) {
+          await supabase
+            .from('forge_snapshots')
+            .delete()
+            .in('id', preRestores.slice(1).map((r) => r.id));
+        }
       } catch (e) {
         console.error('[saveSnapshot] Failed:', e);
       }
@@ -1081,8 +1142,12 @@ export function StudioEngine() {
           applyPreviewHtml(html);
           toast.success(`Cambios guardados (${touchedFiles.length} archivo${touchedFiles.length === 1 ? '' : 's'})`);
           // CAMBIO 2 — cierre exitoso de una sesión de guardado del modo Visual:
-          // capturar snapshot por el mismo embudo que el resto de la cobertura.
-          if (touchedFiles.length > 0) void saveSnapshot('manual_save');
+          // capturar snapshot por el mismo embudo que el resto de la cobertura,
+          // con un label determinista derivado de lo que tocó el buffer.
+          if (touchedFiles.length > 0) {
+            const resumen = summarizeVisualEdits(touchedFiles, byFile);
+            void saveSnapshot('manual_save', `Edición visual: ${resumen}`);
+          }
           return;
         }
         if (verdict === 'server-error') {
@@ -1165,6 +1230,11 @@ export function StudioEngine() {
 
     setIsGenerating(true);
     setGenerationProgress(null);
+    // Label del snapshot: la PRIMERA generación de un proyecto (aún sin build
+    // propio) se marca como "Proyecto creado"; el resto de intents (plan/simple/
+    // fixes) llevan el prompt del usuario. Capturamos el flag antes de cualquier
+    // await para que el compile exitoso que pone hasBuiltProject=true no lo mueva.
+    const isInitialGeneration = !hasBuiltProject;
     // CAMBIO 4 — una nueva generación supersede cualquier overlay de cancelación
     // previo: el overlay "Generando…" toma el relevo y, si esta corrida completa,
     // el estado cancelado no debe reaparecer.
@@ -1213,7 +1283,11 @@ export function StudioEngine() {
         abortController.signal
       );
       if (result.modifiedFiles.length > 0) {
-        await saveSnapshot('ai_action');
+        const promptLabel = truncateLabel(message, 80);
+        const snapshotLabel = isInitialGeneration
+          ? `Proyecto creado: ${promptLabel}`
+          : promptLabel;
+        await saveSnapshot('ai_action', snapshotLabel);
       }
 
       const cancelled = result.outcome === 'cancelled';
