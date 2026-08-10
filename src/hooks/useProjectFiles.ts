@@ -9,6 +9,17 @@
 import { useState, useRef, useCallback } from 'react';
 import { SupabaseService } from '../services/SupabaseService';
 import { stripDataOid } from '../utils/stripDataOid';
+import { normalizeBrandVars } from '../utils/normalizeBrandVars';
+
+// Persistence normalizers, composed at every forge_files write path. Both are
+// deterministic backstops applied to the content JUST before it is upserted:
+//  - normalizeBrandVars: rewrite invalid brand-var color syntax
+//    ([color:var(--brand-x)] / bare var(--brand-x)) to hsl(var(--brand-x)).
+//  - stripDataOid: remove Visual-mode preview instrumentation.
+// The in-memory Map keeps the raw content (so the live preview / Visual mode
+// still work); only what hits forge_files goes through this funnel.
+const persistContent = (content: string): string =>
+  stripDataOid(normalizeBrandVars(content));
 
 export interface UseProjectFilesReturn {
   files: Map<string, string>;
@@ -96,14 +107,12 @@ export function useProjectFiles(): UseProjectFilesReturn {
 
       console.log('[useProjectFiles] upsert firing', { projectId, path });
 
-      // CAMBIO 2 — data-oid is Visual-mode preview instrumentation and must
-      // never reach the persisted source. The in-memory Map above keeps it (so
-      // the live preview / Visual mode still work); only what hits forge_files
-      // is stripped.
+      // Persistence funnel — normalize brand-var color syntax + strip data-oid
+      // before the row reaches forge_files (see persistContent above).
       const { error } = await supabase
         .from('forge_files')
         .upsert(
-          { project_id: projectId, path, content: stripDataOid(content) },
+          { project_id: projectId, path, content: persistContent(content) },
           { onConflict: 'project_id,path' }
         );
 
@@ -134,12 +143,12 @@ export function useProjectFiles(): UseProjectFilesReturn {
       if (content !== undefined) {
         promises.push(
           (async () => {
-            // CAMBIO 2 — strip data-oid before it reaches forge_files (same
-            // rule as the debounced saveFile path).
+            // Persistence funnel — same normalize + strip as the debounced
+            // saveFile path (see persistContent above).
             const { error } = await supabase
               .from('forge_files')
               .upsert(
-                { project_id: projectId, path, content: stripDataOid(content) },
+                { project_id: projectId, path, content: persistContent(content) },
                 { onConflict: 'project_id,path' }
               );
             if (error) {

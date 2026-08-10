@@ -20,7 +20,7 @@ import { Terminal, type TerminalRef } from '../components/Terminal';
 import { PropertyPanel } from '../components/studio/PropertyPanel';
 import { AIOrchestrator } from '../services/AIOrchestrator';
 import { SupabaseService } from '../services/SupabaseService';
-import { compileWithMeta, isPreviewError, type OidMap } from '../services/BrowserCompiler';
+import { compileWithMeta, classifyCompileResult, isPreviewError, type OidMap } from '../services/BrowserCompiler';
 import { isAbortError } from '../utils/abort';
 import { updateCode, type TargetElement } from '../utils/ast';
 import { fileSystemTreeToMap, mapToFileSystemTree } from '../utils/context';
@@ -458,26 +458,44 @@ export function StudioEngine() {
   const COMPILE_DEBOUNCE_MS = 600;
   const compileInFlightRef = useRef(false);
   const pendingCompileJobRef = useRef<null | (() => Promise<void>)>(null);
+  // Resolver de la promesa del job ENCOLADO, para que quien haga
+  // `await runExclusive(...)` nunca quede colgado si su job es superado por uno
+  // más reciente (drop del intermedio): al descartarlo, resolvemos su promesa.
+  const pendingResolveRef = useRef<null | (() => void)>(null);
 
-  const runExclusive = useCallback((job: () => Promise<void>): void => {
-    if (compileInFlightRef.current) {
-      // Uno en vuelo: quedarnos SÓLO con el estado más reciente.
-      pendingCompileJobRef.current = job;
-      return;
-    }
-    compileInFlightRef.current = true;
-    void (async () => {
-      try {
-        await job();
-      } finally {
-        compileInFlightRef.current = false;
-        const next = pendingCompileJobRef.current;
-        if (next) {
-          pendingCompileJobRef.current = null;
-          runExclusive(next);
-        }
+  // Devuelve una Promise<void> que resuelve cuando el job TERMINA (o cuando es
+  // superado en la cola). Los callers fire-and-forget la ignoran; el restore la
+  // AWAITEA para leer el veredicto real antes de componer su mensaje honesto
+  // (antes `runExclusive` devolvía void, así que `await` resolvía de inmediato y
+  // el mensaje se componía con el veredicto sin calcular — ver handleRestoreSnapshot).
+  const runExclusive = useCallback((job: () => Promise<void>): Promise<void> => {
+    return new Promise<void>((resolve) => {
+      if (compileInFlightRef.current) {
+        // Uno en vuelo: quedarnos SÓLO con el estado más reciente. Si ya había
+        // uno encolado, se descarta → resolvemos su promesa para no colgar a su
+        // awaiter.
+        pendingResolveRef.current?.();
+        pendingCompileJobRef.current = job;
+        pendingResolveRef.current = resolve;
+        return;
       }
-    })();
+      compileInFlightRef.current = true;
+      void (async () => {
+        try {
+          await job();
+        } finally {
+          resolve();
+          compileInFlightRef.current = false;
+          const next = pendingCompileJobRef.current;
+          const nextResolve = pendingResolveRef.current;
+          if (next) {
+            pendingCompileJobRef.current = null;
+            pendingResolveRef.current = null;
+            runExclusive(next).then(() => nextResolve?.());
+          }
+        }
+      })();
+    });
   }, []);
 
   // CAMBIO 3 — el estado de error del preview SIEMPRE refleja el último compile.
@@ -851,6 +869,43 @@ export function StudioEngine() {
     }
   }, [projectId, flushPendingWrites]);
 
+  // Reintento con backoff tras un veredicto 'infra' del restore (servidor lento /
+  // 5xx / red / sesión). compileWithMeta ya agotó SU backoff interno; esto vuelve
+  // a intentar el compile completo unas pocas veces por si el servidor se
+  // recupera, y refresca el preview cuando lo logra. Consume el MISMO clasificador
+  // que el compile inicial: si tras recuperarse el código no compila, pinta el
+  // error real; si compila, aplica el preview. El mensaje de chat ya emitido
+  // ("el servidor tarda…") no se reescribe — el preview refleja el estado final.
+  const retryRestorePreview = useCallback(
+    (restoredFiles: Map<string, string>) => {
+      const BACKOFFS_MS = [2000, 4000, 8000];
+      let settled = false;
+      const attempt = (i: number) => {
+        if (settled || i >= BACKOFFS_MS.length) return;
+        window.setTimeout(() => {
+          if (settled) return;
+          runExclusive(async () => {
+            if (settled) return;
+            const result = await compileWithMeta(restoredFiles);
+            if (Object.keys(result.oidMap).length > 0) oidMapRef.current = result.oidMap;
+            const decision = classifyCompileResult(result);
+            if (decision.status === 'ok') {
+              settled = true;
+              applyPreviewHtml(result.html);
+            } else if (decision.status === 'code-error') {
+              settled = true;
+              setCompiledHtml(result.html); // el servidor se recuperó: error real
+            } else {
+              attempt(i + 1); // sigue en infra: siguiente backoff
+            }
+          });
+        }, BACKOFFS_MS[i]);
+      };
+      attempt(0);
+    },
+    [runExclusive, applyPreviewHtml],
+  );
+
   // -------------------------------------------------------------------------
   // CAMBIO 1 — Restore por el embudo normal de escritura.
   //  b. Auto-snapshot del estado ACTUAL (pre_restore) → todo restore es reversible.
@@ -858,9 +913,9 @@ export function StudioEngine() {
   //     normal (updateLocalFile + saveFile: strip de oids incluido) y ELIMINAR
   //     los que existen hoy pero no en el snapshot (restore = estado completo).
   //  d. Recompilar por el flujo normal (setCompiledHtml limpia el overlay de
-  //     error) y esperar el veredicto.
-  //  e. Mensaje de sistema en el chat (persiste): éxito → confirmación; fallo →
-  //     error real honesto + recordatorio del checkpoint de salida.
+  //     error) y esperar el veredicto REAL (runExclusive ahora es awaitable).
+  //  e. Mensaje de sistema en el chat (persiste): éxito → confirmación; infra →
+  //     "el servidor tarda…" + reintento con backoff; no-compila → error real.
   // -------------------------------------------------------------------------
   const handleRestoreSnapshot = useCallback(
     async (tree: FileSystemTree, meta: { label: string | null; created_at: string; trigger: string }) => {
@@ -886,56 +941,72 @@ export function StudioEngine() {
 
       setIsHistoryOpen(false);
 
-      // d. Recompilar y esperar veredicto (mismo camino que limpia el overlay).
-      let compiledOk = false;
-      let compileError: string | undefined;
+      // d. Recompilar y esperar el veredicto REAL. `runExclusive` ya es awaitable,
+      //    así que este await NO resuelve hasta que el job termina — el mensaje de
+      //    abajo se compone con un veredicto realmente calculado (antes resolvía de
+      //    inmediato y el mensaje veía compileError === undefined).
+      //
+      //    El veredicto se obtiene del ÚNICO clasificador compartido con el compile
+      //    normal (classifyCompileResult) — no una reimplementación:
+      //      - 'ok'         → éxito.
+      //      - 'infra'      → server-error / network-error (timeout / 5xx / vacío /
+      //                       red) O un compile-error sin mensaje real (sesión/401).
+      //                       La versión SÍ se restauró: JAMÁS declaramos "no
+      //                       compila". Mensaje "el servidor tarda…" + reintento.
+      //      - 'code-error' → ÚNICO camino de no-compila. Trae el error REAL por
+      //                       construcción del clasificador, nunca undefined.
+      // Holder mutable (no una `let` local): TS estrecharía una `let` a su
+      // literal inicial e ignoraría las reasignaciones dentro del closure para
+      // las lecturas de fuera; leer una propiedad usa el tipo declarado.
+      const restore: { outcome: 'ok' | 'infra' | 'code-error'; error: string } = {
+        outcome: 'infra',
+        error: '',
+      };
       await runExclusive(async () => {
         setIsCompiling(true);
         try {
-          if (restoredFiles.size === 0) return;
-          const { html, oidMap, verdict, error } = await compileWithMeta(restoredFiles);
-          if (Object.keys(oidMap).length > 0) oidMapRef.current = oidMap;
-          // CAMBIO 6 — veredicto honesto del restore, alineado con la MISMA
-          // taxonomía del embudo de escritura (BrowserCompiler.CompileVerdict):
-          //  - 'server-error' (5xx / vacío / TIMEOUT, incluido un compile lento
-          //    que se reintenta) y 'network-error' (red del cliente) NO son
-          //    veredictos sobre el código restaurado. compileWithMeta ya agotó su
-          //    backoff; conservamos lo escrito y JAMÁS declaramos "no compila".
-          //  - 'compile-error' (200-con-error / 4xx) es el ÚNICO veredicto que
-          //    dice que la versión restaurada no compila, y siempre trae `error`.
-          // Esto elimina el catch-all "desconocido": antes, un 'network-error'
-          // (o un timeout de un compile lento pero exitoso en el servidor) caía
-          // aquí con compileError undefined y se anunciaba como fallo de
-          // compilación inexistente.
-          if (verdict === 'server-error' || verdict === 'network-error') {
-            compiledOk = true; // inconcluso por infra/red, no un fallo del código
-            return;
-          }
-          setCompiledHtml(html);
-          if (verdict === 'ok' && !isPreviewError(html)) {
-            compiledOk = true;
+          if (restoredFiles.size === 0) { restore.outcome = 'ok'; return; }
+          const result = await compileWithMeta(restoredFiles);
+          if (Object.keys(result.oidMap).length > 0) oidMapRef.current = result.oidMap;
+          const decision = classifyCompileResult(result);
+          if (decision.status === 'ok') {
+            setCompiledHtml(result.html);
             setHasValidPreview(true);
+            restore.outcome = 'ok';
+          } else if (decision.status === 'code-error') {
+            setCompiledHtml(result.html); // página de error de compilación
+            restore.outcome = 'code-error';
+            restore.error = decision.error; // real, nunca undefined
           } else {
-            // Único camino de fallo real: el compilador rechazó el código.
-            compileError = error ?? 'el compilador rechazó el código restaurado';
+            // infra: conservar lo escrito, no pintar error (el reintento refresca).
+            restore.outcome = 'infra';
           }
         } catch (e) {
-          // compileWithMeta no lanza (devuelve veredictos); este catch cubre un
-          // fallo inesperado del cliente y reporta su mensaje real, nunca un
-          // placeholder "desconocido".
+          // compileWithMeta no lanza (devuelve veredictos). Un fallo inesperado del
+          // cliente es infra, no un fallo del código restaurado: conservamos lo
+          // escrito y reintentamos, sin declarar "no compila".
           console.error('[Restore] Compile error:', e);
-          compileError = e instanceof Error ? e.message : String(e);
+          restore.outcome = 'infra';
         } finally {
           setIsCompiling(false);
         }
       });
 
+      // Tras un veredicto de infra, reintentar el compile con backoff para
+      // refrescar el preview cuando el servidor se recupere.
+      if (restore.outcome === 'infra') {
+        retryRestorePreview(restoredFiles);
+      }
+
       // e. Mensaje de sistema en el chat (definitivo → se persiste).
       const dateLabel = formatSnapshotDate(meta.created_at);
       const labelSuffix = meta.label ? ` (${meta.label})` : '';
-      const systemMessage = compiledOk
-        ? `Proyecto restaurado a la versión de ${dateLabel}${labelSuffix}.`
-        : `La versión restaurada no compila: ${compileError}. Guardé un checkpoint "Antes de restaurar" para que puedas volver al estado anterior.`;
+      const systemMessage =
+        restore.outcome === 'ok'
+          ? `Proyecto restaurado a la versión de ${dateLabel}${labelSuffix}.`
+          : restore.outcome === 'infra'
+            ? `El servidor tarda en responder — la versión se restauró; el preview se actualizará al terminar.`
+            : `La versión restaurada no compila: ${restore.error}. Guardé un checkpoint "Antes de restaurar" para que puedas volver al estado anterior.`;
 
       setChatHistory((prev) => [
         ...prev,
@@ -952,6 +1023,7 @@ export function StudioEngine() {
       saveFile,
       flushPendingWrites,
       runExclusive,
+      retryRestorePreview,
       persistChatMessage,
     ],
   );
@@ -1150,12 +1222,17 @@ export function StudioEngine() {
     runExclusive(async () => {
       setIsCompiling(true);
       try {
-        const { html, oidMap, verdict } = await compileWithMeta(finalFiles, {
+        const result = await compileWithMeta(finalFiles, {
           onServerRetry: () => toast.message('Servidor ocupado — reintentando…'),
         });
+        const { html, oidMap, verdict } = result;
         if (Object.keys(oidMap).length > 0) oidMapRef.current = oidMap;
 
-        if (verdict === 'ok') {
+        // MISMO clasificador que el restore (classifyCompileResult) — una sola
+        // taxonomía para todo el que consume un compile.
+        const decision = classifyCompileResult(result);
+
+        if (decision.status === 'ok') {
           applyPreviewHtml(html);
           toast.success(`Cambios guardados (${touchedFiles.length} archivo${touchedFiles.length === 1 ? '' : 's'})`);
           // CAMBIO 2 — cierre exitoso de una sesión de guardado del modo Visual:
@@ -1167,17 +1244,20 @@ export function StudioEngine() {
           }
           return;
         }
-        if (verdict === 'server-error') {
-          // No revertir: la edición AST es sintácticamente segura por construcción.
-          toast.message('Guardado — el preview se actualizará al reconectar');
-          return;
-        }
-        if (verdict === 'network-error') {
-          applyPreviewHtml(html); // flujo de red existente (página con reintento).
+        if (decision.status === 'infra') {
+          // server-error / red / sesión: NO revertir (la edición AST es
+          // sintácticamente segura por construcción). Un compile-error SIN mensaje
+          // real (sesión/401) ya NO revierte el cambio del usuario — cae aquí.
+          if (verdict === 'network-error') {
+            applyPreviewHtml(html); // flujo de red existente (página con reintento).
+          } else {
+            toast.message('Guardado — el preview se actualizará al reconectar');
+          }
           return;
         }
 
-        // compile-error: el cambio rompió la compilación → revertir al baseline.
+        // decision.status === 'code-error': el cambio rompió la compilación →
+        // revertir al baseline.
         toast.error('El cambio rompió la compilación — revertido');
         const reverted = new Map(finalFiles);
         for (const [path, original] of baseline) {

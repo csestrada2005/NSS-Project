@@ -106,6 +106,51 @@ export interface CompileResult {
   error?: string;
 }
 
+/**
+ * classifyCompileResult — ÚNICA fuente de verdad que traduce un CompileResult a
+ * la decisión semántica que TODO consumidor de un compile necesita. El compile
+ * normal (saveVisualChanges) y el restore consumen EXACTAMENTE este clasificador;
+ * ninguno reimplementa la taxonomía, así que no pueden divergir.
+ *
+ * Tres estados:
+ *  - 'ok'         → el código compiló; renderizar `html`.
+ *  - 'code-error' → el CÓDIGO es el culpable. Es el ÚNICO estado que puede
+ *                   declarar "no compila", y SIEMPRE trae un `error` real (nunca
+ *                   undefined). Se alcanza SOLO con un veredicto 'compile-error'
+ *                   que además trae un mensaje de error no vacío — es decir, el
+ *                   200-con-error (o 4xx) del compilador.
+ *  - 'infra'      → NO es culpa del código: 'server-error' / 'network-error'
+ *                   (timeout / 5xx / respuesta vacía / red del cliente) Y también
+ *                   un 'compile-error' SIN mensaje real (401 / sesión expirada,
+ *                   que el compilador marca como compile-error pero no es un fallo
+ *                   del código restaurado). Conservar lo escrito; reintentar con
+ *                   backoff; JAMÁS declarar "no compila".
+ *
+ * La clave honesta: un veredicto 'compile-error' sin `error` (sesión/401) NO es
+ * un fallo de compilación del código — cae en 'infra', no en 'code-error'. Así,
+ * 'code-error' nunca interpola un mensaje undefined.
+ */
+export type CompileDecision =
+  | { status: 'ok' }
+  | { status: 'code-error'; error: string }
+  | { status: 'infra'; verdict: CompileVerdict };
+
+export function classifyCompileResult(result: CompileResult): CompileDecision {
+  if (result.verdict === 'ok') {
+    return { status: 'ok' };
+  }
+  if (
+    result.verdict === 'compile-error' &&
+    typeof result.error === 'string' &&
+    result.error.trim() !== ''
+  ) {
+    return { status: 'code-error', error: result.error };
+  }
+  // 'server-error', 'network-error', y cualquier 'compile-error' sin mensaje
+  // real (sesión/401) son infra: no es culpa del código.
+  return { status: 'infra', verdict: result.verdict };
+}
+
 /** Shape of the JSON body returned by /api/compile. */
 interface CompilePayload {
   error?: string;
