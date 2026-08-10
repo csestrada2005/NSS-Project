@@ -414,6 +414,15 @@ function esmShResolverPlugin() {
   return {
     name: 'esm-sh-resolver',
     setup(build) {
+      // CAMBIO 2 — instrumentación de latencia CDN (diagnóstico de los 16s).
+      // Colector POR BUILD (el plugin se instancia en cada esbuild.build): cuenta
+      // sólo los fetches de red REALES a esm.sh — un hit de caché no es un fetch y
+      // no suma. Al terminar el build se emite el resumen. Si el resumen dice
+      // N=0 y el esbuild total sigue >10s, ninguna latencia CDN explica el tiempo:
+      // el cuello de botella es CPU de la instancia y la decisión pasa a infra.
+      let cdnFetchCount = 0;
+      let cdnFetchTotalMs = 0;
+
       build.onResolve({ filter: /.*/ }, args => {
         // Módulos locales (alias map) y cualquier *-preview → nunca a esm.sh.
         // Va PRIMERO, gana a TODO (incluso a imports que vienen de dentro de un
@@ -460,7 +469,16 @@ function esmShResolverPlugin() {
           return esmShCache.get(args.path);
         }
 
+        // CAMBIO 2 — cronometrar el fetch de red. Se mide y loguea SIEMPRE que
+        // haya salida a red (aunque el status no sea ok): un 404 también consume
+        // latencia y debe contarse en el diagnóstico.
+        const fetchStart = Date.now();
         const res = await fetch(args.path);
+        const fetchMs = Date.now() - fetchStart;
+        cdnFetchCount += 1;
+        cdnFetchTotalMs += fetchMs;
+        console.log(`[compile] CDN fetch: ${args.path} ${fetchMs}ms`);
+
         if (!res.ok) {
           return { errors: [{ text: `esm.sh fetch ${res.status}: ${args.path}` }] };
         }
@@ -468,6 +486,13 @@ function esmShResolverPlugin() {
         const result = { contents: await res.text(), loader: 'js' };
         esmShCache.set(args.path, result);
         return result;
+      });
+
+      // CAMBIO 2 — resumen al final del build. N=0 significa que ningún fetch a
+      // esm.sh ocurrió (todo resuelto por alias local o servido de caché): si el
+      // esbuild total sigue alto, la latencia no está en el CDN.
+      build.onEnd(() => {
+        console.log(`[compile] CDN fetches: ${cdnFetchCount}, total ${cdnFetchTotalMs}ms`);
       });
     }
   };

@@ -61,6 +61,19 @@ import { NavigatePanel } from '../components/studio/NavigatePanel';
 type TabType = 'chat' | 'visual' | 'code' | 'navigate';
 type ViewportMode = 'mobile' | 'tablet' | 'desktop';
 
+// CAMBIO 1 — una mutación visual pendiente de guardar. Se indexa por
+// `oid::property` en el buffer (el último gana), y guarda todo lo que updateCode
+// necesita para reescribir la fuente por ordinal cuando el usuario pulsa Guardar.
+interface PendingVisualEdit {
+  oid: string;
+  filePath: string;
+  ordinal: number;
+  tagName: string;
+  property: 'className' | 'text';
+  value: string;
+  classNameMode?: 'replace' | 'merge';
+}
+
 // PR-2: parse a compile-time oid ("{fileSlug}:{ordinal}") into its parts. The
 // slug is a project path minus extension (never contains a colon), so we split on
 // the LAST colon. `ordinal` is the 0-based native-element index within the file.
@@ -166,6 +179,19 @@ export function StudioEngine() {
   // ChatInterface, no la versión pelada {role, content}.
   const [chatHistory, setChatHistory] = useState<Message[]>([]);
   const [editMode, setEditMode] = useState<'interaction' | 'visual'>('interaction');
+  // CAMBIO 1 (sesión de edición con Guardar) — buffer de cambios visuales
+  // pendientes. Los ajustes del panel aplican SOLO al DOM (optimista) y se
+  // acumulan aquí, keyed por `oid::propiedad` (el último gana). Nada toca la
+  // fuente ni compila hasta pulsar "Guardar cambios (N)". El flujo de texto usa
+  // el mismo buffer. `previewReloadNonce` fuerza el remount del iframe al
+  // Descartar (re-render del DOM desde el último estado compilado).
+  const [pendingEdits, setPendingEdits] = useState<Map<string, PendingVisualEdit>>(new Map());
+  const pendingEditsRef = useRef(pendingEdits);
+  pendingEditsRef.current = pendingEdits;
+  const [previewReloadNonce, setPreviewReloadNonce] = useState(0);
+  // Guarda de salida con cambios sin guardar: sostiene la acción diferida hasta
+  // que el usuario resuelve el diálogo (Guardar / Descartar / Cancelar).
+  const [pendingNavAction, setPendingNavAction] = useState<{ proceed: () => void } | null>(null);
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [selectedFileContent, setSelectedFileContent] = useState<string>('');
   const [activeBottomTab, setActiveBottomTab] = useState<TabType>('chat');
@@ -591,6 +617,12 @@ export function StudioEngine() {
     if (lastChangeSource.current === 'ai') {
       iframeRef.current?.contentWindow?.postMessage({ type: 'clear-selection' }, '*');
       setSelectedElement(prev => (prev ? null : prev));
+      // CAMBIO 1 — el buffer visual pendiente se construyó por ordinal contra la
+      // fuente ANTERIOR; una regeneración del AI puede haber corrido esos
+      // ordinales. Sus reflejos optimistas en el DOM ya los borra el recompile
+      // del AI, así que el buffer stale se descarta (guardarlo podría corromper
+      // elementos que no eran los editados).
+      setPendingEdits(prev => (prev.size > 0 ? new Map() : prev));
     }
   }, [files]);
 
@@ -612,6 +644,21 @@ export function StudioEngine() {
   useEffect(() => {
     if (editMode !== 'visual') setSelectedElement(null);
   }, [editMode]);
+
+  // CAMBIO 1 (c) — guarda de salida a nivel de navegador (recarga/cierre de
+  // pestaña) cuando hay cambios visuales sin guardar. Las salidas dentro de la
+  // app (toggle a Interaction, "Back to Nebu", cambio de página) las cubre
+  // guardUnsaved con el diálogo Guardar/Descartar.
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (pendingEditsRef.current.size > 0) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
 
   // Bridge (CAMBIO 2): the in-iframe picker posts 'element-selected' with the oid;
   // resolve it to { filePath, ordinal } via the last compile's oidMap. A stale map
@@ -791,151 +838,186 @@ export function StudioEngine() {
   // -------------------------------------------------------------------------
   // Visual editing handlers (PR-2 — deterministic, zero-LLM)
   //
-  // Every edit targets selectedElement.filePath (resolved from the oidMap) and
-  // localizes the exact source element by ordinal. Flujo (CAMBIO 1 + 2):
-  //  1. Reflejo optimista en el iframe (sin flash) y mutación de la fuente por
-  //     ordinal → save. Esto ocurre por CADA ajuste, al instante.
-  //  2. El compile de verificación NO se dispara por ajuste: se debouncea 600ms
-  //     tras el último cambio y pasa por runExclusive (uno en vuelo). Una ráfaga
-  //     de stepper = un solo compile del estado final.
-  //  3. Veredicto del compile (CAMBIO 2):
-  //       ok            → adoptar el html compilado.
-  //       compile-error → el cambio rompió la compilación → revertir al estado
-  //                       previo a la ráfaga y avisar.
-  //       server-error  → NO revertir (la edición AST es sintácticamente segura
-  //                       por construcción): conservar y avisar honestamente.
-  //       network-error → flujo de red existente (página con reintento manual).
+  // CAMBIO 1 — Sesión de edición con Guardar explícito. Flujo:
+  //  a. Cada ajuste del panel aplica SOLO al DOM del iframe (optimista, sin
+  //     flash) y se acumula en `pendingEdits` (keyed por oid::propiedad, el
+  //     último gana). NO toca la fuente ni compila. El texto usa el mismo buffer.
+  //  b. "Guardar cambios (N)" aplica TODAS las mutaciones a la fuente
+  //     (updateCode secuencial por ordinal, agrupado por archivo), hace UN
+  //     saveFile por archivo tocado y UNA sola compilación con manejo de
+  //     veredicto (ok/compile-error/server-error/network-error).
+  //  d. Descartar re-renderiza el DOM desde el último estado compilado
+  //     (remonta el iframe → srcdoc del compiledHtml vigente).
+  //  e. El runExclusive (serialización de compiles) queda como red de seguridad
+  //     global — la compilación del guardado pasa por él como cualquier otra.
   // -------------------------------------------------------------------------
 
-  // Debounce + baseline de reversión de la ráfaga de edits visuales en curso.
-  // `visualBaselineRef` guarda, por archivo tocado, su contenido PREVIO al primer
-  // edit del lote; si la verificación falla como compile-error, es a ahí a donde
-  // revertimos (no perdemos un last-good por no haberlo capturado).
-  const visualCompileTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const visualBaselineRef = useRef<Map<string, string>>(new Map());
-
-  const runVisualVerify = useCallback(() => {
-    const baseline = visualBaselineRef.current;
-    if (baseline.size === 0) return;
-    // Cerramos el lote actual: los edits que lleguen durante el compile abren un
-    // lote nuevo con su propio baseline.
-    const revertMap = new Map(baseline);
-    visualBaselineRef.current = new Map();
-
-    runExclusive(async () => {
-      setIsCompiling(true);
-      try {
-        const current = filesRef.current;
-        const { html, oidMap, verdict } = await compileWithMeta(current, {
-          onServerRetry: () => toast.message('Servidor ocupado — reintentando…'),
-        });
-        if (Object.keys(oidMap).length > 0) oidMapRef.current = oidMap;
-
-        if (verdict === 'ok') {
-          applyPreviewHtml(html);
-          return;
-        }
-        if (verdict === 'server-error') {
-          // CAMBIO 2b — no revertir: se conserva la edición local.
-          toast.message('No pude verificar el cambio — se guardó; el preview se actualizará al reconectar');
-          return;
-        }
-        if (verdict === 'network-error') {
-          // CAMBIO 2c — flujo de red existente: mostrar la página con reintento.
-          applyPreviewHtml(html);
-          return;
-        }
-
-        // CAMBIO 2a — compile-error: el cambio rompió la compilación → revertir.
-        toast.error('El cambio rompió la compilación — revertido');
-        for (const [path, original] of revertMap) {
-          updateLocalFile(path, original);
-          void saveFile(path, original);
-        }
-        const reverted = new Map(filesRef.current);
-        for (const [path, original] of revertMap) reverted.set(path, original);
-        const revertRes = await compileWithMeta(reverted);
-        applyPreviewHtml(revertRes.html);
-      } catch (e) {
-        console.error('[StudioEngine] visual verify compile error:', e);
-      } finally {
-        setIsCompiling(false);
-      }
-    });
-  }, [runExclusive, applyPreviewHtml, updateLocalFile, saveFile]);
-
-  const scheduleVisualVerify = useCallback(() => {
-    if (visualCompileTimerRef.current) clearTimeout(visualCompileTimerRef.current);
-    visualCompileTimerRef.current = setTimeout(() => {
-      visualCompileTimerRef.current = null;
-      runVisualVerify();
-    }, COMPILE_DEBOUNCE_MS);
-  }, [runVisualVerify]);
-
-  const applyVisualEdit = useCallback(
-    async (updates: { className?: string; textContent?: string }, options?: { classNameMode?: 'replace' | 'merge' }) => {
+  // (a) Encolar un ajuste: reflejo optimista en el iframe + registro en el buffer.
+  const stageVisualEdit = useCallback(
+    (updates: { className?: string; textContent?: string }, options?: { classNameMode?: 'replace' | 'merge' }) => {
       const el = selectedElement;
-      if (!el || !el.filePath || typeof el.ordinal !== 'number') {
+      if (!el || !el.filePath || typeof el.ordinal !== 'number' || !el.dataOid) {
         toast.error('No pude aplicar el cambio con seguridad — usa el chat');
         return;
       }
-      const filePath = el.filePath;
-      const code = files.get(filePath);
-      if (!code) {
-        toast.error('No pude aplicar el cambio con seguridad — usa el chat');
-        return;
-      }
+      const { dataOid, filePath, ordinal, tagName } = el;
 
-      // (1) Optimistic reflection in the iframe — all instances of the oid.
-      if (el.dataOid) {
-        iframeRef.current?.contentWindow?.postMessage(
-          { type: 'apply-visual-edit', oid: el.dataOid, className: updates.className, text: updates.textContent },
-          '*',
-        );
-      }
+      // Reflejo optimista en el iframe — TODAS las instancias del oid.
+      iframeRef.current?.contentWindow?.postMessage(
+        { type: 'apply-visual-edit', oid: dataOid, className: updates.className, text: updates.textContent },
+        '*',
+      );
 
-      // (2) Mutate the source by ordinal.
-      lastChangeSource.current = 'visual';
-      let notFound = false;
-      const newCode = updateCode(code, el, updates, options, () => { notFound = true; });
-      if (notFound) {
-        toast.error('No pude aplicar el cambio con seguridad — usa el chat');
-        // Undo the optimistic DOM change by re-rendering the compiled truth.
-        runExclusive(async () => {
-          const { html } = await compileWithMeta(filesRef.current);
-          applyPreviewHtml(html);
-        });
-        return;
-      }
+      // Registro en el buffer (último gana por oid::propiedad).
+      setPendingEdits(prev => {
+        const next = new Map(prev);
+        if (updates.className !== undefined) {
+          next.set(`${dataOid}::className`, {
+            oid: dataOid, filePath, ordinal, tagName,
+            property: 'className', value: updates.className,
+            classNameMode: options?.classNameMode ?? 'replace',
+          });
+        }
+        if (updates.textContent !== undefined) {
+          next.set(`${dataOid}::text`, {
+            oid: dataOid, filePath, ordinal, tagName,
+            property: 'text', value: updates.textContent,
+          });
+        }
+        return next;
+      });
 
-      // Baseline del lote: contenido PREVIO al primer edit de cada archivo tocado.
-      if (!visualBaselineRef.current.has(filePath)) {
-        visualBaselineRef.current.set(filePath, code);
-      }
-
-      updateLocalFile(filePath, newCode);
-      await saveFile(filePath, newCode);
+      // Mantener el panel sincronizado con lo que muestra el DOM.
       if (updates.className !== undefined) {
         setSelectedElement(prev => (prev ? { ...prev, className: updates.className } : null));
       }
       if (updates.textContent !== undefined) {
         setSelectedElement(prev => (prev ? { ...prev, textContent: updates.textContent } : null));
       }
-
-      // (3) Verificación gobernada: debounce 600ms + un solo compile en vuelo.
-      scheduleVisualVerify();
     },
-    [selectedElement, files, updateLocalFile, saveFile, runExclusive, applyPreviewHtml, scheduleVisualVerify],
+    [selectedElement],
   );
 
+  // (b) Guardar: aplicar todo el buffer a la fuente y compilar UNA vez.
+  const saveVisualChanges = useCallback(async (): Promise<void> => {
+    const edits = Array.from(pendingEditsRef.current.values());
+    if (edits.length === 0) return;
+
+    // Agrupar por archivo tocado.
+    const byFile = new Map<string, PendingVisualEdit[]>();
+    for (const e of edits) {
+      const list = byFile.get(e.filePath);
+      if (list) list.push(e);
+      else byFile.set(e.filePath, [e]);
+    }
+
+    lastChangeSource.current = 'visual';
+    // `baseline` = contenido PREVIO al guardado por archivo (para revertir si
+    // compile-error). `finalFiles` = mapa completo con las mutaciones aplicadas,
+    // construido explícitamente para no depender de un filesRef aún sin re-render.
+    const baseline = new Map<string, string>();
+    const finalFiles = new Map(filesRef.current);
+    const touchedFiles: string[] = [];
+    let anyNotFound = false;
+
+    for (const [filePath, fileEdits] of byFile) {
+      const original = filesRef.current.get(filePath);
+      if (original === undefined) { anyNotFound = true; continue; }
+      baseline.set(filePath, original);
+
+      let code = original;
+      for (const e of fileEdits) {
+        const target: TargetElement = { tagName: e.tagName, ordinal: e.ordinal, filePath, dataOid: e.oid };
+        const updates = e.property === 'className'
+          ? { className: e.value }
+          : { textContent: e.value };
+        const opts = e.property === 'className' ? { classNameMode: e.classNameMode } : undefined;
+        let notFound = false;
+        code = updateCode(code, target, updates, opts, () => { notFound = true; });
+        if (notFound) anyNotFound = true;
+      }
+
+      finalFiles.set(filePath, code);
+      updateLocalFile(filePath, code);
+      await saveFile(filePath, code); // UN saveFile por archivo tocado.
+      touchedFiles.push(filePath);
+    }
+
+    // La fuente ya carga los cambios: vaciar el buffer.
+    setPendingEdits(new Map());
+
+    if (anyNotFound) {
+      toast.error('Algunos cambios no se pudieron localizar — revisa el resultado');
+    }
+
+    // (b) UNA sola compilación, por la red de seguridad global (runExclusive).
+    runExclusive(async () => {
+      setIsCompiling(true);
+      try {
+        const { html, oidMap, verdict } = await compileWithMeta(finalFiles, {
+          onServerRetry: () => toast.message('Servidor ocupado — reintentando…'),
+        });
+        if (Object.keys(oidMap).length > 0) oidMapRef.current = oidMap;
+
+        if (verdict === 'ok') {
+          applyPreviewHtml(html);
+          toast.success(`Cambios guardados (${touchedFiles.length} archivo${touchedFiles.length === 1 ? '' : 's'})`);
+          return;
+        }
+        if (verdict === 'server-error') {
+          // No revertir: la edición AST es sintácticamente segura por construcción.
+          toast.message('Guardado — el preview se actualizará al reconectar');
+          return;
+        }
+        if (verdict === 'network-error') {
+          applyPreviewHtml(html); // flujo de red existente (página con reintento).
+          return;
+        }
+
+        // compile-error: el cambio rompió la compilación → revertir al baseline.
+        toast.error('El cambio rompió la compilación — revertido');
+        const reverted = new Map(finalFiles);
+        for (const [path, original] of baseline) {
+          updateLocalFile(path, original);
+          void saveFile(path, original);
+          reverted.set(path, original);
+        }
+        const revertRes = await compileWithMeta(reverted);
+        applyPreviewHtml(revertRes.html);
+      } catch (e) {
+        console.error('[StudioEngine] visual save compile error:', e);
+      } finally {
+        setIsCompiling(false);
+      }
+    });
+  }, [runExclusive, applyPreviewHtml, updateLocalFile, saveFile]);
+
+  // (d) Descartar: soltar el buffer y re-renderizar el DOM desde el último
+  // estado compilado (remonta el iframe → srcdoc del compiledHtml vigente).
+  const discardVisualChanges = useCallback(() => {
+    setPendingEdits(new Map());
+    setSelectedElement(null);
+    setPreviewReloadNonce(n => n + 1);
+  }, []);
+
+  // (c) Guarda de salida: si hay cambios sin guardar, interponer el diálogo
+  // Guardar / Descartar antes de ejecutar `proceed`; si no, seguir directo.
+  const guardUnsaved = useCallback((proceed: () => void) => {
+    if (pendingEditsRef.current.size > 0) {
+      setPendingNavAction({ proceed });
+    } else {
+      proceed();
+    }
+  }, []);
+
   const handleApplyClassName = useCallback(
-    (newClassName: string) => applyVisualEdit({ className: newClassName }, { classNameMode: 'replace' }),
-    [applyVisualEdit],
+    (newClassName: string) => stageVisualEdit({ className: newClassName }, { classNameMode: 'replace' }),
+    [stageVisualEdit],
   );
 
   const handleApplyText = useCallback(
-    (newText: string) => applyVisualEdit({ textContent: newText }),
-    [applyVisualEdit],
+    (newText: string) => stageVisualEdit({ textContent: newText }),
+    [stageVisualEdit],
   );
 
   // -------------------------------------------------------------------------
@@ -1139,6 +1221,8 @@ export function StudioEngine() {
   // -------------------------------------------------------------------------
   const fileTree = mapToFileSystemTree(files); // for legacy components (StateGraph, SettingsModal, HistoryDrawer)
   const hasPreview = hasValidPreview;
+  // CAMBIO 1 — número de cambios visuales pendientes de guardar (oid::propiedad).
+  const pendingCount = pendingEdits.size;
 
   // CAMBIO 3 (pasajero) — overlay sin flash. Antes el overlay solo aparecía
   // cuando isGenerating pasaba a true, dejando una ventana de 1-2s donde el
@@ -1349,7 +1433,7 @@ export function StudioEngine() {
                 {/* Navigation items */}
                 <div className="flex flex-col py-2">
                   <button
-                    onClick={() => { setIsMenuPanelOpen(false); navigate('/'); }}
+                    onClick={() => guardUnsaved(() => { setIsMenuPanelOpen(false); navigate('/'); })}
                     className="w-full flex items-center gap-3 px-5 py-3 text-sm text-foreground hover:bg-primary/10 hover:text-primary transition-colors"
                   >
                     <ChevronLeft size={16} />
@@ -1432,7 +1516,7 @@ export function StudioEngine() {
                       overlay glass pane sat on top of it and swallowed the click. */}
                   <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-card border border-border rounded-lg flex overflow-hidden shadow-lg">
                     <button
-                      onClick={() => setEditMode('interaction')}
+                      onClick={() => guardUnsaved(() => setEditMode('interaction'))}
                       className={`px-3 py-1.5 text-xs font-medium transition-colors ${editMode === 'interaction' ? 'bg-red-600 text-white' : 'text-muted-foreground hover:text-foreground'}`}
                     >
                       Interaction
@@ -1505,6 +1589,7 @@ export function StudioEngine() {
                   {viewportMode === 'desktop' ? (
                     <div className="relative w-full h-full">
                       <iframe
+                        key={`preview-${previewReloadNonce}`}
                         ref={iframeRef}
                         srcDoc={compiledHtml}
                         sandbox="allow-scripts allow-modals"
@@ -1522,6 +1607,7 @@ export function StudioEngine() {
                       </div>
                       <div className="relative flex-1 w-full overflow-hidden">
                         <iframe
+                          key={`preview-${previewReloadNonce}`}
                           ref={iframeRef}
                           srcDoc={compiledHtml}
                           sandbox="allow-scripts allow-modals"
@@ -1546,6 +1632,32 @@ export function StudioEngine() {
                         setSelectedElement(null);
                       }}
                     />
+                  )}
+
+                  {/* CAMBIO 1 (b) — barra de guardado explícito. Visible en modo
+                      Visual siempre que haya cambios pendientes, aunque no haya
+                      ningún elemento seleccionado. "Guardar cambios (N)" aplica
+                      todo el buffer a la fuente y compila una vez; "Descartar"
+                      recarga el preview desde el último estado compilado. */}
+                  {editMode === 'visual' && pendingCount > 0 && (
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 bg-card border border-border rounded-full shadow-2xl px-2 py-1.5">
+                      <span className="text-xs text-muted-foreground pl-2 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                        {pendingCount} cambio{pendingCount === 1 ? '' : 's'} sin guardar
+                      </span>
+                      <button
+                        onClick={() => discardVisualChanges()}
+                        className="text-xs font-medium text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-full hover:bg-accent transition-colors"
+                      >
+                        Descartar
+                      </button>
+                      <button
+                        onClick={() => { void saveVisualChanges(); }}
+                        className="text-xs font-medium bg-primary text-white px-4 py-1.5 rounded-full hover:bg-primary/90 transition-colors"
+                      >
+                        Guardar cambios ({pendingCount})
+                      </button>
+                    </div>
                   )}
                 </div>
               ) : compiledHtml !== '' ? (
@@ -1633,7 +1745,10 @@ export function StudioEngine() {
           <CommandModal
             onClose={() => setIsCommandModalOpen(false)}
             visualEditMode={editMode === 'visual'}
-            onToggleVisualEdit={(active) => setEditMode(active ? 'visual' : 'interaction')}
+            onToggleVisualEdit={(active) => {
+              if (active) setEditMode('visual');
+              else guardUnsaved(() => setEditMode('interaction'));
+            }}
             activeTab={activeBottomTab}
             setActiveTab={(tab) => setActiveBottomTab(tab)}
           >
@@ -1674,6 +1789,7 @@ export function StudioEngine() {
                   iframeRef={iframeRef}
                   activeRoute={activeRoute}
                   setActiveRoute={setActiveRoute}
+                  beforeNavigate={guardUnsaved}
                 />
               </div>
             </div>
@@ -1725,6 +1841,52 @@ export function StudioEngine() {
           }}
           currentTree={fileTree}
         />
+
+        {/* CAMBIO 1 (c) — diálogo de cambios sin guardar. Se interpone al salir
+            de Visual, del proyecto o al cambiar de página con edits pendientes.
+            Guardar aplica el buffer y continúa; Descartar recarga el preview y
+            continúa; Cancelar cierra el diálogo y no hace nada. */}
+        {pendingNavAction && (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60">
+            <div className="w-[92%] max-w-md rounded-xl border border-border bg-card shadow-2xl text-foreground p-6 flex flex-col gap-4">
+              <div className="flex flex-col gap-1">
+                <h3 className="text-base font-semibold">Tienes cambios sin guardar</h3>
+                <p className="text-sm text-muted-foreground">
+                  {pendingCount} cambio{pendingCount === 1 ? '' : 's'} visual{pendingCount === 1 ? '' : 'es'} sin guardar. ¿Qué quieres hacer antes de continuar?
+                </p>
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  onClick={() => setPendingNavAction(null)}
+                  className="text-sm font-medium text-muted-foreground hover:text-foreground px-4 py-2 rounded-md hover:bg-accent transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    const action = pendingNavAction;
+                    setPendingNavAction(null);
+                    discardVisualChanges();
+                    action.proceed();
+                  }}
+                  className="text-sm font-medium border border-border text-foreground px-4 py-2 rounded-md hover:bg-accent transition-colors"
+                >
+                  Descartar
+                </button>
+                <button
+                  onClick={() => {
+                    const action = pendingNavAction;
+                    setPendingNavAction(null);
+                    void saveVisualChanges().then(() => action.proceed());
+                  }}
+                  className="text-sm font-medium bg-primary text-white px-4 py-2 rounded-md hover:bg-primary/90 transition-colors"
+                >
+                  Guardar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </ProtectedRoute>
   );
