@@ -895,17 +895,34 @@ export function StudioEngine() {
           if (restoredFiles.size === 0) return;
           const { html, oidMap, verdict, error } = await compileWithMeta(restoredFiles);
           if (Object.keys(oidMap).length > 0) oidMapRef.current = oidMap;
-          // Un fallo de servidor (5xx) no es culpa de la versión restaurada:
-          // conservamos lo escrito y dejamos que el compile se reintente solo.
-          if (verdict === 'server-error') {
-            compiledOk = true; // no pintamos error honesto por un problema de red
+          // CAMBIO 6 — veredicto honesto del restore, alineado con la MISMA
+          // taxonomía del embudo de escritura (BrowserCompiler.CompileVerdict):
+          //  - 'server-error' (5xx / vacío / TIMEOUT, incluido un compile lento
+          //    que se reintenta) y 'network-error' (red del cliente) NO son
+          //    veredictos sobre el código restaurado. compileWithMeta ya agotó su
+          //    backoff; conservamos lo escrito y JAMÁS declaramos "no compila".
+          //  - 'compile-error' (200-con-error / 4xx) es el ÚNICO veredicto que
+          //    dice que la versión restaurada no compila, y siempre trae `error`.
+          // Esto elimina el catch-all "desconocido": antes, un 'network-error'
+          // (o un timeout de un compile lento pero exitoso en el servidor) caía
+          // aquí con compileError undefined y se anunciaba como fallo de
+          // compilación inexistente.
+          if (verdict === 'server-error' || verdict === 'network-error') {
+            compiledOk = true; // inconcluso por infra/red, no un fallo del código
             return;
           }
           setCompiledHtml(html);
-          compiledOk = verdict === 'ok' && !isPreviewError(html);
-          if (compiledOk) setHasValidPreview(true);
-          if (verdict === 'compile-error') compileError = error;
+          if (verdict === 'ok' && !isPreviewError(html)) {
+            compiledOk = true;
+            setHasValidPreview(true);
+          } else {
+            // Único camino de fallo real: el compilador rechazó el código.
+            compileError = error ?? 'el compilador rechazó el código restaurado';
+          }
         } catch (e) {
+          // compileWithMeta no lanza (devuelve veredictos); este catch cubre un
+          // fallo inesperado del cliente y reporta su mensaje real, nunca un
+          // placeholder "desconocido".
           console.error('[Restore] Compile error:', e);
           compileError = e instanceof Error ? e.message : String(e);
         } finally {
@@ -918,7 +935,7 @@ export function StudioEngine() {
       const labelSuffix = meta.label ? ` (${meta.label})` : '';
       const systemMessage = compiledOk
         ? `Proyecto restaurado a la versión de ${dateLabel}${labelSuffix}.`
-        : `La versión restaurada no compila: ${compileError ?? 'error de compilación desconocido'}. Guardé un checkpoint "Antes de restaurar" para que puedas volver al estado anterior.`;
+        : `La versión restaurada no compila: ${compileError}. Guardé un checkpoint "Antes de restaurar" para que puedas volver al estado anterior.`;
 
       setChatHistory((prev) => [
         ...prev,

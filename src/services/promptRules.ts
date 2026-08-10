@@ -17,7 +17,7 @@ REACT/TAILWIND RULES:
 - The global CSS entry file is ALWAYS src/index.css. Never import globals.css, global.css, or any other CSS filename. Never create a new CSS entry file.
 - Fonts are already loaded via <link> in index.html. NEVER import fonts — no @import in CSS, no URL imports in JS/TS.
 - Export convention: every component file uses a named export matching the filename (export function ServicesSection...). Importers use the matching named import. Never mix default and named exports for components.
-- For conditional or merged classNames, import cn from '@/lib/utils' (already provided, dependency-free). Never import clsx directly.
+- For conditional or merged classNames, import cn from '@/lib/utils' (already provided; it wraps clsx + tailwind-merge). Never import clsx or tailwind-merge directly.
 - When importing cn from '@/lib/utils', use a named import: import { cn } from '@/lib/utils'.
 - For icons, you may import from lucide-react (e.g. import { Rocket } from 'lucide-react') or use inline <svg>.
 
@@ -32,6 +32,21 @@ AVAILABLE RUNTIME (the preview resolves these — use them for richer UI):
   require a server — the preview runs entirely in the browser.
 - For animations, framer-motion is available and encouraged for hero sections,
   transitions, and micro-interactions.
+
+TEMPLATE PRIMITIVES (compose these — do not reinvent them):
+- The template ships motion primitives in src/components/motion (FadeIn,
+  StaggerChildren, ParallaxImage, Marquee, AnimatedCounter) and UI components in
+  src/components/ui (button, card, input, textarea, label, badge, accordion,
+  dialog, tabs, separator). PREFER composing these over hand-writing animations
+  or basic UI. Import them; do not recreate them.
+- Entrance/scroll reveals: wrap content in <FadeIn> (direction + delay props) and
+  group sequential reveals with <StaggerChildren> — do NOT hand-roll
+  IntersectionObserver or raw framer-motion variants for standard reveals.
+- Stats/counters use <AnimatedCounter value={...} />; logo/testimonial rows use
+  <Marquee>; hero/section imagery that should drift on scroll uses <ParallaxImage>.
+  All of them already respect prefers-reduced-motion.
+- For per-page <title>/meta, import { SEO } from '@/components/SEO' and render
+  <SEO title="..." description="..." image="..." /> once near the top of the page.
 
 NAVIGATION CONTRACT (navbar/menu/footer links must resolve — steps are generated
 separately, so anchors and routes only work if both ends exist):

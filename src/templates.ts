@@ -1,5 +1,13 @@
 import type { FileSystemTree } from '@webcontainer/api';
 import { SHADCN_FILES, SHADCN_DEPENDENCIES } from './utils/shadcnDefaults';
+import { UI_DIR, UI_COMPONENT_DEPENDENCIES } from './utils/shadcnComponents';
+import { MOTION_DIR } from './utils/motionPrimitives';
+import { SEO_FILE } from './utils/seoComponent';
+
+// CIRUGÍA P1-6 — versión PINNEADA de framer-motion. Vendorizada en el runtime
+// del preview (server/compiler.js ALIAS) y usada por las primitivas de motion.
+// Mantener en lockstep con KNOWN_DEP_VERSIONS (AIOrchestrator).
+const FRAMER_MOTION_VERSION = '11.15.0';
 
 const commonFiles = {
   'package.json': {
@@ -18,15 +26,25 @@ const commonFiles = {
         dependencies: {
           react: "^18.3.1",
           "react-dom": "^18.3.1",
-          "react-router-dom": "^6.26.2",
-          ...SHADCN_DEPENDENCIES
+          // react-router-dom v7 (CIRUGÍA P1-6, CAMBIO 4): v6 (6.0.0–7.17.0) is
+          // flagged by the open-redirect + constructor-injection advisories; the
+          // fix lands in 7.18. The template only uses the stable
+          // BrowserRouter/Routes/Route/Outlet/Link API, unchanged across v6→v7.
+          "react-router-dom": "^7.18.2",
+          "framer-motion": FRAMER_MOTION_VERSION,
+          ...SHADCN_DEPENDENCIES,
+          ...UI_COMPONENT_DEPENDENCIES
         },
         devDependencies: {
           "@eslint/js": "^9.9.0",
           "@types/node": "^22.5.5",
           "@types/react": "^18.3.3",
           "@types/react-dom": "^18.3.0",
-          "@vitejs/plugin-react": "^4.3.1",
+          // vite 7 + plugin-react 5 (CIRUGÍA P1-6, CAMBIO 4): vite ≤6.4.2 and its
+          // bundled esbuild ≤0.24.2 carry the dev-server path-traversal / request
+          // advisories. vite 7 pulls esbuild ≥0.25, clearing both. Requires Node
+          // ≥20.19, which the build environment provides.
+          "@vitejs/plugin-react": "^5.1.1",
           autoprefixer: "^10.4.20",
           eslint: "^9.9.0",
           "eslint-plugin-react-hooks": "^5.1.0-rc.0",
@@ -36,7 +54,7 @@ const commonFiles = {
           tailwindcss: "^3.4.13",
           typescript: "^5.5.3",
           "typescript-eslint": "^8.0.1",
-          vite: "^5.4.1"
+          vite: "^7.3.6"
         }
       }, null, 2)
     }
@@ -333,13 +351,12 @@ export default NotFound;
   },
   'components': {
       directory: {
-          'ui': {
-              directory: {
-                  '.gitkeep': {
-                      file: { contents: '' }
-                  }
-              }
-          },
+          // CIRUGÍA P1-6 — el template ya no envía ui/ vacío: trae los 10
+          // componentes shadcn de mayor uso (CAMBIO 2) y las 5 primitivas de
+          // motion (CAMBIO 1). SEO.tsx (CAMBIO 3a) vive junto a ellos.
+          'ui': UI_DIR,
+          'motion': MOTION_DIR,
+          'SEO.tsx': SEO_FILE,
           'layout': {
               directory: {
                   'Layout.tsx': {
