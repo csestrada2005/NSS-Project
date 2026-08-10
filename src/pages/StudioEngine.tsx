@@ -24,6 +24,7 @@ import { compileWithMeta, isPreviewError, type OidMap } from '../services/Browse
 import { isAbortError } from '../utils/abort';
 import { updateCode, type TargetElement } from '../utils/ast';
 import { fileSystemTreeToMap, mapToFileSystemTree } from '../utils/context';
+import type { FileSystemTree } from '@webcontainer/api';
 import JSZip from 'jszip';
 import {
   Download,
@@ -86,6 +87,13 @@ function parseOid(oid: string): { slug: string; ordinal: number } | null {
   return { slug, ordinal };
 }
 
+// Fecha legible para el mensaje de sistema del restore ("restaurado a la
+// versión de …"). Mismo formato local que usa el HistoryDrawer.
+function formatSnapshotDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+}
+
 export function StudioEngine() {
   // -------------------------------------------------------------------------
   // Routing
@@ -112,7 +120,7 @@ export function StudioEngine() {
   // -------------------------------------------------------------------------
   // File state (replaces WebContainer + FileSystemTree)
   // -------------------------------------------------------------------------
-  const { files, isLoading, loadFromSupabase, saveFile, updateLocalFile, flushPendingWrites } = useProjectFiles();
+  const { files, isLoading, loadFromSupabase, saveFile, deleteFile, updateLocalFile, flushPendingWrites } = useProjectFiles();
 
   // -------------------------------------------------------------------------
   // Preview state
@@ -729,7 +737,12 @@ export function StudioEngine() {
   // -------------------------------------------------------------------------
   const saveSnapshot = useCallback(async (trigger: string, label?: string) => {
     if (!projectId) return;
-    if (files.size === 0) return;
+    // Leemos por ref, no por el `files` del closure: cuando saveSnapshot corre al
+    // cierre de una generación/fix, el `files` capturado en el render del handler
+    // es anterior a las escrituras del AI. filesRef.current siempre refleja el
+    // último estado comprometido, así que el snapshot captura lo recién escrito.
+    const currentFiles = filesRef.current;
+    if (currentFiles.size === 0) return;
     try {
       const supabase = SupabaseService.getInstance().client;
       const { data: { user } } = await supabase.auth.getUser();
@@ -738,7 +751,7 @@ export function StudioEngine() {
       // Flush all pending debounced writes before capturing the snapshot
       await flushPendingWrites();
 
-      const fileTree = mapToFileSystemTree(files);
+      const fileTree = mapToFileSystemTree(currentFiles);
 
       try {
         await supabase.from('forge_snapshots').insert({
@@ -752,13 +765,118 @@ export function StudioEngine() {
           .from('forge_projects')
           .update({ updated_at: new Date().toISOString() })
           .eq('id', projectId);
+
+        // CAMBIO 2 — retención: tras cada insert, conservar los últimos 30 por
+        // proyecto y borrar los más viejos, EXCEPTO los checkpoints etiquetados
+        // por el usuario (trigger='manual'), que se preservan siempre.
+        const { data: excess } = await supabase
+          .from('forge_snapshots')
+          .select('id')
+          .eq('project_id', projectId)
+          .neq('trigger', 'manual')
+          .order('created_at', { ascending: false })
+          .range(30, 1000);
+        if (excess && excess.length > 0) {
+          await supabase
+            .from('forge_snapshots')
+            .delete()
+            .in('id', excess.map((r) => r.id));
+        }
       } catch (e) {
         console.error('[saveSnapshot] Failed:', e);
       }
     } catch (e) {
       console.error('[saveSnapshot] Error:', e);
     }
-  }, [projectId, files, flushPendingWrites]);
+  }, [projectId, flushPendingWrites]);
+
+  // -------------------------------------------------------------------------
+  // CAMBIO 1 — Restore por el embudo normal de escritura.
+  //  b. Auto-snapshot del estado ACTUAL (pre_restore) → todo restore es reversible.
+  //  c. file_tree del snapshot → mapa plano; escribir CADA archivo por el camino
+  //     normal (updateLocalFile + saveFile: strip de oids incluido) y ELIMINAR
+  //     los que existen hoy pero no en el snapshot (restore = estado completo).
+  //  d. Recompilar por el flujo normal (setCompiledHtml limpia el overlay de
+  //     error) y esperar el veredicto.
+  //  e. Mensaje de sistema en el chat (persiste): éxito → confirmación; fallo →
+  //     error real honesto + recordatorio del checkpoint de salida.
+  // -------------------------------------------------------------------------
+  const handleRestoreSnapshot = useCallback(
+    async (tree: FileSystemTree, meta: { label: string | null; created_at: string; trigger: string }) => {
+      if (isReadOnly || !projectId) return;
+
+      // b. Checkpoint del estado actual antes de tocar nada.
+      await saveSnapshot('pre_restore', 'Antes de restaurar');
+
+      // c. Estado completo: escribir lo del snapshot, borrar lo que sobra.
+      lastChangeSource.current = 'ai';
+      const restoredFiles = fileSystemTreeToMap(tree);
+
+      for (const path of Array.from(filesRef.current.keys())) {
+        if (!restoredFiles.has(path)) {
+          await deleteFile(path);
+        }
+      }
+      for (const [path, content] of restoredFiles) {
+        updateLocalFile(path, content);
+        await saveFile(path, content);
+      }
+      await flushPendingWrites();
+
+      setIsHistoryOpen(false);
+
+      // d. Recompilar y esperar veredicto (mismo camino que limpia el overlay).
+      let compiledOk = false;
+      let compileError: string | undefined;
+      await runExclusive(async () => {
+        setIsCompiling(true);
+        try {
+          if (restoredFiles.size === 0) return;
+          const { html, oidMap, verdict, error } = await compileWithMeta(restoredFiles);
+          if (Object.keys(oidMap).length > 0) oidMapRef.current = oidMap;
+          // Un fallo de servidor (5xx) no es culpa de la versión restaurada:
+          // conservamos lo escrito y dejamos que el compile se reintente solo.
+          if (verdict === 'server-error') {
+            compiledOk = true; // no pintamos error honesto por un problema de red
+            return;
+          }
+          setCompiledHtml(html);
+          compiledOk = verdict === 'ok' && !isPreviewError(html);
+          if (compiledOk) setHasValidPreview(true);
+          if (verdict === 'compile-error') compileError = error;
+        } catch (e) {
+          console.error('[Restore] Compile error:', e);
+          compileError = e instanceof Error ? e.message : String(e);
+        } finally {
+          setIsCompiling(false);
+        }
+      });
+
+      // e. Mensaje de sistema en el chat (definitivo → se persiste).
+      const dateLabel = formatSnapshotDate(meta.created_at);
+      const labelSuffix = meta.label ? ` (${meta.label})` : '';
+      const systemMessage = compiledOk
+        ? `Proyecto restaurado a la versión de ${dateLabel}${labelSuffix}.`
+        : `La versión restaurada no compila: ${compileError ?? 'error de compilación desconocido'}. Guardé un checkpoint "Antes de restaurar" para que puedas volver al estado anterior.`;
+
+      setChatHistory((prev) => [
+        ...prev,
+        { role: 'assistant', content: systemMessage } as Message,
+      ].slice(-30));
+      persistChatMessage('assistant', systemMessage);
+    },
+    [
+      isReadOnly,
+      projectId,
+      saveSnapshot,
+      deleteFile,
+      updateLocalFile,
+      saveFile,
+      flushPendingWrites,
+      runExclusive,
+      persistChatMessage,
+    ],
+  );
 
   // -------------------------------------------------------------------------
   // Template loader
@@ -962,6 +1080,9 @@ export function StudioEngine() {
         if (verdict === 'ok') {
           applyPreviewHtml(html);
           toast.success(`Cambios guardados (${touchedFiles.length} archivo${touchedFiles.length === 1 ? '' : 's'})`);
+          // CAMBIO 2 — cierre exitoso de una sesión de guardado del modo Visual:
+          // capturar snapshot por el mismo embudo que el resto de la cobertura.
+          if (touchedFiles.length > 0) void saveSnapshot('manual_save');
           return;
         }
         if (verdict === 'server-error') {
@@ -990,7 +1111,7 @@ export function StudioEngine() {
         setIsCompiling(false);
       }
     });
-  }, [runExclusive, applyPreviewHtml, updateLocalFile, saveFile]);
+  }, [runExclusive, applyPreviewHtml, updateLocalFile, saveFile, saveSnapshot]);
 
   // (d) Descartar: soltar el buffer y re-renderizar el DOM desde el último
   // estado compilado (remonta el iframe → srcdoc del compiledHtml vigente).
@@ -1810,35 +1931,7 @@ export function StudioEngine() {
           projectId={projectId ?? null}
           isOpen={isHistoryOpen}
           onClose={() => setIsHistoryOpen(false)}
-          onRestore={async (tree) => {
-            const restoredFiles = fileSystemTreeToMap(tree);
-            for (const [path, content] of restoredFiles) {
-              updateLocalFile(path, content);
-              await saveFile(path, content);
-            }
-
-            // Force immediate recompile after restore
-            setIsCompiling(true);
-            try {
-              if (restoredFiles.size === 0) return;
-              const { html, oidMap, verdict } = await compileWithMeta(restoredFiles);
-              if (Object.keys(oidMap).length > 0) oidMapRef.current = oidMap;
-              // CAMBIO 2b — servidor ocupado: no pintamos error tras un restore;
-              // conservamos lo restaurado y el compile se reintentará solo.
-              if (verdict !== 'server-error') {
-                setCompiledHtml(html);
-              }
-              if (verdict === 'ok') {
-                setHasValidPreview(true);
-              }
-            } catch (e) {
-              console.error('[Restore] Compile error:', e);
-            } finally {
-              setIsCompiling(false);
-            }
-
-            setIsHistoryOpen(false);
-          }}
+          onRestore={handleRestoreSnapshot}
           currentTree={fileTree}
         />
 
