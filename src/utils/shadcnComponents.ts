@@ -3,7 +3,15 @@
  * CAMBIO 2). The 10 highest-use components on landing pages, from the current
  * shadcn registry (default style, React 18 / forwardRef API for maximum runtime
  * compatibility), adapted to the template's `cn` helper (`@/lib/utils`) and the
- * semantic CSS-var tokens already defined in index.css.
+ * semantic CSS-var tokens defined in index.css.
+ *
+ * The sources below are written idiomatically with NAMED tokens; before they are
+ * emitted as files, `bridgeTokens` rewrites those to arbitrary-value form
+ * (bg-primary -> bg-[hsl(var(--primary))]) so the colors PAINT in the preview's
+ * Tailwind v4 browser JIT (which ignores tailwind.config.js and @theme injected
+ * via index.css — verified empirically). Arbitrary values render under both the
+ * v4 preview JIT and the exported v3 build, so a shadcn Button shows its colors
+ * in both. See bridgeTokens below (CAMBIO 2b).
  *
  * Exposed as FileSystemTree file nodes so templates.ts can splice them into
  * `src/components/ui/` without inlining ~600 lines of TSX into its literal.
@@ -67,7 +75,7 @@ import { cn } from "@/lib/utils";
 
 const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("rounded-lg border bg-card text-card-foreground shadow-sm", className)} {...props} />
+    <div ref={ref} className={cn("rounded-lg border border-border bg-card text-card-foreground shadow-sm", className)} {...props} />
   )
 );
 Card.displayName = "Card";
@@ -243,7 +251,7 @@ const AccordionItem = React.forwardRef<
   React.ElementRef<typeof AccordionPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof AccordionPrimitive.Item>
 >(({ className, ...props }, ref) => (
-  <AccordionPrimitive.Item ref={ref} className={cn("border-b", className)} {...props} />
+  <AccordionPrimitive.Item ref={ref} className={cn("border-b border-border", className)} {...props} />
 ));
 AccordionItem.displayName = "AccordionItem";
 
@@ -374,7 +382,7 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg",
+        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border border-border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg",
         className
       )}
       {...props}
@@ -433,11 +441,68 @@ export {
 };
 `;
 
-const file = (contents: string) => ({ file: { contents } });
+// ---------------------------------------------------------------------------
+// Semantic-token bridge (CIRUGÍA P1-6, CAMBIO 2b) — PREVIEW COLOR FIDELITY
+// ---------------------------------------------------------------------------
+// The component sources above are written idiomatically with NAMED shadcn tokens
+// (bg-primary, text-primary-foreground, border-border, …). In an EXPORTED build
+// those render via the template's Tailwind v3 config (colors mapped to the CSS
+// vars) — perfect. But the Wyrd PREVIEW runs Tailwind v4's BROWSER JIT, which
+// does NOT read tailwind.config.js and — verified empirically — does NOT honor an
+// @theme block injected through index.css's plain <style>. So `bg-primary` there
+// resolves to nothing (transparent button).
+//
+// Empirically, the v4 JIT renders ARBITRARY-VALUE utilities with zero config:
+// bg-[hsl(var(--primary))] -> rgb(15,23,42), border-[hsl(var(--border))] ->
+// rgb(226,232,240). So we ship each component with its named color utilities
+// rewritten to arbitrary-value form. The source stays readable/idiomatic; the
+// materialized file is preview-correct. Arbitrary values also render under
+// Tailwind v3, so the exported build is unaffected.
+//
+// Longest token names first so `primary-foreground` matches before `primary`.
+const SEMANTIC_TOKENS = [
+  'card-foreground', 'popover-foreground', 'primary-foreground',
+  'secondary-foreground', 'muted-foreground', 'accent-foreground',
+  'destructive-foreground', 'background', 'foreground', 'card', 'popover',
+  'primary', 'secondary', 'muted', 'accent', 'destructive', 'border', 'input', 'ring',
+];
+// Color properties Tailwind attaches to a token. `ring-offset` before `ring`.
+const COLOR_PROPS = ['ring-offset', 'bg', 'text', 'border', 'ring', 'fill', 'stroke'];
+
+const TOKEN_RE = new RegExp(
+  // (1) leading class-boundary  (2) variant chain (hover:, focus-visible:,
+  // placeholder:, data-[state=active]:, …)  (3) color property  (4) token
+  // (5) optional /NN opacity
+  '(^|[\\s"\'`{])' +
+  '((?:(?:[a-z0-9-]+|(?:data|aria|group-data|peer-data)-\\[[^\\]]*\\]|supports-\\[[^\\]]*\\]):)*)' +
+  '(' + COLOR_PROPS.join('|') + ')' +
+  '-(' + SEMANTIC_TOKENS.join('|') + ')' +
+  '(?:/(\\d{1,3}))?' +
+  '(?=[\\s"\'`}]|$)',
+  'g',
+);
+
+/**
+ * Rewrite named shadcn color utilities to arbitrary-value form so they paint in
+ * the Tailwind v4 browser JIT. e.g.
+ *   bg-primary            -> bg-[hsl(var(--primary))]
+ *   hover:bg-primary/90   -> hover:bg-[hsl(var(--primary)/0.9)]
+ *   border-border         -> border-[hsl(var(--border))]
+ */
+export function bridgeTokens(src: string): string {
+  return src.replace(TOKEN_RE, (_m, pre, variants, prop, token, opacity) => {
+    const alpha = opacity ? '/' + (Number(opacity) / 100) : '';
+    return `${pre}${variants}${prop}-[hsl(var(--${token})${alpha})]`;
+  });
+}
+
+const file = (contents: string) => ({ file: { contents: bridgeTokens(contents) } });
 
 /**
  * FileSystemTree fragment for `src/components/ui/`. Spliced into the template's
  * `components` directory by templates.ts (replacing the old .gitkeep-only dir).
+ * Each file's named color tokens are bridged to arbitrary values for preview
+ * fidelity (see bridgeTokens above).
  */
 export const UI_DIR = {
   directory: {
