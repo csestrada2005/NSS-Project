@@ -15,6 +15,10 @@ interface NavigatePanelProps {
   iframeRef: RefObject<HTMLIFrameElement | null>;
   activeRoute: string;
   setActiveRoute: (route: string) => void;
+  // CAMBIO 1 (c) — guarda de salida: si hay cambios visuales sin guardar,
+  // interpone el diálogo Guardar/Descartar antes de cambiar de página. Cuando no
+  // se pasa, la navegación ocurre directamente.
+  beforeNavigate?: (proceed: () => void) => void;
 }
 
 export function NavigatePanel({
@@ -22,6 +26,7 @@ export function NavigatePanel({
   iframeRef,
   activeRoute,
   setActiveRoute,
+  beforeNavigate,
 }: NavigatePanelProps) {
   const pageFiles = Array.from(files.keys()).filter(path =>
     path.startsWith('src/pages/') &&
@@ -35,8 +40,12 @@ export function NavigatePanel({
   }).sort((a, b) => a === '/' ? -1 : b === '/' ? 1 : a.localeCompare(b));
 
   const handleNavigate = (route: string) => {
-    setActiveRoute(route);
-    iframeRef.current?.contentWindow?.postMessage({ type: 'navigate', path: route }, '*');
+    const doNavigate = () => {
+      setActiveRoute(route);
+      iframeRef.current?.contentWindow?.postMessage({ type: 'navigate', path: route }, '*');
+    };
+    if (beforeNavigate) beforeNavigate(doNavigate);
+    else doNavigate();
   };
 
   return (

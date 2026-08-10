@@ -252,3 +252,37 @@ createRoot(document.getElementById('root')).render(<App />);
   assert.ok(result.html.includes('src/main:0'), 'first native oid in bundle');
   assert.ok(result.html.includes('src/main:1'), 'second native oid in bundle');
 });
+
+// ---------------------------------------------------------------------------
+// CAMBIO 2 — instrumentación de latencia de esbuild / CDN
+// ---------------------------------------------------------------------------
+
+test('a build with no CDN deps emits the CDN summary with N=0', async () => {
+  // Un proyecto que sólo usa React (alias local) no hace ningún fetch a esm.sh.
+  // El resumen debe confirmarlo con "CDN fetches: 0" — la señal de que ninguna
+  // latencia de red explica un esbuild lento (el veredicto pasa a CPU/infra).
+  const files = {
+    'src/main.tsx': `import { createRoot } from 'react-dom/client';
+function App() {
+  return <div className="wrap"><h1>Hola</h1></div>;
+}
+createRoot(document.getElementById('root')).render(<App />);
+`,
+  };
+
+  const logs = [];
+  const originalLog = console.log;
+  console.log = (...args) => { logs.push(args.join(' ')); };
+  try {
+    const result = await compileFiles(files);
+    assert.ok(!result.error, 'compiles without error: ' + (result.error || ''));
+  } finally {
+    console.log = originalLog;
+  }
+
+  const summary = logs.find((l) => l.startsWith('[compile] CDN fetches:'));
+  assert.ok(summary, 'CDN summary line emitted');
+  assert.match(summary, /CDN fetches: 0, total 0ms/, 'no CDN fetches for an alias-only build');
+  // Sin fetches no debe haber ninguna línea de fetch individual.
+  assert.ok(!logs.some((l) => l.startsWith('[compile] CDN fetch:')), 'no per-fetch lines when N=0');
+});
