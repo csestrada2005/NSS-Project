@@ -779,7 +779,14 @@ export async function compileFiles(filesObj) {
   // y viaja en la respuesta de compile para el consumidor (PR-2).
   const oidMap = {};
 
+  // Desglose de tiempos: `total` cubre todo compileFiles (parseo del filesObj,
+  // esbuild, generateHTML y armado de la respuesta); `esbuild` aísla el coste del
+  // esbuild.build en sí. La diferencia total-esbuild es el resto del handler.
+  const startTotal = Date.now();
+  const fileCount = Object.keys(filesObj).length;
+
   try {
+    const startEsbuild = Date.now();
     const result = await esbuild.build({
       entryPoints: [entry],
       bundle: true,
@@ -807,6 +814,7 @@ export async function compileFiles(filesObj) {
       plugins: [routerShimPlugin(), virtualFilesPlugin(filesObj, oidMap), esmShResolverPlugin()],
       logLevel: 'silent'
     });
+    const esbuildMs = Date.now() - startEsbuild;
 
     let bundleJs = '';
     let bundleCss = '';
@@ -819,6 +827,8 @@ export async function compileFiles(filesObj) {
     }
 
     const html = generateHTML(bundleJs, bundleCss);
+    const totalMs = Date.now() - startTotal;
+    console.log(`[compile] TIMING: esbuild=${esbuildMs}ms total=${totalMs}ms (files: ${fileCount})`);
     return { html, oidMap };
 
   } catch (err) {
