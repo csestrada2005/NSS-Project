@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Clock, RotateCcw, Tag, Loader2, GitBranch } from 'lucide-react';
+import { X, Clock, RotateCcw, Tag, Loader2, GitBranch, ChevronDown, ChevronRight } from 'lucide-react';
 import type { FileSystemTree } from '@webcontainer/api';
 import { SupabaseService } from '@/services/SupabaseService';
 
@@ -55,6 +55,9 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
   // CAMBIO 1a — confirmación previa al restore + estado de descarga del árbol.
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
+  // Los 'pre_restore' viven en una sección secundaria colapsada (colapsada por
+  // defecto): son puntos de vuelta atrás, no versiones que el usuario elija.
+  const [showPreRestore, setShowPreRestore] = useState(false);
 
   const fetchSnapshots = async () => {
     if (!projectId) return;
@@ -151,6 +154,72 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
     return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   };
 
+  // El listado ya llega ordenado por created_at desc. Separamos los pre_restore
+  // (sección secundaria) del resto (versiones "reales" que el usuario elige).
+  const mainSnapshots = snapshots.filter((s) => s.trigger !== 'pre_restore');
+  const preRestoreSnapshots = snapshots.filter((s) => s.trigger === 'pre_restore');
+  // Sólo el pre_restore más reciente es visible: la retención poda los anteriores,
+  // pero aunque llegaran varios, aquí sólo mostramos el último.
+  const latestPreRestore = preRestoreSnapshots[0] ?? null;
+
+  const renderSnapshotCard = (snap: Snapshot) => (
+    <div
+      key={snap.id}
+      className="rounded-lg border border-border bg-accent/50 p-3 hover:border-border/80 transition-colors"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${TRIGGER_COLORS[snap.trigger] ?? 'bg-gray-700 text-gray-400 border-gray-600'}`}>
+              {TRIGGER_LABELS[snap.trigger] ?? snap.trigger}
+            </span>
+          </div>
+          {snap.label && (
+            <p className="text-foreground text-sm font-medium truncate">{snap.label}</p>
+          )}
+          <p className="text-muted-foreground text-xs mt-0.5">{formatDate(snap.created_at)}</p>
+        </div>
+        <button
+          onClick={() => setConfirmingId(snap.id)}
+          disabled={restoringId !== null}
+          className="flex items-center gap-1 px-2 py-1 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-xs rounded transition-colors shrink-0"
+        >
+          <RotateCcw size={11} />
+          Restore
+        </button>
+      </div>
+
+      {/* CAMBIO 1a — confirmación: todo restore guarda antes un
+          checkpoint del estado actual, así que siempre es reversible. */}
+      {confirmingId === snap.id && (
+        <div className="mt-3 pt-3 border-t border-border">
+          <p className="text-xs text-muted-foreground mb-2">
+            ¿Restaurar a esta versión? Se guardará un checkpoint del estado actual.
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleRestore(snap)}
+              disabled={restoringId !== null}
+              className="flex items-center gap-1 px-2.5 py-1 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-xs rounded transition-colors"
+            >
+              {restoringId === snap.id
+                ? <Loader2 size={11} className="animate-spin" />
+                : <RotateCcw size={11} />}
+              Restaurar
+            </button>
+            <button
+              onClick={() => setConfirmingId(null)}
+              disabled={restoringId !== null}
+              className="px-2.5 py-1 text-muted-foreground hover:text-foreground text-xs rounded transition-colors"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <>
       {/* Backdrop */}
@@ -233,63 +302,28 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
               <p className="text-gray-600 text-sm">Actions are auto-saved as you build</p>
             </div>
           ) : (
-            snapshots.map((snap) => (
-              <div
-                key={snap.id}
-                className="rounded-lg border border-border bg-accent/50 p-3 hover:border-border/80 transition-colors"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${TRIGGER_COLORS[snap.trigger] ?? 'bg-gray-700 text-gray-400 border-gray-600'}`}>
-                        {TRIGGER_LABELS[snap.trigger] ?? snap.trigger}
-                      </span>
-                    </div>
-                    {snap.label && (
-                      <p className="text-foreground text-sm font-medium truncate">{snap.label}</p>
-                    )}
-                    <p className="text-muted-foreground text-xs mt-0.5">{formatDate(snap.created_at)}</p>
-                  </div>
-                  <button
-                    onClick={() => setConfirmingId(snap.id)}
-                    disabled={restoringId !== null}
-                    className="flex items-center gap-1 px-2 py-1 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-xs rounded transition-colors shrink-0"
-                  >
-                    <RotateCcw size={11} />
-                    Restore
-                  </button>
-                </div>
+            <>
+              {mainSnapshots.map((snap) => renderSnapshotCard(snap))}
 
-                {/* CAMBIO 1a — confirmación: todo restore guarda antes un
-                    checkpoint del estado actual, así que siempre es reversible. */}
-                {confirmingId === snap.id && (
-                  <div className="mt-3 pt-3 border-t border-border">
-                    <p className="text-xs text-muted-foreground mb-2">
-                      ¿Restaurar a esta versión? Se guardará un checkpoint del estado actual.
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleRestore(snap)}
-                        disabled={restoringId !== null}
-                        className="flex items-center gap-1 px-2.5 py-1 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-xs rounded transition-colors"
-                      >
-                        {restoringId === snap.id
-                          ? <Loader2 size={11} className="animate-spin" />
-                          : <RotateCcw size={11} />}
-                        Restaurar
-                      </button>
-                      <button
-                        onClick={() => setConfirmingId(null)}
-                        disabled={restoringId !== null}
-                        className="px-2.5 py-1 text-muted-foreground hover:text-foreground text-xs rounded transition-colors"
-                      >
-                        Cancelar
-                      </button>
+              {/* Sección secundaria colapsada: puntos de restauración
+                  (pre_restore). Sólo se muestra el más reciente. */}
+              {latestPreRestore && (
+                <div className="pt-2">
+                  <button
+                    onClick={() => setShowPreRestore((v) => !v)}
+                    className="w-full flex items-center gap-1.5 px-1 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showPreRestore ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    Punto de restauración
+                  </button>
+                  {showPreRestore && (
+                    <div className="mt-2">
+                      {renderSnapshotCard(latestPreRestore)}
                     </div>
-                  </div>
-                )}
-              </div>
-            ))
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
