@@ -3,19 +3,28 @@ import { X, Clock, RotateCcw, Tag, Loader2, GitBranch } from 'lucide-react';
 import type { FileSystemTree } from '@webcontainer/api';
 import { SupabaseService } from '@/services/SupabaseService';
 
+// CAMBIO 3 — el listado del drawer NO baja file_tree (puede pesar MBs por fila,
+// x50 filas). El árbol se descarga sólo al ejecutar un restore (select por id).
 interface Snapshot {
   id: string;
   label: string | null;
   trigger: string;
   created_at: string;
-  file_tree: any;
+}
+
+// Metadatos que el drawer entrega al padre junto al árbol restaurado, para que
+// el mensaje de sistema del chat ("restaurado a la versión de …") sea honesto.
+export interface RestoreMeta {
+  label: string | null;
+  created_at: string;
+  trigger: string;
 }
 
 interface HistoryDrawerProps {
   projectId: string | null;
   isOpen: boolean;
   onClose: () => void;
-  onRestore: (tree: FileSystemTree) => void;
+  onRestore: (tree: FileSystemTree, meta: RestoreMeta) => void | Promise<void>;
   currentTree: FileSystemTree;
 }
 
@@ -25,6 +34,7 @@ const TRIGGER_COLORS: Record<string, string> = {
   zip_upload: 'bg-purple-600/20 text-purple-400 border-purple-600/30',
   template_load: 'bg-green-600/20 text-green-400 border-green-600/30',
   manual_save: 'bg-amber-600/20 text-amber-400 border-amber-600/30',
+  pre_restore: 'bg-slate-600/20 text-slate-300 border-slate-600/30',
 };
 
 const TRIGGER_LABELS: Record<string, string> = {
@@ -33,6 +43,7 @@ const TRIGGER_LABELS: Record<string, string> = {
   zip_upload: 'Upload',
   template_load: 'Template',
   manual_save: 'Saved',
+  pre_restore: 'Pre-restore',
 };
 
 export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTree }: HistoryDrawerProps) {
@@ -41,15 +52,19 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
   const [showLabelInput, setShowLabelInput] = useState(false);
   const [labelValue, setLabelValue] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  // CAMBIO 1a — confirmación previa al restore + estado de descarga del árbol.
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
 
   const fetchSnapshots = async () => {
     if (!projectId) return;
     setIsLoading(true);
     try {
       const supabase = SupabaseService.getInstance().client;
+      // CAMBIO 3 — listado ligero: NO seleccionamos file_tree.
       const { data } = await supabase
         .from('forge_snapshots')
-        .select('id, label, trigger, created_at, file_tree')
+        .select('id, label, trigger, created_at')
         .eq('project_id', projectId)
         .order('created_at', { ascending: false })
         .limit(50);
@@ -64,6 +79,11 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
   useEffect(() => {
     if (isOpen && projectId) {
       fetchSnapshots();
+    }
+    if (!isOpen) {
+      // Al cerrar, olvidar cualquier confirmación pendiente.
+      setConfirmingId(null);
+      setRestoringId(null);
     }
   }, [isOpen, projectId]);
 
@@ -93,14 +113,36 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
     }
   };
 
-  const handleRestore = (snapshot: Snapshot) => {
+  // CAMBIO 1a/CAMBIO 3 — al confirmar, se baja el file_tree de ESE snapshot
+  // (select por id, el único fetch que trae el árbol) y se delega en el padre
+  // el restore por el embudo normal (auto-checkpoint + escritura + recompile).
+  const handleRestore = async (snapshot: Snapshot) => {
+    if (!projectId) return;
+    setRestoringId(snapshot.id);
     try {
-      const parsed: FileSystemTree = typeof snapshot.file_tree === 'string'
-        ? JSON.parse(snapshot.file_tree)
-        : snapshot.file_tree;
-      onRestore(parsed);
+      const supabase = SupabaseService.getInstance().client;
+      const { data, error } = await supabase
+        .from('forge_snapshots')
+        .select('file_tree')
+        .eq('id', snapshot.id)
+        .single();
+      if (error || !data) {
+        console.error('[HistoryDrawer] Failed to load snapshot tree:', error);
+        return;
+      }
+      const parsed: FileSystemTree = typeof data.file_tree === 'string'
+        ? JSON.parse(data.file_tree)
+        : data.file_tree;
+      setConfirmingId(null);
+      await onRestore(parsed, {
+        label: snapshot.label,
+        created_at: snapshot.created_at,
+        trigger: snapshot.trigger,
+      });
     } catch (e) {
-      console.error('[HistoryDrawer] Failed to parse file tree:', e);
+      console.error('[HistoryDrawer] Failed to restore snapshot:', e);
+    } finally {
+      setRestoringId(null);
     }
   };
 
@@ -209,13 +251,43 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
                     <p className="text-muted-foreground text-xs mt-0.5">{formatDate(snap.created_at)}</p>
                   </div>
                   <button
-                    onClick={() => handleRestore(snap)}
-                    className="flex items-center gap-1 px-2 py-1 bg-primary hover:bg-primary/90 text-white text-xs rounded transition-colors shrink-0"
+                    onClick={() => setConfirmingId(snap.id)}
+                    disabled={restoringId !== null}
+                    className="flex items-center gap-1 px-2 py-1 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-xs rounded transition-colors shrink-0"
                   >
                     <RotateCcw size={11} />
                     Restore
                   </button>
                 </div>
+
+                {/* CAMBIO 1a — confirmación: todo restore guarda antes un
+                    checkpoint del estado actual, así que siempre es reversible. */}
+                {confirmingId === snap.id && (
+                  <div className="mt-3 pt-3 border-t border-border">
+                    <p className="text-xs text-muted-foreground mb-2">
+                      ¿Restaurar a esta versión? Se guardará un checkpoint del estado actual.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleRestore(snap)}
+                        disabled={restoringId !== null}
+                        className="flex items-center gap-1 px-2.5 py-1 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-xs rounded transition-colors"
+                      >
+                        {restoringId === snap.id
+                          ? <Loader2 size={11} className="animate-spin" />
+                          : <RotateCcw size={11} />}
+                        Restaurar
+                      </button>
+                      <button
+                        onClick={() => setConfirmingId(null)}
+                        disabled={restoringId !== null}
+                        className="px-2.5 py-1 text-muted-foreground hover:text-foreground text-xs rounded transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))
           )}
