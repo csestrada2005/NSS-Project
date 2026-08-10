@@ -450,16 +450,26 @@ const BACKEND_RULES = `When the user asks for backend features (e.g., 'save this
  * own runtime deps (react, react-dom, react-router-dom + the shadcn set).
  */
 const KNOWN_DEP_VERSIONS: Record<string, string> = {
-  // Explicitly runtime-vendored / encouraged
-  'framer-motion': '^11.0.0',
-  'lucide-react': '^0.446.0',
-  clsx: '^2.1.1',
-  'tailwind-merge': '^2.5.2',
-  'react-router-dom': '^6.26.2',
+  // Explicitly runtime-vendored / encouraged. PINNED (CIRUGÍA P1-6, CAMBIO 4) in
+  // lockstep with the template package.json (shadcnDefaults + shadcnComponents +
+  // templates.ts) so an exported project reproduces the tree the preview ran.
+  'framer-motion': '11.15.0',
+  'lucide-react': '0.469.0',
+  clsx: '2.1.1',
+  'tailwind-merge': '2.6.0',
+  'react-router-dom': '^7.18.2',
+  // shadcn base — cva + the Radix primitives the 10 template components import.
+  // Resolve via esm.sh in the preview; declared here so `npm install` outside
+  // Wyrd installs the exact versions the template ships.
+  'class-variance-authority': '0.7.1',
+  'tailwindcss-animate': '1.0.7',
+  '@radix-ui/react-slot': '1.1.1',
+  '@radix-ui/react-accordion': '1.2.2',
+  '@radix-ui/react-dialog': '1.1.4',
+  '@radix-ui/react-label': '2.1.1',
+  '@radix-ui/react-separator': '1.1.1',
+  '@radix-ui/react-tabs': '1.1.2',
   // Common well-known packages the preview resolves via esm.sh
-  'class-variance-authority': '^0.7.0',
-  'tailwindcss-animate': '^1.0.7',
-  '@radix-ui/react-slot': '^1.0.2',
   'date-fns': '^4.1.0',
   recharts: '^2.12.0',
   zustand: '^4.5.0',

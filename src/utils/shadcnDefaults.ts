@@ -1,10 +1,16 @@
+// Versions are PINNED (CIRUGÍA P1-6, CAMBIO 4) and current. These cover the
+// template's shadcn/ui base (button, badge use cva + slot) plus the shared
+// className utilities. The 5 Radix packages the other components need live in
+// UI_COMPONENT_DEPENDENCIES (shadcnComponents.ts); framer-motion (motion
+// primitives) is added directly in templates.ts. Keep every version in lockstep
+// with AIOrchestrator's KNOWN_DEP_VERSIONS.
 export const SHADCN_DEPENDENCIES = {
-  "class-variance-authority": "^0.7.0",
-  "clsx": "^2.1.1",
-  "tailwind-merge": "^2.5.2",
-  "tailwindcss-animate": "^1.0.7",
-  "lucide-react": "^0.446.0",
-  "@radix-ui/react-slot": "^1.0.2"
+  "class-variance-authority": "0.7.1",
+  "clsx": "2.1.1",
+  "tailwind-merge": "2.6.0",
+  "tailwindcss-animate": "1.0.7",
+  "lucide-react": "0.469.0",
+  "@radix-ui/react-slot": "1.1.1"
 };
 
 export const SHADCN_FILES = {
@@ -88,6 +94,20 @@ export default {
 				'4': 'hsl(var(--chart-4))',
 				'5': 'hsl(var(--chart-5))'
 			}
+		},
+		keyframes: {
+			'accordion-down': {
+				from: { height: '0' },
+				to: { height: 'var(--radix-accordion-content-height)' }
+			},
+			'accordion-up': {
+				from: { height: 'var(--radix-accordion-content-height)' },
+				to: { height: '0' }
+			}
+		},
+		animation: {
+			'accordion-down': 'accordion-down 0.2s ease-out',
+			'accordion-up': 'accordion-up 0.2s ease-out'
 		}
 	}
   },
@@ -174,8 +194,16 @@ export default {
   'src/lib/utils.ts': {
     file: {
       contents: `
-export function cn(...args: Array<string | false | null | undefined | (string | false | null | undefined)[]>): string {
-  return args.flat().filter(Boolean).join(' ');
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+// Real shadcn cn: clsx builds the conditional class list, tailwind-merge dedupes
+// conflicting Tailwind utilities so a caller's \`className\` override wins over a
+// component's default. Both packages are vendored in the preview runtime (see
+// server/compiler.js ALIAS) and declared in package.json, so this resolves the
+// same in Wyrd and in an exported build.
+export function cn(...inputs: ClassValue[]): string {
+  return twMerge(clsx(inputs));
 }
 
 export default cn;
