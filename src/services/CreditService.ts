@@ -32,10 +32,12 @@ export class CreditService {
   }
 
   /**
-   * Settle the charge for a completed intent. The server decides whether to
-   * burn the free prompt, log admin usage, or atomically deduct credits, and
-   * returns the new balance. Returns the server's balance (or null on failure)
-   * so the caller can feed the credit chip directly.
+   * DEPRECATED (CIRUGÍA: cobro dentro del pipeline servido). The charge is now
+   * applied server-side from tokens the server accumulates per intent; the
+   * client no longer settles at close (not calling used to mean not paying).
+   * Kept as a no-op returning null so any remaining caller compiles without
+   * hitting the deprecated /api/credits/deduct endpoint. Balance refresh flows
+   * through platformService.closeIntent().
    */
   static async settleIntent(
     intentType: string,
@@ -43,12 +45,11 @@ export class CreditService {
     tokensOutput: number,
     projectId?: string
   ): Promise<{ balance: number | null; deducted: number } | null> {
-    return platformService.deductCredits({
-      tokensInput,
-      tokensOutput,
-      intentType,
-      projectId,
-    });
+    void intentType;
+    void tokensInput;
+    void tokensOutput;
+    void projectId;
+    return null;
   }
 
   /**

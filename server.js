@@ -10,6 +10,7 @@ import { createClient } from '@supabase/supabase-js';
 import { compileFiles } from './server/compiler.js';
 import { searchUnsplash } from './server/unsplash.js';
 import { computeCreditsFromTokens } from './server/credits.js';
+import { createIntentAccumulator } from './server/intentAccumulator.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -51,6 +52,14 @@ if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }
+
+// ---------------------------------------------------------------------------
+// Intent accumulator (CIRUGÍA: cobro dentro del pipeline servido). Every
+// /api/chat-forge request tagged with x-forge-intent-id folds its tokens here;
+// the charge is applied SERVER-SIDE (see chargeAccumulatedIntent + sweepIntents
+// below), never from a client trigger. See server/intentAccumulator.js.
+// ---------------------------------------------------------------------------
+const intentAccumulator = createIntentAccumulator();
 
 // ---------------------------------------------------------------------------
 // AES-256 encryption helpers (for storing service role keys)
@@ -462,6 +471,30 @@ app.post('/api/chat-forge', async (req, res) => {
       + ` cache_write=${u.cache_creation_input_tokens ?? 0}`
       + (stepMode ? ` mode=${stepMode}` : '')
     );
+
+    // CIRUGÍA (cobro dentro del pipeline): fold this served request's tokens into
+    // its intent so the charge can be applied SERVER-SIDE at close, with no
+    // client trigger. Only successful responses carry real usage; a failed /
+    // retried call (no usage) contributes nothing. userId comes from the auth
+    // middleware — never from the body — so tokens are billed to the real caller.
+    const intentId = req.headers['x-forge-intent-id'];
+    if (intentId && response.ok) {
+      intentAccumulator.accumulate(
+        intentId,
+        {
+          userId: req.userId,
+          projectId: req.headers['x-forge-project-id'] || null,
+          intentType: req.headers['x-forge-intent-type'] || null,
+          tokensInput: u.input_tokens ?? 0,
+          tokensOutput: u.output_tokens ?? 0,
+        },
+        Date.now()
+      );
+      // Lazy sweep: charge any OTHER intent that has gone idle/expired. Never
+      // blocks this response — fire and forget.
+      sweepIntents().catch((err) => console.error('[credits] lazy sweep error:', err));
+    }
+
     res.status(response.status).json(data);
   } catch (err) {
     console.error('[chat-forge] Error:', err);
@@ -478,7 +511,14 @@ app.post('/api/chat-forge', async (req, res) => {
 // all of it is re-derived from the DB on each call.
 //
 //   POST /api/credits/check   — preflight at intent START. 402 if broke.
-//   POST /api/credits/deduct  — atomic charge at intent CLOSE. 402 on race.
+//   POST /api/credits/close   — accelerator: close+charge the accumulated intent
+//                               now (the sweep does it anyway). 402 on race.
+//   POST /api/credits/deduct  — DEPRECATED no-op (charge is server-side now).
+//
+// The actual deduction is driven by the intent accumulator + sweep (see above):
+// every /api/chat-forge request tagged x-forge-intent-id folds its tokens, and
+// chargeAccumulatedIntent charges them when the intent closes. No client trigger
+// is required — that is the whole point of this cirugía.
 // ---------------------------------------------------------------------------
 
 // Resolve the authoritative credit context for a user, server-side.
@@ -534,37 +574,46 @@ app.post('/api/credits/check', async (req, res) => {
   return res.status(402).json({ allowed: false, error: 'INSUFFICIENT_CREDITS', balance: 0 });
 });
 
-// Charge — applied at the CLOSE of an intent (success / partial only; the
-// client does not call this for cancelled/failed runs with no work produced).
-app.post('/api/credits/deduct', async (req, res) => {
-  const userId = req.userId;
-  const {
-    tokensInput = 0,
-    tokensOutput = 0,
-    intentType = null,
-    projectId = null,
-  } = req.body || {};
+// Charge the credits ACCUMULATED for one intent, server-side. This is the sole
+// deduction path now — invoked by the idle/TTL sweep and by the explicit-close
+// accelerator (/api/credits/close), never with token amounts supplied by the
+// client. `rec` is an accumulator record: { userId, projectId, intentType,
+// tokensInput, tokensOutput }. Returns a plain result object (no HTTP): the
+// caller decides how to surface it.
+//
+//   { balance, deducted }                    — settled (deducted may be 0)
+//   { balance, deducted: 0, unlimited: true } — admin / unlimited, never charged
+//   { balance, deducted: 0, freePrompt: true }— free prompt burned instead
+//   { balance, deducted: 0, insufficient: true } — race drained the wallet
+//   { balance: null, deducted: 0 }            — no user / no admin client / DB down
+async function chargeAccumulatedIntent(rec) {
+  const userId = rec?.userId;
+  const projectId = rec?.projectId ?? null;
+  const intentType = rec?.intentType ?? null;
+  const tokensInput = rec?.tokensInput ?? 0;
+  const tokensOutput = rec?.tokensOutput ?? 0;
 
-  if (!userId) {
-    return res.json({ balance: null, deducted: 0 });
-  }
-  if (!supabaseAdmin) {
-    // Cannot write without the admin client — report no change, don't fabricate.
-    return res.json({ balance: null, deducted: 0 });
-  }
+  if (!userId) return { balance: null, deducted: 0 };
+  if (!supabaseAdmin) return { balance: null, deducted: 0 };
 
   const ctx = await getCreditContext(userId);
-  if (!ctx) {
-    return res.json({ balance: null, deducted: 0 });
-  }
+  if (!ctx) return { balance: null, deducted: 0 };
 
-  const { creditsToDeduct, totalCostUsd } = computeCreditsFromTokens(tokensInput, tokensOutput);
+  // "Trabajo servido es trabajo cobrado": served work is any tokens accumulated
+  // for the intent (success OR cancelled — the persisted steps stay, so they
+  // are charged). Zero tokens means nothing was served; never burn the free
+  // prompt or charge for an empty intent.
+  const servedWork = tokensInput > 0 || tokensOutput > 0;
+  const { creditsToDeduct: rawCredits, totalCostUsd } = computeCreditsFromTokens(
+    tokensInput,
+    tokensOutput
+  );
 
   try {
     // Admin / unlimited → never charged. Log an admin_usage audit row (0 credits)
     // when there was real usage, then report the (unbounded) balance.
     if (ctx.isAdmin || ctx.unlimited) {
-      if (creditsToDeduct > 0) {
+      if (servedWork) {
         await supabaseAdmin.from('forge_credit_transactions').insert({
           user_id: userId,
           project_id: projectId,
@@ -576,7 +625,12 @@ app.post('/api/credits/deduct', async (req, res) => {
           cost_usd: totalCostUsd,
         });
       }
-      return res.json({ balance: null, deducted: 0, unlimited: true });
+      return { balance: null, deducted: 0, unlimited: true };
+    }
+
+    // Empty intent (no served work) → nothing to charge, free prompt untouched.
+    if (!servedWork) {
+      return { balance: ctx.balance, deducted: 0 };
     }
 
     // Free prompt still available → burn it instead of charging. Update the flag
@@ -594,17 +648,18 @@ app.post('/api/credits/deduct', async (req, res) => {
           .from('forge_credit_wallets')
           .insert({ user_id: userId, balance_credits: 0, free_prompt_used: true });
       }
-      return res.json({ balance: ctx.balance, deducted: 0, freePrompt: true });
+      return { balance: ctx.balance, deducted: 0, freePrompt: true };
     }
 
-    // Zero-cost close (e.g. fast lane) with the free prompt already spent → no-op.
-    if (creditsToDeduct <= 0) {
-      return res.json({ balance: ctx.balance, deducted: 0 });
-    }
+    // Charge floor (PIEZA 6): a non-admin intent that served real work never
+    // rounds to 0 credits and slips through free. computeCreditsFromTokens ceils,
+    // so any positive token count is already >= 1 credit; Math.max(1, ...) makes
+    // that floor explicit and future-proof against a formula change.
+    const creditsToDeduct = Math.max(1, rawCredits);
 
     // Atomic charge. deduct_credits does the balance>=amount guard + audit insert
     // in one round-trip; success=false means a concurrent charge drained the
-    // wallet after our preflight, so we answer 402.
+    // wallet after our preflight.
     const { data, error } = await supabaseAdmin.rpc('deduct_credits', {
       p_user_id: userId,
       p_amount: creditsToDeduct,
@@ -618,22 +673,101 @@ app.post('/api/credits/deduct', async (req, res) => {
     if (error) {
       console.error('[credits] deduct_credits rpc error:', error);
       // Don't fabricate a charge on infra failure; report current balance.
-      return res.json({ balance: ctx.balance, deducted: 0 });
+      return { balance: ctx.balance, deducted: 0 };
     }
 
     const row = Array.isArray(data) ? data[0] : data;
     if (!row?.success) {
-      return res.status(402).json({
-        error: 'INSUFFICIENT_CREDITS',
-        balance: row?.new_balance ?? ctx.balance,
-        deducted: 0,
-      });
+      return { balance: row?.new_balance ?? ctx.balance, deducted: 0, insufficient: true };
     }
-    return res.json({ balance: row.new_balance, deducted: creditsToDeduct });
+    return { balance: row.new_balance, deducted: creditsToDeduct };
   } catch (err) {
-    console.error('[credits] deduct error:', err);
-    return res.json({ balance: ctx.balance, deducted: 0 });
+    console.error('[credits] chargeAccumulatedIntent error:', err);
+    return { balance: ctx.balance, deducted: 0 };
   }
+}
+
+// Sweep — close and charge every intent that is idle past the window or past
+// its TTL. Runs lazily on each accumulate and on a periodic timer, so a charge
+// lands even if the client never sends an explicit close (the security fix:
+// no client trigger can be withheld to avoid paying). Each record was removed
+// from the map by collectExpired, so a concurrent explicit close can't double
+// charge it.
+let sweepInFlight = false;
+async function sweepIntents() {
+  if (sweepInFlight) return; // don't overlap a slow DB round-trip with the timer
+  sweepInFlight = true;
+  try {
+    const due = intentAccumulator.collectExpired(Date.now());
+    for (const rec of due) {
+      try {
+        const result = await chargeAccumulatedIntent(rec);
+        console.log(
+          `[credits] swept intent=${rec.intentId} reason=${rec.closeReason}`
+          + ` in=${rec.tokensInput} out=${rec.tokensOutput}`
+          + ` deducted=${result.deducted}`
+          + (result.unlimited ? ' unlimited' : '')
+          + (result.freePrompt ? ' freePrompt' : '')
+          + (result.insufficient ? ' INSUFFICIENT' : '')
+        );
+      } catch (err) {
+        console.error('[credits] sweep charge error:', err);
+      }
+    }
+  } finally {
+    sweepInFlight = false;
+  }
+}
+
+// Periodic backstop so an intent still charges when NO further traffic arrives
+// to drive the lazy sweep. unref() so it never keeps the process alive on its
+// own. Only meaningful when the admin client can actually write.
+if (supabaseAdmin) {
+  const sweepTimer = setInterval(() => {
+    sweepIntents().catch((err) => console.error('[credits] periodic sweep error:', err));
+  }, 30_000);
+  if (typeof sweepTimer.unref === 'function') sweepTimer.unref();
+}
+
+// Explicit close — ACCELERATOR ONLY. The client may call this at intent end so
+// the balance refreshes promptly; correctness does not depend on it (the sweep
+// charges regardless). Carries NO token amounts — the server charges what it
+// accumulated. Deducted server-side, so a client that never calls this (or lies
+// about it) still pays via the sweep.
+app.post('/api/credits/close', async (req, res) => {
+  const { intentId } = req.body || {};
+  if (!intentId) {
+    return res.status(400).json({ error: 'intentId is required' });
+  }
+  // Ownership: only the user who opened the intent may close it. Peek first so a
+  // mismatched caller can't consume (and thereby discard) another user's record.
+  const pending = intentAccumulator.get(intentId);
+  if (pending && req.userId && pending.userId && pending.userId !== req.userId) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  const rec = intentAccumulator.close(intentId);
+  if (!rec) {
+    // Unknown or already closed (by a prior call or the sweep) — nothing to do.
+    return res.json({ balance: null, deducted: 0, closed: false });
+  }
+  const result = await chargeAccumulatedIntent(rec);
+  if (result.insufficient) {
+    return res.status(402).json({
+      error: 'INSUFFICIENT_CREDITS',
+      balance: result.balance,
+      deducted: 0,
+      closed: true,
+    });
+  }
+  return res.json({ ...result, closed: true });
+});
+
+// DEPRECATED (CIRUGÍA: cobro dentro del pipeline servido). The charge no longer
+// depends on a client call. This endpoint is a no-op kept only so an older
+// client build cannot 404; it never writes to the wallet. All deduction now
+// happens server-side via the intent accumulator + sweep.
+app.post('/api/credits/deduct', async (req, res) => {
+  return res.json({ balance: null, deducted: 0, deprecated: true });
 });
 
 // ---------------------------------------------------------------------------

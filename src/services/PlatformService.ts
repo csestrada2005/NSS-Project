@@ -19,6 +19,75 @@ export interface CompileErrorDetail {
 }
 
 class PlatformService {
+  // ---------------------------------------------------------------------------
+  // Intent correlation (CIRUGÍA: cobro dentro del pipeline servido). One user
+  // action ("intent") drives many /api/chat-forge calls (classify → plan →
+  // implement → verify). The server accumulates tokens per intent and charges
+  // server-side, so every forge request in the pipeline must carry the SAME
+  // x-forge-intent-id. The browser runs one intent at a time (the run is gated
+  // by an AbortController + generation overlay), so a single "current intent"
+  // singleton is safe. userId/tokens are NEVER trusted from the client — the
+  // server derives the user from auth and reads token usage from the upstream
+  // response; this id only correlates the calls.
+  // ---------------------------------------------------------------------------
+  private currentIntent: { id: string; projectId?: string; intentType?: string } | null = null;
+
+  /** Open a new intent and return its id. Call once, before the first forge call. */
+  beginIntent(meta: { projectId?: string } = {}): string {
+    const id =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `intent-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    this.currentIntent = { id, projectId: meta.projectId };
+    return id;
+  }
+
+  /** Tag the open intent with its classified type (best-effort audit metadata). */
+  setIntentType(intentType: string): void {
+    if (this.currentIntent) this.currentIntent.intentType = intentType;
+  }
+
+  /** Headers correlating a forge request to the open intent (empty if none). */
+  getForgeIntentHeaders(): Record<string, string> {
+    if (!this.currentIntent) return {};
+    const h: Record<string, string> = { 'x-forge-intent-id': this.currentIntent.id };
+    if (this.currentIntent.projectId) h['x-forge-project-id'] = this.currentIntent.projectId;
+    if (this.currentIntent.intentType) h['x-forge-intent-type'] = this.currentIntent.intentType;
+    return h;
+  }
+
+  /**
+   * Close the open intent. This is an ACCELERATOR: it asks the server to charge
+   * the accumulated tokens now so the balance chip refreshes promptly. It is not
+   * required for correctness — the server sweeps idle intents and charges them
+   * with no client trigger. Best-effort: any failure is swallowed (the sweep
+   * still charges). Dispatches forge:credits-updated with the server's fresh
+   * balance so the UI updates without a separate wallet read.
+   */
+  async closeIntent(): Promise<void> {
+    const intent = this.currentIntent;
+    this.currentIntent = null;
+    if (!intent) return;
+    try {
+      const headers = await this.getHeaders();
+      const response = await fetch('/api/credits/close', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ intentId: intent.id }),
+      });
+      this.handleAuthError(response);
+      let detail: { balance: number | null; deducted: number } | undefined;
+      if (response.ok || response.status === 402) {
+        detail = await response.json().catch(() => undefined);
+      }
+      window.dispatchEvent(new CustomEvent('forge:credits-updated', { detail }));
+    } catch (err) {
+      console.warn('[PlatformService] closeIntent failed (sweep will charge):', err);
+      // Still nudge the UI to re-read the wallet via its owner_read path.
+      window.dispatchEvent(new CustomEvent('forge:credits-updated'));
+    }
+  }
+
   private async getHeaders(): Promise<HeadersInit> {
     const { Authorization } = await SupabaseService.getInstance().getAuthHeader();
     return {
@@ -57,7 +126,13 @@ class PlatformService {
       const baseHeaders = await this.getHeaders();
       const response = await fetch('/api/chat-forge', {
         method: 'POST',
-        headers: { ...baseHeaders, 'anthropic-version': '2023-06-01' },
+        headers: {
+          ...baseHeaders,
+          'anthropic-version': '2023-06-01',
+          // Correlate this call to the open intent so the server can accumulate
+          // and charge its tokens server-side.
+          ...this.getForgeIntentHeaders(),
+        },
         body: JSON.stringify(body),
         signal,
       });

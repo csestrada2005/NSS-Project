@@ -872,11 +872,14 @@ export class AIOrchestrator {
   }
 
   /**
-   * Settle the credit charge for a closed intent and notify the UI. The server
-   * is authoritative: it decides whether to burn the free prompt, log admin
-   * usage, or atomically deduct credits, and returns the new balance, which we
-   * forward to the credit chip via the event detail. Best-effort — a settle
-   * failure never blocks the user (the work is already done).
+   * DEPRECATED (CIRUGÍA: cobro dentro del pipeline servido). Charging no longer
+   * happens from a client call at intent close — it is applied SERVER-SIDE from
+   * the tokens the server itself accumulates per intent (see PlatformService
+   * intent headers + server.js chargeAccumulatedIntent/sweep). This method is
+   * kept as a no-op so the existing lane call sites stay untouched; the actual
+   * charge + balance refresh are driven by platformService.closeIntent() and the
+   * server sweep. The `tokens*` args are intentionally ignored — the client is
+   * never trusted for billing amounts.
    */
   private static async settleCredits(
     intentType: string,
@@ -884,10 +887,12 @@ export class AIOrchestrator {
     tokensOutput: number,
     projectId?: string
   ): Promise<void> {
-    const settle = await CreditService.settleIntent(intentType, tokensInput, tokensOutput, projectId);
-    window.dispatchEvent(
-      new CustomEvent('forge:credits-updated', { detail: settle ?? undefined })
-    );
+    // no-op — server charges the accumulated intent. The tokens are ignored on
+    // purpose: the client is never trusted for billing amounts.
+    void intentType;
+    void tokensInput;
+    void tokensOutput;
+    void projectId;
   }
 
   /**
@@ -1029,6 +1034,11 @@ export class AIOrchestrator {
           risk: 'medium' as const,
           reasoning: 'No memory available; defaulting to modify_existing.',
         };
+
+    // Tag the open intent with its classified type so the server records it on
+    // the credit transaction (audit metadata only — billing derives userId and
+    // tokens server-side, never from the client).
+    platformService.setIntentType(intent.type);
 
     // ------------------------------------------------------------------
     // Question intent — answer in chat, no file changes
