@@ -1,6 +1,7 @@
 import type { BuildStep } from './Architect';
 import type { ProjectMemory } from './ProjectMemoryService';
 import { SupabaseService } from './SupabaseService';
+import { platformService } from './PlatformService';
 import { sanitizeFileContent } from '../utils/sanitizeFileContent';
 import { buildProjectContextPrefix } from './promptRules';
 import { cachedSystemBlocks } from './promptCache';
@@ -514,6 +515,10 @@ export class Implementer {
           'Content-Type': 'application/json',
           Authorization,
           'anthropic-version': '2023-06-01',
+          // This raw fetch bypasses PlatformService.callForgeChat, so it must
+          // attach the intent-correlation headers itself — otherwise the server
+          // never accumulates the Implementer's (often largest) token spend.
+          ...platformService.getForgeIntentHeaders(),
         };
         if (stepMode) headers['x-forge-step-mode'] = stepMode;
 

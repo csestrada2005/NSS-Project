@@ -19,6 +19,7 @@ import { ChatInterface, type Message } from '../components/ChatInterface';
 import { Terminal, type TerminalRef } from '../components/Terminal';
 import { PropertyPanel } from '../components/studio/PropertyPanel';
 import { AIOrchestrator } from '../services/AIOrchestrator';
+import { platformService } from '../services/PlatformService';
 import { SupabaseService } from '../services/SupabaseService';
 import { compileWithMeta, classifyCompileResult, isPreviewError, type OidMap } from '../services/BrowserCompiler';
 import { isAbortError } from '../utils/abort';
@@ -1411,6 +1412,12 @@ export function StudioEngine() {
     terminalRef.current?.clear();
     terminalRef.current?.write('\r\n\x1b[33m⚡ Starting build...\x1b[0m\r\n');
 
+    // CIRUGÍA (cobro dentro del pipeline servido): abrir un intent correlaciona
+    // todas las llamadas /api/chat-forge de esta acción bajo un mismo id, para
+    // que el server acumule y cobre server-side. El cierre (finally) es sólo un
+    // acelerador del refresco de saldo; el server cobra igual vía su sweep aunque
+    // no lleguemos a cerrarlo.
+    platformService.beginIntent({ projectId });
     try {
       lastChangeSource.current = 'ai';
       const activeFiles = filesOverride ?? files;
@@ -1508,6 +1515,10 @@ export function StudioEngine() {
       terminalRef.current?.write('\r\n\x1b[31m❌ Unexpected error.\x1b[0m\r\n');
       return { success: false, modifiedFiles: [] };
     } finally {
+      // Cerrar el intent: cobra server-side lo acumulado (incluye runs
+      // cancelados — trabajo servido es trabajo cobrado) y refresca el saldo.
+      // Best-effort; el sweep del server cubre cualquier fallo aquí.
+      void platformService.closeIntent();
       setIsGenerating(false);
       setGenerationProgress(null);
       // CAMBIO 2 — cierre del run: soltamos el controller y rehabilitamos el botón.
