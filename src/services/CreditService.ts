@@ -26,6 +26,7 @@ export class CreditService {
     const res = await platformService.checkCredits();
     return {
       allowed: res.allowed,
+      reason: res.reason,
       isFreePrompt: res.isFreePrompt ?? false,
       isAdmin: res.isAdmin ?? false,
     };

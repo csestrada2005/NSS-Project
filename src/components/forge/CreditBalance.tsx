@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Zap, Infinity as InfinityIcon } from 'lucide-react';
 import { CreditService } from '../../services/CreditService';
+import { formatCredits } from '../../lib/creditDisplay';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -65,7 +66,7 @@ export default function CreditBalance() {
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5 bg-background/90 border border-primary/50 rounded-full px-3 py-1.5 text-xs text-primary font-medium">
               <Zap size={12} className="shrink-0" />
-              <span>0 credits</span>
+              <span>{formatCredits(0)} créditos</span>
             </div>
             <button
               onClick={() => { toast('Credit packages coming soon'); navigate('/forge'); }}
@@ -77,7 +78,7 @@ export default function CreditBalance() {
         ) : (
           <div className="flex items-center gap-1.5 bg-background/90 border border-border rounded-full px-3 py-1.5 text-xs text-foreground font-medium">
             <Zap size={12} className="shrink-0 text-yellow-400" />
-            <span>{balance.toLocaleString()} credits</span>
+            <span>{formatCredits(balance)} créditos</span>
           </div>
         )}
       </div>

@@ -13,7 +13,8 @@ import { Architect, type BuildStep } from './Architect';
 import { Implementer, type ProgressCallback } from './Implementer';
 import { Verifier, type RetryCallback } from './Verifier';
 import { CreditService } from './CreditService';
-import { REACT_TAILWIND_RULES } from './promptRules';
+import { REACT_TAILWIND_RULES, buildProjectContextPrefix } from './promptRules';
+import { cachedSystem, cachedSystemBlocks } from './promptCache';
 import { DesignBriefService } from './DesignBriefService';
 import { isAbortError } from '../utils/abort';
 
@@ -37,6 +38,13 @@ export interface OrchestratorResult {
   steps?: BuildStep[];
   outcome?: 'success' | 'failed' | 'cancelled';
   error?: string;
+  /**
+   * CAMBIO 2c — when error === 'INSUFFICIENT_CREDITS', the server's reason for
+   * the 402 ('FREE_PROMPT_SPENT' | 'INSUFFICIENT_BALANCE'), so the UI shows the
+   * honest copy (free-build-used only when the free prompt was actually spent
+   * without a purchase). Undefined for every other outcome.
+   */
+  errorReason?: string;
   warning?: string;
   tokensInput?: number;
   tokensOutput?: number;
@@ -993,6 +1001,7 @@ export class AIOrchestrator {
     // ------------------------------------------------------------------
     let creditUserId: string | null = null;
     let creditAllowed = true;
+    let creditReason: string | undefined;
     try {
       const supabase = SupabaseService.getInstance().client;
       const { data: { user } } = await supabase.auth.getUser();
@@ -1002,6 +1011,7 @@ export class AIOrchestrator {
         // user is out of credits (the server answers 402 → allowed:false).
         const creditCheck = await CreditService.canMakeCall();
         creditAllowed = creditCheck.allowed;
+        creditReason = creditCheck.reason;
       }
     } catch (e) {
       console.error('[AIOrchestrator] Credit check error:', e);
@@ -1009,9 +1019,15 @@ export class AIOrchestrator {
     }
 
     // Out of credits → stop before any LLM call. The UI renders the honest
-    // "top up credits" message for this error code.
+    // "top up credits" message for this error code, choosing the wording from
+    // errorReason (free-build-used vs insufficient-balance).
     if (creditUserId && !creditAllowed) {
-      return { modifiedFiles: [], outcome: 'failed', error: 'INSUFFICIENT_CREDITS' };
+      return {
+        modifiedFiles: [],
+        outcome: 'failed',
+        error: 'INSUFFICIENT_CREDITS',
+        errorReason: creditReason,
+      };
     }
 
     // ------------------------------------------------------------------
@@ -1627,9 +1643,6 @@ export class AIOrchestrator {
     // lane edit too, so a one-off tweak still honors the project's palette,
     // fonts and anti-template rules. Non-blocking: getContext swallows failures.
     const designContext = await DesignContextService.getContext(input, files);
-    const designBlock = designContext
-      ? `\n\nDESIGN SYSTEM CONTEXT (follow it — colors from --brand-*/tokens, no emojis as UI, no hardcoded hex):\n${designContext}`
-      : '';
 
     // Site data contract: always surface src/data/site.ts (single source of
     // truth for contact/brand facts, ~15 lines, fixed shape) so a one-off edit
@@ -1641,19 +1654,29 @@ export class AIOrchestrator {
         ? `\n\nSITE DATA CONTRACT (src/data/site.ts — import facts from here; use these EXACT field shapes. hours is an array of {days, open, close}):\n${siteTs}`
         : '';
 
+    // CAMBIO 1 — prompt caching en el simple lane (mismo patrón del plan lane):
+    // el prefijo estático (reglas + brief + blueprint) es byte-idéntico al del
+    // Architect/Implementer/Verifier de esta generación, así que el edit lo
+    // escribe una vez a cache y las llamadas siguientes de la ventana de 5 min
+    // (incl. las reparaciones del Verifier que dispara abajo) lo leen como
+    // cache_read en vez de re-facturarlo. REACT_TAILWIND_RULES ya incluye el
+    // AVAILABLE RUNTIME, por eso ya no se antepone aparte. El Task (archivo +
+    // cambio pedido) viaja en el user message.
+    const blueprint = generateBlueprintFromFiles(files);
+    const sharedPrefix = buildProjectContextPrefix(designContext, blueprint);
+    const roleBlock =
+      'You are a React/Tailwind expert. The user wants a simple change. ' +
+      'Return ONLY the complete updated file content. No explanation, ' +
+      'no markdown fences. Just the raw file starting from line 1. ' +
+      'Never write the file path as the first line of the file content. File ' +
+      'content must start directly with code (imports, comments, or declarations).' +
+      siteBlock;
+
     try {
       const response = await platformService.callForgeChat({
         model: 'claude-sonnet-4-6',
         max_tokens: 8192,
-        system:
-          'You are a React/Tailwind expert. The user wants a simple change. ' +
-          'Return ONLY the complete updated file content. No explanation, ' +
-          'no markdown fences. Just the raw file starting from line 1. ' +
-          'Never write the file path as the first line of the file content. File ' +
-          'content must start directly with code (imports, comments, or declarations).\n\n' +
-          AVAILABLE_RUNTIME_CONTEXT +
-          designBlock +
-          siteBlock,
+        system: cachedSystemBlocks(sharedPrefix, roleBlock),
         messages: [
           {
             role: 'user',
@@ -1694,9 +1717,10 @@ export class AIOrchestrator {
         signal,
         2,
         // CAMBIO 1 — reparaciones Sonnet del simple lane comparten el prefijo
-        // cacheado (reglas + brief + blueprint) igual que el plan lane.
+        // cacheado (reglas + brief + blueprint) igual que el plan lane. Es el
+        // MISMO sharedPrefix del edit de arriba, así que se sirve desde cache.
         designContext,
-        generateBlueprintFromFiles(files)
+        blueprint
       );
 
       if (verifyResult.success) {
@@ -2031,10 +2055,15 @@ export class AIOrchestrator {
     }));
 
     try {
+      // CAMBIO 1 — el prefijo estático (rol + reglas de formato) no cambia entre
+      // preguntas, así que se marca cacheable: la 1ª pregunta lo escribe a cache
+      // y las siguientes de la ventana lo leen como cache_read. El contexto por
+      // proyecto (blueprint + memoria + archivos + pregunta) viaja en el user
+      // message, fuera del prefijo cacheado.
       const response = await platformService.callForgeChat({
         model: 'claude-sonnet-4-6',
         max_tokens: 1024,
-        system: systemPrompt,
+        system: cachedSystem(systemPrompt),
         messages: [
           ...priorMessages,
           { role: 'user' as const, content: contextBlock },

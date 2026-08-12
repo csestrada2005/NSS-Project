@@ -1377,7 +1377,7 @@ export function StudioEngine() {
     onProgress?: (step: number, total: number, file: string, description?: string) => void,
     onRetry?: (attempt: number, error: string) => void,
     filesOverride?: Map<string, string>
-  ): Promise<{ success: boolean; modifiedFiles: string[]; error?: string; warning?: string; chatResponse?: string; suggestedAction?: string }> => {
+  ): Promise<{ success: boolean; modifiedFiles: string[]; error?: string; errorReason?: string; warning?: string; chatResponse?: string; suggestedAction?: string }> => {
     if (isReadOnly) return { success: false, modifiedFiles: [] };
 
     // Persistencia del mensaje del usuario: embudo común de TODOS los envíos.
@@ -1492,6 +1492,7 @@ export function StudioEngine() {
         success,
         modifiedFiles: result.modifiedFiles,
         error: result.error,
+        errorReason: result.errorReason,
         warning: result.warning,
         chatResponse: result.chatResponse,
         suggestedAction: result.suggestedAction,

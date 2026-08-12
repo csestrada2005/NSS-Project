@@ -26,7 +26,7 @@ interface ChatInterfaceProps {
     message: string,
     onProgress?: (step: number, total: number, file: string, description?: string) => void,
     onRetry?: (attempt: number, error: string) => void
-  ) => Promise<{ success: boolean; modifiedFiles: string[]; error?: string; warning?: string; chatResponse?: string; suggestedAction?: string }>;
+  ) => Promise<{ success: boolean; modifiedFiles: string[]; error?: string; errorReason?: string; warning?: string; chatResponse?: string; suggestedAction?: string }>;
   selectedElement: { tagName: string; className?: string } | null;
   chatHistory?: Message[];
   onHistoryUpdate?: (history: Message[]) => void;
@@ -315,11 +315,17 @@ export function ChatInterface({
     }
   };
 
-  const buildAssistantMessage = (result: { success: boolean; modifiedFiles: string[]; error?: string; warning?: string; chatResponse?: string; suggestedAction?: string }): { content: string; warning?: string; errorType?: 'insufficient_credits' | 'compile_error' | 'generic'; errorDetail?: string; suggestedAction?: string } => {
+  const buildAssistantMessage = (result: { success: boolean; modifiedFiles: string[]; error?: string; errorReason?: string; warning?: string; chatResponse?: string; suggestedAction?: string }): { content: string; warning?: string; errorType?: 'insufficient_credits' | 'compile_error' | 'generic'; errorDetail?: string; suggestedAction?: string } => {
     if (!result.success) {
       if (result.error === 'INSUFFICIENT_CREDITS') {
+        // CAMBIO 2c — the "free build used" copy is only honest when the user
+        // actually spent their free prompt without ever purchasing. Any other
+        // depletion (bought credits, now below the floor) gets the neutral copy.
+        const freePromptSpent = result.errorReason === 'FREE_PROMPT_SPENT';
         return {
-          content: "You've used your free build. Top up credits to continue building.",
+          content: freePromptSpent
+            ? "You've used your free build. Top up credits to continue building."
+            : 'Saldo insuficiente — recarga créditos para continuar.',
           errorType: 'insufficient_credits',
         };
       }

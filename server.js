@@ -521,6 +521,33 @@ app.post('/api/chat-forge', async (req, res) => {
 // is required — that is the whole point of this cirugía.
 // ---------------------------------------------------------------------------
 
+// CAMBIO 2c — preflight floor: a non-admin, non-free-prompt user must hold at
+// least this many INTERNAL credit units to start an intent. Below it the
+// preflight 402s, so a run can never begin on a balance too small to cover even
+// its first served step. The value is in internal units (see DISPLAY_DIVISOR on
+// the client for how it is shown to the user).
+const CREDIT_PREFLIGHT_FLOOR = 10;
+
+// Has this user ever purchased credits? Used only on the 402 path to pick the
+// honest copy: a user who never bought (free prompt spent, balance below floor)
+// sees the "free build used" message; anyone who has purchased sees the neutral
+// "saldo insuficiente" message. Best-effort — any error resolves to false.
+async function hasEverPurchased(userId) {
+  if (!userId || !supabaseAdmin) return false;
+  try {
+    const { data } = await supabaseAdmin
+      .from('forge_credit_transactions')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('type', 'purchase')
+      .limit(1);
+    return Array.isArray(data) && data.length > 0;
+  } catch (err) {
+    console.error('[credits] hasEverPurchased error:', err);
+    return false;
+  }
+}
+
 // Resolve the authoritative credit context for a user, server-side.
 // Returns null on a hard DB error so callers can fail open (never block a
 // paying user on a transient blip) — matching the old client-side behavior.
@@ -567,11 +594,23 @@ app.post('/api/credits/check', async (req, res) => {
   if (ctx.freePromptAvailable) {
     return res.json({ allowed: true, isFreePrompt: true, balance: ctx.balance });
   }
-  if (ctx.balance > 0) {
+  // CAMBIO 2c — preflight floor: require at least CREDIT_PREFLIGHT_FLOOR internal
+  // units (free prompt / admin paths above are intact and bypass this).
+  if (ctx.balance >= CREDIT_PREFLIGHT_FLOOR) {
     return res.json({ allowed: true, isFreePrompt: false, balance: ctx.balance });
   }
-  // Out of credits, free prompt spent, not an admin → refuse before the pipeline.
-  return res.status(402).json({ allowed: false, error: 'INSUFFICIENT_CREDITS', balance: 0 });
+  // Below the floor, free prompt spent, not an admin → refuse before the pipeline.
+  // Distinguish the copy: a user who never purchased (pure free tier, now spent)
+  // gets FREE_PROMPT_SPENT; anyone who has bought gets INSUFFICIENT_BALANCE. Both
+  // carry the same neutral 402 message; the client picks the wording from reason.
+  const purchased = await hasEverPurchased(userId);
+  return res.status(402).json({
+    allowed: false,
+    error: 'INSUFFICIENT_CREDITS',
+    reason: purchased ? 'INSUFFICIENT_BALANCE' : 'FREE_PROMPT_SPENT',
+    balance: ctx.balance,
+    message: 'Saldo insuficiente — recarga créditos para continuar.',
+  });
 });
 
 // Charge the credits ACCUMULATED for one intent, server-side. This is the sole
@@ -658,8 +697,11 @@ async function chargeAccumulatedIntent(rec) {
     const creditsToDeduct = Math.max(1, rawCredits);
 
     // Atomic charge. deduct_credits does the balance>=amount guard + audit insert
-    // in one round-trip; success=false means a concurrent charge drained the
-    // wallet after our preflight.
+    // in one round-trip. p_allow_partial=true enables drenar-a-cero (CAMBIO 2):
+    // if the wallet no longer holds the full charge but still holds something,
+    // it takes everything left (balance→0), records a transaction for the drained
+    // amount at the full real cost, and returns partial=true. success=false now
+    // means only the balance was already 0 (a concurrent charge fully drained it).
     const { data, error } = await supabaseAdmin.rpc('deduct_credits', {
       p_user_id: userId,
       p_amount: creditsToDeduct,
@@ -668,6 +710,7 @@ async function chargeAccumulatedIntent(rec) {
       p_tokens_input: tokensInput,
       p_tokens_output: tokensOutput,
       p_cost_usd: totalCostUsd,
+      p_allow_partial: true,
     });
 
     if (error) {
@@ -679,6 +722,13 @@ async function chargeAccumulatedIntent(rec) {
     const row = Array.isArray(data) ? data[0] : data;
     if (!row?.success) {
       return { balance: row?.new_balance ?? ctx.balance, deducted: 0, insufficient: true };
+    }
+    if (row.partial) {
+      // Drained to zero: charged what remained (the pre-charge balance we read)
+      // against the full cost of the served work. new_balance is 0.
+      const charged = ctx.balance;
+      console.log(`[credits] drained to zero: charged ${charged} of ${creditsToDeduct}`);
+      return { balance: 0, deducted: charged, partial: true };
     }
     return { balance: row.new_balance, deducted: creditsToDeduct };
   } catch (err) {
@@ -708,6 +758,7 @@ async function sweepIntents() {
           + ` deducted=${result.deducted}`
           + (result.unlimited ? ' unlimited' : '')
           + (result.freePrompt ? ' freePrompt' : '')
+          + (result.partial ? ' PARTIAL(drained-to-zero)' : '')
           + (result.insufficient ? ' INSUFFICIENT' : '')
         );
       } catch (err) {
