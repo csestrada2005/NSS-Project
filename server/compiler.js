@@ -866,21 +866,30 @@ export async function compileFiles(filesObj) {
     // del primer error un errorDetail estructurado, quitando el prefijo del
     // namespace virtual del path ("virtual:src/App.tsx" → "src/App.tsx") para
     // que coincida con las keys del filesObj del proyecto.
+    // Normalizador compartido: cada Message de esbuild → CompileErrorDetail con
+    // el prefijo del namespace virtual quitado del path.
+    const toDetail = (e) => {
+      const l = e?.location;
+      return {
+        message: e?.text ?? null,
+        file: l?.file ? l.file.replace(/^virtual:/, '') : null,
+        line: l?.line ?? null,
+        lineText: l?.lineText ?? null
+      };
+    };
+
     const first = errors[0];
-    const loc = first?.location;
-    const errorDetail = first
-      ? {
-          message: first.text ?? null,
-          file: loc?.file ? loc.file.replace(/^virtual:/, '') : null,
-          line: loc?.line ?? null,
-          lineText: loc?.lineText ?? null
-        }
-      : null;
+    const errorDetail = first ? toDetail(first) : null;
+
+    // Lista COMPLETA de errores estructurados (no sólo el primero) para que el
+    // Verifier agrupe por clase y repare por lotes en una sola llamada LLM.
+    const errorDetailList = errors.map(toDetail);
 
     return {
       error: errors[0]?.text || err.message || 'esbuild compilation failed',
       errorDetails: { errors, warnings, message: err.message },
-      errorDetail
+      errorDetail,
+      errorDetailList
     };
   }
 }

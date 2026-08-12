@@ -117,7 +117,7 @@ class PlatformService {
   }
 
   /** Compile project files server-side. */
-  async compileSrc(files: Record<string, string>, signal?: AbortSignal): Promise<{ html?: string; error?: string; errorDetail?: CompileErrorDetail | null }> {
+  async compileSrc(files: Record<string, string>, signal?: AbortSignal): Promise<{ html?: string; error?: string; errorDetail?: CompileErrorDetail | null; errorDetailList?: CompileErrorDetail[] | null }> {
     try {
       const headers = await this.getHeaders();
       const response = await fetch('/api/compile', {

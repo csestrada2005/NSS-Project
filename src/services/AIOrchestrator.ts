@@ -1672,13 +1672,18 @@ export class AIOrchestrator {
       }
 
       // ----------------------------------------------------------------
-      // PIEZA 2 — Verifier post-edición: compilar el cambio antes de escribir.
+      // CAMBIO 1 — Verifier post-edición: compilar el cambio antes de escribir,
+      // entrando al MISMO ciclo de reparación por lotes del plan lane (misma
+      // función Verifier.verify), pero con tope de 2 intentos: una edición
+      // puntual sólo amerita una ronda de reparación por lotes. compile_attempts
+      // y error_message se pueblan igual que en el plan lane.
       // ----------------------------------------------------------------
       const verifyResult = await Verifier.verify(
         new Map([[target.path, newContent]]),
         files,
         undefined,
-        signal
+        signal,
+        2
       );
 
       if (verifyResult.success) {
@@ -1716,13 +1721,17 @@ export class AIOrchestrator {
         };
       }
 
-      // Fallo tras los 3 intentos internos del Verifier: no se escribe nada.
+      // CAMBIO 1 — fallo tras los intentos del Verifier: NO persistir el estado
+      // roto. El simple lane nunca llamó notifyFileUpdate antes del éxito, así
+      // que el preview conserva el contenido previo del archivo: el revert es
+      // efectivo (nada roto llegó nunca al preview). Cerramos con outcome
+      // 'failed', error_message real y un mensaje honesto que dice que se revirtió.
       const errorMsg = verifyResult.error ?? 'Unknown compilation error';
       const errorFile = verifyResult.errorFile ?? null;
       const honest =
         errorFile && errorFile !== target.path
-          ? `No pude aplicar el cambio: existe un error de compilación previo en ${errorFile} que no logré reparar automáticamente. Error: ${errorMsg.slice(0, 200)}`
-          : `No pude aplicar el cambio sin romper la compilación. Error: ${errorMsg.slice(0, 200)}`;
+          ? `El cambio no compiló y lo revertí: existe un error de compilación previo en ${errorFile} que no logré reparar automáticamente. Error: ${errorMsg.slice(0, 200)}`
+          : `El cambio no compiló y lo revertí: ${errorMsg.slice(0, 200)}`;
 
       return {
         modifiedFiles: [],
