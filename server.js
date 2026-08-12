@@ -9,6 +9,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 import { compileFiles } from './server/compiler.js';
 import { searchUnsplash } from './server/unsplash.js';
+import { computeCreditsFromTokens } from './server/credits.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -465,6 +466,173 @@ app.post('/api/chat-forge', async (req, res) => {
   } catch (err) {
     console.error('[chat-forge] Error:', err);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Credits (CIRUGÍA: server-side deduction) — the server charges, the client
+// only reads. The client can still READ its own wallet directly (owner_read
+// RLS), so balance display stays client-side; but every WRITE (spend / free
+// prompt burn) now happens here with the service role, which bypasses RLS by
+// design. The client is never trusted for admin/unlimited/free-prompt state —
+// all of it is re-derived from the DB on each call.
+//
+//   POST /api/credits/check   — preflight at intent START. 402 if broke.
+//   POST /api/credits/deduct  — atomic charge at intent CLOSE. 402 on race.
+// ---------------------------------------------------------------------------
+
+// Resolve the authoritative credit context for a user, server-side.
+// Returns null on a hard DB error so callers can fail open (never block a
+// paying user on a transient blip) — matching the old client-side behavior.
+async function getCreditContext(userId) {
+  if (!userId || !supabaseAdmin) return null;
+  try {
+    const [{ data: profile }, { data: wallet }] = await Promise.all([
+      supabaseAdmin.from('profiles').select('role').eq('id', userId).maybeSingle(),
+      supabaseAdmin
+        .from('forge_credit_wallets')
+        .select('balance_credits, free_prompt_used, unlimited')
+        .eq('user_id', userId)
+        .maybeSingle(),
+    ]);
+
+    const isAdmin = profile?.role === 'admin';
+    const unlimited = !!wallet?.unlimited;
+    // No wallet row yet → brand-new user with the free prompt still available.
+    const freePromptAvailable = !wallet || wallet.free_prompt_used === false;
+    const balance = wallet?.balance_credits ?? 0;
+
+    return { isAdmin, unlimited, freePromptAvailable, balance, walletExists: !!wallet };
+  } catch (err) {
+    console.error('[credits] getCreditContext error:', err);
+    return null;
+  }
+}
+
+// Preflight — checked at the START of an intent, BEFORE the pipeline runs.
+app.post('/api/credits/check', async (req, res) => {
+  const userId = req.userId;
+  if (!userId) {
+    // Local-dev-only path (auth skipped) — never block.
+    return res.json({ allowed: true, isFreePrompt: false, balance: null });
+  }
+  const ctx = await getCreditContext(userId);
+  if (!ctx) {
+    // Fail open on DB unavailability — do not block the user.
+    return res.json({ allowed: true, isFreePrompt: false, balance: null });
+  }
+  if (ctx.isAdmin || ctx.unlimited) {
+    return res.json({ allowed: true, isAdmin: true, unlimited: true, balance: null });
+  }
+  if (ctx.freePromptAvailable) {
+    return res.json({ allowed: true, isFreePrompt: true, balance: ctx.balance });
+  }
+  if (ctx.balance > 0) {
+    return res.json({ allowed: true, isFreePrompt: false, balance: ctx.balance });
+  }
+  // Out of credits, free prompt spent, not an admin → refuse before the pipeline.
+  return res.status(402).json({ allowed: false, error: 'INSUFFICIENT_CREDITS', balance: 0 });
+});
+
+// Charge — applied at the CLOSE of an intent (success / partial only; the
+// client does not call this for cancelled/failed runs with no work produced).
+app.post('/api/credits/deduct', async (req, res) => {
+  const userId = req.userId;
+  const {
+    tokensInput = 0,
+    tokensOutput = 0,
+    intentType = null,
+    projectId = null,
+  } = req.body || {};
+
+  if (!userId) {
+    return res.json({ balance: null, deducted: 0 });
+  }
+  if (!supabaseAdmin) {
+    // Cannot write without the admin client — report no change, don't fabricate.
+    return res.json({ balance: null, deducted: 0 });
+  }
+
+  const ctx = await getCreditContext(userId);
+  if (!ctx) {
+    return res.json({ balance: null, deducted: 0 });
+  }
+
+  const { creditsToDeduct, totalCostUsd } = computeCreditsFromTokens(tokensInput, tokensOutput);
+
+  try {
+    // Admin / unlimited → never charged. Log an admin_usage audit row (0 credits)
+    // when there was real usage, then report the (unbounded) balance.
+    if (ctx.isAdmin || ctx.unlimited) {
+      if (creditsToDeduct > 0) {
+        await supabaseAdmin.from('forge_credit_transactions').insert({
+          user_id: userId,
+          project_id: projectId,
+          type: 'admin_usage',
+          intent_type: intentType,
+          amount_credits: 0,
+          tokens_input: tokensInput,
+          tokens_output: tokensOutput,
+          cost_usd: totalCostUsd,
+        });
+      }
+      return res.json({ balance: null, deducted: 0, unlimited: true });
+    }
+
+    // Free prompt still available → burn it instead of charging. Update the flag
+    // in place so any existing balance is preserved; only create a fresh wallet
+    // (balance 0) when the user has none yet. Never upsert balance_credits here —
+    // that would reset a real balance on conflict.
+    if (ctx.freePromptAvailable) {
+      if (ctx.walletExists) {
+        await supabaseAdmin
+          .from('forge_credit_wallets')
+          .update({ free_prompt_used: true })
+          .eq('user_id', userId);
+      } else {
+        await supabaseAdmin
+          .from('forge_credit_wallets')
+          .insert({ user_id: userId, balance_credits: 0, free_prompt_used: true });
+      }
+      return res.json({ balance: ctx.balance, deducted: 0, freePrompt: true });
+    }
+
+    // Zero-cost close (e.g. fast lane) with the free prompt already spent → no-op.
+    if (creditsToDeduct <= 0) {
+      return res.json({ balance: ctx.balance, deducted: 0 });
+    }
+
+    // Atomic charge. deduct_credits does the balance>=amount guard + audit insert
+    // in one round-trip; success=false means a concurrent charge drained the
+    // wallet after our preflight, so we answer 402.
+    const { data, error } = await supabaseAdmin.rpc('deduct_credits', {
+      p_user_id: userId,
+      p_amount: creditsToDeduct,
+      p_intent_type: intentType,
+      p_project_id: projectId,
+      p_tokens_input: tokensInput,
+      p_tokens_output: tokensOutput,
+      p_cost_usd: totalCostUsd,
+    });
+
+    if (error) {
+      console.error('[credits] deduct_credits rpc error:', error);
+      // Don't fabricate a charge on infra failure; report current balance.
+      return res.json({ balance: ctx.balance, deducted: 0 });
+    }
+
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row?.success) {
+      return res.status(402).json({
+        error: 'INSUFFICIENT_CREDITS',
+        balance: row?.new_balance ?? ctx.balance,
+        deducted: 0,
+      });
+    }
+    return res.json({ balance: row.new_balance, deducted: creditsToDeduct });
+  } catch (err) {
+    console.error('[credits] deduct error:', err);
+    return res.json({ balance: ctx.balance, deducted: 0 });
   }
 });
 

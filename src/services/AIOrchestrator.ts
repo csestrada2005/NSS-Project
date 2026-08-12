@@ -872,9 +872,27 @@ export class AIOrchestrator {
   }
 
   /**
+   * Settle the credit charge for a closed intent and notify the UI. The server
+   * is authoritative: it decides whether to burn the free prompt, log admin
+   * usage, or atomically deduct credits, and returns the new balance, which we
+   * forward to the credit chip via the event detail. Best-effort — a settle
+   * failure never blocks the user (the work is already done).
+   */
+  private static async settleCredits(
+    intentType: string,
+    tokensInput: number,
+    tokensOutput: number,
+    projectId?: string
+  ): Promise<void> {
+    const settle = await CreditService.settleIntent(intentType, tokensInput, tokensOutput, projectId);
+    window.dispatchEvent(
+      new CustomEvent('forge:credits-updated', { detail: settle ?? undefined })
+    );
+  }
+
+  /**
    * CAMBIO 2 — cierre honesto de un run cancelado. Cobra el mínimo disponible
-   * (granularidad per-intent que soporta CreditService hoy: marca el free-prompt
-   * o deduce 0 tokens — SOLO si algo se produjo), registra el intent con
+   * (granularidad per-intent) SOLO si algo se produjo, registra el intent con
    * outcome='cancelled' y los archivos realmente escritos, y devuelve el mensaje
    * honesto para el chat. `writtenPaths` ya fue persistido por el caller.
    */
@@ -884,23 +902,17 @@ export class AIOrchestrator {
     writtenPaths: string[];
     projectId?: string;
     creditUserId: string | null;
-    isFreePrompt: boolean;
     startTime: number;
     planSteps?: BuildStep[];
     compileAttempts?: number;
   }): Promise<OrchestratorResult> {
-    const { writtenPaths, projectId, creditUserId, isFreePrompt } = params;
+    const { writtenPaths, projectId, creditUserId } = params;
 
     // Créditos: sólo cobramos si el run llegó a producir archivos completos. Un
-    // abort sin salida útil no quema el free-prompt del usuario. La granularidad
-    // es la del intent (CreditService no cobra por token en el plan lane hoy).
+    // abort sin salida útil no quema el free-prompt del usuario. El server
+    // decide free-prompt vs deducción; aquí sólo enviamos 0 tokens.
     if (creditUserId && writtenPaths.length > 0) {
-      if (isFreePrompt) {
-        await CreditService.markFreePromptUsed(creditUserId);
-      } else {
-        await CreditService.deductCredits(creditUserId, 0, 0, projectId);
-      }
-      window.dispatchEvent(new CustomEvent('forge:credits-updated'));
+      await this.settleCredits(params.intent.type, 0, 0, projectId);
     }
 
     if (projectId) {
@@ -975,18 +987,26 @@ export class AIOrchestrator {
     // CREDIT CHECK — must pass before any LLM call
     // ------------------------------------------------------------------
     let creditUserId: string | null = null;
-    let isFreePrompt = false;
+    let creditAllowed = true;
     try {
       const supabase = SupabaseService.getInstance().client;
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         creditUserId = user.id;
-        const creditCheck = await CreditService.canMakeCall(user.id);
-        isFreePrompt = creditCheck.isFreePrompt ?? false;
+        // Server-authoritative preflight: the pipeline must not run when the
+        // user is out of credits (the server answers 402 → allowed:false).
+        const creditCheck = await CreditService.canMakeCall();
+        creditAllowed = creditCheck.allowed;
       }
     } catch (e) {
       console.error('[AIOrchestrator] Credit check error:', e);
       // Fail open on credit check errors
+    }
+
+    // Out of credits → stop before any LLM call. The UI renders the honest
+    // "top up credits" message for this error code.
+    if (creditUserId && !creditAllowed) {
+      return { modifiedFiles: [], outcome: 'failed', error: 'INSUFFICIENT_CREDITS' };
     }
 
     // ------------------------------------------------------------------
@@ -1021,7 +1041,6 @@ export class AIOrchestrator {
         chatHistory,
         projectId,
         creditUserId,
-        isFreePrompt,
         startTime,
         intent,
         signal
@@ -1046,7 +1065,7 @@ export class AIOrchestrator {
       const compiles = await this.currentStateCompiles(files, signal);
       if (signal?.aborted) {
         return await this.finalizeCancelled({
-          input, intent, writtenPaths: [], projectId, creditUserId, isFreePrompt, startTime,
+          input, intent, writtenPaths: [], projectId, creditUserId, startTime,
         });
       }
       if (compiles) {
@@ -1092,12 +1111,7 @@ export class AIOrchestrator {
     ) {
       const result = await this.runFastLane(input, files, selectedElement, signal);
       if (result.outcome === 'success' && creditUserId) {
-        if (isFreePrompt) {
-          await CreditService.markFreePromptUsed(creditUserId);
-        } else {
-          await CreditService.deductCredits(creditUserId, 0, 0, projectId);
-        }
-        window.dispatchEvent(new CustomEvent('forge:credits-updated'));
+        await this.settleCredits(intent.type, 0, 0, projectId);
       }
       if (projectId) {
         await this.logIntent({
@@ -1140,17 +1154,7 @@ export class AIOrchestrator {
     if (isSimpleEdit && files.size > 0) {
       const result = await this.runSimpleLane(input, files, selectedElement, intent, projectId, signal, previousClarifyQuestion);
       if (result.outcome === 'success' && creditUserId) {
-        if (isFreePrompt) {
-          await CreditService.markFreePromptUsed(creditUserId);
-        } else {
-          await CreditService.deductCredits(
-            creditUserId,
-            result.tokensInput ?? 0,
-            result.tokensOutput ?? 0,
-            projectId
-          );
-        }
-        window.dispatchEvent(new CustomEvent('forge:credits-updated'));
+        await this.settleCredits(intent.type, result.tokensInput ?? 0, result.tokensOutput ?? 0, projectId);
       }
       if (projectId) {
         await this.logIntent({
@@ -1222,7 +1226,7 @@ export class AIOrchestrator {
     // vacío por abort caiga al heavy lane.
     if (signal?.aborted) {
       return await this.finalizeCancelled({
-        input, intent, writtenPaths: [], projectId, creditUserId, isFreePrompt, startTime,
+        input, intent, writtenPaths: [], projectId, creditUserId, startTime,
       });
     }
 
@@ -1230,17 +1234,7 @@ export class AIOrchestrator {
       // Architect returned nothing — fall back to the legacy heavy lane
       const result = await this.runHeavyLane(input, files, selectedElement, projectId, intent, signal);
       if (result.outcome === 'success' && creditUserId) {
-        if (isFreePrompt) {
-          await CreditService.markFreePromptUsed(creditUserId);
-        } else {
-          await CreditService.deductCredits(
-            creditUserId,
-            result.tokensInput ?? 0,
-            result.tokensOutput ?? 0,
-            projectId
-          );
-        }
-        window.dispatchEvent(new CustomEvent('forge:credits-updated'));
+        await this.settleCredits(intent.type, result.tokensInput ?? 0, result.tokensOutput ?? 0, projectId);
       }
       if (projectId) {
         await this.logIntent({
@@ -1287,7 +1281,7 @@ export class AIOrchestrator {
         await ProjectMemoryService.updateAfterChange(projectId, writtenPaths, modifiedFilesMap);
       }
       return await this.finalizeCancelled({
-        input, intent, writtenPaths, projectId, creditUserId, isFreePrompt, startTime,
+        input, intent, writtenPaths, projectId, creditUserId, startTime,
         planSteps: implResult.completedSteps,
       });
     }
@@ -1354,7 +1348,7 @@ export class AIOrchestrator {
           await ProjectMemoryService.updateAfterChange(projectId, writtenPaths, modifiedFilesMap);
         }
         return await this.finalizeCancelled({
-          input, intent, writtenPaths, projectId, creditUserId, isFreePrompt, startTime,
+          input, intent, writtenPaths, projectId, creditUserId, startTime,
           planSteps: implResult.completedSteps,
         });
       }
@@ -1413,14 +1407,12 @@ export class AIOrchestrator {
 
       // Deduct credits for main pipeline
       if (creditUserId) {
-        if (isFreePrompt) {
-          await CreditService.markFreePromptUsed(creditUserId);
-        } else {
-          const totalInput = verifyResult.tokensInput ?? 0;
-          const totalOutput = verifyResult.tokensOutput ?? 0;
-          await CreditService.deductCredits(creditUserId, totalInput, totalOutput, projectId);
-        }
-        window.dispatchEvent(new CustomEvent('forge:credits-updated'));
+        await this.settleCredits(
+          intent.type,
+          verifyResult.tokensInput ?? 0,
+          verifyResult.tokensOutput ?? 0,
+          projectId
+        );
       }
 
       // Update memory and record success
@@ -1978,7 +1970,6 @@ export class AIOrchestrator {
     chatHistory: Array<{ role: string; content: string }> | undefined,
     projectId: string | undefined,
     creditUserId: string | null,
-    isFreePrompt: boolean,
     startTime: number,
     intent: Intent,
     signal?: AbortSignal
@@ -2059,19 +2050,14 @@ export class AIOrchestrator {
         answer = lines.slice(0, lastNonEmpty).join('\n').trim();
       }
 
-      // Deduct credits (same accounting as runSimpleLane).
+      // Settle credits (same accounting as runSimpleLane).
       if (creditUserId) {
-        if (isFreePrompt) {
-          await CreditService.markFreePromptUsed(creditUserId);
-        } else {
-          await CreditService.deductCredits(
-            creditUserId,
-            data.usage?.input_tokens ?? 0,
-            data.usage?.output_tokens ?? 0,
-            projectId
-          );
-        }
-        window.dispatchEvent(new CustomEvent('forge:credits-updated'));
+        await this.settleCredits(
+          'question',
+          data.usage?.input_tokens ?? 0,
+          data.usage?.output_tokens ?? 0,
+          projectId
+        );
       }
 
       if (projectId) {

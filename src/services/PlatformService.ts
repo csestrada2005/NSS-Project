@@ -157,6 +157,68 @@ class PlatformService {
     }
   }
 
+  /**
+   * Preflight credit check at the START of an intent. The server is
+   * authoritative for admin / unlimited / free-prompt / balance state. A 402
+   * means the user is out of credits and the pipeline must not run. Fails open
+   * (allowed:true) on any network/parse error so a transient blip never blocks
+   * a paying user.
+   */
+  async checkCredits(): Promise<{
+    allowed: boolean;
+    isFreePrompt?: boolean;
+    isAdmin?: boolean;
+    unlimited?: boolean;
+    balance?: number | null;
+  }> {
+    try {
+      const headers = await this.getHeaders();
+      const response = await fetch('/api/credits/check', { method: 'POST', headers });
+      this.handleAuthError(response);
+      if (response.status === 402) {
+        return { allowed: false, balance: 0 };
+      }
+      if (!response.ok) return { allowed: true };
+      return response.json();
+    } catch (err) {
+      console.warn('[PlatformService] checkCredits failed (failing open):', err);
+      return { allowed: true };
+    }
+  }
+
+  /**
+   * Charge the wallet at the CLOSE of an intent. The server re-derives whether
+   * to burn the free prompt, log admin usage, or atomically deduct credits, and
+   * returns the NEW balance for the credit chip. Best-effort: on any error we
+   * return null so the caller simply refreshes from the wallet instead.
+   */
+  async deductCredits(params: {
+    tokensInput?: number;
+    tokensOutput?: number;
+    intentType?: string;
+    projectId?: string;
+  }): Promise<{ balance: number | null; deducted: number } | null> {
+    try {
+      const headers = await this.getHeaders();
+      const response = await fetch('/api/credits/deduct', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          tokensInput: params.tokensInput ?? 0,
+          tokensOutput: params.tokensOutput ?? 0,
+          intentType: params.intentType ?? null,
+          projectId: params.projectId ?? null,
+        }),
+      });
+      this.handleAuthError(response);
+      if (!response.ok && response.status !== 402) return null;
+      return response.json();
+    } catch (err) {
+      console.warn('[PlatformService] deductCredits failed:', err);
+      return null;
+    }
+  }
+
   /** Get deployment status for a project. */
   async getDeploymentStatus(projectId: string): Promise<{ url: string | null; lastDeployedAt: string | null; status: string }> {
     try {
