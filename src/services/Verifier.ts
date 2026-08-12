@@ -1,6 +1,8 @@
 import { platformService } from './PlatformService';
 import type { CompileErrorDetail } from './PlatformService';
 import { isAbortError } from '../utils/abort';
+import { groupCompileErrors } from '../utils/groupCompileErrors';
+import type { RepairBatch } from '../utils/groupCompileErrors';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -32,6 +34,15 @@ export interface VerifyResult {
    * falla, porque en ese caso `files` es el original intacto.
    */
   repairedFiles: string[];
+  /**
+   * Telemetría de reparación por lotes (CAMBIO 2). `totalErrors` suma todos los
+   * errores que esbuild reportó a lo largo de los compiles fallidos;
+   * `fixCalls` cuenta las llamadas LLM de reparación realmente emitidas. El
+   * ahorro del batching es totalErrors − fixCalls (una cascada de 3 exports que
+   * antes costaba 3 llamadas ahora cuesta 1).
+   */
+  totalErrors: number;
+  fixCalls: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -43,9 +54,13 @@ export class Verifier {
     modifiedFiles: Map<string, string>,
     originalFiles: Map<string, string>,
     onRetry?: RetryCallback,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    // CAMBIO 1 — el tope de intentos es configurable: el plan lane conserva 3
+    // (compile inicial + 2 rondas de reparación); el simple lane pasa 2, porque
+    // una edición puntual sólo justifica una ronda de reparación por lotes.
+    maxRetries: number = 3
   ): Promise<VerifyResult> {
-    const MAX_RETRIES = 3;
+    const MAX_RETRIES = Math.max(1, maxRetries);
     // Compilar el proyecto COMPLETO con los cambios aplicados encima.
     // Compilar solo modifiedFiles causa "No entrypoint found" porque
     // main.tsx no suele estar entre los archivos modificados.
@@ -53,6 +68,10 @@ export class Verifier {
     for (const [path, content] of modifiedFiles) {
       currentFiles.set(path, content);
     }
+
+    // CAMBIO 2 — telemetría del batching, acumulada a lo largo de los intentos.
+    let totalErrors = 0;
+    let fixCalls = 0;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       // Cancelación: si el run fue abortado, no arrancamos otro compile ni fix.
@@ -63,11 +82,15 @@ export class Verifier {
       const result = await this.tryCompile(currentFiles, signal);
 
       if (result.success) {
+        console.log('[Verifier] telemetry | totalErrors:', totalErrors, '| fixCalls:', fixCalls,
+          '| saved:', Math.max(0, totalErrors - fixCalls));
         return {
           success: true,
           files: currentFiles,
           attempts: attempt,
           repairedFiles: this.diffPaths(currentFiles, originalFiles),
+          totalErrors,
+          fixCalls,
         };
       }
 
@@ -81,13 +104,27 @@ export class Verifier {
       const errorMsg = result.error ?? 'Unknown compilation error';
       const errorDetail = result.errorDetail ?? null;
 
+      // Lista COMPLETA de errores de este compile (esbuild los entrega todos).
+      // Fallback: si el servidor no propagó la lista, usamos el errorDetail
+      // singular; y si tampoco existe, sintetizamos uno del texto plano.
+      const errorList: CompileErrorDetail[] =
+        result.errorDetailList && result.errorDetailList.length > 0
+          ? result.errorDetailList
+          : errorDetail
+            ? [errorDetail]
+            : [{ message: errorMsg, file: null, line: null, lineText: null }];
+      totalErrors += errorList.length;
+
       // Resolver de antemano el archivo culpable para poder loguearlo por intento.
       const errorFile = this.identifyErrorFile(errorMsg, errorDetail, currentFiles);
-      console.log('[Verifier] attempt', attempt, '| error file:', errorFile ?? 'UNKNOWN');
+      console.log('[Verifier] attempt', attempt, '| errors:', errorList.length,
+        '| first error file:', errorFile ?? 'UNKNOWN');
 
       onRetry?.(attempt, errorMsg.slice(0, 200));
 
       if (attempt === MAX_RETRIES) {
+        console.log('[Verifier] telemetry | totalErrors:', totalErrors, '| fixCalls:', fixCalls,
+          '| saved:', Math.max(0, totalErrors - fixCalls), '| result: FAILED');
         // Fallo definitivo: devolvemos el original intacto, así que no hay
         // reparaciones persistibles (repairedFiles vacío).
         return {
@@ -97,12 +134,34 @@ export class Verifier {
           errorFile,
           attempts: attempt,
           repairedFiles: [],
+          totalErrors,
+          fixCalls,
         };
       }
 
-      const fixed = await this.fixError(errorMsg, errorDetail, currentFiles, signal);
-      if (fixed) {
-        currentFiles = fixed;
+      // CAMBIO 2 — reparación POR LOTES: agrupar todos los errores por clase y
+      // reparar cada clase en una sola llamada LLM (con los contenidos completos
+      // de todos los archivos implicados). Una cascada de 3 exports = 1 llamada.
+      const batches = groupCompileErrors(
+        errorList,
+        (path) => currentFiles.get(path),
+      );
+
+      if (batches.length === 0) {
+        // Ningún error resolvió a un archivo reparable: caer al fix de archivo
+        // único histórico (usa regex sobre el texto) como último recurso.
+        const fixed = await this.fixError(errorMsg, errorDetail, currentFiles, signal);
+        if (fixed) {
+          fixCalls += 1;
+          currentFiles = fixed;
+        }
+        continue;
+      }
+
+      for (const batch of batches) {
+        const fixed = await this.fixBatch(batch, currentFiles, signal);
+        fixCalls += 1;
+        if (fixed) currentFiles = fixed;
       }
     }
 
@@ -112,6 +171,8 @@ export class Verifier {
       files: originalFiles,
       attempts: MAX_RETRIES,
       repairedFiles: [],
+      totalErrors,
+      fixCalls,
     };
   }
 
@@ -135,7 +196,7 @@ export class Verifier {
   private static async tryCompile(
     files: Map<string, string>,
     signal?: AbortSignal
-  ): Promise<{ success: boolean; error?: string; errorDetail?: CompileErrorDetail | null }> {
+  ): Promise<{ success: boolean; error?: string; errorDetail?: CompileErrorDetail | null; errorDetailList?: CompileErrorDetail[] | null }> {
     try {
       console.log('[Verifier] COMPILING KEYS:', [...files.keys()]);
       const filesObj: Record<string, string> = {};
@@ -146,7 +207,12 @@ export class Verifier {
       const result = await platformService.compileSrc(filesObj, signal);
 
       if (result.error) {
-        return { success: false, error: result.error, errorDetail: result.errorDetail ?? null };
+        return {
+          success: false,
+          error: result.error,
+          errorDetail: result.errorDetail ?? null,
+          errorDetailList: result.errorDetailList ?? null,
+        };
       }
 
       return { success: true };
@@ -181,6 +247,118 @@ export class Verifier {
     }
 
     return null;
+  }
+
+  /**
+   * CAMBIO 2 — reparación por lotes. Repara TODOS los errores de una misma
+   * clase en una única llamada LLM, pasando los contenidos completos de cada
+   * archivo implicado. El modelo devuelve cada archivo corregido delimitado; los
+   * parseamos y los mezclamos sobre `files`. El recompile del bucle valida todo
+   * junto.
+   */
+  private static async fixBatch(
+    batch: RepairBatch,
+    files: Map<string, string>,
+    signal?: AbortSignal
+  ): Promise<Map<string, string> | null> {
+    if (batch.files.length === 0) return null;
+
+    const systemPrompt =
+      `You are an expert React + TypeScript engineer fixing compilation errors.\n` +
+      `Several files share the SAME class of error ("${batch.label}") — apply the ` +
+      `same kind of fix to each. Return the COMPLETE corrected content of EVERY ` +
+      `file you were given, each wrapped EXACTLY as:\n` +
+      `===FILE: <path>===\n<full file content>\n===END===\n` +
+      `No markdown fences, no explanation outside the markers. Preserve every ` +
+      `file's path exactly. If a file needs no change, still return it unchanged.`;
+
+    const errorLines = batch.errors
+      .map((e) => {
+        const at = e.line != null ? ` (line ${e.line})` : '';
+        const hint = e.lineText ? `\n    → ${e.lineText.trim()}` : '';
+        return `- [${e.file ?? 'unknown'}]${at} ${e.message ?? ''}${hint}`;
+      })
+      .join('\n');
+
+    // Preferir el contenido VIVO del map (un lote previo en este mismo intento
+    // pudo tocar un archivo compartido); caer al snapshot del agrupador si falta.
+    const fileBlocks = batch.files
+      .map((f) => `===FILE: ${f.path}===\n${files.get(f.path) ?? f.content}\n===END===`)
+      .join('\n\n');
+
+    const userMessage =
+      `${batch.errors.length} compilation error(s) of the same class ` +
+      `("${batch.label}") across ${batch.files.length} file(s):\n${errorLines}\n\n` +
+      `These files all exhibit the same mismatch — fix them all consistently.\n\n` +
+      `FILES:\n${fileBlocks}\n\n` +
+      `Return the complete corrected content of every file, each wrapped in its ` +
+      `===FILE: <path>=== / ===END=== markers:`;
+
+    try {
+      const response = await platformService.callForgeChat({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 8192,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }],
+      }, signal);
+
+      const data = await response.json();
+      console.log('[Verifier] fixBatch usage:', data.usage?.input_tokens ?? 0, 'in /',
+        data.usage?.output_tokens ?? 0, 'out |', batch.files.length, 'file(s),',
+        batch.errors.length, 'error(s)');
+
+      if (data.error) {
+        console.error('[Verifier] Batch fix API error:', data.error);
+        return null;
+      }
+
+      const text: string = data.content?.[0]?.text ?? '';
+      const parsed = this.parseBatchResponse(text);
+
+      // Fallback: exactamente un archivo y el modelo devolvió el crudo sin
+      // marcadores → tratar la respuesta entera como ese archivo.
+      if (parsed.size === 0 && batch.files.length === 1) {
+        const only = batch.files[0].path;
+        const newFiles = new Map<string, string>(files);
+        newFiles.set(only, this.stripCodeFences(text));
+        return newFiles;
+      }
+
+      if (parsed.size === 0) {
+        console.warn('[Verifier] fixBatch: no parseable files in response');
+        return null;
+      }
+
+      const newFiles = new Map<string, string>(files);
+      const known = new Set(batch.files.map((f) => f.path));
+      for (const [path, content] of parsed) {
+        // Sólo aceptamos archivos que estaban en el lote — el modelo no debe
+        // inventar rutas nuevas.
+        if (known.has(path)) newFiles.set(path, content);
+      }
+      return newFiles;
+    } catch (e) {
+      if (isAbortError(e)) throw e; // cancelación: no seguir intentando.
+      console.error('[Verifier] Batch fix attempt failed:', e);
+      return null;
+    }
+  }
+
+  /**
+   * Parsea la respuesta multi-archivo del fixBatch. Formato:
+   *   ===FILE: <path>===\n<content>\n===END===
+   * Tolerante: recorta fences accidentales alrededor del bloque completo.
+   */
+  private static parseBatchResponse(text: string): Map<string, string> {
+    const out = new Map<string, string>();
+    const re = /===FILE:\s*(.+?)\s*===\r?\n([\s\S]*?)\r?\n===END===/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      const path = m[1].trim();
+      const content = this.stripCodeFences(m[2]);
+      if (path) out.set(path, content);
+    }
+    return out;
   }
 
   private static async fixError(

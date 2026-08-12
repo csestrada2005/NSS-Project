@@ -474,7 +474,7 @@ app.post('/api/compile', async (req, res) => {
     if (result.error) {
       // Una línea por error real de compilación (primeras ~200 chars).
       console.error('[compile] ERROR:', String(result.error).slice(0, 200));
-      return res.status(400).json({ error: result.error, errorDetails: result.errorDetails, errorDetail: result.errorDetail ?? null });
+      return res.status(400).json({ error: result.error, errorDetails: result.errorDetails, errorDetail: result.errorDetail ?? null, errorDetailList: result.errorDetailList ?? null });
     }
     // CAMBIO 2 — oidMap (slug → path completo) viaja junto al html para que el
     // consumidor (PR-2) pueda resolver un data-oid del DOM a su archivo real.
