@@ -2349,8 +2349,11 @@ export class AIOrchestrator {
       '',
       `Error: ${message ?? '(sin mensaje)'}`,
       `Ubicación: ${where}${lineno ? `:${lineno}` : ''}`,
-      stack ? `\nStack:\n${stack}` : '',
-      componentStack ? `\nComponent stack:\n${componentStack}` : '',
+      // CAMBIO 2 — dieta del fix-prompt: el stack se recorta a 5 frames útiles.
+      // Los frames profundos (runtime de React, bundler) rara vez señalan el bug
+      // del usuario y sólo inflan el prompt; los 5 primeros bastan para ubicarlo.
+      stack ? `\nStack:\n${this.trimStack(stack)}` : '',
+      componentStack ? `\nComponent stack:\n${this.trimStack(componentStack)}` : '',
     ];
 
     // a. Resolver el archivo implicado.
@@ -2368,10 +2371,96 @@ export class AIOrchestrator {
       ...header,
       `\nArchivo implicado (${resolvedPath}) — CONTENIDO COMPLETO:\n${fileContent}`,
     ];
+    // CAMBIO 2 — dieta del fix-prompt: los imports que son PRIMITIVAS DEL TEMPLATE
+    // (components/motion/*, lib/utils, components/ui/*) casi nunca son la causa del
+    // error y su fuente completa es cara. Van como FIRMA (nombre + props del
+    // interface) para que el modelo sepa cómo usarlos sin pagar su cuerpo. El
+    // archivo objetivo y los imports NO primitivos siguen en contenido completo.
     for (const p of extra) {
-      parts.push(`\nImport directo (${p}):\n${files.get(p) ?? ''}`);
+      const content = files.get(p) ?? '';
+      if (this.isTemplatePrimitive(p)) {
+        parts.push(`\nImport (primitiva del template ${p}) — FIRMA:\n${this.extractSignature(content)}`);
+      } else {
+        parts.push(`\nImport directo (${p}):\n${content}`);
+      }
     }
     return parts.filter(Boolean).join('\n');
+  }
+
+  /**
+   * CAMBIO 2 — ¿es este path una primitiva del template? Son los building blocks
+   * que el scaffold provee y que el usuario rara vez rompe: envoltorios de
+   * animación (components/motion/*), el helper cn() (lib/utils) y los primitivos
+   * shadcn (components/ui/*). Para el fix basta su FIRMA, no su fuente.
+   */
+  private static isTemplatePrimitive(path: string): boolean {
+    return (
+      path.startsWith('src/components/motion/') ||
+      path.startsWith('src/components/ui/') ||
+      path.startsWith('src/lib/utils')
+    );
+  }
+
+  /**
+   * CAMBIO 2 — firma pública de un módulo: sus declaraciones exportadas
+   * (function/const/class, sólo la línea de declaración) y los bloques completos
+   * de interface/type exportados (donde vive la forma de las props). Extracción
+   * determinista por líneas, sin LLM. Da al modelo cómo se LLAMA e INVOCA cada
+   * export sin arrastrar su implementación.
+   */
+  private static extractSignature(content: string): string {
+    if (!content.trim()) return '// (módulo vacío)';
+    const lines = content.split('\n');
+    const out: string[] = [];
+    let braceDepth = 0;
+    let capturing = false;
+
+    for (const line of lines) {
+      if (capturing) {
+        out.push(line);
+        braceDepth += (line.match(/\{/g)?.length ?? 0) - (line.match(/\}/g)?.length ?? 0);
+        if (braceDepth <= 0) { capturing = false; braceDepth = 0; }
+        continue;
+      }
+      const trimmed = line.trim();
+      // Bloque interface/type exportado: capturar completo (la forma de las props).
+      if (/^export\s+(interface|type)\b/.test(trimmed)) {
+        out.push(line);
+        braceDepth = (line.match(/\{/g)?.length ?? 0) - (line.match(/\}/g)?.length ?? 0);
+        // Un `type X = ...;` de una sola línea no abre llaves: no entra en captura.
+        capturing = braceDepth > 0;
+        continue;
+      }
+      // Declaración function/const/class exportada: sólo la firma, sin cuerpo.
+      if (/^export\s+(default\s+)?(abstract\s+)?(function|const|let|class)\b/.test(trimmed)) {
+        out.push(line.replace(/\s*[{=]\s*$/, '').replace(/\s*=>\s*$/, '').trimEnd());
+        continue;
+      }
+    }
+
+    return out.length > 0 ? out.join('\n') : '// (sin exports detectables)';
+  }
+
+  /**
+   * CAMBIO 2 — recorta un stack (JS `error.stack` o React componentStack) a los
+   * primeros `maxFrames` frames útiles, conservando las líneas de mensaje (no
+   * frame) del encabezado. Señala cuántos frames se omitieron.
+   */
+  private static trimStack(stack: string, maxFrames = 5): string {
+    const lines = stack.split('\n');
+    const out: string[] = [];
+    let frames = 0;
+    let dropped = 0;
+    for (const line of lines) {
+      const isFrame = /^\s*(at\b|in\b)/.test(line);
+      if (isFrame) {
+        if (frames >= maxFrames) { dropped++; continue; }
+        frames++;
+      }
+      out.push(line);
+    }
+    if (dropped > 0) out.push(`    … (${dropped} frame(s) más omitidos)`);
+    return out.join('\n').trim();
   }
 
   /**

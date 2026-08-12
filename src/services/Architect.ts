@@ -1,4 +1,5 @@
 import { platformService } from './PlatformService';
+import { cachedSystem } from './promptCache';
 import type { Intent } from './IntentClassifier';
 
 // ---------------------------------------------------------------------------
@@ -128,7 +129,10 @@ Return ONLY a valid JSON array. No markdown fences, no explanation before or aft
       const response = await platformService.callForgeChat({
         model: 'claude-sonnet-4-6',
         max_tokens: 4096,
-        system: systemPrompt,
+        // Prompt caching (CAMBIO 1): el system prompt del Architect es estático
+        // salvo la initial-build rule; marcarlo cachea el prefijo para re-planes
+        // sucesivos dentro de la ventana de caché.
+        system: cachedSystem(systemPrompt),
         messages: [{ role: 'user', content: userMessage }],
       }, signal);
 
