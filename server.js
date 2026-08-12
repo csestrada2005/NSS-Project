@@ -394,12 +394,18 @@ app.post('/api/chat-forge', async (req, res) => {
     // se sirvió DESDE la caché (ahorro real); cache_creation_input_tokens es lo que
     // se ESCRIBIÓ a la caché en esta llamada (coste único del primer prefijo).
     const u = data.usage ?? {};
+    // CAMBIO 2 (fase 2) — el modo del step del Implementer (diff|full|fallback)
+    // viaja como header x-forge-step-mode y se refleja aquí para medir en Render
+    // el ahorro de output por modo. Ausente en llamadas que no son de step
+    // (Architect, Verifier, simple lane) → se omite del log.
+    const stepMode = req.headers['x-forge-step-mode'];
     console.log(
       `[chat-forge] model=${resolvedModel} status=${response.status}`
       + ` input_tokens=${u.input_tokens ?? '?'}`
       + ` output_tokens=${u.output_tokens ?? '?'}`
       + ` cache_read=${u.cache_read_input_tokens ?? 0}`
       + ` cache_write=${u.cache_creation_input_tokens ?? 0}`
+      + (stepMode ? ` mode=${stepMode}` : '')
     );
     res.status(response.status).json(data);
   } catch (err) {
