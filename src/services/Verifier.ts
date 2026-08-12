@@ -3,7 +3,8 @@ import type { CompileErrorDetail } from './PlatformService';
 import { isAbortError } from '../utils/abort';
 import { groupCompileErrors, labelForError } from '../utils/groupCompileErrors';
 import type { RepairBatch } from '../utils/groupCompileErrors';
-import { cachedSystem } from './promptCache';
+import { cachedSystemBlocks } from './promptCache';
+import { buildProjectContextPrefix } from './promptRules';
 
 // ---------------------------------------------------------------------------
 // CAMBIO 3 — ruteo de reparación por clase de error.
@@ -84,7 +85,14 @@ export class Verifier {
     // CAMBIO 1 — el tope de intentos es configurable: el plan lane conserva 3
     // (compile inicial + 2 rondas de reparación); el simple lane pasa 2, porque
     // una edición puntual sólo justifica una ronda de reparación por lotes.
-    maxRetries: number = 3
+    maxRetries: number = 3,
+    // CAMBIO 1 (caching) — el design brief y el blueprint de esta generación.
+    // Cuando llegan, las reparaciones Sonnet comparten byte-a-byte el prefijo
+    // cacheado que escribieron el Architect y el Implementer, así que se sirven
+    // desde cache_read en vez de re-facturarse como input fresco. Vacíos por
+    // defecto: un caller que no los pase conserva el system prompt de hoy.
+    designContext: string = '',
+    blueprint: string = ''
   ): Promise<VerifyResult> {
     const MAX_RETRIES = Math.max(1, maxRetries);
     // Compilar el proyecto COMPLETO con los cambios aplicados encima.
@@ -176,7 +184,7 @@ export class Verifier {
       if (batches.length === 0) {
         // Ningún error resolvió a un archivo reparable: caer al fix de archivo
         // único histórico (usa regex sobre el texto) como último recurso.
-        const fixed = await this.fixError(errorMsg, errorDetail, currentFiles, signal);
+        const fixed = await this.fixError(errorMsg, errorDetail, currentFiles, signal, designContext, blueprint);
         if (fixed) {
           fixCalls += 1;
           currentFiles = fixed;
@@ -185,7 +193,7 @@ export class Verifier {
       }
 
       for (const batch of batches) {
-        const fixed = await this.fixBatch(batch, currentFiles, signal);
+        const fixed = await this.fixBatch(batch, currentFiles, signal, designContext, blueprint);
         fixCalls += 1;
         if (fixed) currentFiles = fixed;
       }
@@ -285,7 +293,9 @@ export class Verifier {
   private static async fixBatch(
     batch: RepairBatch,
     files: Map<string, string>,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    designContext: string = '',
+    blueprint: string = ''
   ): Promise<Map<string, string> | null> {
     if (batch.files.length === 0) return null;
 
@@ -323,13 +333,21 @@ export class Verifier {
     // CAMBIO 3 — ruteo por clase: sintaxis/import-mismatch → Haiku; resto → Sonnet.
     const model = pickRepairModel(batch.label);
 
+    // Prompt caching (CAMBIO 1): system = [ sharedPrefix, systemPrompt ]. El
+    // sharedPrefix (reglas + brief + blueprint) es idéntico al del Architect y el
+    // Implementer, así que en reparaciones Sonnet se sirve desde cache_read; en
+    // Haiku el prefijo se cachea aparte (por modelo). Sólo se antepone cuando el
+    // caller aportó brief/blueprint — si no, cachedSystemBlocks colapsa a un solo
+    // bloque = system prompt de hoy.
+    const sharedPrefix = (designContext || blueprint)
+      ? buildProjectContextPrefix(designContext, blueprint)
+      : '';
+
     try {
       const response = await platformService.callForgeChat({
         model,
         max_tokens: 8192,
-        // Prompt caching (CAMBIO 1): el system prompt de reparación es estático
-        // salvo la etiqueta de clase; se cachea el prefijo entre lotes.
-        system: cachedSystem(systemPrompt),
+        system: cachedSystemBlocks(sharedPrefix, systemPrompt),
         messages: [{ role: 'user', content: userMessage }],
       }, signal);
 
@@ -399,7 +417,9 @@ export class Verifier {
     error: string,
     errorDetail: CompileErrorDetail | null,
     files: Map<string, string>,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    designContext: string = '',
+    blueprint: string = ''
   ): Promise<Map<string, string> | null> {
     const errorFile = this.identifyErrorFile(error, errorDetail, files);
     const fileContent = errorFile ? (files.get(errorFile) ?? '') : '';
@@ -433,11 +453,16 @@ Return ONLY the complete corrected file content. No markdown fences, no explanat
     // suelto con la misma función que usa el agrupador.
     const model = pickRepairModel(labelForError(error));
 
+    // Mismo prefijo cacheado compartido que fixBatch (CAMBIO 1).
+    const sharedPrefix = (designContext || blueprint)
+      ? buildProjectContextPrefix(designContext, blueprint)
+      : '';
+
     try {
       const response = await platformService.callForgeChat({
         model,
         max_tokens: 8192,
-        system: cachedSystem(systemPrompt),
+        system: cachedSystemBlocks(sharedPrefix, systemPrompt),
         messages: [{ role: 'user', content: userMessage }],
       }, signal);
 

@@ -1,5 +1,6 @@
 import { platformService } from './PlatformService';
-import { cachedSystem } from './promptCache';
+import { cachedSystemBlocks } from './promptCache';
+import { buildProjectContextPrefix } from './promptRules';
 import type { Intent } from './IntentClassifier';
 
 // ---------------------------------------------------------------------------
@@ -93,6 +94,7 @@ PLANNING RULES — follow these exactly:
 Maximum 6 steps for any request. If you think you need more, consolidate.
 Minimum 1 step. Never return an empty array.
 One step = one file. Never put two different file paths in one step.
+Each visual section of a page gets its OWN component file in src/components/sections/ (HeroSection.tsx, PricingSection.tsx, ContactSection.tsx...). NEVER bundle multiple sections into a single file (no 'LandingSections', 'MainSections', or similar catch-all files). One section = one file = one plan step. A section component should stay under ~200 lines; if it grows beyond that, split subcomponents into the same folder.
 Purely cosmetic changes (color, text, spacing): return exactly 1 step.
 New page: 2-4 steps maximum (page component + sub-components + router update).
 Do not create test files, story files, or documentation files unless explicitly asked.
@@ -112,11 +114,15 @@ ROUTING & ENTRY-POINT RULES — critical:
 Return ONLY a valid JSON array. No markdown fences, no explanation before or after.${initialBuildRule}`;
 
     try {
-      const designBlock = designContext ? `DESIGN SYSTEM CONTEXT:\n${designContext}\n\n` : '';
+      // CAMBIO 1 — el design brief y el blueprint viajan en el prefijo estático
+      // cacheado (compartido byte-a-byte con Implementer y Verifier en esta
+      // generación), no en el user message. El user message queda con lo que
+      // varía por petición: memoria, request e intent. El Architect corre PRIMERO
+      // en la generación, así que ESCRIBE la caché del prefijo que luego leen los
+      // steps del Implementer y las reparaciones Sonnet del Verifier.
+      const sharedPrefix = buildProjectContextPrefix(designContext, blueprint);
       const userMessage =
-        designBlock +
         `${memoryFormatted}\n\n` +
-        `PROJECT FILES:\n${blueprint}\n\n` +
         `USER REQUEST: ${prompt}\n\n` +
         `CLASSIFIED INTENT:\n` +
         `- Type: ${intent.type}\n` +
@@ -129,10 +135,11 @@ Return ONLY a valid JSON array. No markdown fences, no explanation before or aft
       const response = await platformService.callForgeChat({
         model: 'claude-sonnet-4-6',
         max_tokens: 4096,
-        // Prompt caching (CAMBIO 1): el system prompt del Architect es estático
-        // salvo la initial-build rule; marcarlo cachea el prefijo para re-planes
-        // sucesivos dentro de la ventana de caché.
-        system: cachedSystem(systemPrompt),
+        // system = [ sharedPrefix (cacheado, compartido entre lanes), reglas de
+        // planificación del Architect (cacheado por-lane) ]. La initial-build
+        // rule es estática dentro de la generación, así que va en el bloque de
+        // rol sin romper el prefijo compartido.
+        system: cachedSystemBlocks(sharedPrefix, systemPrompt),
         messages: [{ role: 'user', content: userMessage }],
       }, signal);
 

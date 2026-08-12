@@ -2,8 +2,9 @@ import type { BuildStep } from './Architect';
 import type { ProjectMemory } from './ProjectMemoryService';
 import { SupabaseService } from './SupabaseService';
 import { sanitizeFileContent } from '../utils/sanitizeFileContent';
-import { REACT_TAILWIND_RULES } from './promptRules';
-import { cachedSystem } from './promptCache';
+import { buildProjectContextPrefix } from './promptRules';
+import { cachedSystemBlocks } from './promptCache';
+import { applyEditsFromResponse } from '../utils/applyEdits';
 import { withTimeout, isAbortError } from '../utils/abort';
 
 // ---------------------------------------------------------------------------
@@ -57,6 +58,41 @@ When importing components created by other steps of this plan, use the EXACT pat
 Never reimplement inline a component that exists as a file in PLAN FILES — import it instead.
 `.trim();
 
+// CAMBIO 2 — diff-based modifies. For an action 'modify' over an EXISTING file
+// the model emits surgical SEARCH/REPLACE blocks instead of the whole file, so
+// output tokens scale with the CHANGE, not the file. Used only for modifies;
+// 'create' keeps FORMAT_INSTRUCTION (full file). The applier
+// (src/utils/applyEdits.js) is all-or-nothing: any block that fails to match
+// uniquely rejects the whole edit and the step falls back to a full rewrite.
+const MODIFY_FORMAT_INSTRUCTION = `
+CRITICAL OUTPUT FORMAT — SURGICAL EDITS ONLY (this file already exists):
+Do NOT rewrite the whole file. Emit ONLY the minimal edits needed, each as a SEARCH/REPLACE block in this EXACT shape:
+
+<<<<<<< SEARCH
+<exact lines copied verbatim from the CURRENT FILE CONTENT below>
+=======
+<the replacement lines>
+>>>>>>> REPLACE
+
+RULES:
+- Copy the SEARCH text VERBATIM from CURRENT FILE CONTENT — same indentation, quotes and spacing — and make it UNIQUE: include enough surrounding lines that it occurs exactly once in the file.
+- Emit one block per distinct edit. To INSERT code, SEARCH an existing anchor line and REPLACE it with that same line plus the new code.
+- Do not touch lines you are not changing. Output NOTHING except the SEARCH/REPLACE blocks — no prose, no markdown fences, no full file.
+
+EXAMPLE (add an import and retitle a heading):
+<<<<<<< SEARCH
+import { cn } from '@/lib/utils';
+=======
+import { cn } from '@/lib/utils';
+import { Star } from 'lucide-react';
+>>>>>>> REPLACE
+<<<<<<< SEARCH
+      <h1 className="text-3xl">Welcome</h1>
+=======
+      <h1 className="text-4xl font-bold">Welcome to Acme</h1>
+>>>>>>> REPLACE
+`.trim();
+
 // REACT_TAILWIND_RULES is the shared constant in ./promptRules (single source of
 // truth across every generation lane, including the anti-template / brand rules).
 
@@ -81,7 +117,11 @@ export class Implementer {
     onProgress?: ProgressCallback,
     patternContext?: string,
     designContext?: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    // CAMBIO 1 — el blueprint (estructura de archivos del proyecto) se computa
+    // UNA vez por generación en el orquestador y viaja a las tres lanes; forma
+    // parte del prefijo estático cacheado compartido con Architect y Verifier.
+    blueprint: string = ''
   ): Promise<ImplementerResult> {
     const modifiedFiles = new Map<string, string>(files);
     const completed = new Set<number>();
@@ -146,7 +186,7 @@ export class Implementer {
         }));
 
         this.lastApiFailure = null;
-        const newContent = await this.executeStep(step, modifiedFiles, memory, planFiles, patternContext, designContext, signal);
+        const newContent = await this.executeStep(step, modifiedFiles, memory, planFiles, patternContext, designContext, signal, blueprint);
 
         // El step en vuelo se abortó: se descarta (no se escribe un archivo a
         // medias) y NO se contabiliza como fallo del modelo. Salimos del plan.
@@ -233,7 +273,8 @@ export class Implementer {
     planFiles: { path: string; done: boolean }[],
     patternContext: string = '',
     designContext: string = '',
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    blueprint: string = ''
   ): Promise<string | null> {
     console.log('[Implementer] patternContext chars:', patternContext?.length ?? 0, '| preview:', patternContext?.slice(0, 200)); // TODO: remove after RAG verification
     const rawContent      = files.get(step.file_path) ?? '';
@@ -248,12 +289,30 @@ export class Implementer {
 
     const trimmedPattern  = patternContext.slice(0, patternBudget);
     const trimmedImports  = importedContext.slice(0, importBudget);
-    const trimmedContent  = this.truncateFileContent(rawContent, fileBudget);
 
-    const systemPrompt =
+    // CAMBIO 2 — diff mode applies only to a 'modify' of a file that already
+    // has content. A 'create' (or a 'modify' of an empty/absent file) has no
+    // SEARCH anchors, so it emits the full file as before.
+    const isModifyExisting = step.action === 'modify' && rawContent.trim().length > 0;
+
+    // In diff mode the model must see the EXACT current content so its SEARCH
+    // blocks match verbatim — pass it untruncated. In full mode keep the budget
+    // truncation. The applier always matches against the full rawContent, so a
+    // truncated view can only cause a safe fallback, never a bad apply.
+    const shownContent = isModifyExisting
+      ? rawContent
+      : this.truncateFileContent(rawContent, fileBudget);
+
+    // CAMBIO 1 — shared static prefix (rules + design brief + blueprint),
+    // byte-identical across Architect/Implementer/Verifier for this generation.
+    const sharedPrefix = buildProjectContextPrefix(designContext, blueprint);
+
+    // Lane role block: full-file contract for create, surgical-edit contract for
+    // modify. This is the ONLY part of the system prompt that changes by action;
+    // it sits after the shared prefix so the prefix cache is reused regardless.
+    const roleBlock =
       `You are an expert React + TypeScript engineer implementing one specific step in a build plan.\n` +
-      `${FORMAT_INSTRUCTION}\n\n` +
-      `${REACT_TAILWIND_RULES}`;
+      `${isModifyExisting ? MODIFY_FORMAT_INSTRUCTION : FORMAT_INSTRUCTION}`;
 
     const parts: string[] = [];
     parts.push(compactMemory);
@@ -270,9 +329,8 @@ export class Implementer {
       );
     }
 
-    if (designContext) {
-      parts.push(`\nDESIGN SYSTEM CONTEXT:\n${designContext}`);
-    }
+    // designContext moved to the cached shared prefix (CAMBIO 1) — no longer
+    // repeated in the per-step user message.
 
     if (trimmedPattern) {
       parts.push(
@@ -297,25 +355,26 @@ export class Implementer {
       );
     }
 
-    if (trimmedContent) {
-      parts.push(`\nCURRENT FILE CONTENT:\n${trimmedContent}`);
+    if (shownContent) {
+      parts.push(`\nCURRENT FILE CONTENT:\n${shownContent}`);
     }
 
     parts.push(
-      `\nWrite the complete ${step.action === 'create' ? 'new' : 'updated'} content for ${step.file_path}:`
+      isModifyExisting
+        ? `\nEmit the SEARCH/REPLACE blocks needed for ${step.file_path}:`
+        : `\nWrite the complete ${step.action === 'create' ? 'new' : 'updated'} content for ${step.file_path}:`
     );
 
     const userMessage = parts.join('\n');
 
+    // Prompt caching (CAMBIO 1): system = [ sharedPrefix, roleBlock ], both
+    // cache-controlled. The sharedPrefix block is identical across every step of
+    // this generation (and shared with Architect/Verifier), so steps 2..N read
+    // it from cache instead of re-billing it as fresh input.
     const result = await this.callStepWithRetry({
       model: 'claude-sonnet-4-6',
       max_tokens: 8192,
-      // Prompt caching (CAMBIO 1): el system prompt (FORMAT_INSTRUCTION +
-      // REACT_TAILWIND_RULES) es idéntico byte-a-byte en TODOS los steps de una
-      // generación. Marcarlo hace que los steps 2..N lean el prefijo desde la
-      // caché (cache_read) en vez de re-facturarlo como input fresco — el mayor
-      // ahorro del pipeline, porque un plan tiene hasta 6 steps.
-      system: cachedSystem(systemPrompt),
+      system: cachedSystemBlocks(sharedPrefix, roleBlock),
       messages: [{ role: 'user', content: userMessage }],
     }, signal);
 
@@ -331,7 +390,74 @@ export class Implementer {
     }
 
     const text: string = result.data.content?.[0]?.text ?? '';
+    const outputTokens = result.data.usage?.output_tokens ?? 0;
+
+    // ------------------------------------------------------------------
+    // CAMBIO 2 — apply diff edits, with a safe single fallback to full file.
+    // ------------------------------------------------------------------
+    if (isModifyExisting) {
+      const applied = applyEditsFromResponse(rawContent, text);
+      if (applied.ok) {
+        this.logStepTelemetry(step, 'diff', outputTokens, applied.appliedCount);
+        return sanitizeFileContent(applied.result);
+      }
+
+      // Any block failed to match uniquely — never apply a partial edit. Retry
+      // ONCE asking for the complete file (full, safe rewrite).
+      console.warn(
+        `[Implementer] Step ${step.order} diff apply rejected (${applied.reason}) — falling back to full file`
+      );
+      const fallback = await this.callStepWithRetry({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 8192,
+        system: cachedSystemBlocks(
+          sharedPrefix,
+          `You are an expert React + TypeScript engineer implementing one specific step in a build plan.\n${FORMAT_INSTRUCTION}`
+        ),
+        messages: [{
+          role: 'user',
+          content:
+            userMessage.replace(
+              `\nEmit the SEARCH/REPLACE blocks needed for ${step.file_path}:`,
+              `\nWrite the complete updated content for ${step.file_path}:`
+            ),
+        }],
+      }, signal);
+
+      if ('finalError' in fallback) {
+        console.error(
+          `[Implementer] Step ${step.order} fallback failed definitively:`,
+          fallback.finalError
+        );
+        this.lastApiFailure = fallback.finalError;
+        return null;
+      }
+
+      const fbText: string = fallback.data.content?.[0]?.text ?? '';
+      const fbTokens = fallback.data.usage?.output_tokens ?? 0;
+      this.logStepTelemetry(step, 'fallback', outputTokens + fbTokens, 0);
+      return sanitizeFileContent(this.stripCodeFences(fbText));
+    }
+
+    this.logStepTelemetry(step, 'full', outputTokens, 0);
     return sanitizeFileContent(this.stripCodeFences(text));
+  }
+
+  /**
+   * CAMBIO 2 — telemetría de output por step + modo (diff|full|fallback) para
+   * medir el ahorro real de tokens de salida. Una línea por step.
+   */
+  private static logStepTelemetry(
+    step: BuildStep,
+    mode: 'diff' | 'full' | 'fallback',
+    outputTokens: number,
+    editBlocks: number
+  ): void {
+    console.log(
+      `[Implementer] telemetry | step=${step.order} action=${step.action} ` +
+      `file=${step.file_path} mode=${mode} output_tokens=${outputTokens}` +
+      (mode === 'diff' ? ` edits=${editBlocks}` : '')
+    );
   }
 
   // -------------------------------------------------------------------------
