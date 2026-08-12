@@ -1,8 +1,34 @@
 import { platformService } from './PlatformService';
 import type { CompileErrorDetail } from './PlatformService';
 import { isAbortError } from '../utils/abort';
-import { groupCompileErrors } from '../utils/groupCompileErrors';
+import { groupCompileErrors, labelForError } from '../utils/groupCompileErrors';
 import type { RepairBatch } from '../utils/groupCompileErrors';
+import { cachedSystem } from './promptCache';
+
+// ---------------------------------------------------------------------------
+// CAMBIO 3 — ruteo de reparación por clase de error.
+//
+// Los errores de sintaxis y los de nombre import/export son fallos MECÁNICOS:
+// un corchete que falta, un `import { Foo }` que no coincide con el export. Un
+// modelo pequeño (Haiku) los repara con la misma fiabilidad y a una fracción
+// del coste. El resto de clases (módulo no resuelto, referencia indefinida,
+// declaración duplicada, error genérico) pueden requerir juicio sobre QUÉ debe
+// existir, así que se quedan en Sonnet.
+//
+// Las etiquetas provienen de groupCompileErrors.labelForError (única fuente de
+// clasificación), así que este ruteo se mantiene alineado con el batching.
+// ---------------------------------------------------------------------------
+const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
+const SONNET_MODEL = 'claude-sonnet-4-6';
+const HAIKU_REPAIR_CLASSES = new Set<string>([
+  'syntax error',
+  'export/import name mismatch',
+]);
+
+/** Devuelve el modelo de reparación adecuado para una etiqueta de clase. */
+function pickRepairModel(label: string): string {
+  return HAIKU_REPAIR_CLASSES.has(label) ? HAIKU_MODEL : SONNET_MODEL;
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -294,17 +320,25 @@ export class Verifier {
       `Return the complete corrected content of every file, each wrapped in its ` +
       `===FILE: <path>=== / ===END=== markers:`;
 
+    // CAMBIO 3 — ruteo por clase: sintaxis/import-mismatch → Haiku; resto → Sonnet.
+    const model = pickRepairModel(batch.label);
+
     try {
       const response = await platformService.callForgeChat({
-        model: 'claude-sonnet-4-6',
+        model,
         max_tokens: 8192,
-        system: systemPrompt,
+        // Prompt caching (CAMBIO 1): el system prompt de reparación es estático
+        // salvo la etiqueta de clase; se cachea el prefijo entre lotes.
+        system: cachedSystem(systemPrompt),
         messages: [{ role: 'user', content: userMessage }],
       }, signal);
 
       const data = await response.json();
-      console.log('[Verifier] fixBatch usage:', data.usage?.input_tokens ?? 0, 'in /',
-        data.usage?.output_tokens ?? 0, 'out |', batch.files.length, 'file(s),',
+      console.log('[Verifier] fixBatch model=' + model + ' class="' + batch.label + '" usage:',
+        data.usage?.input_tokens ?? 0, 'in /',
+        data.usage?.output_tokens ?? 0, 'out |',
+        'cache_read', data.usage?.cache_read_input_tokens ?? 0, '|',
+        batch.files.length, 'file(s),',
         batch.errors.length, 'error(s)');
 
       if (data.error) {
@@ -395,17 +429,23 @@ Return ONLY the complete corrected file content. No markdown fences, no explanat
       `CURRENT CONTENT:\n${fileContent}\n\n` +
       `Fix the error and return the complete corrected file content:`;
 
+    // CAMBIO 3 — misma política de ruteo que fixBatch, clasificando el mensaje
+    // suelto con la misma función que usa el agrupador.
+    const model = pickRepairModel(labelForError(error));
+
     try {
       const response = await platformService.callForgeChat({
-        model: 'claude-sonnet-4-6',
+        model,
         max_tokens: 8192,
-        system: systemPrompt,
+        system: cachedSystem(systemPrompt),
         messages: [{ role: 'user', content: userMessage }],
       }, signal);
 
       const data = await response.json();
-      console.log('[Verifier] fixError usage:', data.usage?.input_tokens ?? 0, 'in /',
-        data.usage?.output_tokens ?? 0, 'out');
+      console.log('[Verifier] fixError model=' + model + ' usage:',
+        data.usage?.input_tokens ?? 0, 'in /',
+        data.usage?.output_tokens ?? 0, 'out |',
+        'cache_read', data.usage?.cache_read_input_tokens ?? 0);
 
       if (data.error) {
         console.error('[Verifier] Fix API error:', data.error);

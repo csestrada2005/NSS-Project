@@ -389,7 +389,18 @@ app.post('/api/chat-forge', async (req, res) => {
     });
 
     const data = await response.json();
-    console.log(`[chat-forge] model=${resolvedModel} status=${response.status} input_tokens=${data.usage?.input_tokens ?? '?'}`);
+    // Contabilidad completa de tokens (Fase Previa #1): sin output ni cache no hay
+    // antes/después medible del prompt caching. cache_read_input_tokens es lo que
+    // se sirvió DESDE la caché (ahorro real); cache_creation_input_tokens es lo que
+    // se ESCRIBIÓ a la caché en esta llamada (coste único del primer prefijo).
+    const u = data.usage ?? {};
+    console.log(
+      `[chat-forge] model=${resolvedModel} status=${response.status}`
+      + ` input_tokens=${u.input_tokens ?? '?'}`
+      + ` output_tokens=${u.output_tokens ?? '?'}`
+      + ` cache_read=${u.cache_read_input_tokens ?? 0}`
+      + ` cache_write=${u.cache_creation_input_tokens ?? 0}`
+    );
     res.status(response.status).json(data);
   } catch (err) {
     console.error('[chat-forge] Error:', err);

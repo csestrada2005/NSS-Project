@@ -108,6 +108,45 @@ function componentNameFromPath(filePath: string): string {
   return base.replace(/\.[^./]+$/, '') || base;
 }
 
+// CAMBIO 5 — resumen DETERMINISTA (sin LLM) de una generación, derivado de los
+// archivos modificados. Cuenta como "secciones" los componentes de contenido
+// (src/components/*.tsx, excluidos los primitivos ui/layout/motion) y como
+// "páginas" los archivos de src/pages/*.tsx distintos del Index por defecto.
+// Devuelve null cuando no hay ni secciones ni páginas (nada que resumir).
+// Ej.: "Proyecto generado: 3 secciones (HeroSection, Features, Contact), 1 página (About)."
+function buildGenerationSummary(modifiedFiles: string[]): string | null {
+  const sections: string[] = [];
+  const pages: string[] = [];
+  for (const path of modifiedFiles) {
+    if (
+      path.startsWith('src/components/') &&
+      path.endsWith('.tsx') &&
+      !path.startsWith('src/components/ui/') &&
+      !path.startsWith('src/components/layout/') &&
+      !path.startsWith('src/components/motion/')
+    ) {
+      const name = componentNameFromPath(path);
+      if (!sections.includes(name)) sections.push(name);
+    } else if (path.startsWith('src/pages/') && path.endsWith('.tsx')) {
+      const name = componentNameFromPath(path);
+      if (name !== 'Index' && !pages.includes(name)) pages.push(name);
+    }
+  }
+
+  if (sections.length === 0 && pages.length === 0) return null;
+
+  const parts: string[] = [];
+  if (sections.length > 0) {
+    const word = sections.length === 1 ? 'sección' : 'secciones';
+    parts.push(`${sections.length} ${word} (${sections.join(', ')})`);
+  }
+  if (pages.length > 0) {
+    const word = pages.length === 1 ? 'página' : 'páginas';
+    parts.push(`${pages.length} ${word} (${pages.join(', ')})`);
+  }
+  return `Proyecto generado: ${parts.join(', ')}.`;
+}
+
 // Resumen corto y DETERMINISTA de una sesión de guardado visual, derivado de las
 // propiedades tocadas (className → "estilo", text → "texto") y de los archivos
 // afectados (→ nombre de componente). Sin LLM. Ej.: "estilo y texto en HeroSection".
@@ -646,9 +685,22 @@ export function StudioEngine() {
         // not block a legitimate initial generation.
       }
 
+      // CAMBIO 6 (render en vivo + rehidratación del prompt inicial): sembramos
+      // el mensaje del usuario en chatHistory ANTES de disparar la generación. El
+      // initialPrompt entra por handleSendMessage directo, sin pasar por
+      // ChatInterface.appendMessage, así que sin esto el chat no pinta el prompt
+      // en vivo durante la primera generación. La persistencia del user ya la hace
+      // handleSendMessage (embudo común); aquí sólo alimentamos el estado visible,
+      // que además rehidrata al re-entrar. El guard `prev.length === 0` evita
+      // pisar historial ya cargado.
+      setChatHistory(prev =>
+        prev.length === 0 ? [{ role: 'user', content: promptToRun }] : prev
+      );
+
       try {
+        let result;
         if (files.size > 0) {
-          await handleSendMessage(promptToRun);
+          result = await handleSendMessage(promptToRun);
         } else {
           isAutoLoadingTemplate.current = true;
           const loadedFiles = await handleLoadTemplate('landing-page');
@@ -657,7 +709,20 @@ export function StudioEngine() {
           // generation, so every lane sees the brief. Best-effort — a null result
           // (API/JSON failure) leaves the scaffold untouched.
           const briefFiles = await applyDesignBrief(promptToRun, loadedFiles);
-          await handleSendMessage(promptToRun, undefined, undefined, briefFiles);
+          result = await handleSendMessage(promptToRun, undefined, undefined, briefFiles);
+        }
+
+        // CAMBIO 5 — mensaje de cierre determinista (sin LLM). El flujo del prompt
+        // inicial no pasa por ChatInterface, así que sin esto la primera
+        // generación cerraría SIN respuesta del asistente en el chat. Resume las
+        // secciones/páginas generadas, lo eleva a chatHistory (render en vivo) y lo
+        // persiste (rehidratación al re-entrar).
+        if (result?.success) {
+          const summary = buildGenerationSummary(result.modifiedFiles);
+          if (summary) {
+            setChatHistory(prev => [...prev, { role: 'assistant', content: summary }]);
+            persistChatMessage('assistant', summary);
+          }
         }
       } finally {
         // CAMBIO 3 — la generación inicial ya arrancó y terminó (isGenerating y
@@ -1308,7 +1373,7 @@ export function StudioEngine() {
   // -------------------------------------------------------------------------
   const handleSendMessage = async (
     message: string,
-    onProgress?: (step: number, total: number, file: string) => void,
+    onProgress?: (step: number, total: number, file: string, description?: string) => void,
     onRetry?: (attempt: number, error: string) => void,
     filesOverride?: Map<string, string>
   ): Promise<{ success: boolean; modifiedFiles: string[]; error?: string; warning?: string; chatResponse?: string; suggestedAction?: string }> => {
@@ -1354,13 +1419,15 @@ export function StudioEngine() {
         activeFiles,
         selectedElement,
         projectId,
-        (step, total, file) => {
+        (step, total, file, description) => {
           terminalRef.current?.write(
             `\r\n\x1b[32m  [${step}/${total}] Writing ${file}\x1b[0m`
           );
           // CAMBIO 2: alimenta la línea secundaria del overlay de generación.
           setGenerationProgress({ step, total, file });
-          onProgress?.(step, total, file);
+          // CAMBIO 4 (progreso honesto): propaga la description real del step al
+          // chat, que la muestra truncada en vez del "creating" genérico.
+          onProgress?.(step, total, file, description);
         },
         (attempt, errorMsg) => {
           terminalRef.current?.write(

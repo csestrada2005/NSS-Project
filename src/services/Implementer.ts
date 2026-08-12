@@ -3,6 +3,7 @@ import type { ProjectMemory } from './ProjectMemoryService';
 import { SupabaseService } from './SupabaseService';
 import { sanitizeFileContent } from '../utils/sanitizeFileContent';
 import { REACT_TAILWIND_RULES } from './promptRules';
+import { cachedSystem } from './promptCache';
 import { withTimeout, isAbortError } from '../utils/abort';
 
 // ---------------------------------------------------------------------------
@@ -12,7 +13,10 @@ import { withTimeout, isAbortError } from '../utils/abort';
 export type ProgressCallback = (
   stepNumber: number,
   totalSteps: number,
-  currentFile: string
+  currentFile: string,
+  // CAMBIO 4 — descripción real del step del plan (progreso honesto). Opcional
+  // por compatibilidad hacia atrás con callers que sólo consumen file/step.
+  stepDescription?: string
 ) => void;
 
 /**
@@ -127,7 +131,7 @@ export class Implementer {
         const depsReady = step.requires_steps.every(dep => completed.has(dep));
         if (!depsReady) continue;
 
-        onProgress?.(completed.size + 1, sorted.length, step.file_path);
+        onProgress?.(completed.size + 1, sorted.length, step.file_path, step.description);
 
         if (step.action === 'delete') {
           modifiedFiles.delete(step.file_path);
@@ -306,7 +310,12 @@ export class Implementer {
     const result = await this.callStepWithRetry({
       model: 'claude-sonnet-4-6',
       max_tokens: 8192,
-      system: systemPrompt,
+      // Prompt caching (CAMBIO 1): el system prompt (FORMAT_INSTRUCTION +
+      // REACT_TAILWIND_RULES) es idéntico byte-a-byte en TODOS los steps de una
+      // generación. Marcarlo hace que los steps 2..N lean el prefijo desde la
+      // caché (cache_read) en vez de re-facturarlo como input fresco — el mayor
+      // ahorro del pipeline, porque un plan tiene hasta 6 steps.
+      system: cachedSystem(systemPrompt),
       messages: [{ role: 'user', content: userMessage }],
     }, signal);
 

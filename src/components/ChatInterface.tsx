@@ -24,7 +24,7 @@ interface ChatInterfaceProps {
   isLoading: boolean;
   onSendMessage: (
     message: string,
-    onProgress?: (step: number, total: number, file: string) => void,
+    onProgress?: (step: number, total: number, file: string, description?: string) => void,
     onRetry?: (attempt: number, error: string) => void
   ) => Promise<{ success: boolean; modifiedFiles: string[]; error?: string; warning?: string; chatResponse?: string; suggestedAction?: string }>;
   selectedElement: { tagName: string; className?: string } | null;
@@ -249,19 +249,41 @@ export function ChatInterface({
   // igual o menor longitud, para no pisar mensajes locales aún no propagados.
   useEffect(() => {
     if (!chatHistory || chatHistory.length === 0) return;
-    // Caso carga inicial async (persistencia): el chat arranca con el saludo
-    // pelado (length 1) mientras el fetch de forge_chat_messages vuela. Cuando
-    // resuelve, un historial de UN solo mensaje no superaría el length del
-    // saludo y la regla estricta lo bloquearía. Por eso: si el estado local es
-    // sólo el saludo, adoptamos cualquier historial no vacío. En cualquier otro
-    // caso mantenemos la regla estricta (adoptar sólo si el prop es más largo),
-    // para no pisar mensajes locales aún no propagados al padre.
-    const isBareGreeting =
-      messagesRef.current.length === 1 &&
-      messagesRef.current[0].role === 'assistant' &&
-      messagesRef.current[0].content === INITIAL_GREETING;
+    const local = messagesRef.current;
+
+    // El saludo inicial pelado NO es historial real: es el placeholder de un chat
+    // intacto. Comparar longitudes contra él es la raíz de la regresión — un
+    // historial rehidratado de UN solo mensaje (p.ej. el prompt inicial del
+    // proyecto) daba `1 > 1 = false` y NO se adoptaba, dejando el modal mostrando
+    // sólo el saludo. Por eso medimos contra los mensajes REALES (excluido el
+    // saludo), no contra la lista cruda.
+    const localIsBareGreeting =
+      local.length === 1 &&
+      local[0].role === 'assistant' &&
+      local[0].content === INITIAL_GREETING;
+    const realLocal = localIsBareGreeting ? [] : local;
+
+    // Identidad del primer mensaje real: si difiere del primero del prop, el
+    // padre trae un historial DISTINTO (más autoritativo: rehidratado de
+    // forge_chat_messages o sembrado del prompt inicial). Adoptamos por identidad
+    // aunque las longitudes empaten — cubre el caso "1 vs 1 con contenido
+    // distinto" que la comparación por sólo-longitud dejaba pasar.
+    const firstDiffers =
+      realLocal.length > 0 &&
+      (realLocal[0].role !== chatHistory[0].role ||
+        realLocal[0].content !== chatHistory[0].content);
+
+    // Regla de adopción, ordenada para no PISAR jamás mensajes locales:
+    //  - local es sólo el saludo (no hay nada real que perder) → adoptar;
+    //  - el prop es estrictamente más largo (el padre sabe más) → adoptar;
+    //  - misma-o-mayor longitud pero el primer mensaje difiere → adoptar por
+    //    identidad. Nunca adoptamos un prop MÁS CORTO con primer msg distinto,
+    //    porque eso descartaría mensajes locales aún no propagados.
     const shouldAdopt =
-      chatHistory.length > messagesRef.current.length || isBareGreeting;
+      realLocal.length === 0 ||
+      chatHistory.length > realLocal.length ||
+      (firstDiffers && chatHistory.length >= realLocal.length);
+
     if (shouldAdopt) {
       messagesRef.current = chatHistory;
       setMessages(chatHistory);
@@ -342,13 +364,20 @@ export function ChatInterface({
     try {
       const result = await onSendMessage(
         userMessage,
-        (_step, _total, file) => {
+        (_step, _total, file, description) => {
+          // CAMBIO 4 (progreso honesto): la línea muestra la description real del
+          // step del plan (qué se está construyendo), truncada a 60 chars, en vez
+          // del "Creating <archivo>" genérico. Si no hay description (callers
+          // viejos), cae al nombre de archivo.
+          const label = description && description.trim()
+            ? (description.length > 60 ? `${description.slice(0, 60)}…` : description)
+            : file;
           setProgressLines(prev => {
             const next = [...prev];
             if (next.length > 0 && next[next.length - 1].status === 'pending') {
               next[next.length - 1].status = 'done';
             }
-            next.push({ text: `Creating ${file}`, status: 'pending' });
+            next.push({ text: `Creating ${label}`, status: 'pending' });
             return next;
           });
         },
