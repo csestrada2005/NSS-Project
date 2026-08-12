@@ -96,7 +96,15 @@ app.use((req, res, next) => {
 // ---------------------------------------------------------------------------
 // Auth middleware — validates Supabase session for all /api/* routes.
 // All /api/* routes require auth. Ownership checks are done per-endpoint.
+//
+// Fail-closed (CAMBIO 1): if the admin client is not configured we can NOT
+// verify tokens. In any deployed environment (NODE_ENV=production, or Render,
+// which sets the RENDER env var) that MUST be a hard 503 — never a silent
+// next() that would let unauthenticated requests through. The auth skip only
+// survives in an explicit local-dev context where neither flag is present.
 // ---------------------------------------------------------------------------
+const IS_PRODUCTION = process.env.NODE_ENV === 'production' || !!process.env.RENDER;
+
 async function requireAuth(req, res, next) {
   const authHeader = req.headers['authorization'];
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -104,7 +112,12 @@ async function requireAuth(req, res, next) {
   }
   const token = authHeader.slice(7);
   if (!supabaseAdmin) {
-    // Dev mode: no admin client configured — skip auth check
+    if (IS_PRODUCTION) {
+      // Fail closed: we cannot verify the session, so refuse to serve it.
+      console.error('[Auth] supabaseAdmin unavailable in a production environment — refusing request (503).');
+      return res.status(503).json({ error: 'Auth unavailable' });
+    }
+    // Local dev only (no NODE_ENV=production, no RENDER): skip auth check.
     req.userId = null;
     return next();
   }
@@ -120,6 +133,47 @@ async function requireAuth(req, res, next) {
     console.error('[Auth] Error verifying token:', err);
     return res.status(401).json({ error: 'Unauthorized' });
   }
+}
+
+// ---------------------------------------------------------------------------
+// Ownership helper (CAMBIO 2) — verifies that the authenticated user owns the
+// given forge project. Today ownership means forge_projects.user_id === userId.
+// (Collaborators with an "edit" role will be added here when that feature is
+// actually implemented — for now only the owner passes.)
+//
+// Returns true when the caller may proceed. On any failure it writes the
+// appropriate status/body to `res` and returns false, so callers do:
+//     if (!(await requireProjectOwnership(req, res, projectId))) return;
+// ---------------------------------------------------------------------------
+async function requireProjectOwnership(req, res, projectId) {
+  if (!projectId) {
+    res.status(400).json({ error: 'projectId is required' });
+    return false;
+  }
+  if (!supabaseAdmin) {
+    // No admin client. In production requireAuth already 503'd before we get
+    // here; in local dev there is no ownership data to check against.
+    if (IS_PRODUCTION) {
+      res.status(503).json({ error: 'Auth unavailable' });
+      return false;
+    }
+    return true;
+  }
+  const { data: project, error } = await supabaseAdmin
+    .from('forge_projects')
+    .select('user_id')
+    .eq('id', projectId)
+    .single();
+
+  if (error || !project) {
+    res.status(404).json({ error: 'Project not found' });
+    return false;
+  }
+  if (project.user_id !== req.userId) {
+    res.status(403).json({ error: 'Forbidden' });
+    return false;
+  }
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -440,17 +494,170 @@ app.post('/api/images/search', async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// GET /api/proxy — server-side fetch of external documentation (CAMBIO 3).
+//
+// Censo (grep '/api/proxy' in src/): the ONLY caller is
+// ContextService.fetchDocumentation, invoked by AIOrchestrator for the
+// "Read [url]" flow — the user pastes arbitrary public documentation URLs and
+// we fetch their text server-side. Because the target host set is open-ended
+// (any docs site the user references), a fixed host allowlist would break the
+// feature; the real protection here is an SSRF guard:
+//   - only http/https schemes (https strongly preferred; http tolerated for
+//     docs that still serve plaintext, but see PROXY_ALLOW_HTTP below),
+//   - reject literal IP hosts outright,
+//   - resolve the hostname and refuse if ANY resolved address is private,
+//     loopback, link-local or otherwise non-public (anti DNS-rebinding),
+//   - 8s timeout and a 1MB response cap.
+// ---------------------------------------------------------------------------
+
+// Private / reserved IP ranges we must never let the proxy reach.
+function isPrivateIPv4(ip) {
+  const parts = ip.split('.').map(Number);
+  if (parts.length !== 4 || parts.some(n => Number.isNaN(n) || n < 0 || n > 255)) {
+    return true; // malformed → treat as unsafe
+  }
+  const [a, b] = parts;
+  if (a === 10) return true;                          // 10.0.0.0/8
+  if (a === 127) return true;                         // 127.0.0.0/8 loopback
+  if (a === 0) return true;                           // 0.0.0.0/8
+  if (a === 172 && b >= 16 && b <= 31) return true;   // 172.16.0.0/12
+  if (a === 192 && b === 168) return true;            // 192.168.0.0/16
+  if (a === 169 && b === 254) return true;            // 169.254.0.0/16 link-local
+  if (a === 100 && b >= 64 && b <= 127) return true;  // 100.64.0.0/10 CGNAT
+  if (a >= 224) return true;                          // multicast / reserved
+  return false;
+}
+
+function isPrivateIPv6(ip) {
+  const addr = ip.toLowerCase().split('%')[0]; // strip zone id
+  if (addr === '::1' || addr === '::') return true;   // loopback / unspecified
+  if (addr.startsWith('fe80')) return true;           // link-local
+  if (addr.startsWith('fc') || addr.startsWith('fd')) return true; // unique local
+  // IPv4-mapped IPv6 (::ffff:a.b.c.d) → validate the embedded v4
+  const mapped = addr.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  if (mapped) return isPrivateIPv4(mapped[1]);
+  return false;
+}
+
+function isPrivateAddress(ip, family) {
+  return family === 6 ? isPrivateIPv6(ip) : isPrivateIPv4(ip);
+}
+
+// Detect whether a hostname is a bare IP literal (v4 or v6).
+function isIpLiteral(host) {
+  const h = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(h)) return true;
+  if (h.includes(':')) return true; // IPv6 literal
+  return false;
+}
+
+const PROXY_ALLOW_HTTP = process.env.PROXY_ALLOW_HTTP === 'true';
+const PROXY_TIMEOUT_MS = 8000;
+const PROXY_MAX_BYTES = 1024 * 1024; // 1MB
+
+async function assertSafeProxyTarget(rawUrl) {
+  let parsed;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw { status: 400, message: 'Invalid URL' };
+  }
+
+  // (c) scheme allowlist
+  if (parsed.protocol !== 'https:' && !(PROXY_ALLOW_HTTP && parsed.protocol === 'http:')) {
+    throw { status: 400, message: 'Only https URLs are allowed' };
+  }
+
+  const host = parsed.hostname;
+
+  // Block obvious localhost aliases and *.internal / *.local before any lookup.
+  const lowered = host.toLowerCase();
+  if (
+    lowered === 'localhost' ||
+    lowered.endsWith('.internal') ||
+    lowered.endsWith('.local')
+  ) {
+    throw { status: 403, message: 'Host not allowed' };
+  }
+
+  // (c) reject literal IP hosts outright — docs are served from named hosts.
+  if (isIpLiteral(host)) {
+    throw { status: 403, message: 'IP-literal hosts are not allowed' };
+  }
+
+  // Resolve the hostname and ensure EVERY resolved address is public. This is
+  // the anti-rebinding check: a hostname that resolves to 127.0.0.1 / 10.x /
+  // 169.254.x etc. is rejected here.
+  let addresses;
+  try {
+    addresses = await dns.lookup(host, { all: true });
+  } catch {
+    throw { status: 502, message: 'Could not resolve host' };
+  }
+  if (!addresses.length) {
+    throw { status: 502, message: 'Could not resolve host' };
+  }
+  for (const { address, family } of addresses) {
+    if (isPrivateAddress(address, family)) {
+      throw { status: 403, message: 'Host resolves to a private address' };
+    }
+  }
+}
+
 app.get('/api/proxy', async (req, res) => {
   const { url } = req.query;
-  if (!url) return res.status(400).json({ error: 'URL is required' });
+  if (!url || typeof url !== 'string') {
+    return res.status(400).json({ error: 'URL is required' });
+  }
+
   try {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
-    const text = await response.text();
-    res.send(text);
+    await assertSafeProxyTarget(url);
+  } catch (guard) {
+    if (guard && guard.status) {
+      return res.status(guard.status).json({ error: guard.message });
+    }
+    return res.status(400).json({ error: 'Invalid URL' });
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PROXY_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      redirect: 'error', // don't silently follow redirects to an internal host
+      headers: { 'User-Agent': 'nebu-docs-proxy/1.0' },
+    });
+    if (!response.ok) {
+      return res.status(502).json({ error: `Upstream responded ${response.status}` });
+    }
+
+    // (d) 1MB response cap — stream and abort if the body grows past the limit.
+    const reader = response.body?.getReader();
+    if (!reader) {
+      return res.status(502).json({ error: 'Empty response body' });
+    }
+    const chunks = [];
+    let total = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.length;
+      if (total > PROXY_MAX_BYTES) {
+        controller.abort();
+        return res.status(413).json({ error: 'Response exceeds 1MB limit' });
+      }
+      chunks.push(Buffer.from(value));
+    }
+    res.type('text/plain').send(Buffer.concat(chunks).toString('utf8'));
   } catch (error) {
-    console.error('Error fetching URL:', error);
-    res.status(500).json({ error: 'Failed to fetch URL' });
+    if (error?.name === 'AbortError') {
+      return res.status(504).json({ error: 'Upstream fetch timed out' });
+    }
+    console.error('[proxy] Error fetching URL:', error?.message || error);
+    res.status(502).json({ error: 'Failed to fetch URL' });
+  } finally {
+    clearTimeout(timeout);
   }
 });
 
@@ -516,6 +723,7 @@ app.post('/api/deploy/:projectId', async (req, res) => {
   }
 
   const { projectId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
   const { files, projectName } = req.body;
 
   if (!files || typeof files !== 'object') {
@@ -592,6 +800,7 @@ app.post('/api/deploy/:projectId', async (req, res) => {
 
 app.get('/api/deploy/:projectId/status', async (req, res) => {
   const { projectId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
   if (!supabaseAdmin) return res.json({ status: 'never', url: null, lastDeployedAt: null });
   const { data } = await supabaseAdmin
     .from('forge_projects')
@@ -627,6 +836,7 @@ async function getCloudflarZoneId(domain) {
 
 app.post('/api/domains/:projectId', async (req, res) => {
   const { projectId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
   const { domain } = req.body;
 
   if (!domain || !DOMAIN_REGEX.test(domain)) {
@@ -700,6 +910,7 @@ app.post('/api/domains/:projectId', async (req, res) => {
 
 app.get('/api/domains/:projectId', async (req, res) => {
   const { projectId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
   if (!supabaseAdmin) return res.json([]);
 
   const { data: domains } = await supabaseAdmin
@@ -777,6 +988,7 @@ function generateRandomPassword(length = 24) {
 
 app.post('/api/db/provision/:projectId', async (req, res) => {
   const { projectId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
   if (!supabaseAdmin) return res.status(503).json({ error: 'Database not configured' });
   if (!SUPABASE_MANAGEMENT_TOKEN) return res.status(503).json({ error: 'Database provisioning not configured' });
 
@@ -868,6 +1080,7 @@ app.post('/api/db/provision/:projectId', async (req, res) => {
 
 app.get('/api/db/:projectId/credentials', async (req, res) => {
   const { projectId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
   if (!supabaseAdmin) return res.status(503).json({ error: 'Database not configured' });
   const { data } = await supabaseAdmin
     .from('forge_projects')
@@ -879,6 +1092,7 @@ app.get('/api/db/:projectId/credentials', async (req, res) => {
 
 app.post('/api/db/:projectId/query', async (req, res) => {
   const { projectId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
   const { sql } = req.body;
   if (!supabaseAdmin) return res.status(503).json({ error: 'Database not configured' });
 
@@ -907,6 +1121,7 @@ app.post('/api/db/:projectId/query', async (req, res) => {
 
 app.get('/api/db/:projectId/schema', async (req, res) => {
   const { projectId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
   if (!supabaseAdmin) return res.status(503).json({ error: 'Database not configured' });
 
   const { data: project } = await supabaseAdmin
@@ -943,6 +1158,7 @@ app.get('/api/db/:projectId/schema', async (req, res) => {
 
 app.post('/api/email/setup/:projectId', async (req, res) => {
   const { projectId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
   const { sendingDomain } = req.body;
 
   if (!RESEND_API_KEY) return res.status(503).json({ error: 'Email service not configured' });
@@ -985,6 +1201,7 @@ app.post('/api/email/setup/:projectId', async (req, res) => {
 
 app.get('/api/email/:projectId/status', async (req, res) => {
   const { projectId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
   if (!supabaseAdmin) return res.status(503).json({ error: 'Database not configured' });
 
   const { data: config } = await supabaseAdmin
@@ -1018,6 +1235,7 @@ app.get('/api/email/:projectId/status', async (req, res) => {
 
 app.post('/api/email/:projectId/send', async (req, res) => {
   const { projectId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
   const { to, templateName, variables } = req.body;
 
   if (!RESEND_API_KEY) return res.status(503).json({ error: 'Email service not configured' });
@@ -1072,6 +1290,7 @@ app.post('/api/email/:projectId/send', async (req, res) => {
 // Email templates CRUD
 app.get('/api/email/:projectId/templates', async (req, res) => {
   const { projectId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
   if (!supabaseAdmin) return res.json([]);
   const { data } = await supabaseAdmin
     .from('forge_email_templates')
@@ -1083,6 +1302,7 @@ app.get('/api/email/:projectId/templates', async (req, res) => {
 
 app.post('/api/email/:projectId/templates', async (req, res) => {
   const { projectId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
   const { name, subject, html_body } = req.body;
   if (!supabaseAdmin) return res.status(503).json({ error: 'Database not configured' });
   const { data, error } = await supabaseAdmin
@@ -1095,13 +1315,15 @@ app.post('/api/email/:projectId/templates', async (req, res) => {
 });
 
 app.put('/api/email/:projectId/templates/:templateId', async (req, res) => {
-  const { templateId } = req.params;
+  const { projectId, templateId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
   const { name, subject, html_body } = req.body;
   if (!supabaseAdmin) return res.status(503).json({ error: 'Database not configured' });
   const { data, error } = await supabaseAdmin
     .from('forge_email_templates')
     .update({ name, subject, html_body })
     .eq('id', templateId)
+    .eq('project_id', projectId)
     .select()
     .single();
   if (error) return res.status(500).json({ error: error.message });
@@ -1109,9 +1331,14 @@ app.put('/api/email/:projectId/templates/:templateId', async (req, res) => {
 });
 
 app.delete('/api/email/:projectId/templates/:templateId', async (req, res) => {
-  const { templateId } = req.params;
+  const { projectId, templateId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
   if (!supabaseAdmin) return res.status(503).json({ error: 'Database not configured' });
-  await supabaseAdmin.from('forge_email_templates').delete().eq('id', templateId);
+  await supabaseAdmin
+    .from('forge_email_templates')
+    .delete()
+    .eq('id', templateId)
+    .eq('project_id', projectId);
   res.status(204).send();
 });
 
@@ -1446,4 +1673,12 @@ app.get('*', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  // CAMBIO 1 — make the auth posture visible in the Render logs at boot.
+  if (supabaseAdmin) {
+    console.log('[Auth] AUTH ACTIVE — Supabase admin client configured; sessions are verified.');
+  } else if (IS_PRODUCTION) {
+    console.error('[Auth] AUTH MISCONFIGURED — production environment but no Supabase admin client; /api/* will fail closed with 503.');
+  } else {
+    console.warn('[Auth] AUTH DISABLED (dev) — no Supabase admin client; /api/* auth checks are skipped in local dev only.');
+  }
 });
