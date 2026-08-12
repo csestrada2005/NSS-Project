@@ -376,7 +376,11 @@ export class Implementer {
       max_tokens: 8192,
       system: cachedSystemBlocks(sharedPrefix, roleBlock),
       messages: [{ role: 'user', content: userMessage }],
-    }, signal);
+      // CAMBIO 2 (telemetría en Render) — el modo del step viaja como header a
+      // /api/chat-forge para que la línea [chat-forge] del server lo loguee junto
+      // a output_tokens/cache_read. Una petición diff-attempt es 'diff'; un
+      // create/modify-vacío es 'full'; el rewrite de respaldo (abajo) es 'fallback'.
+    }, signal, isModifyExisting ? 'diff' : 'full');
 
     if ('finalError' in result) {
       console.error(
@@ -422,7 +426,7 @@ export class Implementer {
               `\nWrite the complete updated content for ${step.file_path}:`
             ),
         }],
-      }, signal);
+      }, signal, 'fallback');
 
       if ('finalError' in fallback) {
         console.error(
@@ -475,7 +479,11 @@ export class Implementer {
   // -------------------------------------------------------------------------
   private static async callStepWithRetry(
     body: object,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    // CAMBIO 2 — modo del step (diff|full|fallback). Se adjunta como header
+    // x-forge-step-mode para que server.js lo loguee en Render; ausente en
+    // cualquier caller que no lo pase.
+    stepMode?: string
   ): Promise<{ data: any } | { finalError: string }> {
     const MAX_ATTEMPTS = 3;
     const RETRYABLE_STATUS = new Set([429, 500, 503, 529]);
@@ -507,6 +515,7 @@ export class Implementer {
           Authorization,
           'anthropic-version': '2023-06-01',
         };
+        if (stepMode) headers['x-forge-step-mode'] = stepMode;
 
         // --- Chaos hook (PIEZA 4) -------------------------------------------
         // Double lock: the server only honors the header when FORGE_CHAOS_ENABLED
