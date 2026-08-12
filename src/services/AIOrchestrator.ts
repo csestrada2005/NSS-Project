@@ -683,16 +683,20 @@ export class AIOrchestrator {
       relevantContext += `--- START ${f.path} ---\n${f.content}\n--- END ${f.path} ---\n`;
     }
 
+    // CAMBIO 1a — el system prompt queda 100% estático (reglas + contrato de
+    // formato). La tarea concreta del step (antes `Task: ${...}` en el system)
+    // vive sólo en el user message, que ya la lleva como USER REQUEST — así el
+    // prefijo del system es cacheable y no cambia por step.
     const systemPrompt =
       'You are an expert Senior React Engineer. Implement the following step from the plan.\n' +
       FORMAT_INSTRUCTION + '\n' +
       REACT_TAILWIND_RULES + '\n' +
-      BACKEND_RULES + '\n\n' +
-      `Task: ${nextStepDescription}`;
+      BACKEND_RULES;
 
     const userMessage =
       `PROJECT BLUEPRINT (File Structure):\n${blueprint}\n\n` +
       `RELEVANT FILE CONTEXT:\n${relevantContext}\n\n` +
+      `TASK (implement this step):\n${nextStepDescription}\n\n` +
       `USER REQUEST:\n${nextStepDescription}`;
 
     try {
@@ -1265,7 +1269,10 @@ export class AIOrchestrator {
       onProgress,
       patternContext,
       designContext,
-      signal
+      signal,
+      // CAMBIO 1 — mismo blueprint que recibió el Architect: forma el prefijo
+      // estático cacheado compartido entre las tres lanes de esta generación.
+      blueprint
     );
     const modifiedFilesMap = implResult.files;
     const { failedSteps, skippedSteps } = implResult;
@@ -1336,7 +1343,7 @@ export class AIOrchestrator {
     // ------------------------------------------------------------------
     let verifyResult;
     try {
-      verifyResult = await Verifier.verify(modifiedFilesMap, files, onRetry, signal);
+      verifyResult = await Verifier.verify(modifiedFilesMap, files, onRetry, signal, 3, designContext, blueprint);
     } catch (e) {
       // Cancelación durante el verify: no se lanzan más fixes. Persistimos los
       // steps ya completos (los archivos que el Implementer terminó) y cerramos
@@ -1683,7 +1690,11 @@ export class AIOrchestrator {
         files,
         undefined,
         signal,
-        2
+        2,
+        // CAMBIO 1 — reparaciones Sonnet del simple lane comparten el prefijo
+        // cacheado (reglas + brief + blueprint) igual que el plan lane.
+        designContext,
+        generateBlueprintFromFiles(files)
       );
 
       if (verifyResult.success) {

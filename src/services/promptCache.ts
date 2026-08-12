@@ -35,3 +35,33 @@ export interface CacheableTextBlock {
 export function cachedSystem(text: string): CacheableTextBlock[] {
   return [{ type: 'text', text, cache_control: { type: 'ephemeral' } }];
 }
+
+/**
+ * Build a multi-block cached system prompt (CAMBIO 1 — full static-prefix
+ * caching). Each non-empty block gets its own cache_control breakpoint.
+ *
+ * WHY MULTIPLE BLOCKS
+ * -------------------
+ * A single generation runs three Sonnet lanes back to back — Architect (once),
+ * Implementer (once per plan step) and Verifier (once per repair batch). They
+ * all share the SAME static project context: the React/Tailwind rules, the
+ * design brief and the project blueprint. If every lane leads its `system` with
+ * that identical block, the FIRST call writes it to cache and every later call
+ * (across lanes AND across steps) reads it back as cache_read instead of paying
+ * fresh input — provided the shared block is a byte-identical PREFIX.
+ *
+ * So the caller passes the shared project prefix as the first block and its
+ * lane-specific role instructions as the second. Marking both with
+ * cache_control creates two breakpoints: the first caches the shared prefix
+ * (reused by every lane on the same model), the second caches the full
+ * lane-specific prefix (reused by every call within that one lane). Empty
+ * blocks are dropped so a lane with no project context degrades cleanly to a
+ * single-block cache. The API allows up to four breakpoints; we use two.
+ */
+export function cachedSystemBlocks(
+  ...texts: Array<string | null | undefined>
+): CacheableTextBlock[] {
+  return texts
+    .filter((t): t is string => typeof t === 'string' && t.trim().length > 0)
+    .map(text => ({ type: 'text', text, cache_control: { type: 'ephemeral' } }));
+}

@@ -86,4 +86,37 @@ ANTI-TEMPLATE / BRAND RULES (make every project look intentional, not shadcn-def
 - Contact information (address, phone, email, business hours) and brand name/tagline MUST be imported from src/data/site.ts (siteInfo). NEVER write literal contact data inside components. If a component needs a fact that siteInfo lacks, extend src/data/site.ts in the same step and import it.
 - When consuming siteInfo, use the exact field structure shown in src/data/site.ts from the file context. hours is an array of {days, open, close} objects. Never assume a different shape.
 - Typography, spacing, tone of copy and layout personality MUST follow DESIGN.md. Copy must be specific to the brand (no generic filler like 'Crafted with love').
+
+SECTION GRANULARITY (mirror of the Architect's planning rule — one section = one file):
+- Each visual section of a page lives in its OWN component file under src/components/sections/ (HeroSection.tsx, PricingSection.tsx, ContactSection.tsx...). A section component should stay under ~200 lines; if it grows past that, split subcomponents into the same folder rather than inflating one file.
+- NEVER bundle multiple sections into a single catch-all file ('LandingSections', 'MainSections', or similar). If a step ever asks you to create several distinct sections in one file, honor the one-section-per-file rule and put each section in its own file instead — but with the Architect enforcing the same rule upstream, that case should not reach you.
 `.trim();
+
+/**
+ * Build the static project-context prefix shared by every Sonnet code lane
+ * (Architect, Implementer, Verifier) within a single generation — CAMBIO 1.
+ *
+ * The result is the React/Tailwind rules followed by the design brief/context
+ * and the project blueprint. Because AIOrchestrator computes `designContext`
+ * and `blueprint` ONCE per generation and threads the same values into all
+ * three lanes, this string is byte-identical across them, so it caches on the
+ * first call and reads back on every later call in the 5-minute window
+ * (cache_read). Placed as the FIRST system block by each lane, it is the shared
+ * cached prefix; the lane's own role instructions follow as a second block.
+ *
+ * Empty design/blueprint inputs are omitted so callers that have neither still
+ * get a stable (rules-only) prefix.
+ */
+export function buildProjectContextPrefix(
+  designContext?: string,
+  blueprint?: string
+): string {
+  const parts: string[] = [REACT_TAILWIND_RULES];
+  if (typeof designContext === 'string' && designContext.trim().length > 0) {
+    parts.push(`DESIGN SYSTEM CONTEXT:\n${designContext.trim()}`);
+  }
+  if (typeof blueprint === 'string' && blueprint.trim().length > 0) {
+    parts.push(`PROJECT BLUEPRINT (all files currently in the project):\n${blueprint.trim()}`);
+  }
+  return parts.join('\n\n');
+}
