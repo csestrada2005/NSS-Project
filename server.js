@@ -600,14 +600,27 @@ app.post('/api/credits/check', async (req, res) => {
     return res.json({ allowed: true, isFreePrompt: false, balance: ctx.balance });
   }
   // Below the floor, free prompt spent, not an admin → refuse before the pipeline.
-  // Distinguish the copy: a user who never purchased (pure free tier, now spent)
-  // gets FREE_PROMPT_SPENT; anyone who has bought gets INSUFFICIENT_BALANCE. Both
-  // carry the same neutral 402 message; the client picks the wording from reason.
-  const purchased = await hasEverPurchased(userId);
+  // REMATE — errorReason honesto por ESTADO PRESENTE, no por historial de compra:
+  // the old `purchased ? INSUFFICIENT_BALANCE : FREE_PROMPT_SPENT` told any
+  // non-purchaser they had spent their free build even when they held a positive
+  // balance (e.g. balance=5, free_prompt_used=true → wrongly FREE_PROMPT_SPENT).
+  //   balance > 0                          → INSUFFICIENT_BALANCE (has money, below floor)
+  //   balance == 0 && purchased            → INSUFFICIENT_BALANCE (bought before, drained)
+  //   balance == 0 && !purchased && spent  → FREE_PROMPT_SPENT   (pure free tier, now spent)
+  // We only reach here with the free prompt already spent (freePromptAvailable was
+  // false above), so the last branch's freePromptUsed condition already holds.
+  // Only the balance==0 case needs the purchase-history lookup.
+  let reason;
+  if (ctx.balance > 0) {
+    reason = 'INSUFFICIENT_BALANCE';
+  } else {
+    const purchased = await hasEverPurchased(userId);
+    reason = purchased ? 'INSUFFICIENT_BALANCE' : 'FREE_PROMPT_SPENT';
+  }
   return res.status(402).json({
     allowed: false,
     error: 'INSUFFICIENT_CREDITS',
-    reason: purchased ? 'INSUFFICIENT_BALANCE' : 'FREE_PROMPT_SPENT',
+    reason,
     balance: ctx.balance,
     message: 'Saldo insuficiente — recarga créditos para continuar.',
   });
@@ -726,8 +739,10 @@ async function chargeAccumulatedIntent(rec) {
     if (row.partial) {
       // Drained to zero: charged what remained (the pre-charge balance we read)
       // against the full cost of the served work. new_balance is 0.
+      // REMATE — el drain ya no cobra en silencio: se registra el cargo parcial
+      // con el usuario para poder rastrearlo en Render (checkpoint del cierre).
       const charged = ctx.balance;
-      console.log(`[credits] drained to zero: charged ${charged} of ${creditsToDeduct}`);
+      console.log(`[credits] drained: charged ${charged} of ${creditsToDeduct} (user ${userId})`);
       return { balance: 0, deducted: charged, partial: true };
     }
     return { balance: row.new_balance, deducted: creditsToDeduct };
