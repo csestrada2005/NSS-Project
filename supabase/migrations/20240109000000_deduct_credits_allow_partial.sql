@@ -72,39 +72,37 @@ BEGIN
 
   IF FOUND THEN
     INSERT INTO forge_credit_transactions (
-      user_id, project_id, type, intent_type,
+      user_id, project_id, type, description,
       amount_credits, tokens_input, tokens_output, cost_usd
     ) VALUES (
-      p_user_id, p_project_id, 'spend', p_intent_type,
+      p_user_id, p_project_id, 'deduction', p_intent_type,
       -p_amount, p_tokens_input, p_tokens_output, p_cost_usd
     );
     RETURN QUERY SELECT true, v_new_balance, false;
     RETURN;
   END IF;
 
-  -- Not enough for the full charge. Drain-to-zero (only when the caller opts in):
-  -- take everything that is left. Lock the row first so the read-then-zero pair
-  -- is atomic against a concurrent charge.
   IF p_allow_partial THEN
     SELECT balance_credits INTO v_drained
       FROM forge_credit_wallets
      WHERE user_id = p_user_id
      FOR UPDATE;
-
     IF v_drained IS NOT NULL AND v_drained > 0 THEN
+      -- Cap contra la carrera de top-up: jamás cobrar más que p_amount
+      v_drained := LEAST(v_drained, p_amount);
       UPDATE forge_credit_wallets
-         SET balance_credits = 0
+         SET balance_credits = balance_credits - v_drained
        WHERE user_id = p_user_id;
-
       INSERT INTO forge_credit_transactions (
-        user_id, project_id, type, intent_type,
+        user_id, project_id, type, description,
         amount_credits, tokens_input, tokens_output, cost_usd
       ) VALUES (
-        p_user_id, p_project_id, 'spend', p_intent_type,
+        p_user_id, p_project_id, 'deduction', p_intent_type,
         -v_drained, p_tokens_input, p_tokens_output, p_cost_usd
       );
-
-      RETURN QUERY SELECT true, 0, true;
+      RETURN QUERY SELECT true,
+        (SELECT balance_credits FROM forge_credit_wallets WHERE user_id = p_user_id),
+        true;
       RETURN;
     END IF;
   END IF;
