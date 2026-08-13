@@ -241,6 +241,7 @@ class PlatformService {
    */
   async checkCredits(): Promise<{
     allowed: boolean;
+    reason?: string;
     isFreePrompt?: boolean;
     isAdmin?: boolean;
     unlimited?: boolean;
@@ -251,7 +252,10 @@ class PlatformService {
       const response = await fetch('/api/credits/check', { method: 'POST', headers });
       this.handleAuthError(response);
       if (response.status === 402) {
-        return { allowed: false, balance: 0 };
+        // CAMBIO 2c — carry the server's reason so the UI picks the honest copy
+        // (free-build-used vs insufficient-balance). Body parse is best-effort.
+        const body = await response.json().catch(() => ({}));
+        return { allowed: false, reason: body?.reason, balance: body?.balance ?? 0 };
       }
       if (!response.ok) return { allowed: true };
       return response.json();

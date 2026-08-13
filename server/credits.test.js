@@ -82,3 +82,44 @@ test('deduct_credits: concurrent deductions never overdraw the wallet', () => {
 test('deduct_credits: rejects a negative amount (guards against sign bugs)', () => {
   assert.throws(() => tryAtomicDeduct({ balance_credits: 100 }, -5));
 });
+
+// ---------------------------------------------------------------------------
+// CAMBIO 2 — drenar-a-cero (partial charge). With allowPartial, a charge that
+// exceeds the balance takes everything that is left (leaving 0) instead of
+// bouncing, and reports the drained amount so the server can record a
+// transaction for -balance.
+// ---------------------------------------------------------------------------
+test('deduct_credits: partial drain charges the whole balance (30 of 81 → 0, txn -30)', () => {
+  const wallet = { balance_credits: 30 };
+  const res = tryAtomicDeduct(wallet, 81, true);
+  assert.equal(res.success, true);
+  assert.equal(res.newBalance, 0);
+  assert.equal(res.partial, true);
+  assert.equal(res.drained, 30, 'drained equals the pre-charge balance → transaction amount_credits = -30');
+  assert.equal(wallet.balance_credits, 0, 'wallet is drained to exactly zero');
+});
+
+test('deduct_credits: partial drain is opt-in — without the flag an overcharge still bounces', () => {
+  const wallet = { balance_credits: 30 };
+  const res = tryAtomicDeduct(wallet, 81);
+  assert.equal(res.success, false);
+  assert.equal(res.newBalance, 30);
+  assert.equal(res.partial, undefined);
+  assert.equal(wallet.balance_credits, 30, 'balance untouched when partial is not allowed');
+});
+
+test('deduct_credits: partial drain on a zero balance still fails (nothing to drain)', () => {
+  const wallet = { balance_credits: 0 };
+  const res = tryAtomicDeduct(wallet, 81, true);
+  assert.equal(res.success, false);
+  assert.equal(res.newBalance, 0);
+  assert.equal(res.partial, undefined);
+});
+
+test('deduct_credits: an exact/affordable charge ignores the partial flag (no drain path)', () => {
+  const wallet = { balance_credits: 81 };
+  const res = tryAtomicDeduct(wallet, 30, true);
+  assert.equal(res.success, true);
+  assert.equal(res.newBalance, 51);
+  assert.equal(res.partial, undefined, 'full charge is a normal success, not a partial drain');
+});
