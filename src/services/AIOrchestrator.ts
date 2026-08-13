@@ -13,7 +13,7 @@ import { Architect, type BuildStep } from './Architect';
 import { Implementer, type ProgressCallback } from './Implementer';
 import { Verifier, type RetryCallback } from './Verifier';
 import { CreditService } from './CreditService';
-import { REACT_TAILWIND_RULES, buildProjectContextPrefix } from './promptRules';
+import { REACT_TAILWIND_RULES, buildProjectContextPrefix, buildBlueprintBlock } from './promptRules';
 import { cachedSystem, cachedSystemBlocks } from './promptCache';
 import { DesignBriefService } from './DesignBriefService';
 import { isAbortError } from '../utils/abort';
@@ -1654,16 +1654,19 @@ export class AIOrchestrator {
         ? `\n\nSITE DATA CONTRACT (src/data/site.ts — import facts from here; use these EXACT field shapes. hours is an array of {days, open, close}):\n${siteTs}`
         : '';
 
-    // CAMBIO 1 — prompt caching en el simple lane (mismo patrón del plan lane):
-    // el prefijo estático (reglas + brief + blueprint) es byte-idéntico al del
-    // Architect/Implementer/Verifier de esta generación, así que el edit lo
-    // escribe una vez a cache y las llamadas siguientes de la ventana de 5 min
-    // (incl. las reparaciones del Verifier que dispara abajo) lo leen como
-    // cache_read en vez de re-facturarlo. REACT_TAILWIND_RULES ya incluye el
-    // AVAILABLE RUNTIME, por eso ya no se antepone aparte. El Task (archivo +
-    // cambio pedido) viaja en el user message.
+    // REMATE — prompt caching en el simple lane (mismo patrón del plan lane): el
+    // prefijo ESTABLE (reglas + brief) es byte-idéntico al del
+    // Architect/Implementer/Verifier de esta generación Y entre intents en este
+    // proyecto, así que el primer edit lo escribe una vez a cache y las llamadas
+    // siguientes de la ventana de 5 min (incl. el primer Sonnet del siguiente
+    // intent y las reparaciones del Verifier que dispara abajo) lo leen como
+    // cache_read en vez de re-facturarlo. El blueprint mutable va en su propio
+    // bloque después del prefijo estable para no romper ese cache_read cruzado.
+    // REACT_TAILWIND_RULES ya incluye el AVAILABLE RUNTIME, por eso ya no se
+    // antepone aparte. El Task (archivo + cambio pedido) viaja en el user message.
     const blueprint = generateBlueprintFromFiles(files);
-    const sharedPrefix = buildProjectContextPrefix(designContext, blueprint);
+    const stablePrefix = buildProjectContextPrefix(designContext);
+    const blueprintBlock = buildBlueprintBlock(blueprint);
     const roleBlock =
       'You are a React/Tailwind expert. The user wants a simple change. ' +
       'Return ONLY the complete updated file content. No explanation, ' +
@@ -1676,7 +1679,7 @@ export class AIOrchestrator {
       const response = await platformService.callForgeChat({
         model: 'claude-sonnet-4-6',
         max_tokens: 8192,
-        system: cachedSystemBlocks(sharedPrefix, roleBlock),
+        system: cachedSystemBlocks(stablePrefix, blueprintBlock, roleBlock),
         messages: [
           {
             role: 'user',
@@ -1716,9 +1719,10 @@ export class AIOrchestrator {
         undefined,
         signal,
         2,
-        // CAMBIO 1 — reparaciones Sonnet del simple lane comparten el prefijo
-        // cacheado (reglas + brief + blueprint) igual que el plan lane. Es el
-        // MISMO sharedPrefix del edit de arriba, así que se sirve desde cache.
+        // REMATE — reparaciones Sonnet del simple lane comparten el prefijo
+        // cacheado (reglas + brief) igual que el plan lane. Es el MISMO
+        // stablePrefix del edit de arriba, así que se sirve desde cache; el
+        // blueprint mutable lo reconstruye el Verifier en su propio bloque.
         designContext,
         blueprint
       );
@@ -1906,6 +1910,13 @@ export class AIOrchestrator {
     }
 
     if (cappedCandidates.length >= 2) {
+      // REMATE (caché del Haiku de targeting): NO se cachea a propósito. El
+      // prompt es mayormente dinámico — el grueso de los ~3.8k tokens de input
+      // es el contenido de los archivos candidatos (cada uno recortado a 1500
+      // chars, varios por edición), que cambia en cada llamada. La única parte
+      // estática es el system (~580 tokens), muy por debajo del piso de caché de
+      // Haiku (2048 tokens), así que marcarlo con cache_control no produciría
+      // ningún cache_read. Se deja como está (ver criterio del remate).
       // La llamada de targeting NUNCA debe romper el lane: try/catch → nivel 3.
       try {
         let userMessage = `USER REQUEST: ${input}`;

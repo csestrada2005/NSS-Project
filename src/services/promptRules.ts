@@ -93,30 +93,54 @@ SECTION GRANULARITY (mirror of the Architect's planning rule — one section = o
 `.trim();
 
 /**
- * Build the static project-context prefix shared by every Sonnet code lane
- * (Architect, Implementer, Verifier) within a single generation — CAMBIO 1.
+ * Build the STABLE project-context prefix shared by every Sonnet code lane
+ * (Architect, Implementer, Verifier) — the cached breakpoint.
  *
- * The result is the React/Tailwind rules followed by the design brief/context
- * and the project blueprint. Because AIOrchestrator computes `designContext`
- * and `blueprint` ONCE per generation and threads the same values into all
- * three lanes, this string is byte-identical across them, so it caches on the
- * first call and reads back on every later call in the 5-minute window
- * (cache_read). Placed as the FIRST system block by each lane, it is the shared
- * cached prefix; the lane's own role instructions follow as a second block.
+ * REMATE (prefijo cacheado estable entre intents): this block contains ONLY
+ * what is immutable per project across intents — the React/Tailwind rules and
+ * the design brief. The design brief is generated once per project and threaded
+ * unchanged into every lane, so this string is byte-identical not just across
+ * lanes within one generation but across CONSECUTIVE INTENTS on the same
+ * project. Marked with cache_control as the FIRST system block, it is written to
+ * cache on the first Sonnet call and read back (cache_read) by every later call
+ * inside the 5-minute window — including the first Sonnet of the next intent.
  *
- * Empty design/blueprint inputs are omitted so callers that have neither still
- * get a stable (rules-only) prefix.
+ * The project blueprint (the list of all files currently in the project) is
+ * DELIBERATELY excluded here: it mutates ~450 tokens between intents as files
+ * are added, so folding it into this block would flip every intent's prefix to
+ * a fresh cache_write with cache_read=0. It goes AFTER this marker as its own
+ * block via buildBlueprintBlock() — cached for reuse within one intent, but
+ * never poisoning the cross-intent prefix.
+ *
+ * An empty design brief is omitted so callers still get a stable (rules-only)
+ * prefix.
  */
 export function buildProjectContextPrefix(
-  designContext?: string,
-  blueprint?: string
+  designContext?: string
 ): string {
   const parts: string[] = [REACT_TAILWIND_RULES];
   if (typeof designContext === 'string' && designContext.trim().length > 0) {
     parts.push(`DESIGN SYSTEM CONTEXT:\n${designContext.trim()}`);
   }
-  if (typeof blueprint === 'string' && blueprint.trim().length > 0) {
-    parts.push(`PROJECT BLUEPRINT (all files currently in the project):\n${blueprint.trim()}`);
-  }
   return parts.join('\n\n');
+}
+
+/**
+ * Build the MUTABLE blueprint block that follows the stable cached prefix.
+ *
+ * The blueprint (all files currently in the project) changes between intents, so
+ * it lives in its own system block placed AFTER buildProjectContextPrefix(). It
+ * is still worth a cache_control breakpoint: within a single intent it is
+ * byte-identical across lanes and steps, so calls 2..N of the SAME intent read
+ * it from cache. What it must never do is sit inside the stable prefix, where
+ * its per-intent mutation would break the cross-intent cache_read.
+ *
+ * Returns '' when there is no blueprint so cachedSystemBlocks() drops it and the
+ * system collapses cleanly to [stable prefix, role block].
+ */
+export function buildBlueprintBlock(blueprint?: string): string {
+  if (typeof blueprint === 'string' && blueprint.trim().length > 0) {
+    return `PROJECT BLUEPRINT (all files currently in the project):\n${blueprint.trim()}`;
+  }
+  return '';
 }

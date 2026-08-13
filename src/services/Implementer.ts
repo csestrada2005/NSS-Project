@@ -3,7 +3,7 @@ import type { ProjectMemory } from './ProjectMemoryService';
 import { SupabaseService } from './SupabaseService';
 import { platformService } from './PlatformService';
 import { sanitizeFileContent } from '../utils/sanitizeFileContent';
-import { buildProjectContextPrefix } from './promptRules';
+import { buildProjectContextPrefix, buildBlueprintBlock } from './promptRules';
 import { cachedSystemBlocks } from './promptCache';
 import { applyEditsFromResponse } from '../utils/applyEdits';
 import { withTimeout, isAbortError } from '../utils/abort';
@@ -304,9 +304,12 @@ export class Implementer {
       ? rawContent
       : this.truncateFileContent(rawContent, fileBudget);
 
-    // CAMBIO 1 — shared static prefix (rules + design brief + blueprint),
-    // byte-identical across Architect/Implementer/Verifier for this generation.
-    const sharedPrefix = buildProjectContextPrefix(designContext, blueprint);
+    // REMATE — stable prefix (rules + design brief), byte-identical across
+    // Architect/Implementer/Verifier AND across consecutive intents on this
+    // project. The mutable blueprint is a separate block after it so it never
+    // breaks the cross-intent cache_read of the stable prefix.
+    const stablePrefix = buildProjectContextPrefix(designContext);
+    const blueprintBlock = buildBlueprintBlock(blueprint);
 
     // Lane role block: full-file contract for create, surgical-edit contract for
     // modify. This is the ONLY part of the system prompt that changes by action;
@@ -368,14 +371,15 @@ export class Implementer {
 
     const userMessage = parts.join('\n');
 
-    // Prompt caching (CAMBIO 1): system = [ sharedPrefix, roleBlock ], both
-    // cache-controlled. The sharedPrefix block is identical across every step of
-    // this generation (and shared with Architect/Verifier), so steps 2..N read
-    // it from cache instead of re-billing it as fresh input.
+    // Prompt caching (REMATE): system = [ stablePrefix, blueprintBlock,
+    // roleBlock ], all cache-controlled. The stablePrefix is identical across
+    // every step of this generation (and shared with Architect/Verifier, and
+    // stable across intents), so steps 2..N read it from cache instead of
+    // re-billing it as fresh input.
     const result = await this.callStepWithRetry({
       model: 'claude-sonnet-4-6',
       max_tokens: 8192,
-      system: cachedSystemBlocks(sharedPrefix, roleBlock),
+      system: cachedSystemBlocks(stablePrefix, blueprintBlock, roleBlock),
       messages: [{ role: 'user', content: userMessage }],
       // CAMBIO 2 (telemetría en Render) — el modo del step viaja como header a
       // /api/chat-forge para que la línea [chat-forge] del server lo loguee junto
@@ -416,7 +420,8 @@ export class Implementer {
         model: 'claude-sonnet-4-6',
         max_tokens: 8192,
         system: cachedSystemBlocks(
-          sharedPrefix,
+          stablePrefix,
+          blueprintBlock,
           `You are an expert React + TypeScript engineer implementing one specific step in a build plan.\n${FORMAT_INSTRUCTION}`
         ),
         messages: [{

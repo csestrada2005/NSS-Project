@@ -1,6 +1,6 @@
 import { platformService } from './PlatformService';
 import { cachedSystemBlocks } from './promptCache';
-import { buildProjectContextPrefix } from './promptRules';
+import { buildProjectContextPrefix, buildBlueprintBlock } from './promptRules';
 import type { Intent } from './IntentClassifier';
 
 // ---------------------------------------------------------------------------
@@ -120,7 +120,8 @@ Return ONLY a valid JSON array. No markdown fences, no explanation before or aft
       // varía por petición: memoria, request e intent. El Architect corre PRIMERO
       // en la generación, así que ESCRIBE la caché del prefijo que luego leen los
       // steps del Implementer y las reparaciones Sonnet del Verifier.
-      const sharedPrefix = buildProjectContextPrefix(designContext, blueprint);
+      const stablePrefix = buildProjectContextPrefix(designContext);
+      const blueprintBlock = buildBlueprintBlock(blueprint);
       const userMessage =
         `${memoryFormatted}\n\n` +
         `USER REQUEST: ${prompt}\n\n` +
@@ -135,11 +136,12 @@ Return ONLY a valid JSON array. No markdown fences, no explanation before or aft
       const response = await platformService.callForgeChat({
         model: 'claude-sonnet-4-6',
         max_tokens: 4096,
-        // system = [ sharedPrefix (cacheado, compartido entre lanes), reglas de
-        // planificación del Architect (cacheado por-lane) ]. La initial-build
-        // rule es estática dentro de la generación, así que va en el bloque de
-        // rol sin romper el prefijo compartido.
-        system: cachedSystemBlocks(sharedPrefix, systemPrompt),
+        // system = [ stablePrefix (reglas + brief, cacheado y estable ENTRE
+        // intents), blueprintBlock (mutable, cacheado sólo dentro del intent),
+        // reglas de planificación del Architect (cacheado por-lane) ]. La
+        // initial-build rule es estática dentro de la generación, así que va en
+        // el bloque de rol sin romper el prefijo compartido.
+        system: cachedSystemBlocks(stablePrefix, blueprintBlock, systemPrompt),
         messages: [{ role: 'user', content: userMessage }],
       }, signal);
 

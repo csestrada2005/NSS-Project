@@ -4,7 +4,7 @@ import { isAbortError } from '../utils/abort';
 import { groupCompileErrors, labelForError } from '../utils/groupCompileErrors';
 import type { RepairBatch } from '../utils/groupCompileErrors';
 import { cachedSystemBlocks } from './promptCache';
-import { buildProjectContextPrefix } from './promptRules';
+import { buildProjectContextPrefix, buildBlueprintBlock } from './promptRules';
 
 // ---------------------------------------------------------------------------
 // CAMBIO 3 — ruteo de reparación por clase de error.
@@ -333,21 +333,23 @@ export class Verifier {
     // CAMBIO 3 — ruteo por clase: sintaxis/import-mismatch → Haiku; resto → Sonnet.
     const model = pickRepairModel(batch.label);
 
-    // Prompt caching (CAMBIO 1): system = [ sharedPrefix, systemPrompt ]. El
-    // sharedPrefix (reglas + brief + blueprint) es idéntico al del Architect y el
-    // Implementer, así que en reparaciones Sonnet se sirve desde cache_read; en
-    // Haiku el prefijo se cachea aparte (por modelo). Sólo se antepone cuando el
-    // caller aportó brief/blueprint — si no, cachedSystemBlocks colapsa a un solo
-    // bloque = system prompt de hoy.
-    const sharedPrefix = (designContext || blueprint)
-      ? buildProjectContextPrefix(designContext, blueprint)
+    // Prompt caching (REMATE): system = [ stablePrefix, blueprintBlock,
+    // systemPrompt ]. El stablePrefix (reglas + brief) es idéntico al del
+    // Architect y el Implementer y estable ENTRE intents; el blueprintBlock
+    // (mutable) va aparte para no romper ese cache_read cruzado. En reparaciones
+    // Sonnet se sirve desde cache_read; en Haiku el prefijo se cachea aparte (por
+    // modelo). Sólo se antepone cuando el caller aportó brief/blueprint — si no,
+    // cachedSystemBlocks colapsa a un solo bloque = system prompt de hoy.
+    const stablePrefix = (designContext || blueprint)
+      ? buildProjectContextPrefix(designContext)
       : '';
+    const blueprintBlock = buildBlueprintBlock(blueprint);
 
     try {
       const response = await platformService.callForgeChat({
         model,
         max_tokens: 8192,
-        system: cachedSystemBlocks(sharedPrefix, systemPrompt),
+        system: cachedSystemBlocks(stablePrefix, blueprintBlock, systemPrompt),
         messages: [{ role: 'user', content: userMessage }],
       }, signal);
 
@@ -453,16 +455,18 @@ Return ONLY the complete corrected file content. No markdown fences, no explanat
     // suelto con la misma función que usa el agrupador.
     const model = pickRepairModel(labelForError(error));
 
-    // Mismo prefijo cacheado compartido que fixBatch (CAMBIO 1).
-    const sharedPrefix = (designContext || blueprint)
-      ? buildProjectContextPrefix(designContext, blueprint)
+    // Mismo prefijo cacheado compartido que fixBatch (REMATE): stable aparte del
+    // blueprint mutable para preservar el cache_read entre intents.
+    const stablePrefix = (designContext || blueprint)
+      ? buildProjectContextPrefix(designContext)
       : '';
+    const blueprintBlock = buildBlueprintBlock(blueprint);
 
     try {
       const response = await platformService.callForgeChat({
         model,
         max_tokens: 8192,
-        system: cachedSystemBlocks(sharedPrefix, systemPrompt),
+        system: cachedSystemBlocks(stablePrefix, blueprintBlock, systemPrompt),
         messages: [{ role: 'user', content: userMessage }],
       }, signal);
 
