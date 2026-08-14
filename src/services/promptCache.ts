@@ -22,6 +22,39 @@
  * cache hit, which is harmless.
  */
 
+/**
+ * Deterministic 8-hex-char fingerprint of the cached static prefix, for
+ * diagnostics only (never used for caching decisions).
+ *
+ * WHY
+ * ---
+ * The cross-intent prefix (rules + design brief) is SUPPOSED to be byte-
+ * identical across consecutive intents on the same project so the second
+ * intent's first Sonnet call reads it from cache instead of paying a fresh
+ * write. When we instead see cache_read=0 on that second intent, there are two
+ * possible causes and we cannot tell them apart from the token counts alone:
+ *   - hash SAME across the two intents  => the prefix did not mutate, so the
+ *     miss is a TTL expiry (the 5-minute window lapsed) — NOT a bug.
+ *   - hash DIFFERENT across the two intents => something in the prefix mutated
+ *     between intents; the diff of the two prefixes tells us exactly what.
+ * Logging this hash from the FIRST Sonnet of every intent (the Architect) closes
+ * that diagnosis without dumping the whole prefix into the logs.
+ *
+ * Uses FNV-1a (synchronous, dependency-free) — crypto.subtle is async and Node
+ * crypto is not available in the browser preview, and this value never needs to
+ * be cryptographically strong, only stable and collision-rare for a log line.
+ */
+export function prefixHash(text: string): string {
+  let h = 0x811c9dc5; // FNV offset basis
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    // FNV prime multiply, kept in 32-bit range via Math.imul
+    h = Math.imul(h, 0x01000193);
+  }
+  // >>> 0 coerces to unsigned 32-bit; pad to a stable 8-char hex string
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
 export interface CacheableTextBlock {
   type: 'text';
   text: string;

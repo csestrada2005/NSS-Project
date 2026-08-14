@@ -1,5 +1,5 @@
 import { platformService } from './PlatformService';
-import { cachedSystemBlocks } from './promptCache';
+import { cachedSystemBlocks, prefixHash } from './promptCache';
 import { buildProjectContextPrefix, buildBlueprintBlock } from './promptRules';
 import type { Intent } from './IntentClassifier';
 
@@ -76,7 +76,8 @@ export class Architect {
 INITIAL-BUILD LAYOUT RULE — MANDATORY (this is the first build of a new project):
 - The project was scaffolded from a template whose src/components/layout/Header.tsx and src/components/layout/Footer.tsx still contain placeholder chrome (brand shows "App Name", a single "Home" nav link, footer says "Your Company"). Leaving them untouched ships a generic navbar.
 - Your plan MUST include a step with action "modify" on src/components/layout/Header.tsx that makes the navbar reflect: (1) the brand name from the design brief, (2) nav links whose anchors/routes point ONLY to sections this same plan creates (respect the navigation contract), and (3) the primary CTA. This step is REQUIRED, not optional.
-- Your plan MUST also include a step with action "modify" on src/components/layout/Footer.tsx that carries the brand name and links consistent with the sections this plan creates.
+- Your plan MUST ALSO include a SEPARATE step with action "modify" on src/components/layout/Footer.tsx that reflects: (1) the brand name and tagline from siteInfo (src/data/site.ts), (2) the SAME anchors/links as this plan's navigation contract (the footer nav must resolve to sections this plan creates, exactly like the header), and (3) the contact data (address, phone, email, business hours) consumed from siteInfo — NEVER as literals. This step is REQUIRED, not optional.
+- Do NOT fold Header or Footer changes into another step's description — layout components get their own steps with their own file_path; a mention inside another step's description does not write the file.
 - These layout steps count toward the 6-step maximum. Budget for them from the start.`
       : '';
     const systemPrompt = `You are a software architect for a React + TypeScript + Tailwind web builder.
@@ -121,6 +122,11 @@ Return ONLY a valid JSON array. No markdown fences, no explanation before or aft
       // en la generación, así que ESCRIBE la caché del prefijo que luego leen los
       // steps del Implementer y las reparaciones Sonnet del Verifier.
       const stablePrefix = buildProjectContextPrefix(designContext);
+      // Architect is the FIRST Sonnet of the intent, so it WRITES the shared
+      // cross-intent prefix cache the other lanes read. Log its fingerprint per
+      // intent: same hash + cache_read=0 on the next intent ⇒ TTL expiry, not a
+      // bug; different hash ⇒ the prefix mutated and the diff shows what.
+      console.log(`[cache] prefix hash=${prefixHash(stablePrefix)}`);
       const blueprintBlock = buildBlueprintBlock(blueprint);
       const userMessage =
         `${memoryFormatted}\n\n` +
