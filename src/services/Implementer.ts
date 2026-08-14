@@ -57,6 +57,10 @@ Never truncate. Never use placeholder comments like "// rest of file here".
 Never write the file path as the first line of the file content. File content must start directly with code (imports, comments, or declarations).
 When importing components created by other steps of this plan, use the EXACT paths listed under PLAN FILES (with the @/ alias). Never guess paths.
 Never reimplement inline a component that exists as a file in PLAN FILES — import it instead.
+PAGE EXPORT CONTRACT (src/pages/ only): Every file under src/pages/ MUST end with a default export of the page component: "export default About;". Keep the named export too if the file has one — pages are the one place where BOTH exports are required, because the router steps import them as default.
+Expected shape:
+export function About() { ... }
+export default About;
 `.trim();
 
 // CAMBIO 2 — diff-based modifies. For an action 'modify' over an EXISTING file
@@ -79,6 +83,7 @@ RULES:
 - Copy the SEARCH text VERBATIM from CURRENT FILE CONTENT — same indentation, quotes and spacing — and make it UNIQUE: include enough surrounding lines that it occurs exactly once in the file.
 - Emit one block per distinct edit. To INSERT code, SEARCH an existing anchor line and REPLACE it with that same line plus the new code.
 - Do not touch lines you are not changing. Output NOTHING except the SEARCH/REPLACE blocks — no prose, no markdown fences, no full file.
+- PAGE EXPORT CONTRACT (src/pages/ only): a file under src/pages/ MUST end with "export default <PageName>;". If the CURRENT FILE CONTENT lacks that line, add it with a SEARCH/REPLACE block anchored on the file's last existing line, even when the requested change is about something else. The named export, if present, stays.
 
 EXAMPLE (add an import and retitle a heading):
 <<<<<<< SEARCH
