@@ -111,6 +111,7 @@ ROUTING & ENTRY-POINT RULES — critical:
 - When the user asks to change "the page", "home page", "landing page", "main page", "página principal", "inicio", or the main screen WITHOUT naming a new route, you MUST include a step with action "modify" on src/pages/Index.tsx. A new standalone component is NOT enough — a component that nothing renders never appears in the preview.
 - If any step has action "create" for a component, you MUST also include a step with action "modify" on the file that renders it (usually src/pages/Index.tsx, or src/App.tsx for routing) that imports and uses that component. That modify step must list the create step in its requires_steps. Never leave a created component unreferenced.
 - Only modify src/App.tsx routing when the user explicitly asks for a new page/route.
+- PAGE IMPORT CONTRACT: any step that updates src/App.tsx routing imports page components as DEFAULT imports — its description MUST state it verbatim, e.g. "App.tsx routes /about to the About page, imported as a default import: import About from './pages/About'". Never plan a router step that uses a named import for a file under src/pages/. The counterpart rule makes every src/pages/ file end with "export default <PageName>;", so the default import is always the one that resolves.
 
 Return ONLY a valid JSON array. No markdown fences, no explanation before or after.${initialBuildRule}`;
 

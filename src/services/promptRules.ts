@@ -17,6 +17,7 @@ REACT/TAILWIND RULES:
 - The global CSS entry file is ALWAYS src/index.css. Never import globals.css, global.css, or any other CSS filename. Never create a new CSS entry file.
 - Fonts are already loaded via <link> in index.html. NEVER import fonts — no @import in CSS, no URL imports in JS/TS.
 - Export convention: every component file uses a named export matching the filename (export function ServicesSection...). Importers use the matching named import. Never mix default and named exports for components.
+- EXCEPTION — src/pages/: a page file MUST ALSO end with a default export of the page component (export default About;) on top of its named export, and every importer of a src/pages/ file (the App.tsx router in particular) uses the DEFAULT import: import About from './pages/About'. Pages are the only files where both exports coexist.
 - For conditional or merged classNames, import cn from '@/lib/utils' (already provided; it wraps clsx + tailwind-merge). Never import clsx or tailwind-merge directly.
 - When importing cn from '@/lib/utils', use a named import: import { cn } from '@/lib/utils'.
 - For icons, you may import from lucide-react (e.g. import { Rocket } from 'lucide-react') or use inline <svg>.
