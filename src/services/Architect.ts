@@ -78,7 +78,7 @@ INITIAL-BUILD LAYOUT RULE — MANDATORY (this is the first build of a new projec
 - Your plan MUST include a step with action "modify" on src/components/layout/Header.tsx that makes the navbar reflect: (1) the brand name from the design brief, (2) nav links whose anchors/routes point ONLY to sections this same plan creates (respect the navigation contract), and (3) the primary CTA. This step is REQUIRED, not optional.
 - Your plan MUST ALSO include a SEPARATE step with action "modify" on src/components/layout/Footer.tsx that reflects: (1) the brand name and tagline from siteInfo (src/data/site.ts), (2) the SAME anchors/links as this plan's navigation contract (the footer nav must resolve to sections this plan creates, exactly like the header), and (3) the contact data (address, phone, email, business hours) consumed from siteInfo — NEVER as literals. This step is REQUIRED, not optional.
 - Do NOT fold Header or Footer changes into another step's description — layout components get their own steps with their own file_path; a mention inside another step's description does not write the file.
-- These layout steps count toward the 6-step maximum. Budget for them from the start.`
+- The Header and Footer steps are ALWAYS required in initial builds and must never be consolidated away: plan your section steps so the total (sections + Index + Header + Footer) fits within the 8-step maximum.`
       : '';
     const systemPrompt = `You are a software architect for a React + TypeScript + Tailwind web builder.
 Do not write any code. Return only a JSON array of BuildStep objects.
@@ -92,7 +92,7 @@ requires_steps: number[] (empty array if no dependencies)
 
 PLANNING RULES — follow these exactly:
 
-Maximum 6 steps for any request. If you think you need more, consolidate.
+Maximum 8 steps for any request. If you think you need more, consolidate SECTIONS — never the Header/Footer layout steps.
 Minimum 1 step. Never return an empty array.
 One step = one file. Never put two different file paths in one step.
 Each visual section of a page gets its OWN component file in src/components/sections/ (HeroSection.tsx, PricingSection.tsx, ContactSection.tsx...). NEVER bundle multiple sections into a single file (no 'LandingSections', 'MainSections', or similar catch-all files). One section = one file = one plan step. A section component should stay under ~200 lines; if it grows beyond that, split subcomponents into the same folder.
@@ -166,10 +166,22 @@ Return ONLY a valid JSON array. No markdown fences, no explanation before or aft
 
       const originalCount = steps.length;
       let wasTrimmed = false;
-      if (steps.length > 6) {
-        steps = steps.slice(0, 6);
+      if (steps.length > 8) {
+        // Protect the layout chrome: never trim Header.tsx or Footer.tsx steps.
+        // Cut sections before layout — drop non-layout steps first, keeping the
+        // layout steps even if that means keeping fewer sections.
+        const isLayoutStep = (s: BuildStep) => {
+          const p = (s.file_path ?? '').replace(/\\/g, '/');
+          return p.endsWith('layout/Header.tsx') || p.endsWith('layout/Footer.tsx');
+        };
+        const layoutSteps = steps.filter(isLayoutStep);
+        const nonLayoutSteps = steps.filter(s => !isLayoutStep(s));
+        const roomForNonLayout = Math.max(0, 8 - layoutSteps.length);
+        const kept = [...nonLayoutSteps.slice(0, roomForNonLayout), ...layoutSteps];
+        // Preserve original ordering.
+        steps = steps.filter(s => kept.includes(s));
         wasTrimmed = true;
-        console.warn(`[Architect] Plan trimmed from ${originalCount} to 6 steps`);
+        console.warn(`[Architect] Plan trimmed from ${originalCount} to ${steps.length} steps (layout steps protected)`);
       }
 
       const filteredAndMappedSteps = steps
