@@ -92,7 +92,12 @@ export class Verifier {
     // desde cache_read en vez de re-facturarse como input fresco. Vacíos por
     // defecto: un caller que no los pase conserva el system prompt de hoy.
     designContext: string = '',
-    blueprint: string = ''
+    blueprint: string = '',
+    // Paths removed by executed 'delete' steps. Without them the rebuild below
+    // resurrects every deleted file (it starts from the ORIGINAL map, where the
+    // file still exists), so the compile — and everything downstream — would
+    // still see a page the plan just deleted.
+    deletedPaths: string[] = []
   ): Promise<VerifyResult> {
     const MAX_RETRIES = Math.max(1, maxRetries);
     // Compilar el proyecto COMPLETO con los cambios aplicados encima.
@@ -101,6 +106,11 @@ export class Verifier {
     let currentFiles = new Map<string, string>(originalFiles);
     for (const [path, content] of modifiedFiles) {
       currentFiles.set(path, content);
+    }
+    // Deletions are applied AFTER the merge: they are the one change that is
+    // expressed by an absence, which the merge above cannot carry.
+    for (const path of deletedPaths) {
+      currentFiles.delete(path);
     }
 
     // CAMBIO 2 — telemetría del batching, acumulada a lo largo de los intentos.

@@ -44,6 +44,49 @@ export interface ImplementerResult {
    * discarded (never written); already-completed steps stay in `files`.
    */
   cancelled: boolean;
+  /**
+   * Paths of steps with action 'delete' that were actually executed. Dropping
+   * the key from `files` is NOT enough: the Verifier rebuilds the project from
+   * the ORIGINAL map (so an absent key comes back), and the persistence bridge
+   * (notifyFileUpdate) only ever writes. The caller needs the explicit list to
+   * keep the path out of the compile and to erase the row from forge_files.
+   */
+  deletedPaths: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Deletion safety net — infrastructure files a plan may NEVER delete
+// ---------------------------------------------------------------------------
+
+/**
+ * The Architect prompt forbids emitting deletes over infrastructure, but a
+ * prompt is a request, not a guarantee: a single hallucinated delete on
+ * src/App.tsx would erase the project's routing for good. This deterministic
+ * guard is the backstop — a delete step over any of these is dropped with a
+ * warning, never executed.
+ */
+const UNDELETABLE_EXACT = new Set([
+  'src/App.tsx',
+  'src/main.tsx',
+  'src/index.css',
+  'src/data/site.ts',
+  'src/pages/Index.tsx',
+  'index.html',
+  'package.json',
+  'vite.config.ts',
+  'tailwind.config.ts',
+  'tsconfig.json',
+]);
+
+const UNDELETABLE_PREFIXES = [
+  'src/lib/',
+  'src/components/layout/',
+  'src/components/ui/',
+];
+
+export function isUndeletablePath(path: string): boolean {
+  return UNDELETABLE_EXACT.has(path)
+    || UNDELETABLE_PREFIXES.some(prefix => path.startsWith(prefix));
 }
 
 // ---------------------------------------------------------------------------
@@ -138,6 +181,9 @@ export class Implementer {
     const failed = new Set<number>();
     const failedSteps: { step: BuildStep; reason: string }[] = [];
     const skippedSteps: BuildStep[] = [];
+    // Paths actually removed by executed 'delete' steps. Reported to the caller
+    // so the deletion survives the Verifier's rebuild and reaches forge_files.
+    const deletedPaths: string[] = [];
     const sorted = [...plan].sort((a, b) => a.order - b.order);
 
     console.log('[Implementer] PLAN:', JSON.stringify(
@@ -180,7 +226,20 @@ export class Implementer {
         onProgress?.(completed.size + 1, sorted.length, step.file_path, step.description);
 
         if (step.action === 'delete') {
+          // Safety net: infrastructure is never deletable, whatever the plan says.
+          if (isUndeletablePath(step.file_path)) {
+            console.warn('[Implementer] DELETE REFUSED (infrastructure file):',
+              step.order, step.file_path);
+            // Marked completed, NOT failed/skipped: refusing an illegal delete
+            // must neither cascade into the steps that rewire the file nor turn
+            // an otherwise clean run into a partial-failure report.
+            completed.add(step.order);
+            progressed = true;
+            continue;
+          }
           modifiedFiles.delete(step.file_path);
+          if (!deletedPaths.includes(step.file_path)) deletedPaths.push(step.file_path);
+          console.log('[Implementer] STEP DELETED:', step.order, step.file_path);
           completed.add(step.order);
           progressed = true;
           continue;
@@ -236,8 +295,10 @@ export class Implementer {
 
     console.log('[Implementer] FINAL FILE KEYS:', [...modifiedFiles.keys()]);
 
+    console.log('[Implementer] DELETED PATHS:', deletedPaths);
+
     const completedSteps = sorted.filter(s => completed.has(s.order));
-    return { files: modifiedFiles, failedSteps, skippedSteps, completedSteps, cancelled };
+    return { files: modifiedFiles, failedSteps, skippedSteps, completedSteps, cancelled, deletedPaths };
   }
 
   private static truncateFileContent(content: string, maxChars = 18000): string {

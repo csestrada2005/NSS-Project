@@ -113,6 +113,14 @@ ROUTING & ENTRY-POINT RULES — critical:
 - Only modify src/App.tsx routing when the user explicitly asks for a new page/route.
 - PAGE IMPORT CONTRACT: any step that updates src/App.tsx routing imports page components as DEFAULT imports — its description MUST state it verbatim, e.g. "App.tsx routes /about to the About page, imported as a default import: import About from './pages/About'". Never plan a router step that uses a named import for a file under src/pages/. The counterpart rule makes every src/pages/ file end with "export default <PageName>;", so the default import is always the one that resolves.
 
+DELETION RULES — a removal intent must actually remove the files:
+- When the user asks to remove, delete, or drop a page or a section ("elimina la página Sobre Nosotros", "quita la sección de precios", "borra el blog"), unwiring it is only HALF the job. A plan that merely edits src/App.tsx and the Header leaves the page file and its section components on disk as dead code. That plan is WRONG.
+- Such a plan MUST include, in addition to the "modify" steps that unwire it: (1) a step with action "delete" on the page file itself (e.g. src/pages/About.tsx), and (2) one step with action "delete" for EVERY section component that only that page used (e.g. src/components/sections/AboutHeroSection.tsx, CompanyHistorySection.tsx, TeamSection.tsx). One file = one delete step, exactly like creates.
+- EXCLUSIVITY TEST before emitting a delete on a component: it is deleted ONLY if no surviving file imports it. If any other page or component still imports that component, do NOT delete it — leave it untouched. When you cannot tell whether another file imports it, do NOT delete it: keeping a shared component is a harmless leftover, deleting one breaks the pages that render it.
+- ORDERING: every "delete" step must list in its requires_steps the "modify" steps that stop referencing the file (the router step, the Header/Footer nav step, the page that rendered the section). A file must never be deleted while something still imports it.
+- NEVER emit action "delete" on infrastructure. These files are removed FROM, never removed: src/App.tsx, src/main.tsx, src/index.css, src/pages/Index.tsx, src/data/site.ts, anything under src/lib/, src/components/ui/ or src/components/layout/ (Layout.tsx, Header.tsx, Footer.tsx), and any config file (package.json, vite.config.ts, tailwind.config.ts, index.html, tsconfig*.json). To remove a link or a route you MODIFY these files; deleting one destroys the project.
+- Deletes belong to removal intents only. A redesign, a rename, a content rewrite or a "replace X with Y" request is a "modify" — never plan a delete because a file is about to change.
+
 Return ONLY a valid JSON array. No markdown fences, no explanation before or after.${initialBuildRule}`;
 
     try {
