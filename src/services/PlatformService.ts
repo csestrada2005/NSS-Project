@@ -121,7 +121,14 @@ class PlatformService {
     }
   }
 
-  async callForgeChat(body: object, signal?: AbortSignal): Promise<Response> {
+  async callForgeChat(
+    body: object,
+    signal?: AbortSignal,
+    // Cabeceras extra opcionales para telemetría server-side (mismo patrón que
+    // x-forge-step-mode en el Implementer): el server las refleja en su log de
+    // Render. Ausentes por defecto — ningún caller existente cambia.
+    extraHeaders?: Record<string, string>
+  ): Promise<Response> {
     try {
       const baseHeaders = await this.getHeaders();
       const response = await fetch('/api/chat-forge', {
@@ -132,6 +139,7 @@ class PlatformService {
           // Correlate this call to the open intent so the server can accumulate
           // and charge its tokens server-side.
           ...this.getForgeIntentHeaders(),
+          ...(extraHeaders ?? {}),
         },
         body: JSON.stringify(body),
         signal,
