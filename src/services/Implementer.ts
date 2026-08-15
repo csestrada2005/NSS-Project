@@ -52,6 +52,13 @@ export interface ImplementerResult {
    * keep the path out of the compile and to erase the row from forge_files.
    */
   deletedPaths: string[];
+  /**
+   * Paths of 'delete' steps REFUSED by the infrastructure guard. Never silent:
+   * a plan that tried to delete src/App.tsx is a planning bug worth seeing, and
+   * the run reports success (the delete is skipped, not cascaded), so this list
+   * is the only trace the intent leaves behind.
+   */
+  rejectedDeletes: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -184,6 +191,8 @@ export class Implementer {
     // Paths actually removed by executed 'delete' steps. Reported to the caller
     // so the deletion survives the Verifier's rebuild and reaches forge_files.
     const deletedPaths: string[] = [];
+    // Delete steps refused by the infrastructure guard (see isUndeletablePath).
+    const rejectedDeletes: string[] = [];
     const sorted = [...plan].sort((a, b) => a.order - b.order);
 
     console.log('[Implementer] PLAN:', JSON.stringify(
@@ -228,8 +237,15 @@ export class Implementer {
         if (step.action === 'delete') {
           // Safety net: infrastructure is never deletable, whatever the plan says.
           if (isUndeletablePath(step.file_path)) {
-            console.warn('[Implementer] DELETE REFUSED (infrastructure file):',
-              step.order, step.file_path);
+            // Grep-able trace: a refused delete never fails the run, so this
+            // line (plus `rejectedDeletes` in the intent log) is its footprint.
+            console.warn(
+              `[Implementer] delete_rejected path=${step.file_path} ` +
+              `reason=undeletable step=${step.order}`
+            );
+            if (!rejectedDeletes.includes(step.file_path)) {
+              rejectedDeletes.push(step.file_path);
+            }
             // Marked completed, NOT failed/skipped: refusing an illegal delete
             // must neither cascade into the steps that rewire the file nor turn
             // an otherwise clean run into a partial-failure report.
@@ -296,9 +312,12 @@ export class Implementer {
     console.log('[Implementer] FINAL FILE KEYS:', [...modifiedFiles.keys()]);
 
     console.log('[Implementer] DELETED PATHS:', deletedPaths);
+    if (rejectedDeletes.length > 0) {
+      console.warn('[Implementer] REJECTED DELETES:', rejectedDeletes);
+    }
 
     const completedSteps = sorted.filter(s => completed.has(s.order));
-    return { files: modifiedFiles, failedSteps, skippedSteps, completedSteps, cancelled, deletedPaths };
+    return { files: modifiedFiles, failedSteps, skippedSteps, completedSteps, cancelled, deletedPaths, rejectedDeletes };
   }
 
   private static truncateFileContent(content: string, maxChars = 18000): string {

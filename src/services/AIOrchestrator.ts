@@ -1319,7 +1319,19 @@ export class AIOrchestrator {
       blueprint
     );
     const modifiedFilesMap = implResult.files;
-    const { failedSteps, skippedSteps, deletedPaths } = implResult;
+    const { failedSteps, skippedSteps, deletedPaths, rejectedDeletes } = implResult;
+
+    // Un delete rechazado por el guard de infraestructura no rompe el run (se
+    // salta y sigue), así que sin esta marca no dejaría rastro consultable: el
+    // console.warn del Implementer vive en el navegador, no en los logs del
+    // servidor. Mismo patrón que [PARTIAL:...] — sufijo en el prompt, sin tocar
+    // columnas ni enums de forge_intent_log.
+    const rejectedDeleteMark = rejectedDeletes.length > 0
+      ? ` [DELETE_REJECTED:${rejectedDeletes.join(',')}]`
+      : '';
+    if (rejectedDeletes.length > 0) {
+      console.warn('[AIOrchestrator] delete_rejected (infrastructure guard):', rejectedDeletes);
+    }
 
     // CAMBIO 2 — cancelación durante el plan: el step en vuelo ya se descartó en
     // el Implementer; persistimos SÓLO los steps completos y cerramos el intent
@@ -1490,7 +1502,7 @@ export class AIOrchestrator {
           projectId,
           // PIEZA 3 — telemetría de fallo parcial: mismo patrón que
           // [CLARIFY_ASKED], sufijo en el prompt, sin tocar columnas ni enums.
-          prompt: hasPartial ? `${input} [PARTIAL:${partialOrders.join(',')}]` : input,
+          prompt: (hasPartial ? `${input} [PARTIAL:${partialOrders.join(',')}]` : input) + rejectedDeleteMark,
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,
@@ -1574,7 +1586,7 @@ export class AIOrchestrator {
         });
         await this.logIntent({
           projectId,
-          prompt: input,
+          prompt: input + rejectedDeleteMark,
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,
