@@ -560,6 +560,22 @@ export class AIOrchestrator {
     this.fileUpdateCallback?.(path, content);
   }
 
+  /**
+   * Callback invoked for every file the AI DELETES. Registered by StudioEngine.
+   * A deletion cannot travel through fileUpdateCallback: that bridge carries
+   * (path, content) pairs, and the whole point of a delete is that there is no
+   * content and the row must leave forge_files.
+   */
+  private static fileDeleteCallback: ((path: string) => void) | null = null;
+
+  static setFileDeleteCallback(cb: (path: string) => void) {
+    this.fileDeleteCallback = cb;
+  }
+
+  private static notifyFileDelete(path: string) {
+    this.fileDeleteCallback?.(path);
+  }
+
   // -------------------------------------------------------------------------
   // Dependency audit (P0-2) — keep package.json in sync with imports so the
   // exported zip builds outside Wyrd. Deterministic, no LLM.
@@ -867,7 +883,8 @@ export class AIOrchestrator {
    */
   private static persistCompleted(
     modifiedFiles: Map<string, string>,
-    original: Map<string, string>
+    original: Map<string, string>,
+    deletedPaths: string[] = []
   ): string[] {
     const written: string[] = [];
     for (const [path, content] of modifiedFiles) {
@@ -875,6 +892,13 @@ export class AIOrchestrator {
         this.notifyFileUpdate(path, content);
         written.push(path);
       }
+    }
+    // A delete step that finished before the abort is completed work like any
+    // other: it propagates to forge_files, not just to the in-memory map.
+    for (const path of deletedPaths) {
+      if (!original.has(path)) continue;
+      this.notifyFileDelete(path);
+      written.push(path);
     }
     return written;
   }
@@ -1295,14 +1319,26 @@ export class AIOrchestrator {
       blueprint
     );
     const modifiedFilesMap = implResult.files;
-    const { failedSteps, skippedSteps } = implResult;
+    const { failedSteps, skippedSteps, deletedPaths, rejectedDeletes } = implResult;
+
+    // Un delete rechazado por el guard de infraestructura no rompe el run (se
+    // salta y sigue), así que sin esta marca no dejaría rastro consultable: el
+    // console.warn del Implementer vive en el navegador, no en los logs del
+    // servidor. Mismo patrón que [PARTIAL:...] — sufijo en el prompt, sin tocar
+    // columnas ni enums de forge_intent_log.
+    const rejectedDeleteMark = rejectedDeletes.length > 0
+      ? ` [DELETE_REJECTED:${rejectedDeletes.join(',')}]`
+      : '';
+    if (rejectedDeletes.length > 0) {
+      console.warn('[AIOrchestrator] delete_rejected (infrastructure guard):', rejectedDeletes);
+    }
 
     // CAMBIO 2 — cancelación durante el plan: el step en vuelo ya se descartó en
     // el Implementer; persistimos SÓLO los steps completos y cerramos el intent
     // como cancelado. NO llamamos al Verifier (no fixes post-cancelación); el
     // preview se recompila solo cuando StudioEngine recibe estos archivos.
     if (implResult.cancelled || signal?.aborted) {
-      const writtenPaths = this.persistCompleted(modifiedFilesMap, files);
+      const writtenPaths = this.persistCompleted(modifiedFilesMap, files, deletedPaths);
       if (projectId && writtenPaths.length > 0) {
         await ProjectMemoryService.updateAfterChange(projectId, writtenPaths, modifiedFilesMap);
       }
@@ -1363,13 +1399,13 @@ export class AIOrchestrator {
     // ------------------------------------------------------------------
     let verifyResult;
     try {
-      verifyResult = await Verifier.verify(modifiedFilesMap, files, onRetry, signal, 3, designContext, blueprint);
+      verifyResult = await Verifier.verify(modifiedFilesMap, files, onRetry, signal, 3, designContext, blueprint, deletedPaths);
     } catch (e) {
       // Cancelación durante el verify: no se lanzan más fixes. Persistimos los
       // steps ya completos (los archivos que el Implementer terminó) y cerramos
       // como cancelado, igual que un abort mid-plan.
       if (isAbortError(e)) {
-        const writtenPaths = this.persistCompleted(modifiedFilesMap, files);
+        const writtenPaths = this.persistCompleted(modifiedFilesMap, files, deletedPaths);
         if (projectId && writtenPaths.length > 0) {
           await ProjectMemoryService.updateAfterChange(projectId, writtenPaths, modifiedFilesMap);
         }
@@ -1431,6 +1467,15 @@ export class AIOrchestrator {
         this.notifyFileUpdate(path, content);
       }
 
+      // Notify StudioEngine about each DELETED file. This needs its own bridge:
+      // diffPaths is built by iterating finalFiles, which by definition can no
+      // longer contain a path that was deleted — without this loop the plan's
+      // delete steps die in memory and the file survives in forge_files.
+      const erasedPaths = deletedPaths.filter(p => files.has(p));
+      for (const path of erasedPaths) {
+        this.notifyFileDelete(path);
+      }
+
       // Deduct credits for main pipeline
       if (creditUserId) {
         await this.settleCredits(
@@ -1444,7 +1489,11 @@ export class AIOrchestrator {
       // Update memory and record success
       if (projectId) {
         trackAICall(projectId);
-        await ProjectMemoryService.updateAfterChange(projectId, diffPaths, finalFiles);
+        // Deleted paths go in too: updateAfterChange drops every listed path
+        // from the component registry before re-indexing, and a deleted file
+        // re-indexes to nothing (finalFiles.get -> undefined), so listing it is
+        // exactly how its components leave the registry.
+        await ProjectMemoryService.updateAfterChange(projectId, [...diffPaths, ...erasedPaths], finalFiles);
         await ProjectMemoryService.recordAction(projectId, {
           action: input.slice(0, 120),
           outcome: 'success',
@@ -1453,11 +1502,11 @@ export class AIOrchestrator {
           projectId,
           // PIEZA 3 — telemetría de fallo parcial: mismo patrón que
           // [CLARIFY_ASKED], sufijo en el prompt, sin tocar columnas ni enums.
-          prompt: hasPartial ? `${input} [PARTIAL:${partialOrders.join(',')}]` : input,
+          prompt: (hasPartial ? `${input} [PARTIAL:${partialOrders.join(',')}]` : input) + rejectedDeleteMark,
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,
-          modifiedFiles: diffPaths,
+          modifiedFiles: [...diffPaths, ...erasedPaths],
           affectedFiles: intent.affected_files,
           outcome: 'success',
           // PIEZA 4 — telemetría cableada: compiló, sin error.
@@ -1485,6 +1534,9 @@ export class AIOrchestrator {
       }
       if (extras.length > 0) {
         warnings.push(`Reparé además un error preexistente en: ${extras.join(', ')}`);
+      }
+      if (erasedPaths.length > 0) {
+        warnings.push(`Eliminé del proyecto: ${erasedPaths.join(', ')}`);
       }
       if (diffPaths.length === 0 && verifyResult.attempts > 1) {
         // Caso raro: hubo reparación durante el verify pero el resultado neto no
@@ -1534,7 +1586,7 @@ export class AIOrchestrator {
         });
         await this.logIntent({
           projectId,
-          prompt: input,
+          prompt: input + rejectedDeleteMark,
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,

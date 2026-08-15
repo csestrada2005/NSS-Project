@@ -482,7 +482,19 @@ export function StudioEngine() {
       // Async save — don't await to keep the callback synchronous
       saveFile(path, content).catch(console.error);
     });
-  }, [updateLocalFile, saveFile]);
+
+    // Deletions travel on their own bridge: the update callback carries content,
+    // and a deleted file has none. deleteFile drops it from the in-memory Map
+    // AND removes the forge_files row, so the file stops existing for the
+    // preview, the next compile and the next intent alike.
+    AIOrchestrator.setFileDeleteCallback((path) => {
+      console.log('[StudioEngine] file-delete event received', { path,
+        activeProject: projectId });
+      lastChangeSource.current = 'ai';
+      // Async delete — don't await to keep the callback synchronous
+      deleteFile(path).catch(console.error);
+    });
+  }, [updateLocalFile, saveFile, deleteFile]);
 
   // -------------------------------------------------------------------------
   // CAMBIO 1 — Gobierno de la tasa de compiles del panel visual.
