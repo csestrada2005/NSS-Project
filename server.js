@@ -405,6 +405,74 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// TELEMETRIA DE REPAIRS
+//
+// El batch repair del Verifier resolvió una vez un export/import mismatch
+// BORRANDO el import y la ruta en el consumidor en vez de añadir el export que
+// faltaba en el módulo: compiló limpio y amputó la funcionalidad en silencio.
+// Nada en el log de Render lo delataba. Este helper añade a la línea de la
+// pasada de repair qué archivos ORIGINARON el error y qué archivos acabó
+// TOCANDO el modelo, para que la divergencia entre ambos sea evidente sin
+// inspección manual.
+//
+// error_files    — cabecera x-forge-repair-error-files (los que esbuild culpó).
+// modified_files — se derivan comparando los bloques ===FILE:...===END=== que
+//                  el modelo devolvió contra los que se le enviaron: un archivo
+//                  devuelto idéntico no cuenta como modificado. Se calculan aquí
+//                  y no en el cliente para que el log refleje lo que el modelo
+//                  realmente escribió, no lo que el cliente afirma.
+//
+// Devuelve '' (cadena vacía) para cualquier llamada que no sea de repair, así
+// que el resto del log de /api/chat-forge queda intacto.
+// ---------------------------------------------------------------------------
+const REPAIR_FILE_BLOCK_RE = /===FILE:\s*(.+?)\s*===\r?\n([\s\S]*?)\r?\n===END===/g;
+
+function parseRepairFileBlocks(text) {
+  const out = new Map();
+  if (typeof text !== 'string') return out;
+  REPAIR_FILE_BLOCK_RE.lastIndex = 0;
+  let m;
+  while ((m = REPAIR_FILE_BLOCK_RE.exec(text)) !== null) {
+    const path = m[1].trim();
+    if (path) out.set(path, m[2]);
+  }
+  return out;
+}
+
+function buildRepairTelemetry(req, messages, data) {
+  const header = req.headers['x-forge-repair-error-files'];
+  if (!header) return '';
+
+  const errorFiles = String(header)
+    .split(',')
+    .map((f) => f.trim())
+    .filter(Boolean);
+
+  // Bloques ENVIADOS: el único mensaje de usuario que emite fixBatch.
+  const sent = new Map();
+  for (const msg of Array.isArray(messages) ? messages : []) {
+    if (typeof msg?.content === 'string') {
+      for (const [path, content] of parseRepairFileBlocks(msg.content)) {
+        sent.set(path, content);
+      }
+    }
+  }
+
+  // Bloques DEVUELTOS por el modelo.
+  const returned = parseRepairFileBlocks(data?.content?.[0]?.text ?? '');
+
+  // Modificado = devuelto con contenido distinto del enviado (o path nuevo).
+  const modified = [];
+  for (const [path, content] of returned) {
+    const before = sent.get(path);
+    if (before === undefined || before.trim() !== content.trim()) modified.push(path);
+  }
+
+  const fmt = (arr) => `[${arr.join(',')}]`;
+  return ` [repair] error_files=${fmt(errorFiles)} modified_files=${fmt(modified)}`;
+}
+
 app.post('/api/chat-forge', async (req, res) => {
   if (!ANTHROPIC_API_KEY) {
     return res.status(500).json({ error: 'API key missing' });
@@ -463,6 +531,10 @@ app.post('/api/chat-forge', async (req, res) => {
     // el ahorro de output por modo. Ausente en llamadas que no son de step
     // (Architect, Verifier, simple lane) → se omite del log.
     const stepMode = req.headers['x-forge-step-mode'];
+    // TELEMETRIA DE REPAIRS — sufijo sólo en las pasadas de reparación por lotes
+    // (las que traen x-forge-repair-error-files). Ausente en cualquier otra
+    // llamada, así que el resto del log queda byte a byte igual.
+    const repairSuffix = buildRepairTelemetry(req, messages, data);
     console.log(
       `[chat-forge] model=${resolvedModel} status=${response.status}`
       + ` input_tokens=${u.input_tokens ?? '?'}`
@@ -470,6 +542,7 @@ app.post('/api/chat-forge', async (req, res) => {
       + ` cache_read=${u.cache_read_input_tokens ?? 0}`
       + ` cache_write=${u.cache_creation_input_tokens ?? 0}`
       + (stepMode ? ` mode=${stepMode}` : '')
+      + repairSuffix
     );
 
     // CIRUGÍA (cobro dentro del pipeline): fold this served request's tokens into

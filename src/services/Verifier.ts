@@ -284,6 +284,47 @@ export class Verifier {
   }
 
   /**
+   * REFORMA DEL CONTRATO — archivos del proyecto CITADOS en el texto de los
+   * errores del lote, distintos de los que esbuild culpó.
+   *
+   * Para "No matching export in "virtual:src/pages/Foo.tsx" for import
+   * "default"", esbuild sitúa el error en el importador y nombra el módulo
+   * ofensor dentro del mensaje, con el prefijo del namespace virtual. Esa es la
+   * única pista del archivo que DEBE recibir el export; sin resolverla y
+   * adjuntar su contenido, la regla de dirección del prompt es inejecutable y
+   * la única salida que le queda al modelo es borrar el import.
+   *
+   * Sólo devuelve paths que existen realmente como key del proyecto — un módulo
+   * inexistente (Could not resolve "./nope") no resuelve a nada y cae, por
+   * diseño, en la regla 4 (última instancia, con reporte explícito).
+   */
+  private static referencedProjectFiles(
+    batch: RepairBatch,
+    files: Map<string, string>
+  ): { path: string; content: string }[] {
+    const blamed = new Set(batch.files.map((f) => f.path));
+    const out: { path: string; content: string }[] = [];
+    const seen = new Set<string>();
+
+    for (const err of batch.errors) {
+      const message = err.message ?? '';
+      // Todo segmento entrecomillado del mensaje es candidato a path.
+      for (const m of message.matchAll(/"([^"]+)"|'([^']+)'/g)) {
+        const raw = (m[1] ?? m[2] ?? '').trim();
+        if (!raw) continue;
+        const path = raw.replace(/^virtual:/, '');
+        if (blamed.has(path) || seen.has(path)) continue;
+        const content = files.get(path);
+        if (content == null) continue; // no es un archivo del proyecto
+        seen.add(path);
+        out.push({ path, content });
+      }
+    }
+
+    return out;
+  }
+
+  /**
    * CAMBIO 2 — reparación por lotes. Repara TODOS los errores de una misma
    * clase en una única llamada LLM, pasando los contenidos completos de cada
    * archivo implicado. El modelo devuelve cada archivo corregido delimitado; los
@@ -299,11 +340,47 @@ export class Verifier {
   ): Promise<Map<string, string> | null> {
     if (batch.files.length === 0) return null;
 
+    // REFORMA DEL CONTRATO — archivos REFERENCIADOS por el error.
+    //
+    // esbuild reporta "No matching export in X for import Y" en el archivo
+    // IMPORTADOR (location.file = src/App.tsx), no en X. El lote sólo lleva los
+    // archivos que esbuild culpó, así que hasta ahora el modelo recibía
+    // únicamente el consumidor: la única "reparación" que podía escribir era
+    // borrar el import (y con él la ruta). Resolvemos los paths del proyecto
+    // citados en el texto del error — esbuild los escribe con el prefijo del
+    // namespace virtual ("virtual:src/pages/Foo.tsx") — y los adjuntamos al
+    // prompt para que la regla de dirección (corregir X, no sus importadores)
+    // sea EJECUTABLE y no una instrucción imposible de cumplir.
+    const refFiles = this.referencedProjectFiles(batch, files);
+
     const systemPrompt =
       `You are an expert React + TypeScript engineer fixing compilation errors.\n` +
       `Several files share the SAME class of error ("${batch.label}") — apply the ` +
-      `same kind of fix to each. Return the COMPLETE corrected content of EVERY ` +
-      `file you were given, each wrapped EXACTLY as:\n` +
+      `same kind of fix to each.\n\n` +
+      `NON-DESTRUCTIVE REPAIR CONTRACT — these rules override everything else:\n` +
+      `1. PRESERVE INTENT. A repair fixes how the code is WIRED, never what it ` +
+      `DOES. Every feature, route, screen and behaviour present in the input must ` +
+      `still be present in your output.\n` +
+      `2. NEVER DELETE TO SILENCE AN ERROR. You are FORBIDDEN to remove an ` +
+      `import, a route, a JSX usage, a prop, a handler or any other reference to ` +
+      `a symbol in order to make the compiler stop complaining. Deleting the ` +
+      `consumer is never a valid repair — it compiles clean and amputates the ` +
+      `feature. If your fix makes a file shorter by dropping functionality, it is ` +
+      `the WRONG fix.\n` +
+      `3. FIX THE SOURCE, NOT THE CONSUMER. For "No matching export in X for ` +
+      `import Y", the file to correct is X: ADD the missing export Y to X (for ` +
+      `import "default", add \`export default <Component>\` to X). Do NOT edit the ` +
+      `files that import X. Rewriting the import shape in the consumer is only ` +
+      `acceptable when X genuinely exports the symbol under another shape (named ` +
+      `vs default) — and even then the symbol must keep being imported and used.\n` +
+      `4. LAST RESORT, AND REPORT IT. Only if the referenced symbol exists ` +
+      `NOWHERE in the project — the module file itself is absent, not merely ` +
+      `missing an export — may you remove the reference. When you do, you MUST ` +
+      `emit, before any file block, a line exactly like:\n` +
+      `===REPAIR-NOTE=== removed <symbol> from <path>: <module> does not exist in ` +
+      `the project\n\n` +
+      `OUTPUT: return the COMPLETE corrected content of EVERY file you were ` +
+      `given, each wrapped EXACTLY as:\n` +
       `===FILE: <path>===\n<full file content>\n===END===\n` +
       `No markdown fences, no explanation outside the markers. Preserve every ` +
       `file's path exactly. If a file needs no change, still return it unchanged.`;
@@ -322,11 +399,27 @@ export class Verifier {
       .map((f) => `===FILE: ${f.path}===\n${files.get(f.path) ?? f.content}\n===END===`)
       .join('\n\n');
 
+    // Los archivos citados en el error (el X de "No matching export in X") van
+    // en la MISMA lista de bloques editables: son, por la regla de dirección, el
+    // destino natural de la corrección.
+    const refBlocks = refFiles
+      .map((f) => `===FILE: ${f.path}===\n${f.content}\n===END===`)
+      .join('\n\n');
+
+    const directionNote = refFiles.length > 0
+      ? `The error text points at ${refFiles.length} other project file(s), ` +
+        `included below: ${refFiles.map((f) => f.path).join(', ')}. Per rule 3, ` +
+        `these are most likely where the fix belongs (add the missing export ` +
+        `there) — NOT the file esbuild reported the error in.\n\n`
+      : '';
+
     const userMessage =
       `${batch.errors.length} compilation error(s) of the same class ` +
       `("${batch.label}") across ${batch.files.length} file(s):\n${errorLines}\n\n` +
-      `These files all exhibit the same mismatch — fix them all consistently.\n\n` +
-      `FILES:\n${fileBlocks}\n\n` +
+      `These files all exhibit the same mismatch — fix them all consistently.\n` +
+      `Repair by ADDING what is missing, never by removing what is used.\n\n` +
+      directionNote +
+      `FILES:\n${fileBlocks}${refBlocks ? `\n\n${refBlocks}` : ''}\n\n` +
       `Return the complete corrected content of every file, each wrapped in its ` +
       `===FILE: <path>=== / ===END=== markers:`;
 
@@ -346,12 +439,24 @@ export class Verifier {
     const blueprintBlock = buildBlueprintBlock(blueprint);
 
     try {
+      // CAMBIO 2 (telemetría de repairs) — los archivos que ORIGINARON el error
+      // (los que esbuild culpó) viajan como cabecera; server.js compara la
+      // respuesta del modelo contra los bloques enviados y emite en Render el
+      // sufijo `[repair] error_files=[...] modified_files=[...]`. Un
+      // modified_files con archivos fuera de error_files (o, en el caso que nos
+      // ocupa, un modified_files que sólo toca el importador) queda visible sin
+      // inspección manual.
+      const errorFilePaths = [...new Set(
+        batch.errors.map((e) => e.file).filter((f): f is string => !!f)
+      )];
       const response = await platformService.callForgeChat({
         model,
         max_tokens: 8192,
         system: cachedSystemBlocks(stablePrefix, blueprintBlock, systemPrompt),
         messages: [{ role: 'user', content: userMessage }],
-      }, signal);
+      }, signal, errorFilePaths.length > 0
+        ? { 'x-forge-repair-error-files': errorFilePaths.join(',') }
+        : undefined);
 
       const data = await response.json();
       console.log('[Verifier] fixBatch model=' + model + ' class="' + batch.label + '" usage:',
@@ -371,7 +476,9 @@ export class Verifier {
 
       // Fallback: exactamente un archivo y el modelo devolvió el crudo sin
       // marcadores → tratar la respuesta entera como ese archivo.
-      if (parsed.size === 0 && batch.files.length === 1) {
+      // (con refFiles presentes la respuesta cruda es ambigua: podría ser
+      // cualquiera de los archivos, así que el fallback se desactiva).
+      if (parsed.size === 0 && batch.files.length === 1 && refFiles.length === 0) {
         const only = batch.files[0].path;
         const newFiles = new Map<string, string>(files);
         newFiles.set(only, this.stripCodeFences(text));
@@ -384,7 +491,14 @@ export class Verifier {
       }
 
       const newFiles = new Map<string, string>(files);
-      const known = new Set(batch.files.map((f) => f.path));
+      // Aceptamos los archivos del lote MÁS los referenciados por el error: sin
+      // esto último, la corrección dirigida al archivo X (añadir su export) se
+      // descartaría en silencio y el repair volvería a quedarse sin salida
+      // válida distinta de borrar el import.
+      const known = new Set([
+        ...batch.files.map((f) => f.path),
+        ...refFiles.map((f) => f.path),
+      ]);
       for (const [path, content] of parsed) {
         // Sólo aceptamos archivos que estaban en el lote — el modelo no debe
         // inventar rutas nuevas.
