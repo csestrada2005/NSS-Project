@@ -122,6 +122,15 @@ All description strings must be plain text only — no newlines, no backticks, n
 Plans must never create a step that adds Header/Footer rendering to a page component. Chrome changes belong to Layout.tsx or the chrome components themselves.
 When a step is a contact, footer, or about section (or any section that shows the address, phone, email, business hours, brand name or tagline), its description MUST explicitly state that it consumes siteInfo from src/data/site.ts. Never plan a step that hardcodes contact data — there is one single source for those facts.
 
+DOMAIN DATA RULE — a data file is a step, not a detail:
+- When a page or a section needs 3 or more items of domain data (products, menu items, testimonials, features, FAQ entries, team members, pricing plans, gallery entries, stats), the plan MUST include a step whose file_path is src/data/<domain>.ts (action "create", or "modify" when that file already exists) declaring the TYPED array — e.g. src/data/products.ts exporting a Product type and the array of 12 products.
+- That data step comes BEFORE the step of the section that consumes it, and the consuming step MUST list it in requires_steps. The section's description MUST state that it imports the array from src/data/<domain>.ts and renders it by mapping over it. Never write a section description that has the section declaring its own items.
+- One domain = one data file = one step (src/data/products.ts, src/data/testimonials.ts). Never bundle two domains into one data file, and never fold the data back into the section file.
+- Data steps count against the 8-step maximum — budget them when you plan. If the plan does not fit, consolidate or drop SECTIONS; never drop a data step whose section survives, because that leaves the section importing a file no step writes.
+- Arrays of purely visual configuration (style variants, className maps, icon-to-color lookups) are NOT domain data: they stay inside the component and get no step of their own.
+- SIZE SPLIT: a section that would project past ~200 lines because of the VOLUME of its content is the signal to split it in two steps — src/data/<domain>.ts for the data, the section for the presentation that maps over it. Splitting data out is the first cut to make, before splitting subcomponents.
+- src/data/site.ts stays what it is: the single source for contact and brand facts. Domain collections get their own file next to it, never appended to site.ts.
+
 ROUTING & ENTRY-POINT RULES — critical:
 - The route "/" renders src/pages/Index.tsx. This is the page the user sees first.
 - When the user asks to change "the page", "home page", "landing page", "main page", "página principal", "inicio", or the main screen WITHOUT naming a new route, you MUST include a step with action "modify" on src/pages/Index.tsx. A new standalone component is NOT enough — a component that nothing renders never appears in the preview.
