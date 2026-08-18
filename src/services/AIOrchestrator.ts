@@ -15,6 +15,7 @@ import { Verifier, type RetryCallback } from './Verifier';
 import { CreditService } from './CreditService';
 import { REACT_TAILWIND_RULES, buildProjectContextPrefix, buildBlueprintBlock } from './promptRules';
 import { buildImportedByBlock } from '../utils/importGraph.js';
+import { deletionTargetsTelemetry } from '../utils/deletionGuard.js';
 import { cachedSystem, cachedSystemBlocks } from './promptCache';
 import { DesignBriefService } from './DesignBriefService';
 import { isAbortError } from '../utils/abort';
@@ -1268,7 +1269,7 @@ export class AIOrchestrator {
     // navbar, "App Name" is gone and this flag is false for every later edit.
     const headerContent = files.get('src/components/layout/Header.tsx') ?? '';
     const isInitialBuild = headerContent.includes('App Name');
-    const { steps, wasTrimmed, originalCount } = await Architect.plan(
+    const { steps, wasTrimmed, originalCount, deletionTargets } = await Architect.plan(
       input,
       memoryFormatted,
       intent,
@@ -1324,7 +1325,11 @@ export class AIOrchestrator {
       signal,
       // CAMBIO 1 — mismo blueprint que recibió el Architect: forma el prefijo
       // estático cacheado compartido entre las tres lanes de esta generación.
-      blueprint
+      blueprint,
+      // Capa 1 → Capa 2: lo que el usuario nombró para eliminar. Es la
+      // referencia EXTERNA al plan contra la que el guard mide cada delete; sin
+      // ella el plan sólo puede borrar lo que ya estaba huérfano pre-intent.
+      deletionTargets
     );
     const modifiedFilesMap = implResult.files;
     const { failedSteps, skippedSteps, deletedPaths, rejectedDeletes } = implResult;
@@ -1338,6 +1343,11 @@ export class AIOrchestrator {
     // que rechazan deletes y el log es lo único consultable por SQL: sin el
     // sufijo, un delete caído por el guard de huérfanas (still_imported) sería
     // indistinguible de uno caído por infraestructura (undeletable).
+    // Los targets se registran SIEMPRE que existan, pasen o no los deletes: son
+    // la autorización, y auditar un borrado exige poder contrastar qué se borró
+    // contra qué nombró el usuario. Mismo patrón de sufijo que [PARTIAL:...],
+    // [DELETE_REJECTED:...] y [RESTORED:...] — sin tocar columnas ni enums.
+    const targetsMark = deletionTargetsTelemetry(deletionTargets);
     const rejectedDeleteMark = rejectedDeletes.length > 0
       ? ` [DELETE_REJECTED:${rejectedDeletes.map(r => `${r.path}:${r.reason}`).join(',')}]`
       : '';
@@ -1548,7 +1558,7 @@ export class AIOrchestrator {
           // PIEZA 3 — telemetría de fallo parcial: mismo patrón que
           // [CLARIFY_ASKED], sufijo en el prompt, sin tocar columnas ni enums.
           prompt: (hasPartial ? `${input} [PARTIAL:${partialOrders.join(',')}]` : input) +
-            rejectedDeleteMark + restoredMark,
+            targetsMark + rejectedDeleteMark + restoredMark,
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,
@@ -1637,7 +1647,7 @@ export class AIOrchestrator {
         });
         await this.logIntent({
           projectId,
-          prompt: input + rejectedDeleteMark + restoredMark,
+          prompt: input + targetsMark + rejectedDeleteMark + restoredMark,
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,
