@@ -1419,6 +1419,20 @@ export class AIOrchestrator {
 
     const finalFiles = verifyResult.files;
 
+    // La restauración determinista es lo único del pipeline cuya CONFIRMACIÓN
+    // positiva vivía sólo en la consola del navegador: en Render su firma es
+    // una ausencia (el lote no genera línea [repair]), y una ausencia no se
+    // consulta por SQL. Mismo patrón que [PARTIAL:...] y [DELETE_REJECTED:...]
+    // — sufijo en el prompt del intent log, sin tocar columnas ni enums — así
+    // que "qué archivos repuso el verify, y en qué intents" pasa a ser una
+    // query sobre forge_intent_log.
+    // En un run fallido el verify devuelve el original intacto, así que la marca
+    // ahí significa "lo repuso durante los intentos, pero el run no persistió":
+    // es justo lo que hay que poder distinguir al consultarlo.
+    const restoredMark = (verifyResult.restoredPaths ?? []).length > 0
+      ? ` [RESTORED:${(verifyResult.restoredPaths ?? []).join(',')}]`
+      : '';
+
     if (verifyResult.success) {
       // ----------------------------------------------------------------
       // PIEZA 2 — Diff-write: persistir TODO path cuyo contenido en el
@@ -1521,7 +1535,8 @@ export class AIOrchestrator {
           projectId,
           // PIEZA 3 — telemetría de fallo parcial: mismo patrón que
           // [CLARIFY_ASKED], sufijo en el prompt, sin tocar columnas ni enums.
-          prompt: (hasPartial ? `${input} [PARTIAL:${partialOrders.join(',')}]` : input) + rejectedDeleteMark,
+          prompt: (hasPartial ? `${input} [PARTIAL:${partialOrders.join(',')}]` : input) +
+            rejectedDeleteMark + restoredMark,
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,
@@ -1610,7 +1625,7 @@ export class AIOrchestrator {
         });
         await this.logIntent({
           projectId,
-          prompt: input + rejectedDeleteMark,
+          prompt: input + rejectedDeleteMark + restoredMark,
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,
