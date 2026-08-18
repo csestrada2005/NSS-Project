@@ -79,6 +79,17 @@ export interface VerifyResult {
    * no, el archivo recreado se vuelve a borrar en forge_files).
    */
   recreatedPaths: string[];
+  /**
+   * Paths que el verify RESTAURÓ de forma determinista desde `originalFiles`,
+   * sin pasar por el modelo: el error citaba un módulo ausente que existía
+   * antes de este intent, así que el plan lo borró de más y su contenido
+   * EXACTO sigue disponible. Se distingue de `recreatedPaths` (contenido
+   * inventado por el modelo bajo la regla 4, para módulos que nunca
+   * existieron), pero tiene el mismo efecto sobre los borrados del caller: un
+   * path restaurado deja de ser un borrado y debe salir de `deletedPaths`
+   * antes de persistir.
+   */
+  restoredPaths: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -131,6 +142,12 @@ export class Verifier {
     // que impedir es que el caller lo re-borre al persistir, y para eso viaja
     // en el resultado.
     const recreatedPaths: string[] = [];
+    // Paths restaurados byte-a-byte desde `originalFiles` antes de llamar al
+    // modelo (el plan los borró de más). Se acumulan aparte de las
+    // recreaciones: el descuento de borrados del caller aplica a ambos, pero
+    // la telemetría debe poder decir cuál fue determinista y cuál la escribió
+    // el modelo.
+    const restoredPaths: string[] = [];
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       // Cancelación: si el run fue abortado, no arrancamos otro compile ni fix.
@@ -142,7 +159,8 @@ export class Verifier {
 
       if (result.success) {
         console.log('[Verifier] telemetry | totalErrors:', totalErrors, '| fixCalls:', fixCalls,
-          '| saved:', Math.max(0, totalErrors - fixCalls));
+          '| saved:', Math.max(0, totalErrors - fixCalls),
+          this.absentFilesTelemetry(restoredPaths, recreatedPaths));
         return {
           success: true,
           files: currentFiles,
@@ -151,6 +169,7 @@ export class Verifier {
           totalErrors,
           fixCalls,
           recreatedPaths,
+          restoredPaths,
         };
       }
 
@@ -184,7 +203,8 @@ export class Verifier {
 
       if (attempt === MAX_RETRIES) {
         console.log('[Verifier] telemetry | totalErrors:', totalErrors, '| fixCalls:', fixCalls,
-          '| saved:', Math.max(0, totalErrors - fixCalls), '| result: FAILED');
+          '| saved:', Math.max(0, totalErrors - fixCalls),
+          this.absentFilesTelemetry(restoredPaths, recreatedPaths), '| result: FAILED');
         // Fallo definitivo: devolvemos el original intacto, así que no hay
         // reparaciones persistibles (repairedFiles vacío).
         return {
@@ -197,6 +217,7 @@ export class Verifier {
           totalErrors,
           fixCalls,
           recreatedPaths,
+          restoredPaths,
         };
       }
 
@@ -220,6 +241,24 @@ export class Verifier {
       }
 
       for (const batch of batches) {
+        // RESTAURACIÓN DETERMINISTA — antes de pedirle nada al modelo.
+        //
+        // Si el módulo ausente que cita el error existía en `originalFiles`,
+        // el plan lo borró de más y su contenido EXACTO sigue a mano: pedirle
+        // al modelo que lo "recree" es tirar la fuente de la verdad y aceptar
+        // una reinvención (rutas y dependencias que el original no tenía).
+        // Lo reponemos tal cual y el fixBatch ya lo ve presente, así que sólo
+        // los ausentes que NUNCA existieron llegan al modelo bajo la regla 4.
+        const restore = this.restoreErasedFromOriginal(batch, currentFiles, originalFiles);
+        if (restore.restored.length > 0) {
+          currentFiles = restore.files;
+          for (const path of restore.restored) {
+            if (!restoredPaths.includes(path)) restoredPaths.push(path);
+          }
+          console.log('[Verifier] restored_files=[' + restore.restored.join(',') +
+            '] (deterministic, exact content from originalFiles)');
+        }
+
         const before = currentFiles;
         const fixed = await this.fixBatch(
           batch, before, originalFiles, signal, designContext, blueprint
@@ -247,7 +286,26 @@ export class Verifier {
       totalErrors,
       fixCalls,
       recreatedPaths,
+      restoredPaths,
     };
+  }
+
+  /**
+   * Sufijo de telemetría para los módulos ausentes que el verify repuso.
+   * Distingue las dos vías con nombres distintos, porque el coste y la
+   * fiabilidad no son los mismos: `restored_files` es contenido EXACTO del
+   * proyecto repuesto sin llamar al modelo; `recreated_files` es contenido
+   * que escribió el modelo para un módulo que nunca existió. Cadena vacía
+   * cuando no hubo ninguno de los dos, así que el log de siempre no cambia.
+   */
+  private static absentFilesTelemetry(
+    restored: string[],
+    recreated: string[]
+  ): string {
+    const parts: string[] = [];
+    if (restored.length > 0) parts.push(`restored_files=[${restored.join(',')}]`);
+    if (recreated.length > 0) parts.push(`recreated_files=[${recreated.join(',')}]`);
+    return parts.length > 0 ? `| ${parts.join(' ')}` : '';
   }
 
   /**
@@ -414,6 +472,43 @@ export class Verifier {
     }
 
     return out;
+  }
+
+  /**
+   * RESTAURACIÓN DETERMINISTA de los archivos que el plan borró de más.
+   *
+   * `missingReferencedPaths` ya distingue los dos casos de módulo ausente:
+   * `wasDeleted` marca el que existía en el mapa PREVIO al intent (`universe`
+   * = originalFiles) y por tanto tiene contenido conocido, byte a byte. Para
+   * ése la reparación correcta no es generativa: se repone el original y se
+   * acabó. Pasarlo por el modelo bajo la regla 4 produce un archivo
+   * PLAUSIBLE pero distinto — con rutas que no existen y dependencias nuevas —
+   * cuando la fuente de la verdad estaba disponible.
+   *
+   * Los ausentes que nunca existieron (`wasDeleted === false`) NO se tocan
+   * aquí: no hay nada que restaurar y siguen su camino al modelo.
+   *
+   * Devuelve un mapa nuevo sólo si hubo algo que restaurar (si no, el mismo
+   * que entró) más la lista de paths repuestos.
+   */
+  private static restoreErasedFromOriginal(
+    batch: RepairBatch,
+    files: Map<string, string>,
+    universe: Map<string, string>
+  ): { files: Map<string, string>; restored: string[] } {
+    const restored: string[] = [];
+    let out = files;
+
+    for (const ref of this.missingReferencedPaths(batch, files, universe)) {
+      if (!ref.wasDeleted) continue; // nunca existió → regla 4, lo escribe el modelo
+      const original = universe.get(ref.path);
+      if (original == null) continue; // defensivo: wasDeleted implica que está
+      if (out === files) out = new Map<string, string>(files);
+      out.set(ref.path, original);
+      restored.push(ref.path);
+    }
+
+    return { files: out, restored };
   }
 
   /**

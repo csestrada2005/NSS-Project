@@ -1476,7 +1476,15 @@ export class AIOrchestrator {
       // de ese plan. Sin este filtro el notifyFileDelete de abajo vuelve a
       // borrarlo en forge_files justo después de que notifyFileUpdate lo
       // escribiera, y el proyecto queda otra vez sin el archivo.
-      const recreatedByRepair = new Set(verifyResult.recreatedPaths ?? []);
+      // Un delete revertido lo es por las dos vías: `restoredPaths` (el verify
+      // repuso el contenido EXACTO desde el mapa original, sin modelo) y
+      // `recreatedPaths` (lo escribió el modelo). El descuento sobre los
+      // borrados es idéntico en ambos casos — el archivo vuelve a estar en el
+      // proyecto y no debe re-borrarse en forge_files.
+      const recreatedByRepair = new Set([
+        ...(verifyResult.recreatedPaths ?? []),
+        ...(verifyResult.restoredPaths ?? []),
+      ]);
       const revertedDeletes = deletedPaths.filter(p => recreatedByRepair.has(p));
       if (revertedDeletes.length > 0) {
         console.warn('[AIOrchestrator] delete revertido por el repair (el archivo seguía en uso):',
