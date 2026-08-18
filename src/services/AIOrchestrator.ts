@@ -14,6 +14,7 @@ import { Implementer, type ProgressCallback } from './Implementer';
 import { Verifier, type RetryCallback } from './Verifier';
 import { CreditService } from './CreditService';
 import { REACT_TAILWIND_RULES, buildProjectContextPrefix, buildBlueprintBlock } from './promptRules';
+import { buildImportedByBlock } from '../utils/importGraph.js';
 import { cachedSystem, cachedSystemBlocks } from './promptCache';
 import { DesignBriefService } from './DesignBriefService';
 import { isAbortError } from '../utils/abort';
@@ -1255,6 +1256,12 @@ export class AIOrchestrator {
     const designContext = await DesignContextService.getContext(input, files);
 
     const blueprint = generateBlueprintFromFiles(files);
+    // El blueprint es una lista de PATHS: dice qué archivos hay, no quién usa a
+    // quién. Sin esta segunda señal el Architect decidía qué es "código muerto"
+    // por parecido de nombre (marcó delete sobre MenuSection.tsx creyéndolo de
+    // la página Menú, cuando lo renderiza la landing). El grafo se calcula de
+    // los contenidos reales — el modelo no tiene que deducir nada.
+    const importedByBlock = buildImportedByBlock(files);
     // Initial build of a new project: the scaffolded layout chrome is still in
     // its template state. We detect this deterministically from the placeholder
     // brand string the template ships with — once the first build brands the
@@ -1267,6 +1274,7 @@ export class AIOrchestrator {
       intent,
       designContext,
       blueprint,
+      importedByBlock,
       isInitialBuild,
       signal
     );
@@ -1326,11 +1334,15 @@ export class AIOrchestrator {
     // console.warn del Implementer vive en el navegador, no en los logs del
     // servidor. Mismo patrón que [PARTIAL:...] — sufijo en el prompt, sin tocar
     // columnas ni enums de forge_intent_log.
+    // Cada entrada lleva su motivo (`<path>:<reason>`) porque ya hay dos guards
+    // que rechazan deletes y el log es lo único consultable por SQL: sin el
+    // sufijo, un delete caído por el guard de huérfanas (still_imported) sería
+    // indistinguible de uno caído por infraestructura (undeletable).
     const rejectedDeleteMark = rejectedDeletes.length > 0
-      ? ` [DELETE_REJECTED:${rejectedDeletes.join(',')}]`
+      ? ` [DELETE_REJECTED:${rejectedDeletes.map(r => `${r.path}:${r.reason}`).join(',')}]`
       : '';
     if (rejectedDeletes.length > 0) {
-      console.warn('[AIOrchestrator] delete_rejected (infrastructure guard):', rejectedDeletes);
+      console.warn('[AIOrchestrator] delete_rejected:', rejectedDeletes);
     }
 
     // CAMBIO 2 — cancelación durante el plan: el step en vuelo ya se descartó en

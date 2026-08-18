@@ -62,6 +62,11 @@ export class Architect {
     intent: Intent,
     designContext?: string,
     blueprint: string = '',
+    // Grafo "importado por" calculado deterministamente por el orquestador (ver
+    // src/utils/importGraph.js). Es la evidencia del ORPHAN TEST: sin él, el
+    // plan sólo ve una lista de paths y decide qué es código muerto por
+    // semántica del nombre. Opcional para no romper llamadas existentes.
+    importedByBlock: string = '',
     isInitialBuild: boolean = false,
     signal?: AbortSignal
   ): Promise<{ steps: BuildStep[]; wasTrimmed: boolean; originalCount: number }> {
@@ -116,7 +121,10 @@ ROUTING & ENTRY-POINT RULES — critical:
 DELETION RULES — a removal intent must actually remove the files:
 - When the user asks to remove, delete, or drop a page or a section ("elimina la página Sobre Nosotros", "quita la sección de precios", "borra el blog"), unwiring it is only HALF the job. A plan that merely edits src/App.tsx and the Header leaves the page file and its section components on disk as dead code. That plan is WRONG.
 - Such a plan MUST include, in addition to the "modify" steps that unwire it: (1) a step with action "delete" on the page file itself (e.g. src/pages/About.tsx), and (2) one step with action "delete" for EVERY section component that only that page used (e.g. src/components/sections/AboutHeroSection.tsx, CompanyHistorySection.tsx, TeamSection.tsx). One file = one delete step, exactly like creates.
-- EXCLUSIVITY TEST before emitting a delete on a component: it is deleted ONLY if no surviving file imports it. If any other page or component still imports that component, do NOT delete it — leave it untouched. When you cannot tell whether another file imports it, do NOT delete it: keeping a shared component is a harmless leftover, deleting one breaks the pages that render it.
+- ORPHAN TEST — the ONLY definition of "dead code" you may act on. A file may carry action "delete" ONLY IF NO SURVIVING FILE IMPORTS IT. A surviving file is any file of the project that this same plan does not also delete. Read the answer off the IMPORT GRAPH block in the user message: the candidate is deletable only when its "imported by" list is "(nobody)", or when every importer listed is itself a delete step of THIS plan. If a single importer survives, the file is ALIVE — do not delete it, leave it untouched.
+- A NAME IS NOT EVIDENCE OF PARENTHOOD. Sharing a word with the thing being removed proves nothing: src/components/sections/MenuSection.tsx is the menu SECTION of the landing page (imported by src/pages/Index.tsx) and has nothing to do with src/pages/Menu.tsx beyond the word "Menu". Deleting it because the plan removes the Menu page erases a section of the home page. The same applies to About/AboutSection, Contact/ContactSection, Services/ServicesSection and every similar pair.
+- NEVER write a description like "used exclusively by the X page" unless the IMPORT GRAPH literally shows that page as the file's only importer. If the graph contradicts your intuition, the graph wins.
+- If a candidate does not appear in the IMPORT GRAPH block (or no such block was provided), you CANNOT verify it: do NOT delete it. Keeping an unused component is a harmless leftover; deleting a used one breaks the pages that render it.
 - ORDERING: every "delete" step must list in its requires_steps the "modify" steps that stop referencing the file (the router step, the Header/Footer nav step, the page that rendered the section). A file must never be deleted while something still imports it.
 - NEVER emit action "delete" on infrastructure. These files are removed FROM, never removed: src/App.tsx, src/main.tsx, src/index.css, src/pages/Index.tsx, src/data/site.ts, anything under src/lib/, src/components/ui/ or src/components/layout/ (Layout.tsx, Header.tsx, Footer.tsx), and any config file (package.json, vite.config.ts, tailwind.config.ts, index.html, tsconfig*.json). To remove a link or a route you MODIFY these files; deleting one destroys the project.
 - Deletes belong to removal intents only. A redesign, a rename, a content rewrite or a "replace X with Y" request is a "modify" — never plan a delete because a file is about to change.
@@ -137,8 +145,16 @@ Return ONLY a valid JSON array. No markdown fences, no explanation before or aft
       // bug; different hash ⇒ the prefix mutated and the diff shows what.
       console.log(`[cache] prefix hash=${prefixHash(stablePrefix)}`);
       const blueprintBlock = buildBlueprintBlock(blueprint);
+      // El grafo viaja en el user message, no en los bloques cacheados: cambia
+      // con cada intent (igual que el blueprint) y el Architect corre UNA vez
+      // por generación, así que cachearlo no ahorraría nada y sí ensuciaría el
+      // prefijo estable que comparten Implementer y Verifier.
+      const importGraphSection = importedByBlock.trim().length > 0
+        ? `${importedByBlock.trim()}\n\n`
+        : '';
       const userMessage =
         `${memoryFormatted}\n\n` +
+        importGraphSection +
         `USER REQUEST: ${prompt}\n\n` +
         `CLASSIFIED INTENT:\n` +
         `- Type: ${intent.type}\n` +
