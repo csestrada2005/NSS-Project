@@ -180,3 +180,93 @@ export function absentFilesTelemetry(restored, recreated) {
   if (recreated.length > 0) parts.push(`recreated_files=[${recreated.join(',')}]`);
   return parts.length > 0 ? `| ${parts.join(' ')}` : '';
 }
+
+/**
+ * ALCANCE DE ESCRITURA de una pasada de reparación.
+ *
+ * POR QUÉ (el agujero que cierra)
+ * -------------------------------
+ * Restaurar el archivo lo devuelve a `files`, y eso lo vuelve visible para
+ * `referencedProjectFiles`: en cuanto un error POSTERIOR cita su path resuelto
+ * —"No matching export in "virtual:src/pages/Menu.tsx" for import "Menu""—
+ * entra en el lote como bloque EDITABLE, la regla 3 le dice al modelo que ahí
+ * es donde va la corrección, y el merge acepta la reescritura. La restauración
+ * se pisa con contenido reinventado sin que nada lo delate.
+ *
+ * Los paths restaurados pasan por tanto a CONTEXTO DE SOLO LECTURA: el modelo
+ * los ve (los necesita para corregir a su consumidor) pero no puede escribirlos
+ * por ninguna vía — ni como archivo culpado, ni como referenciado, ni como
+ * ausente. `known` es la garantía dura: lo que no está ahí, el merge lo tira.
+ *
+ * @param {object} scope
+ * @param {{ path: string, content: string }[]} scope.batchFiles   Archivos culpados por esbuild.
+ * @param {{ path: string, content: string }[]} scope.refFiles     Archivos citados por el error.
+ * @param {{ path: string, writable: string[], wasDeleted: boolean }[]} scope.missingRefs
+ * @param {Iterable<string>} scope.protectedPaths  Paths restaurados de forma determinista.
+ * @returns {{
+ *   editableBatchFiles: { path: string, content: string }[],
+ *   editableRefs: { path: string, content: string }[],
+ *   readOnlyRefs: { path: string, content: string }[],
+ *   missingRefs: { path: string, writable: string[], wasDeleted: boolean }[],
+ *   known: Set<string>
+ * }}
+ */
+export function repairWriteScope({ batchFiles, refFiles, missingRefs, protectedPaths }) {
+  const locked = new Set(protectedPaths);
+  const editableBatchFiles = batchFiles.filter((f) => !locked.has(f.path));
+  const editableRefs = refFiles.filter((f) => !locked.has(f.path));
+  // Solo-lectura: los restaurados que el error cita (el modelo los necesita para
+  // corregir a su consumidor) más los que esbuild culpó y no puede tocar.
+  const readOnlyRefs = [
+    ...batchFiles.filter((f) => locked.has(f.path)),
+    ...refFiles.filter((f) => locked.has(f.path)),
+  ];
+  const scopedMissing = missingRefs
+    .filter((r) => !locked.has(r.path))
+    .map((r) => ({ ...r, writable: r.writable.filter((w) => !locked.has(w)) }))
+    .filter((r) => r.writable.length > 0);
+
+  const known = new Set([
+    ...editableBatchFiles.map((f) => f.path),
+    ...editableRefs.map((f) => f.path),
+    ...scopedMissing.flatMap((r) => r.writable),
+  ]);
+  // Backstop: da igual por qué vía haya entrado un path protegido, sale.
+  for (const path of locked) known.delete(path);
+
+  return { editableBatchFiles, editableRefs, readOnlyRefs, missingRefs: scopedMissing, known };
+}
+
+/**
+ * MERGE de los bloques que devuelve la reparación sobre el mapa vivo.
+ *
+ * Sólo se aceptan paths de `known`: el modelo no inventa rutas nuevas y —desde
+ * `repairWriteScope`— tampoco reescribe lo que la restauración repuso. Una
+ * recreación vacía se rechaza: no repara nada y deja un módulo sin exports,
+ * mejor que el error persista y sea visible.
+ *
+ * @param {Map<string, string>} files
+ * @param {Map<string, string>} parsed  Bloques ===FILE:...===END=== parseados.
+ * @param {Set<string>} known
+ * @returns {{ files: Map<string, string>, applied: string[], rejected: string[] }}
+ */
+export function mergeRepairBlocks(files, parsed, known) {
+  const out = new Map(files);
+  const applied = [];
+  const rejected = [];
+
+  for (const [path, content] of parsed) {
+    if (!known.has(path)) {
+      rejected.push(path);
+      continue;
+    }
+    if (!files.has(path) && content.trim() === '') {
+      rejected.push(path);
+      continue;
+    }
+    out.set(path, content);
+    applied.push(path);
+  }
+
+  return { files: out, applied, rejected };
+}

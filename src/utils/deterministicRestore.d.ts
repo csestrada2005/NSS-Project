@@ -37,3 +37,28 @@ export function planDeterministicRestore(
 
 /** Telemetry suffix distinguishing restored (deterministic) from recreated (model). */
 export function absentFilesTelemetry(restored: string[], recreated: string[]): string;
+
+/**
+ * Write scope of one repair pass. Deterministically restored paths become
+ * READ-ONLY context: visible to the model, absent from `known`, so no channel
+ * can overwrite them.
+ */
+export function repairWriteScope(scope: {
+  batchFiles: { path: string; content: string }[];
+  refFiles: { path: string; content: string }[];
+  missingRefs: MissingReference[];
+  protectedPaths: Iterable<string>;
+}): {
+  editableBatchFiles: { path: string; content: string }[];
+  editableRefs: { path: string; content: string }[];
+  readOnlyRefs: { path: string; content: string }[];
+  missingRefs: MissingReference[];
+  known: Set<string>;
+};
+
+/** Merge the repair's returned blocks, accepting only paths in `known`. */
+export function mergeRepairBlocks(
+  files: Map<string, string>,
+  parsed: Map<string, string>,
+  known: Set<string>
+): { files: Map<string, string>; applied: string[]; rejected: string[] };

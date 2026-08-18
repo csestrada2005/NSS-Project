@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {
   planDeterministicRestore,
   missingReferencedPaths,
+  repairWriteScope,
+  mergeRepairBlocks,
   absentFilesTelemetry,
 } from '../src/utils/deterministicRestore.js';
 import { groupCompileErrors } from '../src/utils/groupCompileErrors.js';
@@ -216,4 +218,128 @@ test('el ciclo real: compile falla, se restaura sin modelo y el recompile sale v
   const green = await compileFiles(Object.fromEntries(files));
   assert.equal(green.error, undefined);
   assert.equal(files.get('src/pages/Menu.tsx'), MENU);
+});
+
+// ---------------------------------------------------------------------------
+// LO RESTAURADO ES IMBORRABLE
+//
+// El agujero real: restaurar devuelve el archivo a `files`, y en el intento
+// SIGUIENTE el compile ya no dice "Cannot resolve" (el módulo está) sino
+// `No matching export in "virtual:src/pages/Menu.tsx" for import "Menu"`. Ese
+// mensaje cita el path RESUELTO, así que referencedProjectFiles lo recoge, pasa
+// a bloque editable, la regla 3 manda corregirlo y el merge acepta la
+// reescritura: los 12 productos en español salen sustituidos por un "Sourdough
+// Country Loaf €9.50" que el modelo se inventó.
+// ---------------------------------------------------------------------------
+
+/** El error del intento 2, verbatim del compilador. */
+const EXPORT_MISMATCH = {
+  message: 'No matching export in "virtual:src/pages/Menu.tsx" for import "Menu"',
+  file: 'src/App.tsx',
+  line: 1,
+  lineText: "import { Menu } from './pages/Menu';",
+};
+
+/** Lo que el modelo devolvió en producción: la carta reinventada. */
+const MENU_REINVENTADO = `export function Menu() {
+  return <ul><li>Sourdough Country Loaf €9.50 <span className="badge">New</span></li></ul>;
+}
+`;
+
+test('un path restaurado sale de known: la reescritura del modelo se rechaza', () => {
+  const files = originalFiles();
+  const batch = batchFor([EXPORT_MISMATCH], files);
+  const refFiles = [{ path: 'src/pages/Menu.tsx', content: MENU_ORIGINAL }];
+
+  // Sin protección — el comportamiento que produjo el bug.
+  const open_ = repairWriteScope({
+    batchFiles: batch.files, refFiles, missingRefs: [], protectedPaths: [],
+  });
+  assert.equal(open_.known.has('src/pages/Menu.tsx'), true);
+  const clobbered = mergeRepairBlocks(
+    files, new Map([['src/pages/Menu.tsx', MENU_REINVENTADO]]), open_.known
+  );
+  assert.equal(clobbered.files.get('src/pages/Menu.tsx'), MENU_REINVENTADO, 'así se perdía la carta');
+
+  // Con el path restaurado protegido.
+  const locked = repairWriteScope({
+    batchFiles: batch.files, refFiles, missingRefs: [],
+    protectedPaths: ['src/pages/Menu.tsx'],
+  });
+  assert.equal(locked.known.has('src/pages/Menu.tsx'), false, 'fuera de known');
+  assert.deepEqual(locked.editableRefs, [], 'no es material editable');
+  assert.deepEqual(locked.readOnlyRefs.map((f) => f.path), ['src/pages/Menu.tsx']);
+  assert.deepEqual(locked.known, new Set(['src/App.tsx']), 'el consumidor sí es editable');
+
+  const kept = mergeRepairBlocks(
+    files, new Map([['src/pages/Menu.tsx', MENU_REINVENTADO]]), locked.known
+  );
+  assert.equal(kept.files.get('src/pages/Menu.tsx'), MENU_ORIGINAL, 'la restauración sobrevive');
+  assert.deepEqual(kept.rejected, ['src/pages/Menu.tsx']);
+  assert.deepEqual(kept.applied, []);
+});
+
+test('la protección cubre TODAS las vías, no sólo la de refFiles', () => {
+  const files = originalFiles();
+
+  // (a) el archivo restaurado es el que esbuild culpa.
+  const asBlamed = repairWriteScope({
+    batchFiles: [{ path: 'src/pages/Menu.tsx', content: MENU_ORIGINAL }],
+    refFiles: [],
+    missingRefs: [],
+    protectedPaths: ['src/pages/Menu.tsx'],
+  });
+  assert.equal(asBlamed.known.has('src/pages/Menu.tsx'), false);
+  assert.deepEqual(asBlamed.editableBatchFiles, []);
+  assert.deepEqual(asBlamed.readOnlyRefs.map((f) => f.path), ['src/pages/Menu.tsx']);
+
+  // (b) el archivo restaurado viaja como "ausente escribible" (cabecera
+  //     x-forge-repair-missing-files): tampoco.
+  const asMissing = repairWriteScope({
+    batchFiles: [{ path: 'src/App.tsx', content: files.get('src/App.tsx') }],
+    refFiles: [],
+    missingRefs: [{ path: 'src/pages/Menu.tsx', writable: ['src/pages/Menu.tsx'], wasDeleted: true }],
+    protectedPaths: ['src/pages/Menu.tsx'],
+  });
+  assert.deepEqual(asMissing.missingRefs, [], 'no se declara escribible');
+  assert.equal(asMissing.known.has('src/pages/Menu.tsx'), false);
+
+  // (c) el modelo devuelve el bloque igualmente: el merge lo tira.
+  const merged = mergeRepairBlocks(
+    files, new Map([['src/pages/Menu.tsx', MENU_REINVENTADO]]), asMissing.known
+  );
+  assert.equal(merged.files.get('src/pages/Menu.tsx'), MENU_ORIGINAL);
+});
+
+test('lo NO restaurado sigue siendo editable (la regla 3 no se rompe)', () => {
+  const files = originalFiles();
+  const batch = batchFor([EXPORT_MISMATCH], files);
+  const refFiles = [{ path: 'src/pages/Menu.tsx', content: MENU_ORIGINAL }];
+
+  const scope = repairWriteScope({
+    batchFiles: batch.files, refFiles, missingRefs: [], protectedPaths: [],
+  });
+  assert.deepEqual(scope.editableRefs.map((f) => f.path), ['src/pages/Menu.tsx']);
+  assert.deepEqual(scope.readOnlyRefs, []);
+
+  const merged = mergeRepairBlocks(
+    files, new Map([['src/pages/Menu.tsx', MENU_ORIGINAL + 'export const x = 1;\n']]), scope.known
+  );
+  assert.deepEqual(merged.applied, ['src/pages/Menu.tsx']);
+
+  // Y una ruta que nadie declaró sigue sin entrar.
+  const invented = mergeRepairBlocks(
+    files, new Map([['src/pages/Inventada.tsx', 'export default () => null;']]), scope.known
+  );
+  assert.deepEqual(invented.rejected, ['src/pages/Inventada.tsx']);
+  assert.equal(invented.files.has('src/pages/Inventada.tsx'), false);
+});
+
+test('una recreación vacía se sigue rechazando', () => {
+  const files = originalFiles();
+  files.delete('src/pages/Menu.tsx');
+  const known = new Set(['src/pages/Menu.tsx']);
+  const merged = mergeRepairBlocks(files, new Map([['src/pages/Menu.tsx', '   \n']]), known);
+  assert.deepEqual(merged.rejected, ['src/pages/Menu.tsx']);
+  assert.equal(merged.files.has('src/pages/Menu.tsx'), false);
 });
