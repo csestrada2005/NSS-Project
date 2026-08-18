@@ -197,6 +197,25 @@ import { Star } from 'lucide-react';
 >>>>>>> REPLACE
 `.trim();
 
+/** Context cap for the plan's src/data/*.ts files shown to a section step. */
+const DATA_CONTEXT_MAX = 4_000;
+
+// Regla dura de generación: los datos de dominio no viven en el JSX.
+// El caso real: una MenuCategorySection generada con 12 productos declarados
+// inline creció a ~280 líneas y dejó el contenido enterrado en el componente,
+// cuando el proyecto ya tiene el patrón contrario (src/data/site.ts como fuente
+// única de los hechos). Esta regla es el espejo de la DOMAIN DATA RULE del
+// Architect: él planifica el step de src/data/<dominio>.ts, esto impide que el
+// step de la sección lo ignore y vuelva a declarar el array por su cuenta.
+const DOMAIN_DATA_RULE = `
+DOMAIN DATA SEPARATION — HARD GENERATION RULE:
+- A component under src/components/sections/ NEVER declares an array of 3 or more domain objects (products, menu items, testimonials, features, FAQ entries, team members, pricing plans, gallery entries, stats). That data lives under src/data/ and the section IMPORTS it: import { products } from '@/data/products'.
+- When PLAN FILES lists a src/data/*.ts file (or PROJECT DATA FILES shows one), that file is the source of truth: import it using its EXACT export name and item shape, and render by mapping over it. Never re-declare its items inline, not even a subset, not even "for now".
+- When the step you are writing IS that data file (file_path under src/data/), emit a pure data module: the exported TypeScript type/interface for the item plus the exported typed array. No JSX, no React import, no component in that file.
+- EXEMPT — visual configuration arrays stay in the component: style variants, className maps, size/tone lookups, icon-to-color tables. The test is what the array carries: the CONTENT the site is about (domain data, goes to src/data/) or how it is painted (visual config, stays put).
+- If your section genuinely needs 3+ domain items and the plan gave you NO src/data step, you still may not bury the array inside the JSX: declare it ONCE as a typed module-level const at the top of the file, above the component, and keep the component itself pure presentation mapping over it.
+`.trim();
+
 // REACT_TAILWIND_RULES is the shared constant in ./promptRules (single source of
 // truth across every generation lane, including the anti-template / brand rules).
 
@@ -508,7 +527,8 @@ export class Implementer {
     // it sits after the shared prefix so the prefix cache is reused regardless.
     const roleBlock =
       `You are an expert React + TypeScript engineer implementing one specific step in a build plan.\n` +
-      `${isModifyExisting ? MODIFY_FORMAT_INSTRUCTION : FORMAT_INSTRUCTION}`;
+      `${isModifyExisting ? MODIFY_FORMAT_INSTRUCTION : FORMAT_INSTRUCTION}\n\n` +
+      DOMAIN_DATA_RULE;
 
     const parts: string[] = [];
     parts.push(compactMemory);
@@ -548,6 +568,34 @@ export class Implementer {
     if (siteTs && step.file_path !== 'src/data/site.ts') {
       parts.push(
         `\nSITE DATA CONTRACT (src/data/site.ts — import facts from here; use these EXACT field shapes):\n${siteTs}`
+      );
+    }
+
+    // Domain data contract: the section steps must IMPORT their 3+ item arrays
+    // from src/data/ (DOMAIN_DATA_RULE). For that import to resolve, the step
+    // writing the section needs the data file's EXACT export names and item
+    // shape — and it cannot get them from getImportedFileContext, which reads
+    // the imports of the CURRENT file content and that is empty on a 'create'.
+    // So surface every src/data/*.ts of THIS plan already written by an earlier
+    // step, capped: a 12-product array must not eat the step's context budget.
+    const planDataFiles = planFiles
+      .map(f => f.path)
+      .filter(
+        path =>
+          path.startsWith('src/data/') &&
+          path !== 'src/data/site.ts' &&
+          path !== step.file_path
+      );
+    const dataBlocks = planDataFiles
+      .map(path => {
+        const content = files.get(path);
+        return content ? `--- ${path} ---\n${content}` : '';
+      })
+      .filter(Boolean)
+      .join('\n\n');
+    if (dataBlocks) {
+      parts.push(
+        `\nPROJECT DATA FILES (this plan's domain data — import from these with their EXACT export names and item shapes; never re-declare their items inline):\n${dataBlocks.slice(0, DATA_CONTEXT_MAX)}`
       );
     }
 
