@@ -1471,7 +1471,18 @@ export class AIOrchestrator {
       // diffPaths is built by iterating finalFiles, which by definition can no
       // longer contain a path that was deleted — without this loop the plan's
       // delete steps die in memory and the file survives in forge_files.
-      const erasedPaths = deletedPaths.filter(p => files.has(p));
+      // Un path que el repair RECREÓ deja de ser un borrado: el plan lo borró de
+      // más (otro archivo seguía importándolo) y la recreación ES la corrección
+      // de ese plan. Sin este filtro el notifyFileDelete de abajo vuelve a
+      // borrarlo en forge_files justo después de que notifyFileUpdate lo
+      // escribiera, y el proyecto queda otra vez sin el archivo.
+      const recreatedByRepair = new Set(verifyResult.recreatedPaths ?? []);
+      const revertedDeletes = deletedPaths.filter(p => recreatedByRepair.has(p));
+      if (revertedDeletes.length > 0) {
+        console.warn('[AIOrchestrator] delete revertido por el repair (el archivo seguía en uso):',
+          revertedDeletes.join(', '));
+      }
+      const erasedPaths = deletedPaths.filter(p => files.has(p) && !recreatedByRepair.has(p));
       for (const path of erasedPaths) {
         this.notifyFileDelete(path);
       }
@@ -1537,6 +1548,11 @@ export class AIOrchestrator {
       }
       if (erasedPaths.length > 0) {
         warnings.push(`Eliminé del proyecto: ${erasedPaths.join(', ')}`);
+      }
+      if (revertedDeletes.length > 0) {
+        warnings.push(
+          `Restauré ${revertedDeletes.join(', ')}: el plan lo borró pero seguía en uso.`
+        );
       }
       if (diffPaths.length === 0 && verifyResult.attempts > 1) {
         // Caso raro: hubo reparación durante el verify pero el resultado neto no

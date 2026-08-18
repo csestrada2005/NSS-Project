@@ -417,6 +417,12 @@ app.post('/api/chat', async (req, res) => {
 // inspección manual.
 //
 // error_files    — cabecera x-forge-repair-error-files (los que esbuild culpó).
+// recreated_files— bloques devueltos para un path AUSENTE del proyecto (cabecera
+//                  x-forge-repair-missing-files: el módulo que el error cita y
+//                  que un delete excesivo borró, o que nunca se escribió). Es la
+//                  reparación correcta de un "Cannot resolve", y antes se
+//                  descartaba en silencio en el cliente; el sufijo la deja
+//                  visible. Sólo aparece cuando hubo alguna.
 // modified_files — se derivan comparando los bloques ===FILE:...===END=== que
 //                  el modelo devolvió contra los que se le enviaron: un archivo
 //                  devuelto idéntico no cuenta como modificado. Se calculan aquí
@@ -469,8 +475,22 @@ function buildRepairTelemetry(req, messages, data) {
     if (before === undefined || before.trim() !== content.trim()) modified.push(path);
   }
 
+  // Recreado = devuelto para un path que el cliente declaró ausente del
+  // proyecto (nunca se envió bloque suyo, porque no había contenido que enviar).
+  const missing = new Set(
+    String(req.headers['x-forge-repair-missing-files'] ?? '')
+      .split(',')
+      .map((f) => f.trim())
+      .filter(Boolean)
+  );
+  const recreated = [];
+  for (const path of returned.keys()) {
+    if (missing.has(path) && !sent.has(path)) recreated.push(path);
+  }
+
   const fmt = (arr) => `[${arr.join(',')}]`;
-  return ` [repair] error_files=${fmt(errorFiles)} modified_files=${fmt(modified)}`;
+  return ` [repair] error_files=${fmt(errorFiles)} modified_files=${fmt(modified)}`
+    + (recreated.length > 0 ? ` recreated_files=${fmt(recreated)}` : '');
 }
 
 app.post('/api/chat-forge', async (req, res) => {
