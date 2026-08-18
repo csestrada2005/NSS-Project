@@ -16,6 +16,7 @@ import { CreditService } from './CreditService';
 import { REACT_TAILWIND_RULES, buildProjectContextPrefix, buildBlueprintBlock } from './promptRules';
 import { buildImportedByBlock } from '../utils/importGraph.js';
 import { deletionTargetsTelemetry } from '../utils/deletionGuard.js';
+import { danglingRefsTelemetry } from '../utils/danglingRefs.js';
 import { cachedSystem, cachedSystemBlocks } from './promptCache';
 import { DesignBriefService } from './DesignBriefService';
 import { isAbortError } from '../utils/abort';
@@ -1455,6 +1456,17 @@ export class AIOrchestrator {
       ? ` [RESTORED:${(verifyResult.restoredPaths ?? []).join(',')}]`
       : '';
 
+    // El escaneo determinista de referencias post-delete: cuántas veces el
+    // Implementer devuelve un descableado INCOMPLETO (borra la página, deja el
+    // `<Menu />` en App.tsx). El compile no lo ve —esbuild no reporta
+    // identificadores no definidos— así que sin esta marca el diff corto sólo
+    // se manifiesta como un preview roto que nadie puede contar. La marca se
+    // emite dispare o no el verde final: si una ronda de repair descableó al
+    // consumidor, el intent acaba en 'success' y la marca es justo lo que dice
+    // que hubo que repararlo. Mismo patrón de sufijo que [PARTIAL:...],
+    // [DELETE_REJECTED:...] y [RESTORED:...] — sin tocar columnas ni enums.
+    const danglingMark = danglingRefsTelemetry(verifyResult.danglingRefs ?? []);
+
     if (verifyResult.success) {
       // ----------------------------------------------------------------
       // PIEZA 2 — Diff-write: persistir TODO path cuyo contenido en el
@@ -1558,7 +1570,7 @@ export class AIOrchestrator {
           // PIEZA 3 — telemetría de fallo parcial: mismo patrón que
           // [CLARIFY_ASKED], sufijo en el prompt, sin tocar columnas ni enums.
           prompt: (hasPartial ? `${input} [PARTIAL:${partialOrders.join(',')}]` : input) +
-            targetsMark + rejectedDeleteMark + restoredMark,
+            targetsMark + rejectedDeleteMark + restoredMark + danglingMark,
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,
@@ -1647,7 +1659,7 @@ export class AIOrchestrator {
         });
         await this.logIntent({
           projectId,
-          prompt: input + targetsMark + rejectedDeleteMark + restoredMark,
+          prompt: input + targetsMark + rejectedDeleteMark + restoredMark + danglingMark,
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,

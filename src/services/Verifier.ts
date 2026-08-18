@@ -10,6 +10,8 @@ import {
   mergeRepairBlocks,
   absentFilesTelemetry,
 } from '../utils/deterministicRestore';
+import { findDanglingRefs, syntheticDanglingErrors } from '../utils/danglingRefs';
+import type { DanglingRef } from '../utils/danglingRefs';
 import { cachedSystemBlocks } from './promptCache';
 import { buildProjectContextPrefix, buildBlueprintBlock } from './promptRules';
 
@@ -96,6 +98,15 @@ export interface VerifyResult {
    * antes de persistir.
    */
   restoredPaths: string[];
+  /**
+   * Referencias VIVAS a archivos borrados que el escaneo determinista post-delete
+   * encontró en algún momento de este verify (ver `scanDanglingRefs`). Acumulativo
+   * y sólo informativo: que aparezcan aquí NO significa que el verify fallara —
+   * una ronda de repair puede haberlas descableado y el resultado seguir en verde.
+   * Alimentan el sufijo [DANGLING_REF:...] del intent log, cuyo objetivo es medir
+   * la frecuencia real del diff de descableado incompleto.
+   */
+  danglingRefs: DanglingRef[];
 }
 
 // ---------------------------------------------------------------------------
@@ -154,6 +165,10 @@ export class Verifier {
     // la telemetría debe poder decir cuál fue determinista y cuál la escribió
     // el modelo.
     const restoredPaths: string[] = [];
+    // Pares (borrado -> superviviente) que el escaneo post-delete detectó en
+    // CUALQUIER intento, aunque una ronda posterior los descablease. Es la
+    // medida de frecuencia del diff incompleto, no el estado final.
+    const danglingRefs: DanglingRef[] = [];
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       // Cancelación: si el run fue abortado, no arrancamos otro compile ni fix.
@@ -163,7 +178,29 @@ export class Verifier {
 
       const result = await this.tryCompile(currentFiles, signal);
 
-      if (result.success) {
+      // ------------------------------------------------------------------
+      // ESCANEO DETERMINISTA DE REFERENCIAS POST-DELETE — la puerta al verde.
+      //
+      // esbuild no reporta identificadores no definidos: un descableado a
+      // medias (el import de Menu se fue, `<Menu />` se quedó) compila LIMPIO y
+      // revienta en runtime con "Menu is not defined". El compile verde no es
+      // por tanto evidencia suficiente de que un delete quedó bien descableado,
+      // así que antes de dar verde se comprueba, sin modelo y sin red, que
+      // ningún superviviente siga apuntando a lo que este intent borró.
+      //
+      // Sólo se ejecuta sobre un compile EXITOSO: mientras hay errores reales,
+      // ésos mandan y el recompile del siguiente intento vuelve a pasar por aquí.
+      // ------------------------------------------------------------------
+      const dangling = result.success
+        ? this.scanDanglingRefs(deletedPaths, currentFiles, originalFiles)
+        : [];
+      for (const ref of dangling) {
+        if (!danglingRefs.some((r) => r.deleted === ref.deleted && r.survivor === ref.survivor)) {
+          danglingRefs.push(ref);
+        }
+      }
+
+      if (result.success && dangling.length === 0) {
         console.log('[Verifier] telemetry | totalErrors:', totalErrors, '| fixCalls:', fixCalls,
           '| saved:', Math.max(0, totalErrors - fixCalls),
           absentFilesTelemetry(restoredPaths, recreatedPaths));
@@ -176,6 +213,7 @@ export class Verifier {
           fixCalls,
           recreatedPaths,
           restoredPaths,
+          danglingRefs,
         };
       }
 
@@ -186,18 +224,38 @@ export class Verifier {
       // propagando el AbortError para que el caller cierre como cancelado.
       if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
 
-      const errorMsg = result.error ?? 'Unknown compilation error';
-      const errorDetail = result.errorDetail ?? null;
+      // Un compile en verde con referencias colgantes NO es un verde: se trata
+      // como fallo de verificación con errores SINTÉTICOS, y a partir de aquí
+      // recorre exactamente el mismo camino que un error de esbuild (batching,
+      // repair, recompile). Si el ciclo agota intentos, el fail-closed de
+      // siempre: `files: originalFiles` y el caller no persiste los deletes.
+      const synthetic: CompileErrorDetail[] = dangling.length > 0
+        ? syntheticDanglingErrors(dangling)
+        : [];
+      if (synthetic.length > 0) {
+        console.warn('[Verifier] dangling_refs=[' +
+          dangling.map((r) => `${r.deleted}->${r.survivor}`).join(',') +
+          '] (compile was green; deleted file still referenced — refusing to pass verify)');
+      }
+
+      const errorMsg = synthetic.length > 0
+        ? synthetic.map((e) => e.message).join(' | ')
+        : (result.error ?? 'Unknown compilation error');
+      const errorDetail = synthetic.length > 0
+        ? synthetic[0]
+        : (result.errorDetail ?? null);
 
       // Lista COMPLETA de errores de este compile (esbuild los entrega todos).
       // Fallback: si el servidor no propagó la lista, usamos el errorDetail
       // singular; y si tampoco existe, sintetizamos uno del texto plano.
       const errorList: CompileErrorDetail[] =
-        result.errorDetailList && result.errorDetailList.length > 0
-          ? result.errorDetailList
-          : errorDetail
-            ? [errorDetail]
-            : [{ message: errorMsg, file: null, line: null, lineText: null }];
+        synthetic.length > 0
+          ? synthetic
+          : result.errorDetailList && result.errorDetailList.length > 0
+            ? result.errorDetailList
+            : errorDetail
+              ? [errorDetail]
+              : [{ message: errorMsg, file: null, line: null, lineText: null }];
       totalErrors += errorList.length;
 
       // Resolver de antemano el archivo culpable para poder loguearlo por intento.
@@ -224,6 +282,7 @@ export class Verifier {
           fixCalls,
           recreatedPaths,
           restoredPaths,
+          danglingRefs,
         };
       }
 
@@ -309,7 +368,38 @@ export class Verifier {
       fixCalls,
       recreatedPaths,
       restoredPaths,
+      danglingRefs,
     };
+  }
+
+  /**
+   * ESCANEO DE REFERENCIAS POST-DELETE — el hueco que el compilador no cubre.
+   *
+   * Para cada path que este intent borró y que sigue ausente del mapa (uno que
+   * el repair ya restauró o recreó vuelve a estar presente y deja de ser un
+   * borrado), busca en los supervivientes:
+   *   (a) imports que resuelvan a ese path — vía candidatePathsFor, la misma
+   *       política del plugin virtual del compilador; y
+   *   (b) usos de los símbolos que el archivo borrado EXPORTABA, extraídos de
+   *       su contenido en `originalFiles` de forma determinista, y sólo cuando
+   *       el superviviente no tiene ninguna ligadura para ese nombre.
+   *
+   * Determinista: sin modelo, sin red. Envuelto en try/catch porque es un
+   * guard aditivo — si el escaneo se rompiese, el verify debe seguir
+   * comportándose como antes, nunca tumbar un intent por un fallo del guard.
+   */
+  private static scanDanglingRefs(
+    deletedPaths: string[],
+    files: Map<string, string>,
+    originalFiles: Map<string, string>
+  ): DanglingRef[] {
+    if (!deletedPaths || deletedPaths.length === 0) return [];
+    try {
+      return findDanglingRefs(deletedPaths, files, originalFiles);
+    } catch (e) {
+      console.error('[Verifier] dangling-ref scan failed (ignored):', e);
+      return [];
+    }
   }
 
   /**
