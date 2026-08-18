@@ -6,6 +6,7 @@ import { sanitizeFileContent } from '../utils/sanitizeFileContent';
 import { buildProjectContextPrefix, buildBlueprintBlock } from './promptRules';
 import { cachedSystemBlocks } from './promptCache';
 import { applyEditsFromResponse } from '../utils/applyEdits';
+import { importersOfPath } from '../utils/importGraph.js';
 import { withTimeout, isAbortError } from '../utils/abort';
 
 // ---------------------------------------------------------------------------
@@ -20,6 +21,19 @@ export type ProgressCallback = (
   // por compatibilidad hacia atrás con callers que sólo consumen file/step.
   stepDescription?: string
 ) => void;
+
+/** Why a deterministic guard refused a plan's 'delete' step. */
+export type DeleteRejectionReason = 'undeletable' | 'still_imported';
+
+/**
+ * A 'delete' step that was refused, with the reason and — for
+ * 'still_imported' — the surviving files that keep the target alive.
+ */
+export interface RejectedDelete {
+  path: string;
+  reason: DeleteRejectionReason;
+  importers?: string[];
+}
 
 /**
  * Result of executing a build plan. Beyond the produced files, it carries an
@@ -53,12 +67,13 @@ export interface ImplementerResult {
    */
   deletedPaths: string[];
   /**
-   * Paths of 'delete' steps REFUSED by the infrastructure guard. Never silent:
-   * a plan that tried to delete src/App.tsx is a planning bug worth seeing, and
-   * the run reports success (the delete is skipped, not cascaded), so this list
-   * is the only trace the intent leaves behind.
+   * Deletes REFUSED by a deterministic guard, with the reason. Never silent: a
+   * plan that tried to delete src/App.tsx ('undeletable') or a component the
+   * landing still renders ('still_imported') is a planning bug worth seeing,
+   * and the run reports success (the delete is skipped, not cascaded), so this
+   * list is the only trace the intent leaves behind.
    */
-  rejectedDeletes: string[];
+  rejectedDeletes: RejectedDelete[];
 }
 
 // ---------------------------------------------------------------------------
@@ -94,6 +109,49 @@ const UNDELETABLE_PREFIXES = [
 export function isUndeletablePath(path: string): boolean {
   return UNDELETABLE_EXACT.has(path)
     || UNDELETABLE_PREFIXES.some(prefix => path.startsWith(prefix));
+}
+
+// ---------------------------------------------------------------------------
+// Deletion safety net (2) — nothing that a surviving file still imports
+// ---------------------------------------------------------------------------
+
+/**
+ * Hermano de isUndeletablePath para el sobre-borrado por SEMÁNTICA DEL NOMBRE.
+ *
+ * El caso real: un plan que elimina la página Menú marcó delete sobre
+ * src/components/sections/MenuSection.tsx describiéndolo como "exclusively used
+ * by the Menu page... dead code". Falso — esa sección la renderiza la landing
+ * (src/pages/Index.tsx) y con la página Menú no comparte más que el nombre. El
+ * prompt ya pedía el test de exclusividad, pero un prompt es una petición, no
+ * una garantía, y hasta ahora el plan ni siquiera veía los imports.
+ *
+ * Este guard responde la pregunta con el mapa de archivos POST-PLAN: los
+ * supervivientes son todo lo que hay en `files` menos los paths que el propio
+ * plan borra. Si alguno importa el objetivo, el delete se rechaza.
+ *
+ * TRADE-OFF CONSCIENTE: se evalúa con el contenido conocido en el momento del
+ * step. La regla de ORDERING del Architect obliga a que un delete dependa de
+ * los modify que lo desenganchan, así que en un plan bien formado el importador
+ * ya llegó aquí sin el import. Si el plan olvidó esa dependencia, el guard
+ * rechaza un borrado que quizá era legítimo: el coste es un archivo muerto de
+ * más (inofensivo, y queda registrado), frente a romper las páginas que sí lo
+ * renderizan.
+ *
+ * @returns Los supervivientes que lo importan. Vacío ⇒ borrar es seguro.
+ */
+export function importersBlockingDelete(
+  targetPath: string,
+  files: Map<string, string>,
+  plannedDeletes: Iterable<string>
+): string[] {
+  try {
+    return importersOfPath(targetPath, files, { ignorePaths: plannedDeletes });
+  } catch (e) {
+    // Un contenido raro nunca puede tumbar el run: sin señal fiable, no
+    // bloqueamos el delete (el guard de infraestructura sigue en pie).
+    console.warn('[Implementer] import graph failed for', targetPath, e);
+    return [];
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -191,9 +249,18 @@ export class Implementer {
     // Paths actually removed by executed 'delete' steps. Reported to the caller
     // so the deletion survives the Verifier's rebuild and reaches forge_files.
     const deletedPaths: string[] = [];
-    // Delete steps refused by the infrastructure guard (see isUndeletablePath).
-    const rejectedDeletes: string[] = [];
+    // Delete steps refused by a deterministic guard (see isUndeletablePath and
+    // importersBlockingDelete).
+    const rejectedDeletes: RejectedDelete[] = [];
     const sorted = [...plan].sort((a, b) => a.order - b.order);
+    // Todo lo que ESTE plan borra — el complemento son los supervivientes contra
+    // los que el guard de huérfanas mide "¿alguien lo sigue importando?". Un
+    // delete rechazado sale del conjunto: el archivo SIGUE en el proyecto, así
+    // que a partir de ese momento cuenta como superviviente y sus imports
+    // mantienen vivos a los demás.
+    const plannedDeletePaths = new Set(
+      sorted.filter(s => s.action === 'delete').map(s => s.file_path)
+    );
 
     console.log('[Implementer] PLAN:', JSON.stringify(
       sorted.map(s => ({ order: s.order, action: s.action,
@@ -243,9 +310,10 @@ export class Implementer {
               `[Implementer] delete_rejected path=${step.file_path} ` +
               `reason=undeletable step=${step.order}`
             );
-            if (!rejectedDeletes.includes(step.file_path)) {
-              rejectedDeletes.push(step.file_path);
+            if (!rejectedDeletes.some(r => r.path === step.file_path)) {
+              rejectedDeletes.push({ path: step.file_path, reason: 'undeletable' });
             }
+            plannedDeletePaths.delete(step.file_path);
             // Marked completed, NOT failed/skipped: refusing an illegal delete
             // must neither cascade into the steps that rewire the file nor turn
             // an otherwise clean run into a partial-failure report.
@@ -253,6 +321,38 @@ export class Implementer {
             progressed = true;
             continue;
           }
+
+          // Safety net (2): nada que un superviviente todavía importe. Los
+          // supervivientes son el mapa actual menos TODO lo que el plan borra
+          // (incluidos los deletes aún no ejecutados), así que borrar una página
+          // y su sección propia sigue permitido; borrar la sección que la
+          // landing renderiza, no.
+          const blockingImporters = importersBlockingDelete(
+            step.file_path,
+            modifiedFiles,
+            plannedDeletePaths
+          );
+          if (blockingImporters.length > 0) {
+            console.warn(
+              `[Implementer] delete_rejected path=${step.file_path} ` +
+              `reason=still_imported step=${step.order} ` +
+              `importers=${blockingImporters.join(',')}`
+            );
+            if (!rejectedDeletes.some(r => r.path === step.file_path)) {
+              rejectedDeletes.push({
+                path: step.file_path,
+                reason: 'still_imported',
+                importers: blockingImporters,
+              });
+            }
+            plannedDeletePaths.delete(step.file_path);
+            // Mismo tratamiento que el guard de infraestructura: se salta el
+            // step, el intent continúa y el run no se reporta como parcial.
+            completed.add(step.order);
+            progressed = true;
+            continue;
+          }
+
           modifiedFiles.delete(step.file_path);
           if (!deletedPaths.includes(step.file_path)) deletedPaths.push(step.file_path);
           console.log('[Implementer] STEP DELETED:', step.order, step.file_path);
