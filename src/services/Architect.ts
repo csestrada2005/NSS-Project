@@ -69,7 +69,18 @@ export class Architect {
     importedByBlock: string = '',
     isInitialBuild: boolean = false,
     signal?: AbortSignal
-  ): Promise<{ steps: BuildStep[]; wasTrimmed: boolean; originalCount: number }> {
+  ): Promise<{
+    steps: BuildStep[];
+    wasTrimmed: boolean;
+    originalCount: number;
+    /**
+     * Paths the USER'S REQUEST named for removal — la referencia EXTERNA al
+     * plan que autoriza sus deletes. El guard determinista la expande con las
+     * huérfanas exclusivas pre-plan y la contrasta contra originalFiles; sin
+     * ella un plan sólo puede borrar lo que ya estaba huérfano ANTES de correr.
+     */
+    deletionTargets: string[];
+  }> {
     console.log('[Architect] designContext chars:', designContext?.length ?? 0, '| preview:', designContext?.slice(0, 300)); // TODO: remove after RAG verification
     // Initial build of a brand-new project: the scaffold left the layout chrome
     // in its template state ("App Name" navbar, single "Home" link, "Your
@@ -129,7 +140,15 @@ DELETION RULES — a removal intent must actually remove the files:
 - NEVER emit action "delete" on infrastructure. These files are removed FROM, never removed: src/App.tsx, src/main.tsx, src/index.css, src/pages/Index.tsx, src/data/site.ts, anything under src/lib/, src/components/ui/ or src/components/layout/ (Layout.tsx, Header.tsx, Footer.tsx), and any config file (package.json, vite.config.ts, tailwind.config.ts, index.html, tsconfig*.json). To remove a link or a route you MODIFY these files; deleting one destroys the project.
 - Deletes belong to removal intents only. A redesign, a rename, a content rewrite or a "replace X with Y" request is a "modify" — never plan a delete because a file is about to change.
 
-Return ONLY a valid JSON array. No markdown fences, no explanation before or after.${initialBuildRule}`;
+DELETION TARGETS — the field that AUTHORIZES a delete:
+- Alongside the steps you must report deletion_targets: the paths THE USER'S REQUEST NAMES for removal. Nothing else goes in this list.
+- A path belongs in deletion_targets only if the user's own words point at that file: "elimina la página Menú" names src/pages/Menu.tsx. It does NOT name src/components/sections/MenuSection.tsx — sharing the word "Menu" is not being named, it is a coincidence of vocabulary. If the IMPORT GRAPH shows a surviving file importing the candidate, the user did not name it: leave it out.
+- Do NOT list the components the target uses internally: files imported ONLY by the targets are expanded deterministically downstream, from the import graph, without your help. List the thing the user asked to remove, not its contents.
+- deletion_targets is NOT the list of your delete steps and NOT the list of files you are modifying. It is the answer to one question: which files did the user ask to remove? For a request with no removal in it, deletion_targets is [].
+- A delete step over a path that is neither in deletion_targets nor orphaned BEFORE this plan runs is refused downstream, whatever your steps do to unwire it first. Unwiring a file in an earlier step does not make it deletable: the check reads the project as it was before your plan.
+
+OUTPUT FORMAT — return ONLY a valid JSON object with exactly these two keys, no markdown fences, no explanation before or after:
+{"deletion_targets": ["src/pages/Menu.tsx"], "steps": [ ...the BuildStep objects... ]}${initialBuildRule}`;
 
     try {
       // CAMBIO 1 — el design brief y el blueprint viajan en el prefijo estático
@@ -180,14 +199,18 @@ Return ONLY a valid JSON array. No markdown fences, no explanation before or aft
 
       if (data.error) {
         console.error('[Architect] API error:', data.error);
-        return { steps: [], wasTrimmed: false, originalCount: 0 };
+        return { steps: [], wasTrimmed: false, originalCount: 0, deletionTargets: [] };
       }
 
       const text: string = data.content?.[0]?.text ?? '';
-      const cleaned = this.extractJsonArray(text);
-      let steps = JSON.parse(this.sanitizeJson(cleaned)) as BuildStep[];
+      // El plan viaja ahora como objeto {deletion_targets, steps}. El array
+      // pelado se sigue aceptando: es lo que devuelven los modelos que ignoran
+      // el nuevo contrato, y un plan sin targets no es un plan inválido — sólo
+      // uno que únicamente podrá borrar lo que ya estaba huérfano.
+      const { steps: rawSteps, deletionTargets } = this.extractPlanPayload(text);
+      let steps = rawSteps;
 
-      if (!Array.isArray(steps)) return { steps: [], wasTrimmed: false, originalCount: 0 };
+      if (!Array.isArray(steps)) return { steps: [], wasTrimmed: false, originalCount: 0, deletionTargets: [] };
 
       const originalCount = steps.length;
       let wasTrimmed = false;
@@ -227,19 +250,57 @@ Return ONLY a valid JSON array. No markdown fences, no explanation before or aft
           };
         });
 
-      return { steps: filteredAndMappedSteps, wasTrimmed, originalCount };
+      return { steps: filteredAndMappedSteps, wasTrimmed, originalCount, deletionTargets };
     } catch (e) {
       console.error('[Architect] Failed to plan:', e);
-      return { steps: [], wasTrimmed: false, originalCount: 0 };
+      return { steps: [], wasTrimmed: false, originalCount: 0, deletionTargets: [] };
     }
   }
 
-  private static extractJsonArray(text: string): string {
+  /** Bloque JSON crudo del texto del modelo, con o sin fences. */
+  private static extractJsonBlock(text: string): string {
     const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (fenced) return fenced[1].trim();
-    const start = text.indexOf('[');
-    const end = text.lastIndexOf(']');
-    if (start !== -1 && end > start) return text.slice(start, end + 1);
-    return text.trim();
+    const body = (fenced ? fenced[1] : text).trim();
+    // El objeto manda: un plan con targets es {"deletion_targets": [...],
+    // "steps": [...]} y su array interno no debe confundirse con el payload.
+    const objStart = body.indexOf('{');
+    const arrStart = body.indexOf('[');
+    if (objStart !== -1 && (arrStart === -1 || objStart < arrStart)) {
+      const objEnd = body.lastIndexOf('}');
+      if (objEnd > objStart) return body.slice(objStart, objEnd + 1);
+    }
+    if (arrStart !== -1) {
+      const arrEnd = body.lastIndexOf(']');
+      if (arrEnd > arrStart) return body.slice(arrStart, arrEnd + 1);
+    }
+    return body;
+  }
+
+  /**
+   * Steps + deletion_targets del texto del modelo. Acepta las dos formas: el
+   * objeto {deletion_targets, steps} del contrato actual y el array pelado de
+   * BuildSteps (contrato anterior). Sin targets la lista queda vacía, que es el
+   * lado seguro: el guard sólo dejará pasar deletes ya huérfanos pre-plan.
+   */
+  private static extractPlanPayload(
+    text: string
+  ): { steps: BuildStep[]; deletionTargets: string[] } {
+    const parsed = JSON.parse(this.sanitizeJson(this.extractJsonBlock(text)));
+
+    if (Array.isArray(parsed)) {
+      return { steps: parsed as BuildStep[], deletionTargets: [] };
+    }
+    if (parsed && typeof parsed === 'object') {
+      const obj = parsed as { steps?: unknown; deletion_targets?: unknown };
+      const steps = Array.isArray(obj.steps) ? (obj.steps as BuildStep[]) : [];
+      const targets = Array.isArray(obj.deletion_targets)
+        ? obj.deletion_targets
+            .filter((t): t is string => typeof t === 'string')
+            .map(t => t.trim())
+            .filter(t => t.length > 0)
+        : [];
+      return { steps, deletionTargets: [...new Set(targets)] };
+    }
+    return { steps: [], deletionTargets: [] };
   }
 }
