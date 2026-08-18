@@ -3,7 +3,13 @@ import type { CompileErrorDetail } from './PlatformService';
 import { isAbortError } from '../utils/abort';
 import { groupCompileErrors, labelForError } from '../utils/groupCompileErrors';
 import type { RepairBatch } from '../utils/groupCompileErrors';
-import { candidatePathsFor } from '../utils/resolveModulePath';
+import {
+  planDeterministicRestore,
+  missingReferencedPaths,
+  repairWriteScope,
+  mergeRepairBlocks,
+  absentFilesTelemetry,
+} from '../utils/deterministicRestore';
 import { cachedSystemBlocks } from './promptCache';
 import { buildProjectContextPrefix, buildBlueprintBlock } from './promptRules';
 
@@ -160,7 +166,7 @@ export class Verifier {
       if (result.success) {
         console.log('[Verifier] telemetry | totalErrors:', totalErrors, '| fixCalls:', fixCalls,
           '| saved:', Math.max(0, totalErrors - fixCalls),
-          this.absentFilesTelemetry(restoredPaths, recreatedPaths));
+          absentFilesTelemetry(restoredPaths, recreatedPaths));
         return {
           success: true,
           files: currentFiles,
@@ -204,7 +210,7 @@ export class Verifier {
       if (attempt === MAX_RETRIES) {
         console.log('[Verifier] telemetry | totalErrors:', totalErrors, '| fixCalls:', fixCalls,
           '| saved:', Math.max(0, totalErrors - fixCalls),
-          this.absentFilesTelemetry(restoredPaths, recreatedPaths), '| result: FAILED');
+          absentFilesTelemetry(restoredPaths, recreatedPaths), '| result: FAILED');
         // Fallo definitivo: devolvemos el original intacto, así que no hay
         // reparaciones persistibles (repairedFiles vacío).
         return {
@@ -232,7 +238,10 @@ export class Verifier {
       if (batches.length === 0) {
         // Ningún error resolvió a un archivo reparable: caer al fix de archivo
         // único histórico (usa regex sobre el texto) como último recurso.
-        const fixed = await this.fixError(errorMsg, errorDetail, currentFiles, signal, designContext, blueprint);
+        const fixed = await this.fixError(
+          errorMsg, errorDetail, currentFiles, signal, designContext, blueprint,
+          new Set(restoredPaths)
+        );
         if (fixed) {
           fixCalls += 1;
           currentFiles = fixed;
@@ -249,19 +258,32 @@ export class Verifier {
         // una reinvención (rutas y dependencias que el original no tenía).
         // Lo reponemos tal cual y el fixBatch ya lo ve presente, así que sólo
         // los ausentes que NUNCA existieron llegan al modelo bajo la regla 4.
-        const restore = this.restoreErasedFromOriginal(batch, currentFiles, originalFiles);
+        const restore = planDeterministicRestore(batch, currentFiles, originalFiles);
         if (restore.restored.length > 0) {
           currentFiles = restore.files;
           for (const path of restore.restored) {
             if (!restoredPaths.includes(path)) restoredPaths.push(path);
           }
           console.log('[Verifier] restored_files=[' + restore.restored.join(',') +
-            '] (deterministic, exact content from originalFiles)');
+            '] (deterministic, exact content from originalFiles)' +
+            (restore.skipModel ? ' | batch repaired with no model call' : ''));
         }
+
+        // La reposición resolvió TODOS los errores del lote: no queda nada que
+        // reparar y la llamada al modelo deja de ser inútil para pasar a ser
+        // peligrosa. El modelo recibiría un "Cannot resolve" cuya causa ya no
+        // existe, sin bloque del módulo repuesto (ya está presente, así que no
+        // entra en `missingRefs` ni en `known`) y con la regla 5 —quitar la
+        // referencia— como única salida aparente. Saltamos el fix: el recompile
+        // del siguiente intento es quien confirma la reparación.
+        if (restore.skipModel) continue;
 
         const before = currentFiles;
         const fixed = await this.fixBatch(
-          batch, before, originalFiles, signal, designContext, blueprint
+          batch, before, originalFiles, signal, designContext, blueprint,
+          // Todo lo restaurado en este verify —no sólo en este lote— viaja como
+          // protegido: la restauración es imborrable durante el resto del run.
+          new Set(restoredPaths)
         );
         fixCalls += 1;
         if (fixed) {
@@ -288,24 +310,6 @@ export class Verifier {
       recreatedPaths,
       restoredPaths,
     };
-  }
-
-  /**
-   * Sufijo de telemetría para los módulos ausentes que el verify repuso.
-   * Distingue las dos vías con nombres distintos, porque el coste y la
-   * fiabilidad no son los mismos: `restored_files` es contenido EXACTO del
-   * proyecto repuesto sin llamar al modelo; `recreated_files` es contenido
-   * que escribió el modelo para un módulo que nunca existió. Cadena vacía
-   * cuando no hubo ninguno de los dos, así que el log de siempre no cambia.
-   */
-  private static absentFilesTelemetry(
-    restored: string[],
-    recreated: string[]
-  ): string {
-    const parts: string[] = [];
-    if (restored.length > 0) parts.push(`restored_files=[${restored.join(',')}]`);
-    if (recreated.length > 0) parts.push(`recreated_files=[${recreated.join(',')}]`);
-    return parts.length > 0 ? `| ${parts.join(' ')}` : '';
   }
 
   /**
@@ -423,95 +427,6 @@ export class Verifier {
   }
 
   /**
-   * ARCHIVOS AUSENTES citados por el error — el agujero que dejaba fuera
-   * `referencedProjectFiles`.
-   *
-   * Un delete excesivo del Architect borra un módulo que otros archivos siguen
-   * importando; el compile falla con `Cannot resolve "@/components/X" from
-   * "src/pages/Index.tsx"`. Ese path NO está en `files`, así que
-   * `referencedProjectFiles` lo descartaba (`content == null` → continue) y
-   * nunca entraba en el Set `known` del merge: cuando el modelo RECREABA el
-   * archivo — que es la reparación correcta, porque la regla 2 le prohíbe
-   * borrar el import — su bloque se tiraba en silencio y el siguiente compile
-   * repetía el mismo error hasta agotar los intentos.
-   *
-   * Resolvemos el specifier a los paths que el compilador habría probado y los
-   * declaramos ESCRIBIBLES. `universe` es el mapa PREVIO al intent (originalFiles):
-   * si el archivo existía antes, sabemos su path exacto — es el que el plan
-   * borró — y aceptamos sólo ese; si nunca existió, aceptamos los candidatos
-   * derivados del import (no son rutas inventadas por el modelo: salen del
-   * código).
-   */
-  private static missingReferencedPaths(
-    batch: RepairBatch,
-    files: Map<string, string>,
-    universe: Map<string, string>
-  ): { path: string; writable: string[]; wasDeleted: boolean }[] {
-    const seen = new Set<string>();
-    const out: { path: string; writable: string[]; wasDeleted: boolean }[] = [];
-
-    for (const err of batch.errors) {
-      const message = err.message ?? '';
-      const importer = err.file ?? null;
-      for (const m of message.matchAll(/"([^"]+)"|'([^']+)'/g)) {
-        const raw = (m[1] ?? m[2] ?? '').trim().replace(/^virtual:/, '');
-        const candidates = candidatePathsFor(raw, importer);
-        if (candidates.length === 0) continue;
-        // El módulo existe (por cualquiera de sus formas): no falta nada.
-        if (candidates.some((c) => files.has(c))) continue;
-        const historical = candidates.find((c) => universe.has(c));
-        const chosen = historical ?? candidates[0];
-        if (seen.has(chosen)) continue;
-        seen.add(chosen);
-        out.push({
-          path: chosen,
-          writable: historical ? [historical] : candidates,
-          wasDeleted: historical != null,
-        });
-      }
-    }
-
-    return out;
-  }
-
-  /**
-   * RESTAURACIÓN DETERMINISTA de los archivos que el plan borró de más.
-   *
-   * `missingReferencedPaths` ya distingue los dos casos de módulo ausente:
-   * `wasDeleted` marca el que existía en el mapa PREVIO al intent (`universe`
-   * = originalFiles) y por tanto tiene contenido conocido, byte a byte. Para
-   * ése la reparación correcta no es generativa: se repone el original y se
-   * acabó. Pasarlo por el modelo bajo la regla 4 produce un archivo
-   * PLAUSIBLE pero distinto — con rutas que no existen y dependencias nuevas —
-   * cuando la fuente de la verdad estaba disponible.
-   *
-   * Los ausentes que nunca existieron (`wasDeleted === false`) NO se tocan
-   * aquí: no hay nada que restaurar y siguen su camino al modelo.
-   *
-   * Devuelve un mapa nuevo sólo si hubo algo que restaurar (si no, el mismo
-   * que entró) más la lista de paths repuestos.
-   */
-  private static restoreErasedFromOriginal(
-    batch: RepairBatch,
-    files: Map<string, string>,
-    universe: Map<string, string>
-  ): { files: Map<string, string>; restored: string[] } {
-    const restored: string[] = [];
-    let out = files;
-
-    for (const ref of this.missingReferencedPaths(batch, files, universe)) {
-      if (!ref.wasDeleted) continue; // nunca existió → regla 4, lo escribe el modelo
-      const original = universe.get(ref.path);
-      if (original == null) continue; // defensivo: wasDeleted implica que está
-      if (out === files) out = new Map<string, string>(files);
-      out.set(ref.path, original);
-      restored.push(ref.path);
-    }
-
-    return { files: out, restored };
-  }
-
-  /**
    * CAMBIO 2 — reparación por lotes. Repara TODOS los errores de una misma
    * clase en una única llamada LLM, pasando los contenidos completos de cada
    * archivo implicado. El modelo devuelve cada archivo corregido delimitado; los
@@ -526,7 +441,12 @@ export class Verifier {
     universe: Map<string, string>,
     signal?: AbortSignal,
     designContext: string = '',
-    blueprint: string = ''
+    blueprint: string = '',
+    // Paths que el verify repuso byte a byte desde `universe`. Son la fuente de
+    // la verdad del proyecto, no un borrador: viajan como contexto de SOLO
+    // LECTURA y salen de `known`, así que ninguna vía —culpado, referenciado o
+    // ausente— permite al modelo pisarlos.
+    protectedPaths: ReadonlySet<string> = new Set()
   ): Promise<Map<string, string> | null> {
     if (batch.files.length === 0) return null;
 
@@ -541,11 +461,41 @@ export class Verifier {
     // namespace virtual ("virtual:src/pages/Foo.tsx") — y los adjuntamos al
     // prompt para que la regla de dirección (corregir X, no sus importadores)
     // sea EJECUTABLE y no una instrucción imposible de cumplir.
-    const refFiles = this.referencedProjectFiles(batch, files);
+    const allRefFiles = this.referencedProjectFiles(batch, files);
     // Y los citados que NO existen (borrados por un delete excesivo o nunca
     // escritos): sin declararlos escribibles, la recreación que devuelve el
     // modelo se descarta en el merge y el compile repite el mismo error.
-    const missingRefs = this.missingReferencedPaths(batch, files, universe);
+    const allMissingRefs = missingReferencedPaths(batch, files, universe);
+
+    // ALCANCE DE ESCRITURA — lo restaurado es contexto, no material editable.
+    //
+    // Un archivo repuesto vuelve a estar en `files`, y en cuanto un error
+    // POSTERIOR cita su path resuelto ("No matching export in
+    // "virtual:src/pages/Menu.tsx" for import "Menu"") entraba como bloque
+    // editable: la regla 3 manda corregir ESE archivo, el merge aceptaba la
+    // reescritura y la restauración quedaba pisada por contenido reinventado.
+    // Sale de `known` por todas las vías; el modelo sigue viéndolo para poder
+    // corregir a su consumidor.
+    const {
+      editableBatchFiles,
+      editableRefs: refFiles,
+      readOnlyRefs,
+      missingRefs,
+      known,
+    } = repairWriteScope({
+      batchFiles: batch.files,
+      refFiles: allRefFiles,
+      missingRefs: allMissingRefs,
+      protectedPaths,
+    });
+
+    // Nada editable en el lote: todo lo implicado es contenido restaurado, que
+    // no se toca. No hay reparación que pedir.
+    if (editableBatchFiles.length === 0 && refFiles.length === 0 && missingRefs.length === 0) {
+      console.log('[Verifier] fixBatch skipped: every implicated file is restored ' +
+        '(read-only): ' + readOnlyRefs.map((f) => f.path).join(', '));
+      return null;
+    }
 
     const systemPrompt =
       `You are an expert React + TypeScript engineer fixing compilation errors.\n` +
@@ -594,7 +544,7 @@ export class Verifier {
 
     // Preferir el contenido VIVO del map (un lote previo en este mismo intento
     // pudo tocar un archivo compartido); caer al snapshot del agrupador si falta.
-    const fileBlocks = batch.files
+    const fileBlocks = editableBatchFiles
       .map((f) => `===FILE: ${f.path}===\n${files.get(f.path) ?? f.content}\n===END===`)
       .join('\n\n');
 
@@ -604,6 +554,23 @@ export class Verifier {
     const refBlocks = refFiles
       .map((f) => `===FILE: ${f.path}===\n${f.content}\n===END===`)
       .join('\n\n');
+
+    // CONTEXTO DE SOLO LECTURA — lo que el verify repuso desde el mapa previo.
+    // Marcadores distintos a propósito: no son bloques editables, y así ni el
+    // modelo los confunde con material a devolver ni la telemetría del server
+    // los cuenta como enviados.
+    const readOnlyBlocks = readOnlyRefs
+      .map((f) => `===READ-ONLY FILE: ${f.path}===\n${files.get(f.path) ?? f.content}\n===END===`)
+      .join('\n\n');
+    const readOnlyNote = readOnlyRefs.length > 0
+      ? `${readOnlyRefs.map((f) => f.path).join(', ')} ${readOnlyRefs.length === 1 ? 'was' : 'were'} ` +
+        `RESTORED verbatim from this project's state before the change: that content is the ` +
+        `source of truth and is already correct. ${readOnlyRefs.length === 1 ? 'It is' : 'They are'} ` +
+        `READ-ONLY CONTEXT — do NOT return a ===FILE:=== block for ` +
+        `${readOnlyRefs.length === 1 ? 'it' : 'them'}, and do not rewrite, shorten or ` +
+        `"improve" ${readOnlyRefs.length === 1 ? 'it' : 'them'}. If the mismatch is between one of ` +
+        `these files and the code that uses it, fix the CONSUMER so it matches the restored file.\n\n`
+      : '';
 
     // Los ausentes no pueden llevar bloque (no hay contenido): van nombrados,
     // con la instrucción explícita de recrearlos en ese path exacto.
@@ -637,7 +604,9 @@ export class Verifier {
       `Repair by ADDING what is missing, never by removing what is used.\n\n` +
       directionNote +
       missingNote +
-      `FILES:\n${fileBlocks}${refBlocks ? `\n\n${refBlocks}` : ''}\n\n` +
+      readOnlyNote +
+      `FILES:\n${fileBlocks}${refBlocks ? `\n\n${refBlocks}` : ''}` +
+      `${readOnlyBlocks ? `\n\n${readOnlyBlocks}` : ''}\n\n` +
       `Return the complete corrected content of every file, each wrapped in its ` +
       `===FILE: <path>=== / ===END=== markers:`;
 
@@ -705,8 +674,9 @@ export class Verifier {
       // marcadores → tratar la respuesta entera como ese archivo.
       // (con refFiles presentes la respuesta cruda es ambigua: podría ser
       // cualquiera de los archivos, así que el fallback se desactiva).
-      if (parsed.size === 0 && batch.files.length === 1 && refFiles.length === 0 && missingRefs.length === 0) {
-        const only = batch.files[0].path;
+      if (parsed.size === 0 && editableBatchFiles.length === 1 && refFiles.length === 0 &&
+          missingRefs.length === 0 && readOnlyRefs.length === 0) {
+        const only = editableBatchFiles[0].path;
         const newFiles = new Map<string, string>(files);
         newFiles.set(only, this.stripCodeFences(text));
         return newFiles;
@@ -717,28 +687,18 @@ export class Verifier {
         return null;
       }
 
-      const newFiles = new Map<string, string>(files);
-      // Aceptamos los archivos del lote MÁS los referenciados por el error: sin
-      // esto último, la corrección dirigida al archivo X (añadir su export) se
-      // descartaría en silencio y el repair volvería a quedarse sin salida
-      // válida distinta de borrar el import.
-      const known = new Set([
-        ...batch.files.map((f) => f.path),
-        ...refFiles.map((f) => f.path),
-        // Los ausentes citados por el error: aceptar su recreación es la única
-        // salida que no pasa por amputar el import.
-        ...missingRefs.flatMap((r) => r.writable),
-      ]);
-      for (const [path, content] of parsed) {
-        // Sólo aceptamos archivos que estaban en el lote (o citados por el
-        // error) — el modelo no debe inventar rutas nuevas.
-        if (!known.has(path)) continue;
-        // Una recreación vacía no repara nada y deja un módulo sin exports:
-        // mejor dejar que el error persista y sea visible.
-        if (!files.has(path) && content.trim() === '') continue;
-        newFiles.set(path, content);
+      // `known` (de repairWriteScope) acepta los archivos del lote MÁS los
+      // referenciados por el error —sin eso último, la corrección dirigida al
+      // archivo X se descartaba en silencio— y los ausentes citados, cuya
+      // recreación es la única salida que no pasa por amputar el import. Lo
+      // restaurado NO está: el modelo no puede pisarlo.
+      const merged = mergeRepairBlocks(files, parsed, known);
+      const clobbered = merged.rejected.filter((p) => protectedPaths.has(p));
+      if (clobbered.length > 0) {
+        console.warn('[Verifier] repair tried to rewrite restored file(s), rejected:',
+          clobbered.join(', '));
       }
-      return newFiles;
+      return merged.files;
     } catch (e) {
       if (isAbortError(e)) throw e; // cancelación: no seguir intentando.
       console.error('[Verifier] Batch fix attempt failed:', e);
@@ -769,10 +729,20 @@ export class Verifier {
     files: Map<string, string>,
     signal?: AbortSignal,
     designContext: string = '',
-    blueprint: string = ''
+    blueprint: string = '',
+    // Mismo blindaje que en fixBatch: este camino mergea SIN filtro `known`
+    // (escribe directamente el archivo culpado), así que un path restaurado
+    // aquí sería otra vía para pisar la restauración.
+    protectedPaths: ReadonlySet<string> = new Set()
   ): Promise<Map<string, string> | null> {
     const errorFile = this.identifyErrorFile(error, errorDetail, files);
     const fileContent = errorFile ? (files.get(errorFile) ?? '') : '';
+
+    if (errorFile && protectedPaths.has(errorFile)) {
+      console.warn('[Verifier] fixError skipped: ' + errorFile +
+        ' was restored from the original and is read-only');
+      return null;
+    }
 
     if (!errorFile || !fileContent) {
       console.warn(
