@@ -144,6 +144,20 @@ test('incidente Menú: la sección de la landing se rechaza, los otros dos delet
   assert.deepEqual(rejected[0].importers, ['src/pages/Index.tsx']);
 });
 
+test('la telemetría registra los targets EXPANDIDOS, no sólo la semilla', () => {
+  // El log es lo único consultable por SQL, y auditar un delete exige ver la
+  // autorización COMPLETA: con sólo la semilla, MenuCategorySection.tsx aparece
+  // borrada sin que nada en la fila explique por qué, aunque el usuario nunca la
+  // nombró. El sufijo lleva el conjunto que de verdad autorizó los borrados.
+  const { targets } = runDeleteSteps(incidentPlan(), bakeryOriginalFiles(), [
+    'src/pages/Menu.tsx',
+  ]);
+  assert.equal(
+    deletionTargetsTelemetry(targets),
+    ' [TARGETS:src/components/sections/MenuCategorySection.tsx,src/pages/Menu.tsx]'
+  );
+});
+
 test('el descableado planificado no autoriza: MenuSection sigue rechazada aunque el modify ya corriera', () => {
   const originalFiles = bakeryOriginalFiles();
   // Mapa POST-plan: los 3 modifies ya se aplicaron, Index.tsx ya no importa

@@ -79,6 +79,14 @@ export interface ImplementerResult {
    * list is the only trace the intent leaves behind.
    */
   rejectedDeletes: RejectedDelete[];
+  /**
+   * Los deletion_targets EFECTIVOS: las semillas que el Architect declaró (las
+   * que existen en el mapa original) más las huérfanas exclusivas pre-plan que
+   * el guard expandió a partir de ellas. Es el conjunto que realmente autorizó
+   * los deletes, no el que pidió el modelo, así que es el que tiene sentido
+   * auditar: el orquestador lo escribe como [TARGETS:...] en el intent log.
+   */
+  deletionTargets: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -424,7 +432,14 @@ export class Implementer {
     }
 
     const completedSteps = sorted.filter(s => completed.has(s.order));
-    return { files: modifiedFiles, failedSteps, skippedSteps, completedSteps, cancelled, deletedPaths, rejectedDeletes };
+    return {
+      files: modifiedFiles, failedSteps, skippedSteps, completedSteps, cancelled,
+      deletedPaths, rejectedDeletes,
+      // Expandidos, no las semillas: la expansión es la mitad determinista de
+      // la autorización y sin ella el log no explica por qué cayó un archivo
+      // que el usuario nunca nombró (MenuCategorySection en el caso real).
+      deletionTargets: [...expandedTargets].sort(),
+    };
   }
 
   private static truncateFileContent(content: string, maxChars = 18000): string {

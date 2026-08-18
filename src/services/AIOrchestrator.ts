@@ -1347,7 +1347,10 @@ export class AIOrchestrator {
     // la autorización, y auditar un borrado exige poder contrastar qué se borró
     // contra qué nombró el usuario. Mismo patrón de sufijo que [PARTIAL:...],
     // [DELETE_REJECTED:...] y [RESTORED:...] — sin tocar columnas ni enums.
-    const targetsMark = deletionTargetsTelemetry(deletionTargets);
+    // implResult.deletionTargets, no la lista del Architect: lo que autoriza un
+    // delete es el conjunto EXPANDIDO (semillas + huérfanas exclusivas pre-plan),
+    // y es el único que explica por qué cayó un archivo que el usuario no nombró.
+    const targetsMark = deletionTargetsTelemetry(implResult.deletionTargets);
     const rejectedDeleteMark = rejectedDeletes.length > 0
       ? ` [DELETE_REJECTED:${rejectedDeletes.map(r => `${r.path}:${r.reason}`).join(',')}]`
       : '';
