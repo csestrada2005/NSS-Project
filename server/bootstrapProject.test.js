@@ -13,6 +13,30 @@ test('EXEC_SQL_DDL: el format() interno usa la variable `query`', () => {
   assert.match(EXEC_SQL_DDL, /format\('select .*\(%s\) t',\s*query\)/);
 });
 
+// La rama de excepción para statements no row-returning (DDL, DML sin
+// RETURNING). Congelación ESTÁTICA sobre el string del DDL: la validación
+// funcional viva llega en el checkpoint contra la fixture.
+test('EXEC_SQL_DDL: existe la rama exception when others', () => {
+  assert.match(EXEC_SQL_DDL, /^\s*exception\s*$/m);
+  assert.match(EXEC_SQL_DDL, /when others then/);
+});
+
+test('EXEC_SQL_DDL: la rama ejecuta el query directo, sin envoltorio', () => {
+  assert.match(EXEC_SQL_DDL, /when others then[\s\S]*?execute query;/);
+  // El `execute query` directo va DESPUÉS del format() envuelto, no en su lugar.
+  assert.ok(EXEC_SQL_DDL.indexOf('execute format(') < EXEC_SQL_DDL.indexOf('execute query;'));
+});
+
+test("EXEC_SQL_DDL: la rama devuelve '[]'::jsonb", () => {
+  assert.match(EXEC_SQL_DDL, /when others then[\s\S]*?execute query;[\s\S]*?return '\[\]'::jsonb;/);
+});
+
+test('EXEC_SQL_DDL: los dos caminos devuelven jsonb (contrato de retorno único)', () => {
+  assert.match(EXEC_SQL_DDL, /returns jsonb/);
+  const returns = EXEC_SQL_DDL.match(/^\s*return .*/gm) ?? [];
+  assert.equal(returns.length, 2, 'se esperan exactamente dos return: SELECT y rama de excepción');
+});
+
 test('EXEC_SQL_DDL: security definer con search_path fijado a public', () => {
   assert.match(EXEC_SQL_DDL, /security definer/);
   assert.match(EXEC_SQL_DDL, /set search_path = public/);

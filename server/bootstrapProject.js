@@ -26,6 +26,16 @@
  * Confirmado empíricamente contra producción: PostgREST devolvía
  * PGRST202 "Searched for the function public.exec_sql with parameter query".
  * El format() interno usa esa misma variable.
+ *
+ * Dos caminos, no uno:
+ *   1. El format() envuelve la consulta en un subselect y agrega las filas a
+ *      jsonb. Es el camino de SELECT — el que alimentan /query y /schema.
+ *   2. Un statement que NO devuelve filas (DDL, o DML sin RETURNING) no cabe
+ *      dentro de ese subselect y revienta al envolverlo. La rama `exception
+ *      when others` lo vuelve a ejecutar directo y devuelve '[]'::jsonb.
+ *      Un error de verdad (sintaxis, permisos) se vuelve a levantar en ese
+ *      `execute query` y sale a la superficie tal cual: la rama no traga
+ *      errores, solo reintenta sin el envoltorio.
  */
 export const EXEC_SQL_DDL = `
 create or replace function public.exec_sql(query text)
@@ -40,6 +50,11 @@ begin
   execute format('select coalesce(jsonb_agg(row_to_json(t)), ''[]''::jsonb) from (%s) t', query)
     into result;
   return coalesce(result, '[]'::jsonb);
+exception
+  when others then
+    -- El statement no devuelve filas: ejecutarlo directo, sin envoltorio.
+    execute query;
+    return '[]'::jsonb;
 end;
 $exec_sql$;
 
