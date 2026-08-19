@@ -47,6 +47,7 @@ as $exec_sql$
 declare
   result jsonb;
 begin
+  query := regexp_replace(query, '[;\\s]+$', '');
   execute format('select coalesce(jsonb_agg(row_to_json(t)), ''[]''::jsonb) from (%s) t', query)
     into result;
   return coalesce(result, '[]'::jsonb);
