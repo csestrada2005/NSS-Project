@@ -13,6 +13,41 @@ test('EXEC_SQL_DDL: el format() interno usa la variable `query`', () => {
   assert.match(EXEC_SQL_DDL, /format\('select .*\(%s\) t',\s*query\)/);
 });
 
+// Normalización del input: un ";" final rompe el subquery del format() y cae en
+// la rama `exception`, que re-ejecuta descartando filas y devuelve '[]'.
+// Confirmado empíricamente: "select 1 as ok" → 1 fila; "select 1 as ok;" → 0.
+// String.raw es OBLIGATORIO en la expectativa: escrito '[;\s]+$' en un template
+// normal, JS colapsa \s a s y la expectativa compararía contra [;s]+$ — un DDL
+// que borraría las «s» finales de cualquier query (`from users` → `from user`).
+const NORMALIZE_LINE = String.raw`query := regexp_replace(query, '[;\s]+$', '')`;
+
+test("EXEC_SQL_DDL: normaliza el input — strip de ';' y whitespace finales", () => {
+  // La expectativa misma lleva la barra invertida literal, no una `s` suelta.
+  assert.equal(
+    [...NORMALIZE_LINE].filter(c => c === '\\').length,
+    1,
+    'la expectativa perdió la barra invertida: no está congelando lo que cree'
+  );
+  assert.ok(
+    EXEC_SQL_DDL.includes(NORMALIZE_LINE),
+    'falta la normalización de ";" finales en el cuerpo de exec_sql'
+  );
+  assert.ok(
+    !EXEC_SQL_DDL.includes('[;s]+$'),
+    'el DDL emitido colapsó \\s a s: strip de «s» finales, no de whitespace'
+  );
+});
+
+test('EXEC_SQL_DDL: la normalización es la primera operación sobre query', () => {
+  const iNormalize = EXEC_SQL_DDL.indexOf(NORMALIZE_LINE);
+  const iFormat = EXEC_SQL_DDL.indexOf('execute format(');
+  assert.notEqual(iNormalize, -1);
+  assert.ok(
+    iNormalize < iFormat,
+    'la normalización debe ir antes del wrap en format(), no después'
+  );
+});
+
 // La rama de excepción para statements no row-returning (DDL, DML sin
 // RETURNING). Congelación ESTÁTICA sobre el string del DDL: la validación
 // funcional viva llega en el checkpoint contra la fixture.
