@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import { Play, Trash2, History } from 'lucide-react';
-import { SupabaseService } from '@/services/SupabaseService';
 import { projectDBService } from '@/services/ProjectDBService';
 
 const HISTORY_KEY = 'forge_sql_history';
@@ -40,48 +39,29 @@ export function SQLEditor({ projectId }: SQLEditorProps = {}) {
 
   const runQuery = async () => {
     if (!query.trim()) return;
+
+    // El SQL de un proyecto se ejecuta SIEMPRE contra la base del proyecto
+    // GENERADO, vía projectDBService → /api/db/:projectId/query. No hay fallback
+    // al cliente Supabase PRINCIPAL de Wyrd: sin projectId no se ejecuta nada.
+    if (!resolvedProjectId) {
+      setResults(null);
+      setRowCount(null);
+      setError('SQL Editor requires a project database (no project id resolved)');
+      return;
+    }
+
     setIsRunning(true);
     setError(null);
     setResults(null);
     setRowCount(null);
 
     try {
-      if (resolvedProjectId) {
-        // Use project-scoped DB via server API
-        const { data, error: qError } = await projectDBService.query(resolvedProjectId, query);
-        if (qError) throw new Error(String(qError));
-        const rows = Array.isArray(data) ? data : [];
-        setResults(rows);
-        setRowCount(rows.length);
-      } else {
-        // Fall back to main Supabase client
-        const supabase = SupabaseService.getInstance().client;
-        try {
-          // DEUDA: este rpc apunta al cliente Supabase PRINCIPAL de Wyrd, no al
-          // proyecto generado. exec_sql solo existe (y solo debe existir) en los
-          // proyectos generados — ver server/bootstrapProject.js. Aquí siempre
-          // fallará con PGRST202 y caerá al fallback .from(table) de abajo.
-          // Este camino solo se toma cuando no hay projectId resuelto; el arreglo
-          // real es exigir projectId, no instalar exec_sql en el principal.
-          const { data, error: rpcErr } = await supabase.rpc('exec_sql', { query });
-          if (rpcErr) throw rpcErr;
-          const rows = Array.isArray(data) ? data : [];
-          setResults(rows);
-          setRowCount(rows.length);
-        } catch (e: any) {
-          const match = query.match(/FROM\s+([^\s;]+)/i);
-          if (match) {
-            const table = match[1].replace(/[^a-zA-Z0-9_]/g, '');
-            const { data, error: selErr } = await supabase.from(table).select('*').limit(50);
-            if (selErr) throw selErr;
-            const rows = Array.isArray(data) ? data : [];
-            setResults(rows);
-            setRowCount(rows.length);
-          } else {
-            throw e;
-          }
-        }
-      }
+      // Use project-scoped DB via server API
+      const { data, error: qError } = await projectDBService.query(resolvedProjectId, query);
+      if (qError) throw new Error(String(qError));
+      const rows = Array.isArray(data) ? data : [];
+      setResults(rows);
+      setRowCount(rows.length);
 
       saveToHistory(query);
       setHistory(loadHistory());
