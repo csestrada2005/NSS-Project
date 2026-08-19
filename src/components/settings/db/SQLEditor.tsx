@@ -57,6 +57,12 @@ export function SQLEditor({ projectId }: SQLEditorProps = {}) {
         // Fall back to main Supabase client
         const supabase = SupabaseService.getInstance().client;
         try {
+          // DEUDA: este rpc apunta al cliente Supabase PRINCIPAL de Wyrd, no al
+          // proyecto generado. exec_sql solo existe (y solo debe existir) en los
+          // proyectos generados — ver server/bootstrapProject.js. Aquí siempre
+          // fallará con PGRST202 y caerá al fallback .from(table) de abajo.
+          // Este camino solo se toma cuando no hay projectId resuelto; el arreglo
+          // real es exigir projectId, no instalar exec_sql en el principal.
           const { data, error: rpcErr } = await supabase.rpc('exec_sql', { query });
           if (rpcErr) throw rpcErr;
           const rows = Array.isArray(data) ? data : [];
