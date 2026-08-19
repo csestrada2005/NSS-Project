@@ -302,6 +302,16 @@ app.post('/api/credits/webhook', express.raw({ type: 'application/json' }), asyn
 });
 
 
+// ---------------------------------------------------------------------------
+// Health / build identity. Registered BEFORE the /api/* auth middleware on
+// purpose: this is the only unauthenticated /api route. Read-only, no secrets —
+// it exposes the commit Render built from so a local checkout can be compared
+// against what is actually serving traffic.
+// ---------------------------------------------------------------------------
+app.get('/api/health', (req, res) => {
+  res.json({ commit: process.env.RENDER_GIT_COMMIT || null });
+});
+
 // Apply auth middleware to all /api/* routes
 app.use("/api/", requireAuth);
 
