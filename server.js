@@ -11,6 +11,7 @@ import { compileFiles } from './server/compiler.js';
 import { searchUnsplash } from './server/unsplash.js';
 import { computeCreditsFromTokens } from './server/credits.js';
 import { createIntentAccumulator } from './server/intentAccumulator.js';
+import { bootstrapProject } from './server/bootstrapProject.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -36,6 +37,9 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 // Unsplash access key — used ONLY here on the server to build a per-project pool
 // of real, described photos. It must never reach the repo or the client.
 const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY;
+// TEMPORAL — eliminar tras validación H (junto con POST /api/admin/bootstrap-db/:projectRef).
+// Secreto compartido que autoriza el rebootstrap manual de un proyecto generado.
+const ADMIN_BOOTSTRAP_SECRET = process.env.ADMIN_BOOTSTRAP_SECRET;
 
 // Add static serving for vendor directory (e.g. for iframe preview dependencies)
 app.use('/vendor', (req, res, next) => {
@@ -310,6 +314,42 @@ app.post('/api/credits/webhook', express.raw({ type: 'application/json' }), asyn
 // ---------------------------------------------------------------------------
 app.get('/api/health', (req, res) => {
   res.json({ commit: process.env.RENDER_GIT_COMMIT || null });
+});
+
+// ---------------------------------------------------------------------------
+// TEMPORAL — eliminar tras validación H.
+//
+// Reinstala el contrato SQL (exec_sql) en un proyecto YA generado cuyo bootstrap
+// falló durante /api/db/provision. Existe porque un bootstrap fallido no borra el
+// proyecto: lo deja vivo y reintentable.
+//
+// Se registra ANTES de app.use('/api/', requireAuth) a propósito: no lo invoca un
+// usuario con sesión, lo invoca un operador con el secreto compartido. Esa es
+// justamente la razón por la que es temporal.
+// ---------------------------------------------------------------------------
+app.post('/api/admin/bootstrap-db/:projectRef', async (req, res) => {
+  if (!ADMIN_BOOTSTRAP_SECRET) {
+    return res.status(503).json({ error: 'Admin bootstrap not configured' });
+  }
+  const provided = req.headers['x-admin-secret'];
+  const expected = Buffer.from(ADMIN_BOOTSTRAP_SECRET);
+  const given = Buffer.from(typeof provided === 'string' ? provided : '');
+  if (given.length !== expected.length || !crypto.timingSafeEqual(given, expected)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  if (!SUPABASE_MANAGEMENT_TOKEN) {
+    return res.status(503).json({ error: 'Database provisioning not configured' });
+  }
+
+  const { projectRef } = req.params;
+  try {
+    await bootstrapProject(projectRef, SUPABASE_MANAGEMENT_TOKEN);
+    return res.json({ ok: true, ref: projectRef });
+  } catch (bootErr) {
+    // Mensaje COMPLETO de la Management API solo en el log server-side.
+    console.error(`[Admin Bootstrap] [BOOTSTRAP_FAILED:${projectRef}]`, bootErr.message);
+    return res.status(502).json({ error: 'Bootstrap failed', ref: projectRef });
+  }
 });
 
 // Apply auth middleware to all /api/* routes
@@ -1542,6 +1582,25 @@ app.post('/api/db/provision/:projectId', async (req, res) => {
       })
       .eq('id', projectId);
 
+    // Bootstrap del contrato SQL (exec_sql) en el proyecto recién generado.
+    // Un proyecto sin exec_sql está provisionado pero INUTILIZABLE: /query y
+    // /schema fallan con PGRST202. Por eso el fallo es un HTTP real y no un 200
+    // con el error escondido en el body. El proyecto NO se borra: queda vivo y
+    // reintentable vía POST /api/admin/bootstrap-db/:projectRef.
+    try {
+      await bootstrapProject(ref, SUPABASE_MANAGEMENT_TOKEN);
+    } catch (bootErr) {
+      // Mensaje COMPLETO de la Management API solo en el log server-side.
+      console.error(`[DB Provision] [BOOTSTRAP_FAILED:${ref}]`, bootErr.message);
+      return res.status(502).json({
+        // Sanitizado: el cliente recibe el ref para poder reintentar, nunca el
+        // detalle crudo de la Management API.
+        error: 'Database provisioned but bootstrap failed',
+        ref,
+        provisioned: false,
+      });
+    }
+
     res.json({ projectUrl, anonKey, provisioned: true });
   } catch (err) {
     console.error('[DB Provision] Error:', err);
@@ -1610,12 +1669,22 @@ app.get('/api/db/:projectId/schema', async (req, res) => {
     const projectClient = createClient(project.supabase_project_url, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    const { data, error } = await projectClient
-      .from('information_schema.columns')
-      .select('table_name, column_name, data_type, is_nullable')
-      .eq('table_schema', 'public')
-      .order('table_name')
-      .order('ordinal_position');
+    // information_schema NO es alcanzable por PostgREST: `.from('information_schema.columns')`
+    // se interpreta como una tabla llamada así DENTRO de public y devuelve
+    // PGRST205 ("Could not find the table 'public.information_schema.columns'").
+    // Confirmado empíricamente contra producción. La lectura del catálogo va por
+    // exec_sql, que sí corre SQL de verdad.
+    //
+    // El shape { data: Column[], error } se preserva intacto porque SchemaViewer.tsx
+    // consume exactamente eso (table_name, column_name, data_type, is_nullable).
+    const { data, error } = await projectClient.rpc('exec_sql', {
+      query: `
+        select table_name, column_name, data_type, is_nullable
+        from information_schema.columns
+        where table_schema = 'public'
+        order by table_name, ordinal_position
+      `,
+    });
     res.json({ data, error });
   } catch (err) {
     console.error('[DB Schema] Error:', err);

@@ -61,6 +61,12 @@ export class SupabaseService {
 
   /**
    * Executes SQL using Supabase via RPC 'exec_sql'.
+   *
+   * DEUDA: `this.client` es el cliente Supabase PRINCIPAL de Wyrd. exec_sql solo
+   * existe (y solo debe existir) en los proyectos generados — ver
+   * server/bootstrapProject.js —, así que esta llamada falla con PGRST202 contra
+   * el principal. El arreglo es enrutar por /api/db/:projectId/query como hace
+   * ProjectDBService, no instalar exec_sql en el proyecto principal.
    */
   public async executeSQL(sql: string): Promise<void> {
     console.log('[SupabaseService] Executing SQL via RPC exec_sql...');
