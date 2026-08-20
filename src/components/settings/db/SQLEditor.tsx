@@ -19,6 +19,34 @@ function saveToHistory(query: string) {
   localStorage.setItem(HISTORY_KEY, JSON.stringify(hist.slice(0, 10)));
 }
 
+/**
+ * Convierte cualquier forma de error en texto legible.
+ *
+ * El endpoint POST /api/db/:projectId/query reenvía el error tal cual llega:
+ * puede ser un string (ramas HTTP del server: 'Query failed',
+ * 'Project database not provisioned'...) o el objeto PostgREST de supabase-js
+ * ({ message, details, hint, code }) cuando exec_sql levanta un error real de
+ * Postgres. Interpolar ese objeto directamente producía "[object Object]" y se
+ * perdía el mensaje.
+ */
+function formatQueryError(err: unknown): string {
+  if (typeof err === 'string') return err;
+
+  const message = (err as { message?: unknown } | null | undefined)?.message;
+  if (typeof message === 'string' && message) {
+    const { details, hint } = (err ?? {}) as { details?: unknown; hint?: unknown };
+    return [message, typeof details === 'string' ? details : null, typeof hint === 'string' ? hint : null]
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  try {
+    return JSON.stringify(err) ?? String(err);
+  } catch {
+    return String(err);
+  }
+}
+
 interface SQLEditorProps {
   projectId?: string | null;
 }
@@ -58,15 +86,15 @@ export function SQLEditor({ projectId }: SQLEditorProps = {}) {
     try {
       // Use project-scoped DB via server API
       const { data, error: qError } = await projectDBService.query(resolvedProjectId, query);
-      if (qError) throw new Error(String(qError));
+      if (qError) throw new Error(formatQueryError(qError));
       const rows = Array.isArray(data) ? data : [];
       setResults(rows);
       setRowCount(rows.length);
 
       saveToHistory(query);
       setHistory(loadHistory());
-    } catch (e: any) {
-      setError(e.message ?? 'Query failed');
+    } catch (e: unknown) {
+      setError(formatQueryError(e) || 'Query failed');
     } finally {
       setIsRunning(false);
     }
@@ -144,7 +172,7 @@ export function SQLEditor({ projectId }: SQLEditorProps = {}) {
 
       {/* Error */}
       {error && (
-        <div className="bg-red-900/20 border border-red-700/40 rounded-lg p-3 text-sm text-red-400">
+        <div className="bg-red-900/20 border border-red-700/40 rounded-lg p-3 text-sm text-red-400 whitespace-pre-wrap">
           {error}
         </div>
       )}
