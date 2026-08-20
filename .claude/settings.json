@@ -1,5 +1,16 @@
 {
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 900,
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" || exit 1; if [ -d node_modules/esbuild ] && [ -f node_modules/.package-lock.json ]; then echo \"node_modules already populated - skipping npm ci\"; else echo \"node_modules missing or incomplete - running npm ci\"; npm ci --no-audit --no-fund; fi"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash|Grep",
