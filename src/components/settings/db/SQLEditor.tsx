@@ -25,9 +25,9 @@ function saveToHistory(query: string) {
  * El endpoint POST /api/db/:projectId/query reenvía el error tal cual llega:
  * puede ser un string (ramas HTTP del server: 'Query failed',
  * 'Project database not provisioned'...) o el objeto PostgREST de supabase-js
- * ({ message, details, hint, code }) cuando exec_sql levanta un error real de
- * Postgres. Interpolar ese objeto directamente producía "[object Object]" y se
- * perdía el mensaje.
+ * ({ message, details, hint, code }) cuando la RPC que ejecuta el SQL
+ * server-side levanta un error real de Postgres. Interpolar ese objeto
+ * directamente producía "[object Object]" y se perdía el mensaje.
  */
 function formatQueryError(err: unknown): string {
   if (typeof err === 'string') return err;
