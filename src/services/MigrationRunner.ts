@@ -18,11 +18,17 @@
  * Por eso el veredicto se toma comparando el schema ANTES contra el schema
  * DESPUÉS, que es la única evidencia que no puede mentir:
  *
- *   diff vacío = FALLO.
+ *   diff vacío = NUNCA un éxito.
  *
  * Un DDL que se aplicó de verdad mueve information_schema. Si no lo movió, o
- * bien no se ejecutó, o bien la sentencia era un no-op — y ninguna de las dos
- * cosas es un éxito que podamos reportar.
+ * bien no se ejecutó, o bien tocó algo que el instrumento no mide — y ninguna
+ * de las dos cosas es un éxito que podamos reportar.
+ *
+ * Las dos NO son el mismo fallo, y el log las separa (ver src/utils/ddlVerdict.js):
+ *   [DDL_FAILED:…]      no se aplicó, y lo sabemos: la base lo rechazó.
+ *   [DDL_UNVERIFIED:…]  pudo aplicarse; el instrumento no alcanza a confirmarlo.
+ * Ambas cierran el intent en outcome='failed' — el sesgo fail-closed no cambia,
+ * sólo deja de mezclar dos diagnósticos opuestos bajo una misma etiqueta.
  *
  * LO QUE NO HACE
  *  - No auto-provisiona. Un proyecto sin base de datos no gana una porque haya
@@ -37,6 +43,7 @@
 import { SupabaseService } from './SupabaseService';
 import { projectDBService } from './ProjectDBService';
 import { AIOrchestrator } from './AIOrchestrator';
+import { UNVERIFIED, ddlVerdict, sanitizeReason } from '../utils/ddlVerdict.js';
 
 /** Una fila del schema, tal como la sirve GET /api/db/:projectId/schema. */
 interface SchemaColumn {
@@ -46,7 +53,13 @@ interface SchemaColumn {
   is_nullable: string;
 }
 
-export type MigrationOutcome = 'applied' | 'failed' | 'skipped';
+/**
+ * 'unverified' NO es un valor de enum de forge_intent_log —allí el outcome sigue
+ * siendo 'failed'— sino el estado que este runner devuelve a su caller, que en
+ * Cirugía 2 será el botón de aprobación. "Puede que se aplicara, míralo" y "no
+ * se aplicó, arregla el SQL" piden mensajes distintos en la UI.
+ */
+export type MigrationOutcome = 'applied' | 'failed' | 'skipped' | 'unverified';
 
 export interface MigrationResult {
   outcome: MigrationOutcome;
@@ -82,12 +95,6 @@ function describeError(e: unknown): string {
   } catch {
     return String(e);
   }
-}
-
-/** Recorta un motivo para que quepa en el sufijo de telemetría. */
-function trimReason(reason: string): string {
-  const flat = reason.replace(/[\s\]]+/g, ' ').trim();
-  return flat.length > 120 ? `${flat.slice(0, 117)}...` : flat;
 }
 
 export class MigrationRunner {
@@ -137,7 +144,7 @@ export class MigrationRunner {
       if (error) throw error;
       projectRef = (data?.supabase_project_ref as string | null) ?? null;
     } catch (e) {
-      const reason = trimReason(describeError(e));
+      const reason = sanitizeReason(describeError(e));
       console.error('[MigrationRunner] no se pudo leer el proyecto:', e);
       await close(` [DDL_FAILED:project_lookup:${reason}]`, 'failed', reason, []);
       return { outcome: 'failed', reason: `project_lookup:${reason}`, tables: [] };
@@ -170,7 +177,7 @@ export class MigrationRunner {
       if (error) throw error;
       sql = (data?.content as string | null) ?? '';
     } catch (e) {
-      const reason = trimReason(describeError(e));
+      const reason = sanitizeReason(describeError(e));
       console.error('[MigrationRunner] no se pudo leer la migración:', e);
       await close(` [DDL_FAILED:missing_file:${reason}]`, 'failed', reason, []);
       return { outcome: 'failed', reason: `missing_file:${reason}`, tables: [] };
@@ -194,7 +201,7 @@ export class MigrationRunner {
       if (snapshot.error) throw snapshot.error;
       before = asColumns(snapshot.data);
     } catch (e) {
-      const reason = trimReason(describeError(e));
+      const reason = sanitizeReason(describeError(e));
       console.error('[MigrationRunner] snapshot previo fallido:', e);
       await close(` [DDL_FAILED:schema_before:${reason}]`, 'failed', reason, []);
       return { outcome: 'failed', reason: `schema_before:${reason}`, tables: [] };
@@ -210,9 +217,9 @@ export class MigrationRunner {
     let transportError: string | null = null;
     try {
       const response = await projectDBService.query(projectId, sql);
-      if (response.error) transportError = trimReason(describeError(response.error));
+      if (response.error) transportError = sanitizeReason(describeError(response.error));
     } catch (e) {
-      transportError = trimReason(describeError(e));
+      transportError = sanitizeReason(describeError(e));
       console.error('[MigrationRunner] la ejecución lanzó:', e);
     }
 
@@ -225,10 +232,15 @@ export class MigrationRunner {
       if (snapshot.error) throw snapshot.error;
       after = asColumns(snapshot.data);
     } catch (e) {
-      const reason = trimReason(describeError(e));
-      console.error('[MigrationRunner] snapshot posterior fallido:', e);
-      await close(` [DDL_FAILED:schema_after:${reason}]`, 'failed', reason, []);
-      return { outcome: 'failed', reason: `schema_after:${reason}`, tables: [] };
+      // UNVERIFIED, no FAILED: para cuando esto ocurre el DDL YA se ejecutó. Lo
+      // que falló es el instrumento, no la migración, y llamarlo 'fallo' manda
+      // a alguien a arreglar un SQL que puede estar perfectamente aplicado.
+      // (El snapshot PREVIO sí es un fallo limpio: allí cortamos antes de
+      // ejecutar, así que no se aplicó nada y lo sabemos.)
+      const reason = sanitizeReason(describeError(e));
+      console.error('[MigrationRunner] snapshot posterior fallido — veredicto no verificable:', e);
+      await close(` [DDL_UNVERIFIED:schema_after:${reason}]`, 'failed', reason, []);
+      return { outcome: UNVERIFIED, reason: `schema_after:${reason}`, tables: [] };
     }
 
     // ------------------------------------------------------------------
@@ -239,12 +251,16 @@ export class MigrationRunner {
     // GET /api/db/:projectId/schema, y no se abren endpoints nuevos). Eso ve
     // tablas y columnas, que es lo que produce el 99% del DDL generado —
     // CREATE TABLE, ADD COLUMN, ALTER TYPE. NO ve índices, políticas RLS ni
-    // grants. Una migración que SÓLO habilita RLS o crea una policy se
-    // reportará como [DDL_FAILED:no_schema_change] aunque se haya aplicado.
+    // grants. Una migración que SÓLO habilita RLS o crea una policy no moverá
+    // el diff aunque se haya aplicado.
     // Es el sesgo deliberadamente seguro: preferimos un falso negativo
     // ("revísalo") a un falso positivo, que es el fallo silencioso que esta
-    // cirugía existe para matar. Ampliar el snapshot pide ampliar lo que
-    // devuelve el endpoint de schema, y eso es otra cirugía.
+    // cirugía existe para matar. Pero ese caso NO se etiqueta [DDL_FAILED:] —
+    // sale como [DDL_UNVERIFIED:no_schema_change], porque "puede que se
+    // aplicara y no lo veo" y "la base lo rechazó" son diagnósticos opuestos y
+    // consultarlos por SQL tiene que poder distinguirlos. Ampliar el snapshot
+    // pide ampliar lo que devuelve el endpoint de schema, y eso es otra
+    // cirugía.
     // ------------------------------------------------------------------
     const beforeKeys = new Set(before.map(columnKey));
     const afterKeys = new Set(after.map(columnKey));
@@ -258,25 +274,31 @@ export class MigrationRunner {
     }
     const tables = [...touched].sort();
 
-    if (tables.length === 0) {
-      // Diff vacío = FALLO, siempre, aunque la ejecución no reportara error.
-      // Ese es justo el caso del fallo silencioso original: retorno limpio,
-      // base intacta.
-      const reason = transportError ? `error:${transportError}` : 'no_schema_change';
-      console.error('[MigrationRunner] el schema no cambió — la migración NO se aplicó:', reason);
-      await close(` [DDL_FAILED:${reason}]`, 'failed', reason, []);
-      return { outcome: 'failed', reason, tables: [] };
+    // ------------------------------------------------------------------
+    // 7. Veredicto y telemetría. La taxonomía vive en src/utils/ddlVerdict.js,
+    //    pura y con tests, porque la etiqueta ES el diagnóstico: nadie va a
+    //    mirar la base para saber qué pasó, van a mirar forge_intent_log.
+    // ------------------------------------------------------------------
+    const verdict = ddlVerdict(tables, transportError);
+
+    if (verdict.verdict === UNVERIFIED) {
+      console.warn(
+        '[MigrationRunner] el schema no cambió y la base no se quejó — veredicto no verificable ' +
+        '(no-op, o RLS/índice/grant fuera de lo que mide information_schema.columns).'
+      );
+      await close(verdict.mark, verdict.outcome, verdict.reason, []);
+      return { outcome: UNVERIFIED, reason: verdict.reason ?? undefined, tables: [] };
     }
 
-    // El schema cambió: la migración se aplicó. Si además hubo un error de
-    // transporte, el DDL era multi-sentencia y alguna cayó — se aplicó en
-    // parte, y el log tiene que decirlo en vez de cantar victoria limpia.
-    const mark = transportError
-      ? ` [DDL_APPLIED:${tables.join(',')}] [DDL_FAILED:partial:${transportError}]`
-      : ` [DDL_APPLIED:${tables.join(',')}]`;
+    if (verdict.outcome === 'failed') {
+      console.error('[MigrationRunner] la migración NO se aplicó:', verdict.reason);
+      await close(verdict.mark, verdict.outcome, verdict.reason, []);
+      return { outcome: 'failed', reason: verdict.reason ?? undefined, tables: [] };
+    }
+
     console.log('[MigrationRunner] migración aplicada, tablas tocadas:', tables.join(', '));
-    await close(mark, 'success', transportError, [migrationPath]);
-    return { outcome: 'applied', reason: transportError ? 'partial' : undefined, tables };
+    await close(verdict.mark, verdict.outcome, verdict.reason, [migrationPath]);
+    return { outcome: 'applied', reason: verdict.reason ?? undefined, tables };
   }
 }
 
