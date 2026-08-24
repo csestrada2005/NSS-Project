@@ -189,12 +189,197 @@ function preview(text) {
 // una restricción o un default, no la columna ni sus filas.
 const ALTER_DROP_NON_COLUMN = /^(?:constraint|default|not\s+null|identity|expression|generated)\b/i;
 
+// ---------------------------------------------------------------------------
+// EL OBJETO AFECTADO
+//
+// El modal de confirmación de Cirugía 2 no se contenta con un "¿seguro?": pide
+// que el usuario TECLEE el nombre de lo que va a destruir. Para poder pedirlo
+// hay que saberlo, y saberlo es leer el nombre que la sentencia nombra.
+//
+// Se lee sobre el texto ORIGINAL, no sobre la máscara: maskSqlNoise vacía el
+// interior de las comillas, y una tabla puede llamarse "user orders". Es seguro
+// porque para cuando llegamos aquí el VERBO de la sentencia ya se decidió sobre
+// la máscara — esto sólo lee el nombre que viene detrás.
+// ---------------------------------------------------------------------------
+
+/**
+ * Palabras que se saltan entre el verbo y el nombre, por familia de sentencia.
+ * No son "palabras reservadas": son exactamente las que pueden aparecer ANTES
+ * del identificador en cada forma que este módulo marca.
+ */
+const SKIP_WORDS = {
+  drop: new Set([
+    'table', 'view', 'materialized', 'index', 'sequence', 'type', 'schema',
+    'function', 'procedure', 'routine', 'trigger', 'policy', 'rule', 'domain',
+    'extension', 'foreign', 'aggregate', 'cast', 'collation', 'server',
+    'tablespace', 'statistics', 'publication', 'subscription', 'database',
+    'concurrently', 'if', 'exists', 'only',
+  ]),
+  truncate: new Set(['table', 'only']),
+  delete: new Set(['from', 'only']),
+  alter: new Set(['table', 'materialized', 'view', 'foreign', 'if', 'exists', 'only']),
+};
+
+/**
+ * Lee un identificador (posiblemente cualificado y/o entrecomillado) a partir
+ * de `from` y devuelve su ÚLTIMO segmento: de `public."user orders"` sale
+ * `user orders`, que es lo que el usuario reconoce y lo que va a teclear.
+ *
+ * @param {string} text
+ * @param {number} from
+ * @returns {string} '' si ahí no empieza un identificador
+ */
+function readQualifiedName(text, from) {
+  let i = from;
+  let last = '';
+
+  for (;;) {
+    while (i < text.length && /\s/.test(text[i])) i++;
+
+    if (text[i] === '"') {
+      let j = i + 1;
+      let name = '';
+      while (j < text.length) {
+        if (text[j] === '"') {
+          if (text[j + 1] === '"') { name += '"'; j += 2; continue; }
+          j++;
+          break;
+        }
+        name += text[j];
+        j++;
+      }
+      last = name;
+      i = j;
+    } else {
+      const m = /^[A-Za-z_][A-Za-z0-9_$]*/.exec(text.slice(i));
+      if (!m) return last;
+      last = m[0];
+      i += m[0].length;
+    }
+
+    // ¿Sigue cualificando? `esquema . tabla` puede llevar espacios alrededor.
+    let k = i;
+    while (k < text.length && /\s/.test(text[k])) k++;
+    if (text[k] !== '.') return last;
+    i = k + 1;
+  }
+}
+
+/**
+ * El objeto que una sentencia destructiva nombra.
+ *
+ * Casos con nombre indirecto: `DROP POLICY p ON t` (y trigger/rule) destruyen
+ * algo DE la tabla `t`, así que el nombre que importa es el de la tabla — es lo
+ * que el usuario reconoce como "lo afectado".
+ *
+ * Se devuelve el PRIMER nombre que la sentencia menciona: `DROP TABLE a, b`
+ * reporta `a`. El modal enseña además las sentencias EXACTAS marcadas, así que
+ * lo que se destruye entero sigue estando a la vista aunque lo tecleado sea un
+ * solo nombre.
+ *
+ * @param {string} text sentencia original (o su cabecera, para ALTER)
+ * @param {'drop'|'truncate'|'delete'|'alter'} family
+ * @returns {string} '' cuando no se puede identificar
+ */
+function statementTarget(text, family) {
+  const skip = SKIP_WORDS[family];
+  if (!skip) return '';
+
+  // Saltar el verbo y las palabras que puedan preceder al nombre.
+  let i = 0;
+  const verb = /^[A-Za-z_][A-Za-z0-9_$]*/.exec(text);
+  if (verb) i = verb[0].length;
+
+  for (;;) {
+    while (i < text.length && /\s/.test(text[i])) i++;
+    const word = /^[A-Za-z_][A-Za-z0-9_$]*/.exec(text.slice(i));
+    if (!word || !skip.has(word[0].toLowerCase())) break;
+    i += word[0].length;
+  }
+
+  const name = readQualifiedName(text, i);
+  if (!name) return '';
+
+  // `DROP POLICY p ON t` → la tabla, no la política.
+  if (family === 'drop') {
+    const rest = text.slice(i);
+    const on = /^\s*(?:"[^"]*"|[A-Za-z_][A-Za-z0-9_$]*)\s+on\s+/i.exec(rest);
+    if (on) {
+      const owner = readQualifiedName(rest, on[0].length);
+      if (owner) return owner;
+    }
+  }
+
+  return name;
+}
+
+/**
+ * Nombres únicos de los objetos afectados por unos hallazgos, en orden de
+ * aparición. Los que no se pudieron identificar no aparecen: un nombre vacío no
+ * es algo que se pueda teclear para confirmar.
+ *
+ * @param {{ target?: string }[]} findings
+ * @returns {string[]}
+ */
+export function destructiveTargets(findings) {
+  const out = [];
+  for (const finding of findings ?? []) {
+    const target = typeof finding?.target === 'string' ? finding.target.trim() : '';
+    if (target && !out.includes(target)) out.push(target);
+  }
+  return out;
+}
+
+/**
+ * El nombre que el modal destructivo EXIGE teclear: el del PRIMER objeto que se
+ * destruye, en orden de archivo.
+ *
+ * Un lote puede tocar varios objetos —un DROP COLUMN en `a` y un DROP POLICY
+ * sobre `b`— y la confirmación es UNA. La regla es "el primero", no "todos" ni
+ * "uno cualquiera", por dos razones: es determinista (el orden de los hallazgos
+ * lo es), y el modal enseña ADEMÁS todas las sentencias marcadas y lista los
+ * demás objetos afectados, así que lo que se destruye entero está a la vista
+ * aunque lo tecleado sea un solo nombre. Teclear el nombre no es una contraseña:
+ * es lo que obliga a leer.
+ *
+ * Devuelve '' cuando no hay hallazgo alguno, y también cuando ninguno se pudo
+ * nombrar — y entonces el modal no ofrece confirmar: ver isTargetConfirmed.
+ *
+ * @param {{ target?: string }[]} findings
+ * @returns {string}
+ */
+export function requiredTarget(findings) {
+  return destructiveTargets(findings)[0] ?? '';
+}
+
+/**
+ * ¿Lo tecleado confirma el objeto exigido?
+ *
+ * Ignora espacios de borde y mayúsculas: Postgres pliega a minúsculas los
+ * identificadores sin comillas, así que exigir la caja exacta sería exigir algo
+ * que ni la base distingue. Lo que se comprueba es que el usuario haya leído y
+ * escrito ESE nombre — otro objeto afectado del mismo lote no vale.
+ *
+ * Con `required` vacío devuelve SIEMPRE false: un destructivo que no sabemos
+ * nombrar no se confirma por aquí (fail-closed), y desde luego no con la cadena
+ * vacía.
+ *
+ * @param {string} typed
+ * @param {string} required
+ * @returns {boolean}
+ */
+export function isTargetConfirmed(typed, required) {
+  const expected = String(required ?? '').trim().toLowerCase();
+  if (expected.length === 0) return false;
+  return String(typed ?? '').trim().toLowerCase() === expected;
+}
+
 /**
  * Hallazgos destructivos en un texto SQL. Determinista y sin red: mismo texto,
  * mismos hallazgos, en el mismo orden (por posición en el archivo).
  *
  * @param {string} sql
- * @returns {{ kind: string, statement: string, line: number, match: string }[]}
+ * @returns {{ kind: string, statement: string, line: number, match: string, target: string }[]}
  */
 export function findDestructiveDDL(sql) {
   const src = String(sql ?? '');
@@ -212,6 +397,7 @@ export function findDestructiveDDL(sql) {
         statement: preview(stmt.text),
         line: lineAt(src, stmt.offset),
         match: preview(stmt.text.slice(0, 60)),
+        target: statementTarget(stmt.text, 'drop'),
       });
       continue;
     }
@@ -223,6 +409,7 @@ export function findDestructiveDDL(sql) {
         statement: preview(stmt.text),
         line: lineAt(src, stmt.offset),
         match: preview(stmt.text.slice(0, 60)),
+        target: statementTarget(stmt.text, 'truncate'),
       });
       continue;
     }
@@ -236,6 +423,7 @@ export function findDestructiveDDL(sql) {
           statement: preview(stmt.text),
           line: lineAt(src, stmt.offset),
           match: preview(stmt.text.slice(0, 60)),
+          target: statementTarget(stmt.text, 'delete'),
         });
       }
       continue;
@@ -256,6 +444,9 @@ export function findDestructiveDDL(sql) {
           statement: preview(stmt.text),
           line: lineAt(src, stmt.offset + hit.index),
           match: preview(`${hit[0]}${rest.slice(0, 40)}`),
+          // La columna se va, pero lo afectado —y lo que el usuario reconoce—
+          // es la TABLA de la que se va.
+          target: statementTarget(stmt.text, 'alter'),
         });
       }
     }

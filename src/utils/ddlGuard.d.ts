@@ -21,6 +21,13 @@ export interface DestructiveFinding {
   line: number;
   /** The matched fragment, for a short human-readable label. */
   match: string;
+  /**
+   * Name of the object the statement destroys — the last segment, unquoted, of
+   * the FIRST name it mentions (`DROP POLICY p ON t` reports `t`). This is what
+   * the destructive-DDL modal asks the user to type. Empty when the statement
+   * is too mangled to name one, which the modal treats as fail-closed.
+   */
+  target: string;
 }
 
 export interface SqlStatement {
@@ -43,3 +50,12 @@ export function findDestructiveDDL(sql: string): DestructiveFinding[];
 
 /** True when the SQL contains at least one destructive operation. */
 export function isDestructiveDDL(sql: string): boolean;
+
+/** Unique, non-empty targets of the given findings, in order of appearance. */
+export function destructiveTargets(findings: { target?: string }[]): string[];
+
+/** The name the destructive modal requires typing: first target, file order. */
+export function requiredTarget(findings: { target?: string }[]): string;
+
+/** Trim- and case-insensitive match; always false when `required` is empty. */
+export function isTargetConfirmed(typed: string, required: string): boolean;
