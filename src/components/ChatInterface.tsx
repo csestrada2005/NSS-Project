@@ -1,6 +1,13 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Send, Bot, Loader2, CheckCircle, ChevronDown, ChevronUp, Wand2, Square } from 'lucide-react';
+import {
+  ddlProposedMark,
+  resolveDdlProposals,
+  stripDdlMarks,
+  type DdlProposal,
+} from '@/utils/ddlProposalState.js';
+import { DDLApprovalButton } from './forge/DDLApprovalButton';
 
 export interface Message {
   role: 'user' | 'assistant';
@@ -45,6 +52,13 @@ interface ChatInterfaceProps {
   // por el flujo normal del chat y se notifica al padre para que lo limpie.
   injectedMessage?: string | null;
   onInjectedConsumed?: () => void;
+  // CIRUGÍA 2 — aprobación de DDL inline. El botón que aplica una migración vive
+  // dentro del mensaje que la propuso, así que necesita saber contra qué
+  // proyecto aplicaría y si esta sesión puede escribir en él. Sin projectId el
+  // botón se pinta deshabilitado: el estado de la propuesta sigue siendo
+  // legible, pero no hay dónde ejecutarla.
+  projectId?: string | null;
+  isReadOnly?: boolean;
 }
 
 function BuildProgress({
@@ -164,6 +178,8 @@ export function ChatInterface({
   isCancelling = false,
   injectedMessage,
   onInjectedConsumed,
+  projectId,
+  isReadOnly = false,
 }: ChatInterfaceProps) {
   // Rehidratación: si el padre trae historial (sobreviviente de un cierre del
   // modal), arrancamos con él. Sólo si está vacío usamos el saludo inicial, de
@@ -422,10 +438,30 @@ export function ChatInterface({
       }
 
       const { content, warning, errorType, errorDetail, suggestedAction } = buildAssistantMessage(result);
+      // CIRUGÍA 2 — la marca de propuesta viaja EN EL CONTENIDO del mensaje.
+      //
+      // No es telemetría duplicada: es el único sitio donde el estado del botón
+      // sobrevive a lo que le pasa a este componente. El chat se remonta al
+      // cerrar el modal, se rehidrata desde el padre y se recarga desde
+      // forge_chat_messages tras un refresh; un `useState` con "hay una
+      // migración pendiente" muere en cualquiera de los tres. El contenido del
+      // mensaje sobrevive a los tres, porque es lo que se persiste.
+      //
+      // El formato es literalmente el mismo del sufijo de forge_intent_log
+      // (ddlProposedMark delega en migrationPath.js), y la marca se OCULTA al
+      // renderizar: lo que el usuario ve es el botón, no el corchete.
+      const proposedMark = result.success ? ddlProposedMark(result.modifiedFiles ?? []) : '';
       // Reportamos al padre directamente: si el modal se cerró durante el await,
       // la instancia está desmontada y setMessages sería un no-op, pero el padre
       // (montado) recibe la respuesta enriquecida completa igualmente.
-      appendMessage({ role: 'assistant', content, warning, errorType, errorDetail, suggestedAction });
+      appendMessage({
+        role: 'assistant',
+        content: `${content}${proposedMark}`,
+        warning,
+        errorType,
+        errorDetail,
+        suggestedAction,
+      });
     } catch (error) {
       clearInterval(intervalId);
       console.error('Error in chat:', error);
@@ -469,6 +505,30 @@ export function ChatInterface({
     onInjectedConsumed?.();
   }, [injectedMessage, isLoading]);
 
+  // CIRUGÍA 2 — el estado de cada propuesta de DDL, DERIVADO del historial.
+  //
+  // No hay estado propio que mantener sincronizado: se recalcula con `messages`,
+  // que es la misma lista que se rehidrata y se persiste. Por eso una propuesta
+  // ya aplicada sigue viéndose aplicada tras un refresh, y por eso llegar una
+  // propuesta nueva deja la anterior en `superseded` sin que nadie la avise.
+  //
+  // El resolutor garantiza el invariante del que depende que esto sea seguro:
+  // como mucho UNA propuesta ejecutable en todo el historial.
+  const proposalsByMessage = useMemo(() => {
+    const byMessage = new Map<number, DdlProposal[]>();
+    for (const proposal of resolveDdlProposals(messages)) {
+      const list = byMessage.get(proposal.messageIndex);
+      if (list) list.push(proposal);
+      else byMessage.set(proposal.messageIndex, [proposal]);
+    }
+    return byMessage;
+  }, [messages]);
+
+  // El historial VIVO para la re-verificación al click. Va por ref, no por
+  // valor: el botón tiene que preguntar por el estado del INSTANTE del click,
+  // no por el que se capturó al pintarlo.
+  const getMessages = () => messagesRef.current;
+
   // Índice del mensaje del asistente más reciente: sólo ese muestra su botón
   // de acción sugerida, para no disparar acciones sobre estado viejo.
   const lastAssistantIndex = messages.reduce(
@@ -502,7 +562,10 @@ export function ChatInterface({
             >
               {msg.role === 'assistant' ? (
                 <div className="text-sm leading-relaxed space-y-2 [&_h1]:text-base [&_h1]:font-bold [&_h2]:text-sm [&_h2]:font-bold [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_p]:my-1 [&_a]:underline [&_a]:text-primary [&_strong]:font-semibold [&_code]:bg-muted [&_code]:rounded [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-[0.85em] [&_pre]:bg-muted [&_pre]:rounded [&_pre]:p-2 [&_pre]:overflow-x-auto [&_pre_code]:bg-transparent [&_pre_code]:p-0">
-                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  {/* Las marcas [DDL_…] son maquinaria del botón de abajo, no
+                      texto: viven en el contenido (que se persiste) y se
+                      recortan al pintar. */}
+                  <ReactMarkdown>{stripDdlMarks(msg.content)}</ReactMarkdown>
                 </div>
               ) : (
                 msg.content
@@ -513,6 +576,21 @@ export function ChatInterface({
               {msg.errorType === 'compile_error' && msg.errorDetail && (
                 <CompileErrorDetail errorDetail={msg.errorDetail} />
               )}
+              {msg.role === 'assistant' && proposalsByMessage.get(index)?.map((proposal, nth) => (
+                <DDLApprovalButton
+                  key={`${proposal.key}#${nth}`}
+                  proposal={proposal}
+                  projectId={projectId}
+                  getMessages={getMessages}
+                  onOutcome={content => appendMessage({ role: 'assistant', content })}
+                  // Modo lectura: el endpoint ya rechaza a quien no es dueño del
+                  // proyecto, pero ofrecer el botón a quien no puede pulsarlo es
+                  // prometer algo que no va a pasar. Durante una generación
+                  // tampoco: el archivo que se aplicaría puede estar
+                  // reescribiéndose ahora mismo.
+                  disabled={isReadOnly || isLoading}
+                />
+              ))}
               {msg.role === 'assistant' && msg.suggestedAction && !isLoading && index === lastAssistantIndex && (
                 <div className="mt-2 pt-2 border-t border-border/50">
                   <button

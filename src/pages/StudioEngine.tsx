@@ -23,6 +23,7 @@ import { platformService } from '../services/PlatformService';
 import { SupabaseService } from '../services/SupabaseService';
 import { compileWithMeta, classifyCompileResult, isPreviewError, type OidMap } from '../services/BrowserCompiler';
 import { isAbortError } from '../utils/abort';
+import { ddlProposedMark } from '../utils/ddlProposalState.js';
 import { updateCode, type TargetElement } from '../utils/ast';
 import { fileSystemTreeToMap, mapToFileSystemTree } from '../utils/context';
 import type { FileSystemTree } from '@webcontainer/api';
@@ -732,9 +733,19 @@ export function StudioEngine() {
         // persiste (rehidratación al re-entrar).
         if (result?.success) {
           const summary = buildGenerationSummary(result.modifiedFiles);
-          if (summary) {
-            setChatHistory(prev => [...prev, { role: 'assistant', content: summary }]);
-            persistChatMessage('assistant', summary);
+          // CIRUGÍA 2 — la marca de propuesta de DDL también aquí. Este camino
+          // NO pasa por ChatInterface, así que una migración generada por el
+          // prompt inicial se quedaría sin botón de aprobación: el archivo
+          // escrito y ningún modo de aplicarlo, que es exactamente el silencio
+          // que estas cirugías vienen a romper. Y si el resumen sale vacío
+          // (nada que resumir salvo la migración), el mensaje se escribe
+          // igualmente: sin mensaje no hay dónde colgar el botón.
+          const proposedMark = ddlProposedMark(result.modifiedFiles);
+          const body = summary ?? (proposedMark ? 'Proyecto generado.' : null);
+          if (body) {
+            const content = `${body}${proposedMark}`;
+            setChatHistory(prev => [...prev, { role: 'assistant', content }]);
+            persistChatMessage('assistant', content);
           }
         }
       } finally {
@@ -2148,6 +2159,8 @@ export function StudioEngine() {
                   isCancelling={isCancelling}
                   injectedMessage={pendingChatSend}
                   onInjectedConsumed={() => setPendingChatSend(null)}
+                  projectId={projectId}
+                  isReadOnly={isReadOnly}
                 />
               </div>
               <div className={`w-full h-full ${activeBottomTab === 'visual' ? 'block' : 'hidden'}`}>

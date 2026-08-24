@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   findDestructiveDDL,
+  destructiveTargets,
   isDestructiveDDL,
   maskSqlNoise,
   splitStatements,
@@ -167,4 +168,66 @@ test('entrada vacía o basura no revienta ni inventa hallazgos', () => {
 test('determinismo: mismo texto, mismos hallazgos', () => {
   const sql = 'drop table a; alter table b drop column c; delete from d;';
   assert.deepEqual(findDestructiveDDL(sql), findDestructiveDDL(sql));
+});
+
+// ---------------------------------------------------------------------------
+// EL OBJETO AFECTADO (`target`) — lo que el modal de Cirugía 2 pide teclear.
+//
+// El modal destructivo no se contenta con un "¿seguro?": enseña las sentencias
+// marcadas y exige que el usuario escriba el nombre de lo que va a destruir.
+// Ese nombre sale de aquí, así que un `target` equivocado es un modal que pide
+// teclear una cosa mientras borra otra.
+// ---------------------------------------------------------------------------
+
+const targets = (sql) => findDestructiveDDL(sql).map((f) => f.target);
+
+test('el target de un DROP es el objeto, sin esquema ni adornos', () => {
+  assert.deepEqual(targets('drop table users;'), ['users']);
+  assert.deepEqual(targets('DROP TABLE IF EXISTS public.users CASCADE;'), ['users']);
+  assert.deepEqual(targets('drop materialized view mv_stats;'), ['mv_stats']);
+  assert.deepEqual(targets('drop index concurrently if exists idx_orders;'), ['idx_orders']);
+});
+
+test('DROP POLICY … ON t reporta la TABLA, que es lo afectado', () => {
+  assert.deepEqual(targets('drop policy p_read on public.orders;'), ['orders']);
+  assert.deepEqual(targets('drop trigger t_audit on orders;'), ['orders']);
+});
+
+test('el target de TRUNCATE y DELETE es la tabla que vacían', () => {
+  assert.deepEqual(targets('truncate table sessions;'), ['sessions']);
+  assert.deepEqual(targets('TRUNCATE ONLY sessions RESTART IDENTITY CASCADE;'), ['sessions']);
+  assert.deepEqual(targets('delete from carts;'), ['carts']);
+  assert.deepEqual(targets('delete from public.carts;'), ['carts']);
+});
+
+test('el target de un DROP COLUMN es la TABLA, no la columna', () => {
+  assert.deepEqual(targets('alter table public.users drop column legacy_flag;'), ['users']);
+  assert.deepEqual(targets('alter table users drop legacy_flag;'), ['users']);
+  assert.deepEqual(targets('alter table if exists only users drop column a, drop column b;'), [
+    'users',
+    'users',
+  ]);
+});
+
+test('un identificador entrecomillado conserva su nombre real', () => {
+  assert.deepEqual(targets('drop table "user orders";'), ['user orders']);
+  assert.deepEqual(targets('alter table public."user orders" drop column x;'), ['user orders']);
+});
+
+test('destructiveTargets deduplica, ordena por aparición y descarta vacíos', () => {
+  const findings = findDestructiveDDL(
+    'drop table a; truncate a; delete from b; alter table c drop column d;'
+  );
+  assert.deepEqual(destructiveTargets(findings), ['a', 'b', 'c']);
+  assert.deepEqual(destructiveTargets([{ target: '' }, { target: '  ' }, {}]), []);
+  assert.deepEqual(destructiveTargets(null), []);
+});
+
+test('el target no se inventa cuando la sentencia no nombra nada', () => {
+  // `drop table 123` no es SQL válido, pero el guard lo marca igual (arranca
+  // por el verbo destructivo) y ahí no hay identificador que leer. El modal
+  // trata un target vacío como fail-closed: no ofrece confirmación tecleada
+  // para algo que no sabe nombrar.
+  assert.deepEqual(targets('drop table 123;'), ['']);
+  assert.deepEqual(destructiveTargets(findDestructiveDDL('drop table 123;')), []);
 });

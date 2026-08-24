@@ -37,7 +37,8 @@
  *    ProjectDBService → POST /api/db/:projectId/query, que lo ejecuta
  *    server-side contra el cliente de ESE proyecto (nunca el principal).
  *  - No decide si una migración DEBE aplicarse. Eso es aprobación humana, y
- *    llega en Cirugía 2.
+ *    la pide el botón inline del chat (src/components/forge/DDLApprovalButton.tsx)
+ *    antes de llamar aquí. Este módulo ejecuta lo que ya se aprobó.
  */
 
 import { SupabaseService } from './SupabaseService';
@@ -56,9 +57,10 @@ interface SchemaColumn {
 
 /**
  * 'unverified' NO es un valor de enum de forge_intent_log —allí el outcome sigue
- * siendo 'failed'— sino el estado que este runner devuelve a su caller, que en
- * Cirugía 2 será el botón de aprobación. "Puede que se aplicara, míralo" y "no
- * se aplicó, arregla el SQL" piden mensajes distintos en la UI.
+ * siendo 'failed'— sino el estado que este runner devuelve a su caller, que es
+ * el botón de aprobación del chat. "Puede que se aplicara, míralo" y "no se
+ * aplicó, arregla el SQL" piden mensajes distintos en la UI, y el botón los
+ * da: el veredicto viaja crudo hasta el mensaje que escribe.
  */
 export type MigrationOutcome = 'applied' | 'failed' | 'skipped' | 'unverified';
 
@@ -99,6 +101,41 @@ function describeError(e: unknown): string {
 }
 
 export class MigrationRunner {
+  /**
+   * Lee el SQL de una migración desde forge_files, SIN ejecutar nada.
+   *
+   * Existe para que el botón de aprobación pueda pasar ddlGuard sobre lo que va
+   * a correr ANTES de correrlo: un DROP pide una confirmación distinta de un
+   * CREATE, y esa decisión se toma sobre el SQL de VERDAD.
+   *
+   * Lee de forge_files —no del mapa en memoria del Studio, que va con
+   * debounce— por la misma razón que applyMigration: lo que se enseña en el
+   * modal tiene que ser exactamente lo que se va a ejecutar. Son dos lecturas
+   * del mismo sitio, no una lectura y una suposición.
+   *
+   * Nunca lanza: devuelve el error para que el caller lo pinte y NO ejecute.
+   */
+  static async readMigrationSql(
+    projectId: string,
+    migrationPath: string
+  ): Promise<{ sql: string; error: string | null }> {
+    try {
+      const supabase = SupabaseService.getInstance().client;
+      const { data, error } = await supabase
+        .from('forge_files')
+        .select('content')
+        .eq('project_id', projectId)
+        .eq('path', migrationPath)
+        .single();
+      if (error) throw error;
+      const sql = (data?.content as string | null) ?? '';
+      if (!sql.trim()) return { sql: '', error: 'empty_migration' };
+      return { sql, error: null };
+    } catch (e) {
+      return { sql: '', error: sanitizeReason(describeError(e)) };
+    }
+  }
+
   /**
    * Aplica UNA migración ya persistida en forge_files contra la base del
    * proyecto generado, y registra el veredicto en forge_intent_log.
@@ -353,35 +390,4 @@ export class MigrationRunner {
       tables,
     };
   }
-}
-
-// ---------------------------------------------------------------------------
-// PIEZA D — DISPARADOR TEMPORAL.
-//
-// ⚠ TEMPORAL — SE RETIRA EN CIRUGÍA 2. ⚠
-//
-// Esto existe SÓLO para que el cable recién construido se pueda ejercitar antes
-// de que exista el botón de aprobación en el modal. En cuanto ese botón llegue
-// (Cirugía 2, apoyado en src/utils/ddlGuard.js), este bloque se borra entero.
-//
-// NO abre privilegio nuevo. SQLEditor.tsx ya deja al dueño de un proyecto correr
-// SQL arbitrario contra su propia base por la misma ruta
-// (projectDBService → POST /api/db/:projectId/query, que valida la propiedad
-// server-side con requireProjectOwnership). Esto sólo pone en consola algo que
-// ya está a un clic de distancia, y sigue pasando por exactamente los mismos
-// controles: sin sesión y sin ser dueño del proyecto, el endpoint responde igual
-// de negativamente a esta llamada que a la del editor.
-//
-// Uso:  await window.__forgeApplyMigration('<projectId>', 'supabase/migrations/<archivo>.sql')
-// ---------------------------------------------------------------------------
-declare global {
-  interface Window {
-    /** TEMPORAL (Cirugía 1). Se retira cuando exista el botón de aprobación. */
-    __forgeApplyMigration?: (projectId: string, migrationPath: string) => Promise<MigrationResult>;
-  }
-}
-
-if (typeof window !== 'undefined') {
-  window.__forgeApplyMigration = (projectId: string, migrationPath: string) =>
-    MigrationRunner.applyMigration(projectId, migrationPath);
 }
