@@ -22,6 +22,11 @@ import {
   isMigrationPath,
   resolveMigrationRenames,
 } from '../utils/migrationPath.js';
+import {
+  buildMigrationIntentParams,
+  intentLogResult,
+  type IntentLogResult,
+} from '../utils/migrationIntent.js';
 import { cachedSystem, cachedSystemBlocks } from './promptCache';
 import { DesignBriefService } from './DesignBriefService';
 import { isAbortError } from '../utils/abort';
@@ -808,13 +813,13 @@ export class AIOrchestrator {
     durationMs: number;
     requiredPatternIds?: string[];
     domain?: string;
-  }): Promise<void> {
+  }): Promise<IntentLogResult> {
     try {
       const supabase = SupabaseService.getInstance().client;
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) return intentLogResult('no_session');
 
-      await supabase.from('forge_intent_log').insert({
+      const { error } = await supabase.from('forge_intent_log').insert({
         project_id: params.projectId,
         user_id: user.id,
         user_prompt: params.prompt,
@@ -837,8 +842,15 @@ export class AIOrchestrator {
         required_pattern_ids: params.requiredPatternIds ?? [],
         domain: params.domain ?? 'general',
       });
+      // supabase-js NO lanza cuando PostgREST rechaza: devuelve `{ error }`. El
+      // valor se DEVUELVE en vez de tragarse; los callers generales lo ignoran
+      // (su comportamiento observable no cambia: se sigue sin lanzar y se sigue
+      // sin cortar el flujo), y la puerta de migraciones lo propaga porque allí
+      // la fila perdida acompaña a un DDL irreversible.
+      return intentLogResult(error);
     } catch (e) {
       console.error('[AIOrchestrator] Failed to log intent:', e);
+      return intentLogResult(e);
     }
   }
 
@@ -857,28 +869,31 @@ export class AIOrchestrator {
    * no tiene plan, ni patrones, ni intentos de compilación, así que esos campos
    * ni se exponen. El intentType queda fijado a 'database_change' porque eso es
    * literalmente lo que un DDL aplicado ES — no es un parámetro que el caller
-   * pueda equivocar.
+   * pueda equivocar. Por el mismo motivo el intentRisk tampoco se acepta: queda
+   * fijado a 'high' en src/utils/migrationIntent.js. Es riesgo DECLARADO, no
+   * clasificado — el DDL aplicado es la única operación irreversible del
+   * sistema y debe aparecer en cualquier auditoría por riesgo. Cuando era
+   * opcional nadie lo pasaba, la clave viajaba undefined, supabase-js la omitía
+   * y la columna (NOT NULL, sin default) devolvía 400: DDL aplicado sin fila.
+   *
+   * DEVUELVE la señal del insert. El caller la propaga en su reason SIN tocar
+   * el outcome: que el DDL se aplicara y que su registro llegara son dos
+   * verdades independientes.
    */
   static async logMigrationIntent(params: {
     projectId: string;
     /** user_prompt ya con su sufijo [DDL_APPLIED:...] / [DDL_FAILED:...] / [DDL_SKIPPED:...]. */
     prompt: string;
-    intentRisk?: string;
     modifiedFiles: string[];
     outcome: 'success' | 'failed';
     errorMessage?: string | null;
     durationMs: number;
-  }): Promise<void> {
-    await this.logIntent({
-      projectId: params.projectId,
-      prompt: params.prompt,
-      intentType: 'database_change',
-      intentRisk: params.intentRisk,
-      modifiedFiles: params.modifiedFiles,
-      outcome: params.outcome,
-      errorMessage: params.errorMessage ?? null,
-      durationMs: params.durationMs,
-    });
+  }): Promise<IntentLogResult> {
+    // El payload se construye en src/utils/migrationIntent.js —puro y con
+    // tests— porque el bug no estaba en el insert sino en el OBJETO: sin
+    // intentRisk, supabase-js omitía la clave, intent_risk es NOT NULL sin
+    // default y la fila no entraba. Aquí ya no hay forma de omitirla.
+    return this.logIntent(buildMigrationIntentParams(params));
   }
 
   /**

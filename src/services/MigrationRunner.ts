@@ -44,6 +44,7 @@ import { SupabaseService } from './SupabaseService';
 import { projectDBService } from './ProjectDBService';
 import { AIOrchestrator } from './AIOrchestrator';
 import { UNVERIFIED, ddlVerdict, sanitizeReason } from '../utils/ddlVerdict.js';
+import { withTelemetryFailure } from '../utils/migrationIntent.js';
 
 /** Una fila del schema, tal como la sirve GET /api/db/:projectId/schema. */
 interface SchemaColumn {
@@ -109,14 +110,24 @@ export class MigrationRunner {
     const startTime = Date.now();
     const supabase = SupabaseService.getInstance().client;
 
-    /** Cierra el intento por la única puerta de telemetría que existe. */
+    /**
+     * Cierra el intento por la única puerta de telemetría que existe y devuelve
+     * si esa telemetría LLEGÓ.
+     *
+     * El DDL aplicado y su registro son dos verdades independientes, y el
+     * resultado dice las dos: el outcome sigue saliendo del diff del schema —un
+     * apply real no se degrada a 'failed' porque su log se perdiera— y el fallo
+     * de log viaja aparte, en el reason, como `telemetry_failed:<msg>`. Callarlo
+     * es exactamente el fallo que esto repara: DDL irreversible aplicado, cero
+     * filas en forge_intent_log, nadie enterado.
+     */
     const close = async (
       mark: string,
       outcome: 'success' | 'failed',
       errorMessage: string | null,
       modifiedFiles: string[]
-    ): Promise<void> => {
-      await AIOrchestrator.logMigrationIntent({
+    ): Promise<{ ok: boolean; error?: string }> => {
+      const telemetry = await AIOrchestrator.logMigrationIntent({
         projectId,
         prompt: `Apply migration ${migrationPath}${mark}`,
         modifiedFiles,
@@ -124,6 +135,16 @@ export class MigrationRunner {
         errorMessage,
         durationMs: Date.now() - startTime,
       });
+      if (!telemetry.ok) {
+        // Mensaje COMPLETO en consola: el error de PostgREST (code/details/hint)
+        // es lo que dice por qué la fila no entró; el reason sólo lleva la
+        // versión recortada que cabe en un sufijo.
+        console.error(
+          '[MigrationRunner] la telemetría de este intento NO se registró:',
+          telemetry.error
+        );
+      }
+      return telemetry;
     };
 
     // ------------------------------------------------------------------
@@ -146,8 +167,12 @@ export class MigrationRunner {
     } catch (e) {
       const reason = sanitizeReason(describeError(e));
       console.error('[MigrationRunner] no se pudo leer el proyecto:', e);
-      await close(` [DDL_FAILED:project_lookup:${reason}]`, 'failed', reason, []);
-      return { outcome: 'failed', reason: `project_lookup:${reason}`, tables: [] };
+      const telemetry = await close(` [DDL_FAILED:project_lookup:${reason}]`, 'failed', reason, []);
+      return {
+        outcome: 'failed',
+        reason: withTelemetryFailure(`project_lookup:${reason}`, telemetry),
+        tables: [],
+      };
     }
 
     if (!projectRef) {
@@ -155,8 +180,8 @@ export class MigrationRunner {
       // outcome='failed': el DDL no se aplicó. 'skipped' no es un valor del
       // enum de forge_intent_log y R2 prohíbe añadirlo — el matiz vive en el
       // sufijo [DDL_SKIPPED:no_db], que es consultable igual.
-      await close(' [DDL_SKIPPED:no_db]', 'failed', 'no_db', []);
-      return { outcome: 'skipped', reason: 'no_db', tables: [] };
+      const telemetry = await close(' [DDL_SKIPPED:no_db]', 'failed', 'no_db', []);
+      return { outcome: 'skipped', reason: withTelemetryFailure('no_db', telemetry), tables: [] };
     }
 
     // ------------------------------------------------------------------
@@ -179,13 +204,21 @@ export class MigrationRunner {
     } catch (e) {
       const reason = sanitizeReason(describeError(e));
       console.error('[MigrationRunner] no se pudo leer la migración:', e);
-      await close(` [DDL_FAILED:missing_file:${reason}]`, 'failed', reason, []);
-      return { outcome: 'failed', reason: `missing_file:${reason}`, tables: [] };
+      const telemetry = await close(` [DDL_FAILED:missing_file:${reason}]`, 'failed', reason, []);
+      return {
+        outcome: 'failed',
+        reason: withTelemetryFailure(`missing_file:${reason}`, telemetry),
+        tables: [],
+      };
     }
 
     if (!sql.trim()) {
-      await close(' [DDL_FAILED:empty_migration]', 'failed', 'empty_migration', []);
-      return { outcome: 'failed', reason: 'empty_migration', tables: [] };
+      const telemetry = await close(' [DDL_FAILED:empty_migration]', 'failed', 'empty_migration', []);
+      return {
+        outcome: 'failed',
+        reason: withTelemetryFailure('empty_migration', telemetry),
+        tables: [],
+      };
     }
 
     // ------------------------------------------------------------------
@@ -203,8 +236,12 @@ export class MigrationRunner {
     } catch (e) {
       const reason = sanitizeReason(describeError(e));
       console.error('[MigrationRunner] snapshot previo fallido:', e);
-      await close(` [DDL_FAILED:schema_before:${reason}]`, 'failed', reason, []);
-      return { outcome: 'failed', reason: `schema_before:${reason}`, tables: [] };
+      const telemetry = await close(` [DDL_FAILED:schema_before:${reason}]`, 'failed', reason, []);
+      return {
+        outcome: 'failed',
+        reason: withTelemetryFailure(`schema_before:${reason}`, telemetry),
+        tables: [],
+      };
     }
 
     // ------------------------------------------------------------------
@@ -239,8 +276,12 @@ export class MigrationRunner {
       // ejecutar, así que no se aplicó nada y lo sabemos.)
       const reason = sanitizeReason(describeError(e));
       console.error('[MigrationRunner] snapshot posterior fallido — veredicto no verificable:', e);
-      await close(` [DDL_UNVERIFIED:schema_after:${reason}]`, 'failed', reason, []);
-      return { outcome: UNVERIFIED, reason: `schema_after:${reason}`, tables: [] };
+      const telemetry = await close(` [DDL_UNVERIFIED:schema_after:${reason}]`, 'failed', reason, []);
+      return {
+        outcome: UNVERIFIED,
+        reason: withTelemetryFailure(`schema_after:${reason}`, telemetry),
+        tables: [],
+      };
     }
 
     // ------------------------------------------------------------------
@@ -286,19 +327,31 @@ export class MigrationRunner {
         '[MigrationRunner] el schema no cambió y la base no se quejó — veredicto no verificable ' +
         '(no-op, o RLS/índice/grant fuera de lo que mide information_schema.columns).'
       );
-      await close(verdict.mark, verdict.outcome, verdict.reason, []);
-      return { outcome: UNVERIFIED, reason: verdict.reason ?? undefined, tables: [] };
+      const telemetry = await close(verdict.mark, verdict.outcome, verdict.reason, []);
+      return {
+        outcome: UNVERIFIED,
+        reason: withTelemetryFailure(verdict.reason ?? undefined, telemetry),
+        tables: [],
+      };
     }
 
     if (verdict.outcome === 'failed') {
       console.error('[MigrationRunner] la migración NO se aplicó:', verdict.reason);
-      await close(verdict.mark, verdict.outcome, verdict.reason, []);
-      return { outcome: 'failed', reason: verdict.reason ?? undefined, tables: [] };
+      const telemetry = await close(verdict.mark, verdict.outcome, verdict.reason, []);
+      return {
+        outcome: 'failed',
+        reason: withTelemetryFailure(verdict.reason ?? undefined, telemetry),
+        tables: [],
+      };
     }
 
     console.log('[MigrationRunner] migración aplicada, tablas tocadas:', tables.join(', '));
-    await close(verdict.mark, verdict.outcome, verdict.reason, [migrationPath]);
-    return { outcome: 'applied', reason: verdict.reason ?? undefined, tables };
+    const telemetry = await close(verdict.mark, verdict.outcome, verdict.reason, [migrationPath]);
+    return {
+      outcome: 'applied',
+      reason: withTelemetryFailure(verdict.reason ?? undefined, telemetry),
+      tables,
+    };
   }
 }
 
