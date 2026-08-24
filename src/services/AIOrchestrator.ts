@@ -17,6 +17,11 @@ import { REACT_TAILWIND_RULES, buildProjectContextPrefix, buildBlueprintBlock } 
 import { buildImportedByBlock } from '../utils/importGraph.js';
 import { deletionTargetsTelemetry } from '../utils/deletionGuard.js';
 import { danglingRefsTelemetry } from '../utils/danglingRefs.js';
+import {
+  ddlProposedTelemetry,
+  isMigrationPath,
+  resolveMigrationRenames,
+} from '../utils/migrationPath.js';
 import { cachedSystem, cachedSystemBlocks } from './promptCache';
 import { DesignBriefService } from './DesignBriefService';
 import { isAbortError } from '../utils/abort';
@@ -837,6 +842,45 @@ export class AIOrchestrator {
   }
 
   /**
+   * Única puerta pública a logIntent, para MigrationRunner.
+   *
+   * REGLA R4 INTACTA: logIntent sigue siendo el ÚNICO escritor de
+   * forge_intent_log — este método no inserta nada, delega. La alternativa
+   * (que MigrationRunner hiciera su propio `.insert()`) crearía un segundo
+   * escritor y con él una segunda forma de la fila: otro criterio de qué es un
+   * outcome, otro juego de columnas, otra manera de olvidarse del user_id.
+   * `grep -rn "from('forge_intent_log').insert" src/` debe seguir devolviendo
+   * exactamente una línea.
+   *
+   * La superficie es deliberadamente estrecha: la aplicación de una migración
+   * no tiene plan, ni patrones, ni intentos de compilación, así que esos campos
+   * ni se exponen. El intentType queda fijado a 'database_change' porque eso es
+   * literalmente lo que un DDL aplicado ES — no es un parámetro que el caller
+   * pueda equivocar.
+   */
+  static async logMigrationIntent(params: {
+    projectId: string;
+    /** user_prompt ya con su sufijo [DDL_APPLIED:...] / [DDL_FAILED:...] / [DDL_SKIPPED:...]. */
+    prompt: string;
+    intentRisk?: string;
+    modifiedFiles: string[];
+    outcome: 'success' | 'failed';
+    errorMessage?: string | null;
+    durationMs: number;
+  }): Promise<void> {
+    await this.logIntent({
+      projectId: params.projectId,
+      prompt: params.prompt,
+      intentType: 'database_change',
+      intentRisk: params.intentRisk,
+      modifiedFiles: params.modifiedFiles,
+      outcome: params.outcome,
+      errorMessage: params.errorMessage ?? null,
+      durationMs: params.durationMs,
+    });
+  }
+
+  /**
    * CAMBIO 4 — ¿el estado actual del proyecto compila? Compila el proyecto
    * completo vía /api/compile. Ante un error de servidor/red devolvemos false
    * (no afirmamos una salud que no pudimos verificar) para que el flujo normal
@@ -1509,11 +1553,49 @@ export class AIOrchestrator {
         ? `Completa lo que faltó: ${firstFailedStep.description}`
         : undefined;
 
-      // Notify StudioEngine about each modified file
+      // ----------------------------------------------------------------
+      // PIEZA B — timestamp determinista de migraciones. El modelo emite
+      // siempre el 20240101000000 de la documentación de Supabase, así que la
+      // segunda migración de un proyecto PISA a la primera en forge_files
+      // (clave (project_id, path)). El renombrado ocurre AQUÍ, en el cliente,
+      // contra un único instante para todo el lote: el nombre de una migración
+      // es su identidad y su orden, no un detalle cosmético, y pedirle la fecha
+      // al modelo reintroduce el fallo por otra vía (no sabe qué hora es).
+      // Sólo se renombra lo que NO existía ya: un intent que MODIFICA una
+      // migración previa debe escribir sobre ella, no duplicarla.
+      // ----------------------------------------------------------------
+      const migrationRenames = resolveMigrationRenames(diffPaths, files, Date.now());
+      if (migrationRenames.size > 0) {
+        console.log('[AIOrchestrator] migraciones renombradas al instante real:',
+          [...migrationRenames].map(([from, to]) => `${from} -> ${to}`).join(', '));
+      }
+
+      // Notify StudioEngine about each modified file. `persistedPaths` son los
+      // paths REALMENTE escritos (post-renombrado): es lo que ve el usuario, lo
+      // que viaja a modified_files y lo que MigrationRunner tendrá que leer de
+      // forge_files, así que a partir de aquí diffPaths ya no es la lista de lo
+      // persistido.
+      const persistedPaths: string[] = [];
       for (const path of diffPaths) {
         const content = finalFiles.get(path)!;
-        this.notifyFileUpdate(path, content);
+        const target = migrationRenames.get(path) ?? path;
+        this.notifyFileUpdate(target, content);
+        persistedPaths.push(target);
       }
+
+      // ----------------------------------------------------------------
+      // PIEZA A — gate de propuesta. Un intent 'database_change' que dejó al
+      // menos una migración escrita NO ha tocado la base de datos: la
+      // generación jamás ejecuta DDL. Antes, ese intent cerraba en 'success'
+      // con el archivo persistido y nada distinguía "la tabla existe" de "hay
+      // un .sql esperando a que alguien lo apruebe". La marca es ese rastro, y
+      // es lo único que este intent produce respecto de la base.
+      // Mismo mecanismo que restoredMark / danglingMark: sufijo concatenado a
+      // user_prompt, sin columnas nuevas ni valores de enum nuevos.
+      // ----------------------------------------------------------------
+      const ddlProposedMark = intent.type === 'database_change'
+        ? ddlProposedTelemetry(persistedPaths.filter(isMigrationPath))
+        : '';
 
       // Notify StudioEngine about each DELETED file. This needs its own bridge:
       // diffPaths is built by iterating finalFiles, which by definition can no
@@ -1560,7 +1642,7 @@ export class AIOrchestrator {
         // from the component registry before re-indexing, and a deleted file
         // re-indexes to nothing (finalFiles.get -> undefined), so listing it is
         // exactly how its components leave the registry.
-        await ProjectMemoryService.updateAfterChange(projectId, [...diffPaths, ...erasedPaths], finalFiles);
+        await ProjectMemoryService.updateAfterChange(projectId, [...persistedPaths, ...erasedPaths], finalFiles);
         await ProjectMemoryService.recordAction(projectId, {
           action: input.slice(0, 120),
           outcome: 'success',
@@ -1570,11 +1652,11 @@ export class AIOrchestrator {
           // PIEZA 3 — telemetría de fallo parcial: mismo patrón que
           // [CLARIFY_ASKED], sufijo en el prompt, sin tocar columnas ni enums.
           prompt: (hasPartial ? `${input} [PARTIAL:${partialOrders.join(',')}]` : input) +
-            targetsMark + rejectedDeleteMark + restoredMark + danglingMark,
+            targetsMark + rejectedDeleteMark + restoredMark + danglingMark + ddlProposedMark,
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,
-          modifiedFiles: [...diffPaths, ...erasedPaths],
+          modifiedFiles: [...persistedPaths, ...erasedPaths],
           affectedFiles: intent.affected_files,
           outcome: 'success',
           // PIEZA 4 — telemetría cableada: compiló, sin error.
@@ -1586,7 +1668,7 @@ export class AIOrchestrator {
         });
       }
 
-      this.lastModifiedFiles = diffPaths;
+      this.lastModifiedFiles = persistedPaths;
 
       // ----------------------------------------------------------------
       // PIEZA 3 — fin del éxito falso. "No files needed changing" SÓLO es
@@ -1629,7 +1711,7 @@ export class AIOrchestrator {
       }
 
       return {
-        modifiedFiles: diffPaths,
+        modifiedFiles: persistedPaths,
         steps,
         outcome: 'success',
         warning: warnings.length > 0 ? warnings.join(' ') : undefined,
