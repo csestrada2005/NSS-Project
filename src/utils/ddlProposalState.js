@@ -33,6 +33,36 @@
  * los PATHS, porque lo que tiene que resolver es "¿a qué propuesta se refiere?".
  * Compartir etiqueta volvería ambiguo un grep sobre cualquiera de los dos sitios.
  *
+ * HISTORIAL ANTERIOR A CIRUGÍA 2: NO HAY NINGUNA PROPUESTA, Y ES CORRECTO
+ * ----------------------------------------------------------------------
+ * Este módulo NO parsea las marcas de Cirugía 1, y no es un olvido: es que no
+ * hay nada que parsear. Las marcas de C1 —[DDL_PROPOSED:] incluida— se
+ * escribieron SIEMPRE en el sufijo de `user_prompt` de forge_intent_log, por
+ * AIOrchestrator.logIntent y MigrationRunner.logMigrationIntent. Ningún camino
+ * las copia a forge_chat_messages, que es la ÚNICA tabla que este módulo lee.
+ * Un chat generado antes de C2 no contiene marcas de ninguna familia.
+ *
+ * De ahí el comportamiento declarado sobre historial viejo, verificado en
+ * server/ddlProposalState.test.js:
+ *
+ *   Cero propuestas. Cero ejecutables. Ningún botón, en ningún mensaje.
+ *
+ * Lo que eso significa en la práctica, dicho sin adornos: una migración
+ * generada bajo C1 y NUNCA aplicada tampoco gana botón. Su mensaje no lleva
+ * marca, así que para este módulo no existe. El camino es pedirla otra vez por
+ * chat, lo que produce una propuesta nueva —con marca— sobre el mismo trabajo.
+ * Es la dirección segura del error: no ofrecer de más sobre datos que no
+ * podemos interpretar.
+ *
+ * Y por qué NO se parsea el formato viejo aunque apareciera: [DDL_APPLIED:] de
+ * C1 carga TABLAS (`[DDL_APPLIED:notas_c1]` nombra la tabla, no el archivo).
+ * Una propuesta se identifica por sus PATHS, así que esa marca no puede decir
+ * a qué propuesta cierra sin adivinarlo — y adivinar de qué migración habla un
+ * veredicto es justo lo que no se puede hacer sobre la única operación
+ * irreversible del sistema. Por si acaso llegara al chat por otra vía (alguien
+ * pega una línea de log), el resolutor la trata como texto: ni crea propuesta
+ * ni cierra ninguna.
+ *
  * LAS REGLAS, QUE SON DOS
  * -----------------------
  *  1. Sólo la propuesta MÁS RECIENTE del proyecto es ejecutable. Una propuesta

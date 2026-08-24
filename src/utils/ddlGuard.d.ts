@@ -53,3 +53,9 @@ export function isDestructiveDDL(sql: string): boolean;
 
 /** Unique, non-empty targets of the given findings, in order of appearance. */
 export function destructiveTargets(findings: { target?: string }[]): string[];
+
+/** The name the destructive modal requires typing: first target, file order. */
+export function requiredTarget(findings: { target?: string }[]): string;
+
+/** Trim- and case-insensitive match; always false when `required` is empty. */
+export function isTargetConfirmed(typed: string, required: string): boolean;

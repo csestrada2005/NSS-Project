@@ -31,6 +31,7 @@ import {
   TRUNCATE,
   DELETE_WITHOUT_WHERE,
   DROP_COLUMN,
+  isTargetConfirmed,
 } from '@/utils/ddlGuard.js';
 
 /** Un hallazgo destructivo, con el archivo del que salió. */
@@ -75,16 +76,17 @@ export function MigrationApplyModal({
   onConfirm,
 }: Props) {
   const isDestructive = flagged.length > 0;
-  // El objeto que hay que teclear. Si ddlGuard marcó algo destructivo pero no
-  // supo nombrarlo, no hay confirmación posible: fail-closed, ver abajo.
+  // El objeto que hay que teclear: el PRIMERO que se destruye, en orden de
+  // archivo. Un lote puede tocar varios (`targets` los trae todos, y los demás
+  // se listan bajo el input) pero la confirmación es una. Si ddlGuard marcó
+  // algo destructivo y no supo nombrarlo, `required` viene vacío y no hay
+  // confirmación posible: fail-closed, ver abajo.
   const required = targets[0] ?? '';
   const [typed, setTyped] = useState('');
 
-  // La comparación ignora mayúsculas y espacios: Postgres pliega los
-  // identificadores sin comillas a minúsculas, así que exigir la caja exacta
-  // sería exigir algo que ni la base distingue. Lo que se comprueba es que el
-  // usuario haya leído y escrito el nombre.
-  const matches = typed.trim().toLowerCase() === required.toLowerCase() && required.length > 0;
+  // La regla de coincidencia vive en ddlGuard, con tests: qué desbloquea el
+  // botón rojo no es algo que deba leerse en un JSX para saberlo.
+  const matches = isTargetConfirmed(typed, required);
   // Un destructivo sin nombre legible NO se puede confirmar aquí. Es el caso
   // que no debería darse (las cuatro formas que ddlGuard marca nombran algo);
   // si se da, la salida honesta es no ofrecer el botón, no inventarse una

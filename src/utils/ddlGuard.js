@@ -331,6 +331,50 @@ export function destructiveTargets(findings) {
 }
 
 /**
+ * El nombre que el modal destructivo EXIGE teclear: el del PRIMER objeto que se
+ * destruye, en orden de archivo.
+ *
+ * Un lote puede tocar varios objetos —un DROP COLUMN en `a` y un DROP POLICY
+ * sobre `b`— y la confirmación es UNA. La regla es "el primero", no "todos" ni
+ * "uno cualquiera", por dos razones: es determinista (el orden de los hallazgos
+ * lo es), y el modal enseña ADEMÁS todas las sentencias marcadas y lista los
+ * demás objetos afectados, así que lo que se destruye entero está a la vista
+ * aunque lo tecleado sea un solo nombre. Teclear el nombre no es una contraseña:
+ * es lo que obliga a leer.
+ *
+ * Devuelve '' cuando no hay hallazgo alguno, y también cuando ninguno se pudo
+ * nombrar — y entonces el modal no ofrece confirmar: ver isTargetConfirmed.
+ *
+ * @param {{ target?: string }[]} findings
+ * @returns {string}
+ */
+export function requiredTarget(findings) {
+  return destructiveTargets(findings)[0] ?? '';
+}
+
+/**
+ * ¿Lo tecleado confirma el objeto exigido?
+ *
+ * Ignora espacios de borde y mayúsculas: Postgres pliega a minúsculas los
+ * identificadores sin comillas, así que exigir la caja exacta sería exigir algo
+ * que ni la base distingue. Lo que se comprueba es que el usuario haya leído y
+ * escrito ESE nombre — otro objeto afectado del mismo lote no vale.
+ *
+ * Con `required` vacío devuelve SIEMPRE false: un destructivo que no sabemos
+ * nombrar no se confirma por aquí (fail-closed), y desde luego no con la cadena
+ * vacía.
+ *
+ * @param {string} typed
+ * @param {string} required
+ * @returns {boolean}
+ */
+export function isTargetConfirmed(typed, required) {
+  const expected = String(required ?? '').trim().toLowerCase();
+  if (expected.length === 0) return false;
+  return String(typed ?? '').trim().toLowerCase() === expected;
+}
+
+/**
  * Hallazgos destructivos en un texto SQL. Determinista y sin red: mismo texto,
  * mismos hallazgos, en el mismo orden (por posición en el archivo).
  *

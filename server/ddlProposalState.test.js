@@ -407,3 +407,80 @@ test('un apply con telemetría perdida se aplica igual, pero lo dice', () => {
   assert.match(content, /aplicada/i, 'el DDL se aplicó: eso no se degrada');
   assert.match(content, /telemetry_failed/, 'y el fallo de registro no se calla');
 });
+
+// ---------------------------------------------------------------------------
+// CHECKPOINT — HISTORIAL ANTERIOR A CIRUGÍA 2.
+//
+// Comportamiento DECLARADO, no accidental: sobre un chat generado antes de esta
+// cirugía el resolutor devuelve CERO propuestas y CERO ejecutables. Ningún
+// botón, en ningún mensaje.
+//
+// La razón es que no hay nada que leer. Las marcas de C1 —[DDL_PROPOSED:],
+// [DDL_APPLIED:], [DDL_FAILED:], [DDL_SKIPPED:]— se escribieron siempre en el
+// sufijo de user_prompt de forge_intent_log (AIOrchestrator.logIntent y
+// MigrationRunner.logMigrationIntent). Ningún camino las copia a
+// forge_chat_messages, que es la única tabla que este módulo lee.
+//
+// Estos tests fijan las dos mitades:
+//  (a) un chat viejo REAL (sin marcas) no produce propuesta ni botón;
+//  (b) si una marca de C1 llegara al chat por otra vía —alguien pega una línea
+//      de log— sigue siendo texto: ni crea propuesta ni cierra ninguna. No se
+//      parsea a propósito: [DDL_APPLIED:notas_c1] carga la TABLA, no el path,
+//      así que no puede decir a qué propuesta cierra sin adivinarlo.
+// ---------------------------------------------------------------------------
+
+test('CHECKPOINT pre-C2: un chat sin marcas no produce propuesta ni ejecutable', () => {
+  // Exactamente lo que C1 persistía: el texto de buildAssistantMessage, con el
+  // path de la migración VISIBLE en el cuerpo y ninguna marca.
+  const legacy = [
+    { role: 'user', content: 'crea una tabla de notas' },
+    { role: 'assistant', content: `Done. Modified: ${A}` },
+    { role: 'user', content: 'ahora ponle color al header' },
+    { role: 'assistant', content: 'Done. Modified: src/components/Header.tsx' },
+  ];
+
+  assert.deepEqual(resolveDdlProposals(legacy), []);
+  assert.equal(findExecutableProposal(legacy), null);
+});
+
+test('CHECKPOINT pre-C2: las marcas de C1 en el chat no crean propuesta', () => {
+  // [DDL_PROPOSED:] de C1 vivía en forge_intent_log; si su TEXTO apareciera en
+  // un mensaje, sí crearía propuesta (el formato es el mismo, a propósito). Lo
+  // que no puede pasar es que las marcas de VEREDICTO de C1 inventen estado.
+  const logLines = [
+    { role: 'assistant', content: 'Apply migration notas_c1.sql [DDL_APPLIED:notas_c1]' },
+    { role: 'assistant', content: '[DDL_FAILED:error: relation notas already exists]' },
+    { role: 'assistant', content: '[DDL_SKIPPED:no_db]' },
+    { role: 'assistant', content: '[DDL_UNVERIFIED:no_schema_change]' },
+  ];
+
+  assert.deepEqual(resolveDdlProposals(logLines), []);
+  assert.equal(findExecutableProposal(logLines), null);
+});
+
+test('CHECKPOINT pre-C2: una marca de veredicto de C1 no cierra una propuesta de C2', () => {
+  // El caso que importa: si [DDL_APPLIED:<tabla>] cerrara propuestas, cerraría
+  // la equivocada — no nombra ningún path. Aquí NO cierra ninguna, así que la
+  // propuesta sigue viva y visible como lo que es: pendiente.
+  const mixed = [
+    proposes(A),
+    { role: 'assistant', content: '[DDL_APPLIED:notas_c1]' },
+  ];
+  const [proposal] = resolveDdlProposals(mixed);
+
+  assert.equal(proposal.outcome, null, 'una marca de C1 no puede dar veredicto');
+  assert.equal(proposal.state, EXECUTABLE, 'sigue pendiente, que es la verdad');
+
+  // Y el veredicto de C2 sobre esa misma propuesta sí la cierra, con la marca
+  // de C1 delante sin estorbar.
+  const closed = [...mixed, resolves(OUTCOME_APPLIED, A)];
+  assert.equal(resolveDdlProposals(closed)[0].state, APPLIED);
+});
+
+test('CHECKPOINT pre-C2: el texto de una marca vieja no se toca al renderizar', () => {
+  // stripDdlMarks sólo recorta la maquinaria de C2. Una línea de log pegada por
+  // alguien es contenido del usuario, no maquinaria nuestra: se enseña tal cual
+  // en vez de mutilarla en silencio.
+  const content = 'Apply migration notas_c1.sql [DDL_APPLIED:notas_c1]';
+  assert.equal(stripDdlMarks(content), content);
+});

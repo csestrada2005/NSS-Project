@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {
   findDestructiveDDL,
   destructiveTargets,
+  requiredTarget,
+  isTargetConfirmed,
   isDestructiveDDL,
   maskSqlNoise,
   splitStatements,
@@ -230,4 +232,54 @@ test('el target no se inventa cuando la sentencia no nombra nada', () => {
   // para algo que no sabe nombrar.
   assert.deepEqual(targets('drop table 123;'), ['']);
   assert.deepEqual(destructiveTargets(findDestructiveDDL('drop table 123;')), []);
+});
+
+// ---------------------------------------------------------------------------
+// LA CONFIRMACIÓN TECLEADA — qué nombre desbloquea el botón rojo.
+//
+// Un lote destructivo puede tocar varios objetos (DROP COLUMN en `a`, DROP
+// POLICY sobre `b`) y la confirmación es UNA. La regla está aquí, y no leída de
+// un JSX, para que sea verificable: se exige el PRIMER objeto en orden de
+// archivo, y ningún otro del mismo lote sirve.
+// ---------------------------------------------------------------------------
+
+test('multi-tabla: se exige el PRIMER objeto destruido, en orden de archivo', () => {
+  const findings = findDestructiveDDL(
+    'alter table a drop column vieja;\ndrop policy p_read on b;\ntruncate c;'
+  );
+
+  assert.deepEqual(destructiveTargets(findings), ['a', 'b', 'c'], 'todos, en orden');
+  assert.equal(requiredTarget(findings), 'a', 'el que hay que teclear es el primero');
+});
+
+test('multi-tabla: otro objeto afectado del MISMO lote no confirma', () => {
+  const required = requiredTarget(
+    findDestructiveDDL('alter table a drop column vieja; drop policy p on b;')
+  );
+
+  assert.equal(isTargetConfirmed('a', required), true);
+  assert.equal(isTargetConfirmed('b', required), false, 'b se destruye, pero no es lo exigido');
+  assert.equal(isTargetConfirmed('', required), false);
+  assert.equal(isTargetConfirmed('ab', required), false);
+});
+
+test('la coincidencia ignora caja y espacios de borde, como hace Postgres', () => {
+  assert.equal(isTargetConfirmed('  USERS  ', 'users'), true);
+  assert.equal(isTargetConfirmed('Users', 'users'), true);
+  assert.equal(isTargetConfirmed('user', 'users'), false, 'parecido no es igual');
+});
+
+test('sin objeto nombrable no hay confirmación posible (fail-closed)', () => {
+  const unnameable = findDestructiveDDL('drop table 123;');
+
+  assert.equal(requiredTarget(unnameable), '');
+  // Ni la cadena vacía ni nada desbloquean un destructivo que no sabemos nombrar.
+  for (const typed of ['', '   ', '123', 'sí']) {
+    assert.equal(isTargetConfirmed(typed, ''), false, JSON.stringify(typed));
+  }
+});
+
+test('sin hallazgos no se exige nada: la confirmación destructiva no aplica', () => {
+  assert.equal(requiredTarget(findDestructiveDDL('create table users (id int);')), '');
+  assert.equal(requiredTarget([]), '');
 });
