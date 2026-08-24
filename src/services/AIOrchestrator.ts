@@ -25,6 +25,7 @@ import {
 import { cachedSystem, cachedSystemBlocks } from './promptCache';
 import { DesignBriefService } from './DesignBriefService';
 import { isAbortError } from '../utils/abort';
+import { canEnterFastLane, isSimpleEditIntent } from '../utils/laneRouting.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1197,14 +1198,23 @@ export class AIOrchestrator {
     // selection resolved to a real file (selectedElement.filePath from the oidMap);
     // without one we fall through to the simple lane rather than editing App.tsx
     // blindly.
+    //
+    // El gate vive en utils/laneRouting.js — canEnterFastLane excluye además los
+    // tipos que sólo el plan lane puede resolver (database_change: su entregable
+    // es un .sql de supabase/migrations/, y esta lane sólo toca el archivo de la
+    // selección, siempre bajo src/).
     // ------------------------------------------------------------------
     const fastLaneFilePath = (selectedElement as { filePath?: string } | null)?.filePath;
     if (
+      // `selectedElement &&` va delante para que TS lo estreche a no-nulo de cara
+      // a runFastLane; canEnterFastLane vuelve a mirarlo vía hasSelection.
       selectedElement &&
-      typeof fastLaneFilePath === 'string' &&
-      files.has(fastLaneFilePath) &&
-      (intent.type === 'style_change' || intent.risk === 'low') &&
-      !(intent.requiredPatternIds && intent.requiredPatternIds.length > 0)
+      canEnterFastLane({
+        intent,
+        hasSelection: Boolean(selectedElement),
+        selectionFileExists:
+          typeof fastLaneFilePath === 'string' && files.has(fastLaneFilePath),
+      })
     ) {
       const result = await this.runFastLane(input, files, selectedElement, signal);
       if (result.outcome === 'success' && creditUserId) {
@@ -1243,10 +1253,13 @@ export class AIOrchestrator {
     // ------------------------------------------------------------------
     // Fast path: simple/low-risk edits skip Architect + Implementer + Verifier
     // ------------------------------------------------------------------
-    const isSimpleEdit =
-      (intent.type === 'style_change' ||
-      (intent.risk === 'low' && intent.affected_files.length <= 1)) &&
-      (intent.requiredPatternIds ?? []).length === 0;
+    // El gate vive en utils/laneRouting.js — isSimpleEditIntent excluye además
+    // los tipos que sólo el plan lane puede resolver. database_change es el caso:
+    // el targeting de esta lane filtra candidatos con isSelectableSrcFile
+    // (.ts/.tsx/.js/.jsx bajo src/), así que una migración de supabase/migrations/
+    // no puede ser objetivo por construcción y el intent moriría en un clarify
+    // sin salida en vez de escribir el .sql.
+    const isSimpleEdit = isSimpleEditIntent(intent);
 
     if (isSimpleEdit && files.size > 0) {
       const result = await this.runSimpleLane(input, files, selectedElement, intent, projectId, signal, previousClarifyQuestion);
