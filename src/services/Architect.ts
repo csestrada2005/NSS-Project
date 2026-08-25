@@ -131,6 +131,11 @@ DOMAIN DATA RULE — a data file is a step, not a detail:
 - SIZE SPLIT: a section that would project past ~200 lines because of the VOLUME of its content is the signal to split it in two steps — src/data/<domain>.ts for the data, the section for the presentation that maps over it. Splitting data out is the first cut to make, before splitting subcomponents.
 - src/data/site.ts stays what it is: the single source for contact and brand facts. Domain collections get their own file next to it, never appended to site.ts.
 
+DATABASE / MIGRATION RULE — the folder is not a matter of taste:
+- Any SQL migration step MUST have file_path exactly "supabase/migrations/<timestamp>_<what_it_does>.sql" (e.g. supabase/migrations/20240101000000_create_orders.sql). Never src/db/, never db/, never a bare migrations/ folder. That prefix is what makes the file a migration for the rest of the system; anywhere else it is an inert text file.
+- Do not worry about the timestamp being accurate: it is rewritten client-side to the real UTC instant. Just keep the 14-digit_slug shape.
+- One migration = one step. A step that changes the database never also writes a component.
+
 ROUTING & ENTRY-POINT RULES — critical:
 - The route "/" renders src/pages/Index.tsx. This is the page the user sees first.
 - When the user asks to change "the page", "home page", "landing page", "main page", "página principal", "inicio", or the main screen WITHOUT naming a new route, you MUST include a step with action "modify" on src/pages/Index.tsx. A new standalone component is NOT enough — a component that nothing renders never appears in the preview.

@@ -19,8 +19,9 @@ import { deletionTargetsTelemetry } from '../utils/deletionGuard.js';
 import { danglingRefsTelemetry } from '../utils/danglingRefs.js';
 import {
   ddlProposedTelemetry,
+  misplacedMigrations,
+  resolveMigrationTargets,
   isMigrationPath,
-  resolveMigrationRenames,
 } from '../utils/migrationPath.js';
 import {
   buildMigrationIntentParams,
@@ -609,7 +610,7 @@ export class AIOrchestrator {
   private static auditDependencies(
     writtenFiles: Map<string, string>,
     allFiles: Map<string, string>
-  ): { path: string; content: string } | null {
+  ): { path: string; content: string; added: string[] } | null {
     const pkgRaw = writtenFiles.get('package.json') ?? allFiles.get('package.json');
     if (typeof pkgRaw !== 'string') return null;
 
@@ -663,7 +664,10 @@ export class AIOrchestrator {
     for (const k of Object.keys(deps).sort()) sortedDeps[k] = deps[k];
     pkg.dependencies = sortedDeps;
 
-    return { path: 'package.json', content: JSON.stringify(pkg, null, 2) + '\n' };
+    // `added` sale con el resultado porque el aviso al usuario NO es el mismo
+    // que el de una reparación fuera del plan: aquí no se arregló nada roto, se
+    // declaró la dependencia que el código nuevo importa. Ver el warning.
+    return { path: 'package.json', content: JSON.stringify(pkg, null, 2) + '\n', added };
   }
 
   // -------------------------------------------------------------------------
@@ -1488,6 +1492,11 @@ export class AIOrchestrator {
     if (depAudit) {
       modifiedFilesMap.set(depAudit.path, depAudit.content);
     }
+    // Lo que tocó la auditoría se recuerda para no confundirlo después con una
+    // reparación del Verifier fuera del plan: son causas distintas y merecen
+    // mensajes distintos.
+    const auditedDeps = depAudit?.added ?? [];
+    const auditedPath = depAudit?.path ?? null;
 
     // ------------------------------------------------------------------
     // LAYER 5 — Verifier: compile-check and auto-fix
@@ -1559,7 +1568,10 @@ export class AIOrchestrator {
       const planPaths = new Set(
         steps.map(s => s.file_path).filter((p): p is string => !!p)
       );
-      const extras = diffPaths.filter(p => !planPaths.has(p));
+      // package.json escrito por la auditoría de dependencias NO es una
+      // reparación fuera del plan: es la declaración de un import nuevo. Sale de
+      // `extras` para que no herede el mensaje equivocado.
+      const extras = diffPaths.filter(p => !planPaths.has(p) && p !== auditedPath);
 
       // ----------------------------------------------------------------
       // PIEZA 3 — fallo parcial honesto. Algún step murió por sobrecarga
@@ -1592,9 +1604,21 @@ export class AIOrchestrator {
       // Sólo se renombra lo que NO existía ya: un intent que MODIFICA una
       // migración previa debe escribir sobre ella, no duplicarla.
       // ----------------------------------------------------------------
-      const migrationRenames = resolveMigrationRenames(diffPaths, files, Date.now());
+      // CIRUGÍA 2.2 — el DIRECTORIO también se resuelve aquí, no lo elige el
+      // modelo. `supabase/migrations/` es el prefijo del que cuelga TODO lo que
+      // reconoce una migración (el renombrado, la marca [DDL_PROPOSED:], el
+      // botón de aprobación, el contexto de schema que vuelve al modelo), y la
+      // única regla de prompt que lo nombraba no llega al plan lane — que es
+      // justo la lane a la que laneRouting manda siempre un database_change.
+      // Un proyecto real escribió `src/db/migrations/…` y la cadena entera se
+      // apagó sin un solo aviso. La normalización se limita a los intents
+      // `database_change`: un .sql suelto en otro tipo de intent no tiene por
+      // qué ser una migración, y no nos toca decidirlo.
+      const migrationRenames = resolveMigrationTargets(diffPaths, files, Date.now(), {
+        normalizeDir: intent.type === 'database_change',
+      });
       if (migrationRenames.size > 0) {
-        console.log('[AIOrchestrator] migraciones renombradas al instante real:',
+        console.log('[AIOrchestrator] migraciones colocadas en su sitio real:',
           [...migrationRenames].map(([from, to]) => `${from} -> ${to}`).join(', '));
       }
 
@@ -1624,6 +1648,30 @@ export class AIOrchestrator {
       const ddlProposedMark = intent.type === 'database_change'
         ? ddlProposedTelemetry(persistedPaths.filter(isMigrationPath))
         : '';
+
+      // ----------------------------------------------------------------
+      // CIRUGÍA 2.2 — GUARDA DE LA NORMALIZACIÓN.
+      //
+      // Si tras colocar los .sql queda alguno fuera del prefijo, sólo puede ser
+      // uno que YA existía ahí (los nuevos los recoloca resolveMigrationTargets;
+      // los preexistentes no se mueven porque moverlos es borrar y recrear a
+      // espaldas del usuario). Ese archivo es invisible para el botón de
+      // aprobación y para el contexto de schema, y ANTES no lo decía nadie:
+      // se escribía, el intent cerraba en 'success' y la cadena moría callada.
+      // Ahora deja rastro en el log y aviso en el chat.
+      // ----------------------------------------------------------------
+      const misplacedSql = intent.type === 'database_change'
+        ? misplacedMigrations(persistedPaths)
+        : [];
+      const ddlMisplacedMark = misplacedSql.length > 0
+        ? ` [DDL_MISPLACED:${misplacedSql.join(',')}]`
+        : '';
+      if (misplacedSql.length > 0) {
+        console.warn(
+          '[AIOrchestrator] .sql fuera de supabase/migrations/ (preexistente, no se mueve):',
+          misplacedSql.join(', ')
+        );
+      }
 
       // Notify StudioEngine about each DELETED file. This needs its own bridge:
       // diffPaths is built by iterating finalFiles, which by definition can no
@@ -1680,7 +1728,8 @@ export class AIOrchestrator {
           // PIEZA 3 — telemetría de fallo parcial: mismo patrón que
           // [CLARIFY_ASKED], sufijo en el prompt, sin tocar columnas ni enums.
           prompt: (hasPartial ? `${input} [PARTIAL:${partialOrders.join(',')}]` : input) +
-            targetsMark + rejectedDeleteMark + restoredMark + danglingMark + ddlProposedMark,
+            targetsMark + rejectedDeleteMark + restoredMark + danglingMark + ddlProposedMark +
+            ddlMisplacedMark,
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,
@@ -1713,6 +1762,15 @@ export class AIOrchestrator {
       if (extras.length > 0) {
         warnings.push(`Reparé además un error preexistente en: ${extras.join(', ')}`);
       }
+      if (auditedDeps.length > 0) {
+        // No es una reparación: el código nuevo importa estos paquetes y sin
+        // declararlos el zip exportado no instalaría. Decir "reparé un error
+        // preexistente en package.json" describía la causa equivocada.
+        warnings.push(
+          `Añadí ${auditedDeps.join(', ')} a package.json porque el código nuevo ` +
+          `${auditedDeps.length === 1 ? 'lo importa' : 'los importa'}.`
+        );
+      }
       if (erasedPaths.length > 0) {
         warnings.push(`Eliminé del proyecto: ${erasedPaths.join(', ')}`);
       }
@@ -1726,6 +1784,12 @@ export class AIOrchestrator {
         // difiere del original. No lo reportamos como éxito plano.
         warnings.push(
           'Detecté y corregí errores de compilación durante la verificación.'
+        );
+      }
+      if (misplacedSql.length > 0) {
+        warnings.push(
+          `${misplacedSql.join(', ')} está fuera de supabase/migrations/, así que no puedo ` +
+          `ofrecerte aplicarla desde el chat. Pídeme que la vuelva a crear y la escribiré en su sitio.`
         );
       }
       if (hasPartial) {
