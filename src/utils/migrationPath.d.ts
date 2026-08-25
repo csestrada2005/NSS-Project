@@ -14,6 +14,28 @@ export function isMigrationPath(path: string): boolean;
 /** UTC instant as Supabase's migration prefix: YYYYMMDDHHMMSS. */
 export function utcStamp(when: Date | number): string;
 
+/** True for any `*.sql`, wherever it lives. */
+export function isSqlPath(path: string): boolean;
+
+/** The path a `.sql` must occupy: same file name, under `supabase/migrations/`. */
+export function normalizeMigrationDir(path: string): string;
+
+/** The `.sql` paths that no migration consumer will recognise (wrong folder). */
+export function misplacedMigrations(paths: Iterable<string>): string[];
+
+/**
+ * Target map (old → new) for the migrations in a batch: folder and timestamp
+ * prefix both resolved. Only entries that actually change are present; resolve
+ * with `targets.get(p) ?? p`. `normalizeDir` moves stray `.sql` files under
+ * `supabase/migrations/` — pass it only for a `database_change` intent.
+ */
+export function resolveMigrationTargets(
+  paths: Iterable<string>,
+  existingPaths: Iterable<string> | Map<string, unknown> | Set<string>,
+  now: Date | number,
+  options?: { normalizeDir?: boolean }
+): Map<string, string>;
+
 /**
  * Rename map (old → new) for the migrations in a batch. Only entries that
  * actually change are present; resolve with `renames.get(p) ?? p`.

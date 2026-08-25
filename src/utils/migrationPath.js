@@ -19,6 +19,24 @@
  * mismo fallo por otra vía: no sabe qué hora es, y una alucinación de fecha es
  * indistinguible de una fecha correcta hasta que colisiona.
  *
+ * EL DIRECTORIO ES PARTE DE LA IDENTIDAD (Cirugía 2.2)
+ * -----------------------------------------------------
+ * La misma doctrina, un nivel más arriba. El nombre no lo elige el modelo, y
+ * resulta que la CARPETA tampoco podía: `supabase/migrations/` no es una
+ * convención estética, es el prefijo del que cuelga todo lo que reconoce una
+ * migración —el renombrado, la marca [DDL_PROPOSED:], el botón de aprobación y
+ * el contexto de schema que se le devuelve al modelo. Un .sql fuera de ahí no
+ * es una migración para ninguno de los cuatro.
+ *
+ * Y el modelo lo elegía libremente: la única regla que nombra el directorio
+ * (BACKEND_RULES) vive en dos prompts a los que un intent `database_change`
+ * NUNCA llega, porque laneRouting lo manda siempre al plan lane. Un proyecto
+ * real escribió `src/db/migrations/…` y toda la cadena se apagó EN SILENCIO:
+ * archivo escrito, intent en 'success', ningún botón, ninguna pista.
+ *
+ * Por eso el directorio se normaliza aquí, en el cliente, igual que el
+ * timestamp: el prompt sube la tasa de acierto, esto hace que no importe.
+ *
  * Dos reglas que el renombrado respeta:
  *  1. Un solo instante por LOTE. Todos los archivos de un mismo intent se
  *     resuelven contra el mismo `now`; si el lote trae varias migraciones se
@@ -46,6 +64,66 @@ export function isMigrationPath(path) {
   return typeof path === 'string'
     && path.startsWith(MIGRATIONS_DIR)
     && path.toLowerCase().endsWith('.sql');
+}
+
+/**
+ * ¿Es un archivo SQL, viva donde viva?
+ *
+ * Distinto de isMigrationPath a propósito: esto es "parece una migración", y
+ * aquello es "está donde las migraciones tienen que estar". La diferencia entre
+ * los dos es exactamente lo que esta cirugía normaliza.
+ *
+ * @param {string} path
+ * @returns {boolean}
+ */
+export function isSqlPath(path) {
+  return typeof path === 'string' && path.toLowerCase().endsWith('.sql');
+}
+
+/** Nombre de archivo de un path, sin directorios. */
+function baseName(path) {
+  const cut = String(path ?? '').lastIndexOf('/');
+  return cut === -1 ? String(path ?? '') : String(path).slice(cut + 1);
+}
+
+/**
+ * El path que un .sql DEBE ocupar: su mismo nombre de archivo, bajo
+ * supabase/migrations/. Lo que no es .sql, y lo que ya está en su sitio, sale
+ * intacto.
+ *
+ * Se conserva el nombre del archivo y se tira el resto del directorio: la
+ * estructura que el modelo inventó (`src/db/migrations/`, `db/`, `migrations/`)
+ * no aporta nada que el prefijo real no diga mejor.
+ *
+ * @param {string} path
+ * @returns {string}
+ */
+export function normalizeMigrationDir(path) {
+  if (!isSqlPath(path)) return path;
+  if (path.startsWith(MIGRATIONS_DIR)) return path;
+  return `${MIGRATIONS_DIR}${baseName(path)}`;
+}
+
+/**
+ * Los .sql de un lote que NO viven bajo el prefijo — es decir, los que ningún
+ * consumidor de migraciones va a reconocer.
+ *
+ * Después de normalizar esto tiene que salir VACÍO para todo archivo nuevo. Si
+ * devuelve algo, es un .sql que YA existía fuera de su sitio (esos no se mueven:
+ * moverlos sería borrar y recrear a espaldas del usuario) y hay que decirlo en
+ * vez de dejar el silencio de antes.
+ *
+ * @param {Iterable<string>} paths
+ * @returns {string[]}
+ */
+export function misplacedMigrations(paths) {
+  const out = [];
+  for (const path of paths ?? []) {
+    if (!isSqlPath(path)) continue;
+    if (isMigrationPath(path)) continue;
+    if (!out.includes(path)) out.push(path);
+  }
+  return out;
 }
 
 /**
@@ -82,20 +160,30 @@ function splitStamp(fileName) {
 }
 
 /**
- * Mapa de renombrados para un lote de paths persistidos.
+ * Mapa de DESTINOS para un lote de paths persistidos: dónde acaba cada
+ * migración, con su directorio y su prefijo temporal ya resueltos.
  *
  * Devuelve SÓLO las entradas que cambian: un path que no es migración, o que ya
  * existía en el proyecto, no aparece. El caller resuelve con
- * `renames.get(path) ?? path`, así que un mapa vacío es exactamente "no toques
+ * `targets.get(path) ?? path`, así que un mapa vacío es exactamente "no toques
  * nada".
+ *
+ * `options.normalizeDir` es lo que decide si un .sql que el modelo puso en otro
+ * sitio se recoloca bajo supabase/migrations/. Va como opción y no como
+ * comportamiento fijo porque quien sabe si este intent produce migraciones es el
+ * clasificador, no este módulo: un `.sql` suelto en un intent que no es
+ * `database_change` no tiene por qué ser una migración.
  *
  * @param {Iterable<string>} paths   paths que este intent va a persistir
  * @param {Iterable<string>|Map<string, unknown>|Set<string>} existingPaths
  *        paths que YA existen en el proyecto (el mapa ORIGINAL, pre-intent)
  * @param {Date|number} now instante único del lote
+ * @param {{ normalizeDir?: boolean }} [options]
  * @returns {Map<string, string>} viejo → nuevo
  */
-export function resolveMigrationRenames(paths, existingPaths, now) {
+export function resolveMigrationTargets(paths, existingPaths, now, options) {
+  const normalizeDir = options?.normalizeDir === true;
+
   const taken = new Set();
   if (existingPaths instanceof Map) {
     for (const key of existingPaths.keys()) taken.add(key);
@@ -104,32 +192,58 @@ export function resolveMigrationRenames(paths, existingPaths, now) {
   }
 
   const base = (now instanceof Date ? now : new Date(now)).getTime();
-  const renames = new Map();
+  const targets = new Map();
+  // Destinos ya comprometidos por ESTE lote, cambien o no el path original. Un
+  // archivo que ya venía con el nombre correcto también ocupa su hueco: sin
+  // contarlo, el siguiente del lote podría aterrizar encima.
+  const claimed = new Set();
   let seq = 0;
 
   for (const path of paths ?? []) {
-    if (!isMigrationPath(path)) continue;
-    // Ya existía: este intent lo MODIFICA. Renombrarlo duplicaría la migración.
+    // Entran las que ya viven bajo el prefijo, y —sólo si se pide normalizar—
+    // cualquier otro .sql.
+    if (!isMigrationPath(path) && !(normalizeDir && isSqlPath(path))) continue;
+    // Ya existía: este intent lo MODIFICA. Ni se renombra ni se mueve —
+    // duplicaría la migración y dejaría huérfana la vieja con su contenido
+    // antiguo. Un .sql preexistente fuera de sitio se queda fuera de sitio, y
+    // eso se AVISA (ver misplacedMigrations); no se corrige a espaldas de nadie.
     if (taken.has(path)) continue;
 
-    const fileName = path.slice(MIGRATIONS_DIR.length);
+    const fileName = normalizeMigrationDir(path).slice(MIGRATIONS_DIR.length);
     const { slug } = splitStamp(fileName);
 
     // Un segundo por migración dentro del lote: el orden de `paths` es el orden
     // del plan, y el prefijo debe conservarlo.
     let candidate = `${MIGRATIONS_DIR}${utcStamp(base + seq * 1000)}_${slug}`;
     seq++;
-    // Colisión con algo ya presente (o con otro renombrado de este mismo lote):
+    // Colisión con algo ya presente (o con otro destino de este mismo lote):
     // seguimos avanzando segundos hasta encontrar hueco. Determinista y finito.
-    while (taken.has(candidate) || [...renames.values()].includes(candidate)) {
+    while (taken.has(candidate) || claimed.has(candidate)) {
       candidate = `${MIGRATIONS_DIR}${utcStamp(base + seq * 1000)}_${slug}`;
       seq++;
     }
 
-    if (candidate !== path) renames.set(path, candidate);
+    claimed.add(candidate);
+    if (candidate !== path) targets.set(path, candidate);
   }
 
-  return renames;
+  return targets;
+}
+
+/**
+ * Mapa de renombrados dentro de supabase/migrations/, sin tocar directorios.
+ *
+ * Es resolveMigrationTargets con la normalización APAGADA: lo que había antes de
+ * Cirugía 2.2, conservado porque "renombrar lo que ya está en su sitio" sigue
+ * siendo una operación con sentido propio y sus tests la fijan.
+ *
+ * @param {Iterable<string>} paths
+ * @param {Iterable<string>|Map<string, unknown>|Set<string>} existingPaths
+ * @param {Date|number} now
+ * @returns {Map<string, string>} viejo → nuevo
+ */
+export function resolveMigrationRenames(paths, existingPaths, now) {
+  return resolveMigrationTargets(paths, existingPaths, now, { normalizeDir: false });
 }
 
 /**
