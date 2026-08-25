@@ -53,6 +53,7 @@ import {
   FAILED,
   OUTCOME_APPLIED,
   OUTCOME_UNVERIFIED,
+  stopsBatch,
   SKIPPED,
   SUPERSEDED,
   buildOutcomeMessage,
@@ -283,13 +284,13 @@ export function DDLApprovalButton({
     let failedPath: string | null = null;
 
     try {
-      // En serie y CORTANDO al primer veredicto que no sea 'applied': las
-      // migraciones de un lote se ordenan por su prefijo temporal porque
-      // dependen unas de otras, así que seguir tras un fallo es correr DDL
-      // sobre un schema que no es el que esa migración espera.
+      // En serie, en el orden del lote (que es el de sus prefijos temporales),
+      // y deteniéndose donde diga stopsBatch — la regla vive en el módulo puro
+      // porque decide cuánto DDL irreversible corre de una tacada. Los archivos
+      // posteriores al que detiene el lote NO se intentan.
       for (const path of proposal.paths) {
         const result = await MigrationRunner.applyMigration(projectId, path);
-        if (result.outcome === 'applied') {
+        if (!stopsBatch(result.outcome)) {
           appliedPaths.push(path);
           for (const table of result.tables) {
             if (!tables.includes(table)) tables.push(table);
