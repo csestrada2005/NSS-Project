@@ -8,6 +8,7 @@ import {
   ddlOutcomeMark,
   stripDdlMarks,
   buildOutcomeMessage,
+  stopsBatch,
   normalizeProposalPaths,
   EXECUTABLE,
   SUPERSEDED,
@@ -339,7 +340,10 @@ test('failed manda a corregir el SQL; unverified manda a mirar la base', () => {
   const failed = buildOutcomeMessage({ outcome: OUTCOME_FAILED, paths: [A], reason: 'error: syntax' });
   assert.match(failed, /rechazó/i);
   assert.match(failed, /error: syntax/);
-  assert.match(failed, /corrección/i);
+  // El camino de un fallo es una propuesta NUEVA por chat, no un reintento de
+  // ésta: la propuesta queda cerrada y el mensaje tiene que decir a dónde ir.
+  assert.match(failed, /propuesta nueva/i);
+  assert.match(failed, /ya no se puede reintentar/i);
 
   const unverified = buildOutcomeMessage({
     outcome: OUTCOME_UNVERIFIED,
@@ -483,4 +487,108 @@ test('CHECKPOINT pre-C2: el texto de una marca vieja no se toca al renderizar', 
   // en vez de mutilarla en silencio.
   const content = 'Apply migration notas_c1.sql [DDL_APPLIED:notas_c1]';
   assert.equal(stripDdlMarks(content), content);
+});
+
+// ---------------------------------------------------------------------------
+// SEMÁNTICA DEL LOTE — qué detiene la ejecución, y qué dice el mensaje de cada
+// archivo.
+//
+// Un lote se ejecuta EN SERIE, en el orden de sus paths (que es el de sus
+// prefijos temporales), un archivo por llamada. La regla de parada y la
+// redacción del veredicto se prueban aquí porque son las que deciden cuánto DDL
+// irreversible corre de una tacada y qué cree el usuario que pasó con su base.
+// ---------------------------------------------------------------------------
+
+test('el lote se detiene con CUALQUIER veredicto que no sea applied', () => {
+  assert.equal(stopsBatch(OUTCOME_APPLIED), false, 'sólo applied deja seguir');
+
+  // No es "para si falla": es "sigue sólo mientras haya certeza". 'unverified'
+  // es literalmente "no sé cómo quedó la base", y seguir desde ahí es construir
+  // sobre algo que no hemos podido leer.
+  assert.equal(stopsBatch(OUTCOME_FAILED), true);
+  assert.equal(stopsBatch(OUTCOME_UNVERIFIED), true);
+  assert.equal(stopsBatch(OUTCOME_SKIPPED), true);
+});
+
+test('el mensaje separa lo aplicado, lo que dio el veredicto y lo NO intentado', () => {
+  const content = buildOutcomeMessage({
+    outcome: OUTCOME_FAILED,
+    paths: [A, B, C],
+    appliedPaths: [A],
+    failedPath: B,
+    reason: 'error: relation exists',
+  });
+
+  assert.match(content, /Sí se habían aplicado antes: 20260824120000_create_orders\.sql/);
+  assert.match(content, /rechazó 20260824130000_add_status\.sql/);
+  // C viene DESPUÉS del que detuvo el lote: ni se intentó, y decirlo importa
+  // porque "no se aplicó" y "ni se intentó" mandan a mirar cosas distintas.
+  assert.match(content, /no llegué a tocar: 20260824140000_drop_legacy\.sql/i);
+});
+
+test('la marca cierra el LOTE aunque sólo parte se ejecutara', () => {
+  // La carga de la marca es la IDENTIDAD de la propuesta (sus paths), no el
+  // resultado por archivo. Si sólo cargara el subconjunto ejecutado, la clave no
+  // casaría, la propuesta seguiría `executable` y el botón ofrecería reaplicar
+  // A, que YA está aplicada. El detalle por archivo va en la prosa (arriba) y en
+  // forge_intent_log, donde el runner escribe una fila por llamada.
+  const content = buildOutcomeMessage({
+    outcome: OUTCOME_FAILED,
+    paths: [A, B],
+    appliedPaths: [A],
+    failedPath: B,
+    reason: 'error: boom',
+  });
+
+  assert.match(content, /\[DDL_OUTCOME:failed:.+,.+\]$/, 'la marca nombra los dos archivos');
+  assert.equal(resolveDdlProposals([proposes(A, B), { role: 'assistant', content }])[0].state, FAILED);
+});
+
+test('un fallo ANTES de ejecutar no se le atribuye a la base de datos', () => {
+  // 'failed' cubre dos mundos: el SQL que la base rechazó y el que nunca salió
+  // del cliente. Decir "la base rechazó tu migración" cuando no llegó a verla
+  // manda a arreglar un SQL que no es el sospechoso.
+  const rejected = buildOutcomeMessage({
+    outcome: OUTCOME_FAILED,
+    paths: [A],
+    reason: 'error: syntax error at or near "TABL"',
+  });
+  assert.match(rejected, /La base de datos rechazó/);
+
+  for (const reason of [
+    'project_lookup: timeout',
+    'missing_file: no rows returned',
+    'empty_migration',
+    'schema_before: fetch failed',
+  ]) {
+    const content = buildOutcomeMessage({ outcome: OUTCOME_FAILED, paths: [A], reason });
+    assert.match(content, /No llegué a ejecutar/, reason);
+    assert.match(content, /No se envió nada a tu base de datos/, reason);
+    assert.ok(!content.includes('La base de datos rechazó'), reason);
+  }
+});
+
+test('un motivo desconocido sale con la redacción neutra, sin afirmar de más', () => {
+  // Si mañana aparece un reason nuevo, el peor caso debe ser un mensaje menos
+  // específico — nunca uno que afirme algo que no sabemos.
+  const content = buildOutcomeMessage({
+    outcome: OUTCOME_FAILED,
+    paths: [A],
+    reason: 'motivo_que_todavia_no_existe',
+  });
+
+  assert.match(content, /no se aplicó/);
+  assert.ok(!content.includes('La base de datos rechazó'));
+  assert.ok(!content.includes('No llegué a ejecutar'));
+});
+
+test('unverified siempre afirma que SÍ se ejecutó, porque siempre es post-ejecución', () => {
+  // Los dos reasons de 'unverified' (schema_after: y no_schema_change) sólo se
+  // producen cuando el DDL ya salió hacia la base. Por eso su mensaje puede
+  // decir "ejecuté" sin mentir, y por eso manda a mirar en vez de a reintentar.
+  for (const reason of ['schema_after: fetch failed', 'no_schema_change']) {
+    const content = buildOutcomeMessage({ outcome: OUTCOME_UNVERIFIED, paths: [A], reason });
+    assert.match(content, /Ejecuté/, reason);
+    assert.match(content, /Revísalo/, reason);
+  }
 });

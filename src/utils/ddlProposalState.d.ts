@@ -86,3 +86,6 @@ export function buildOutcomeMessage(result: {
   /** Path whose run produced a non-applied verdict. */
   failedPath?: string | null;
 }): string;
+
+/** True when this per-file verdict stops the batch: anything but 'applied'. */
+export function stopsBatch(outcome: string): boolean;

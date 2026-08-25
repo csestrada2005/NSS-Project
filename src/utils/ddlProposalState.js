@@ -336,6 +336,69 @@ function fileName(path) {
 }
 
 /**
+ * ¿Este veredicto DETIENE el lote?
+ *
+ * Sí para todo lo que no sea 'applied' — y eso incluye 'skipped' y
+ * 'unverified', no sólo 'failed'. La regla no es "para si algo falla" sino
+ * "sigue sólo mientras haya certeza de que lo anterior se aplicó":
+ *
+ *  - Las migraciones de un lote van ordenadas por su prefijo temporal porque
+ *    DEPENDEN unas de otras (la que añade una columna presupone la que creó la
+ *    tabla). Correr la siguiente sobre un schema que no es el que espera es
+ *    aplicar DDL a ciegas.
+ *  - 'unverified' es exactamente "no sé en qué estado quedó la base". Seguir
+ *    desde ahí es construir sobre algo que no hemos podido leer.
+ *  - 'skipped' (no hay base de datos) no va a mejorar en el archivo siguiente.
+ *
+ * Vive aquí, y no como un `if` dentro del componente, porque es la regla que
+ * decide cuánto DDL irreversible corre de una tacada.
+ *
+ * @param {string} outcome veredicto de MigrationRunner para UN archivo
+ * @returns {boolean}
+ */
+export function stopsBatch(outcome) {
+  return outcome !== OUTCOME_APPLIED;
+}
+
+/**
+ * ¿HASTA DÓNDE LLEGÓ la migración que no acabó aplicada?
+ *
+ * 'failed' cubre dos mundos incompatibles, y el reason del runner los separa:
+ *
+ *   error:…            se EJECUTÓ y la base la rechazó (sintaxis, permisos,
+ *                      tabla ya existente). Lo pone ddlVerdict cuando la base
+ *                      habló.
+ *   project_lookup:…   NO se ejecutó: MigrationRunner cortó ANTES de mandar
+ *   missing_file:…     nada a la base (no pudo leer el proyecto, ni el archivo,
+ *   empty_migration    el archivo estaba vacío, o no pudo fotografiar el schema
+ *   schema_before:…    previo, y sin foto previa no hay veredicto posible).
+ *
+ * Decir "la base de datos rechazó tu migración" cuando nunca salió del cliente
+ * manda a alguien a arreglar un SQL que la base no ha visto. Son diagnósticos
+ * distintos y el mensaje tiene que distinguirlos.
+ *
+ * Lo desconocido se nombra como desconocido: un reason que no encaje en ninguna
+ * de las dos listas sale con la redacción neutra. Si mañana aparece un motivo
+ * nuevo, el peor caso es un mensaje menos específico — nunca uno que afirme algo
+ * que no sabemos.
+ *
+ * @param {string} reason
+ * @returns {'rejected'|'never_ran'|'unknown'}
+ */
+function executionReach(reason) {
+  const text = String(reason ?? '');
+  if (text.startsWith('error:')) return 'rejected';
+  const cutBeforeExecuting = [
+    'project_lookup:',
+    'missing_file:',
+    'empty_migration',
+    'schema_before:',
+  ];
+  if (cutBeforeExecuting.some(prefix => text.startsWith(prefix))) return 'never_ran';
+  return 'unknown';
+}
+
+/**
  * El mensaje que el botón escribe en el chat tras ejecutar: el texto que lee el
  * usuario MÁS la marca que cierra la propuesta.
  *
@@ -375,8 +438,14 @@ export function buildOutcomeMessage(result) {
     if (table && !tables.includes(table)) tables.push(table);
   }
   const reason = plain(result?.reason);
-  const failed = plain(fileName(result?.failedPath ?? paths[applied.length] ?? paths[0]));
+  const failedPath = typeof result?.failedPath === 'string' ? result.failedPath : null;
+  const failed = plain(fileName(failedPath ?? paths[applied.length] ?? paths[0]));
   const names = paths.map(fileName).join(', ');
+  // Un lote se detiene en el archivo que dio el veredicto; los que van DESPUÉS
+  // no se intentaron siquiera. "No se aplicó" y "ni se intentó" no son lo mismo
+  // para quien va a mirar su base de datos.
+  const stoppedAt = failedPath ? paths.indexOf(failedPath) : -1;
+  const untouched = stoppedAt >= 0 ? paths.slice(stoppedAt + 1) : [];
 
   const parts = [];
 
@@ -391,10 +460,20 @@ export function buildOutcomeMessage(result) {
     // calla: es exactamente el fallo que la Cirugía 1 vino a matar.
     if (reason) parts.push(`Aviso: ${reason}.`);
   } else if (outcome === OUTCOME_FAILED) {
-    parts.push(`La base de datos rechazó ${failed}${reason ? `: ${reason}.` : '.'}`);
+    const reach = executionReach(reason);
+    const detail = reason ? `: ${reason}.` : '.';
+    if (reach === 'rejected') {
+      parts.push(`La base de datos rechazó ${failed}${detail}`);
+      parts.push('No se aplicó nada de esa migración.');
+    } else if (reach === 'never_ran') {
+      // Nada salió del cliente: el SQL no es el sospechoso.
+      parts.push(`No llegué a ejecutar ${failed}${detail}`);
+      parts.push('No se envió nada a tu base de datos: el SQL no llegó a intentarse.');
+    } else {
+      parts.push(`${failed} no se aplicó${detail}`);
+    }
     parts.push(
-      'No se aplicó nada de esa migración. Pídeme aquí la corrección del SQL y generaré una ' +
-      'propuesta nueva; ésta ya no se puede reintentar.'
+      'Pídemelo de nuevo aquí y generaré una propuesta nueva; ésta ya no se puede reintentar.'
     );
   } else if (outcome === OUTCOME_UNVERIFIED) {
     parts.push(
@@ -413,10 +492,14 @@ export function buildOutcomeMessage(result) {
     );
   }
 
-  // Un lote que se cortó a la mitad: lo que YA se aplicó no se deshace, y
-  // callarlo dejaría al usuario creyendo que la base sigue intacta.
+  // Un lote que se cortó a la mitad: lo que YA se aplicó no se deshace —cada
+  // archivo es su propia llamada y su propia transacción— y callarlo dejaría al
+  // usuario creyendo que la base sigue intacta.
   if (outcome !== OUTCOME_APPLIED && applied.length > 0) {
     parts.push(`Sí se habían aplicado antes: ${applied.map(fileName).join(', ')}.`);
+  }
+  if (untouched.length > 0) {
+    parts.push(`Y no llegué a tocar: ${untouched.map(fileName).join(', ')}.`);
   }
 
   return `${parts.join(' ')}${mark}`;
