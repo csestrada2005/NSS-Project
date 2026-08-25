@@ -294,6 +294,16 @@ export class ProjectMemoryService {
     }
 
     existing.component_registry = updatedRegistry;
+
+    // El schema se recalcula ENTERO desde allFiles, igual que en buildFromFiles.
+    // Doctrina: database_schema es la intención acumulada en los archivos del
+    // proyecto (migraciones + src/types.ts), no una introspección de la base
+    // viva. Sin esta línea, una migración escrita después del primer build
+    // jamás entraba en la memoria y el contexto de schema quedaba congelado en
+    // el estado del bootstrap. El contrapeso de realidad son las marcas
+    // [DDL_OUTCOME:]: la divergencia archivo/base es una propiedad conocida.
+    existing.database_schema = this.extractDatabaseSchema(allFiles);
+
     await this.save(projectId, existing);
   }
 
