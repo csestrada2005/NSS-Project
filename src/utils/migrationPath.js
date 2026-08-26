@@ -43,9 +43,15 @@
  *     separan por segundos crecientes. Sin esto, dos llamadas a Date.now() en
  *     el mismo intent pueden caer en segundos distintos y el orden relativo
  *     depende de la latencia, no del plan.
- *  2. Sólo se renombra lo NUEVO. Si el path ya existía en el proyecto, el
- *     intent lo está MODIFICANDO: renombrarlo crearía un duplicado y dejaría la
- *     migración vieja huérfana con su contenido antiguo.
+ *  2. Un preexistente EN SU SITIO no se renombra. Si el path ya existía bajo el
+ *     prefijo, el intent lo está MODIFICANDO: renombrarlo crearía un duplicado y
+ *     dejaría la migración vieja huérfana con su contenido antiguo.
+ *     Un preexistente FUERA DE SITIO sí se mueve, y sólo cuando se pide
+ *     normalizar: mover un preexistente bien ubicado es una sorpresa, mover uno
+ *     mal ubicado es la reparación. Nadie eligió `src/db/migrations/`; lo
+ *     inventó un plan, y ahí el archivo es invisible para los cuatro
+ *     consumidores. El caller vacía la fila vieja por el mismo puente que usa
+ *     para los borrados del plan.
  *
  * Plain JS (no TS) para que sea importable desde `node --test`, igual que
  * deletionGuard.js y danglingRefs.js. El tipado vive en migrationPath.d.ts.
@@ -164,9 +170,13 @@ function splitStamp(fileName) {
  * migración, con su directorio y su prefijo temporal ya resueltos.
  *
  * Devuelve SÓLO las entradas que cambian: un path que no es migración, o que ya
- * existía en el proyecto, no aparece. El caller resuelve con
+ * existía EN SU SITIO, no aparece. El caller resuelve con
  * `targets.get(path) ?? path`, así que un mapa vacío es exactamente "no toques
  * nada".
+ *
+ * Un origen que YA existía en el proyecto y aparece en el mapa es una
+ * RECUPERACIÓN: el caller no sólo escribe el destino, también tiene que retirar
+ * la fila vieja, o el .sql queda duplicado y el viejo sigue siendo invisible.
  *
  * `options.normalizeDir` es lo que decide si un .sql que el modelo puso en otro
  * sitio se recoloca bajo supabase/migrations/. Va como opción y no como
@@ -203,11 +213,25 @@ export function resolveMigrationTargets(paths, existingPaths, now, options) {
     // Entran las que ya viven bajo el prefijo, y —sólo si se pide normalizar—
     // cualquier otro .sql.
     if (!isMigrationPath(path) && !(normalizeDir && isSqlPath(path))) continue;
-    // Ya existía: este intent lo MODIFICA. Ni se renombra ni se mueve —
-    // duplicaría la migración y dejaría huérfana la vieja con su contenido
-    // antiguo. Un .sql preexistente fuera de sitio se queda fuera de sitio, y
-    // eso se AVISA (ver misplacedMigrations); no se corrige a espaldas de nadie.
-    if (taken.has(path)) continue;
+    // "Ya existía" son DOS casos y sólo uno es intocable (C-D'):
+    //
+    //  - Preexistente EN SU SITIO: este intent lo MODIFICA. Ni se renombra ni se
+    //    mueve — duplicaría la migración y dejaría huérfana la vieja con su
+    //    contenido antiguo. La regla original, intacta.
+    //
+    //  - Preexistente FUERA DE SITIO: no es un archivo que alguien eligiera
+    //    tener ahí, es el residuo de un plan que se inventó la carpeta, y
+    //    ningún consumidor de migraciones lo reconoce — ni el renombrado, ni la
+    //    marca [DDL_PROPOSED:], ni el botón de aprobación, ni el contexto de
+    //    schema. Antes se le avisaba al usuario y se le pedía que lo recreara a
+    //    mano: la máquina detectaba el archivo huérfano y delegaba en la persona
+    //    una reparación que sabe hacer. Moverlo NO es una sorpresa, es LA
+    //    reparación.
+    //
+    // Sólo entra por normalizeDir, que es donde ya vive la doctrina: fuera de un
+    // intent `database_change` un .sql suelto no tiene por qué ser una migración
+    // (el `continue` de arriba ya lo dejó fuera) y aquí no se decide eso.
+    if (taken.has(path) && isMigrationPath(path)) continue;
 
     const fileName = normalizeMigrationDir(path).slice(MIGRATIONS_DIR.length);
     const { slug } = splitStamp(fileName);

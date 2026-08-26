@@ -136,18 +136,106 @@ test('un destino ya ocupado en el proyecto no se pisa', () => {
 
 // --- Lo que la normalización NO hace ----------------------------------------
 
-test('un .sql PREEXISTENTE fuera de sitio no se mueve: se avisa', () => {
-  // Moverlo sería borrar y recrear a espaldas del usuario, y dejaría la vieja
-  // huérfana con su contenido antiguo — el mismo fallo que la regla "sólo se
-  // renombra lo NUEVO" evita desde Cirugía 1.
+// C-D' — ESTE TEST CAMBIÓ DE SIGNO, y el cambio es el punto.
+//
+// Afirmaba `assert.deepEqual(persisted, [legacy])`: un .sql preexistente fuera
+// de sitio se quedaba donde estaba y sólo se AVISABA. La intención era buena —
+// no borrar y recrear a espaldas del usuario— pero fusionaba dos casos que no
+// son el mismo, y el segundo dejaba el archivo muerto para siempre: sin
+// normalizar, sin [DDL_PROPOSED:], sin botón de aprobación y sin contexto de
+// schema, con un aviso que le pedía a la persona recrear a mano lo que la
+// máquina sabe recolocar. Un proyecto real (`create_pedidos_c2.sql`) quedó
+// exactamente así, y ningún reintento lo sacaba de ahí.
+//
+// La doctrina, partida donde tocaba: mover un preexistente BIEN ubicado es una
+// sorpresa (el intent lo está modificando); mover uno MAL ubicado es la
+// reparación. Nadie eligió `src/db/migrations/`.
+test('un .sql PREEXISTENTE fuera de sitio SÍ se recupera, y deja de estar misplaced', () => {
   const legacy = 'src/db/migrations/20240101000000_create_orders.sql';
   const existing = new Map([[legacy, 'create table orders();']]);
 
   const persisted = persistedPaths([legacy], existing, 'database_change');
-  assert.deepEqual(persisted, [legacy], 'se queda donde está');
-  // Y por eso la guarda lo reporta: es lo que alimenta [DDL_MISPLACED:] y el
-  // aviso del chat. Antes esto era silencio.
-  assert.deepEqual(misplacedMigrations(persisted), [legacy]);
+  assert.notDeepEqual(persisted, [legacy], 'ya no se queda donde estaba');
+  assert.ok(isMigrationPath(persisted[0]), 'acaba bajo el prefijo real');
+  assert.match(persisted[0], /^supabase\/migrations\/\d{14}_create_orders\.sql$/);
+  // El corolario: la guarda de misplaced se queda sin nada que reportar, y la
+  // marca de propuesta —que antes salía vacía— ahora sí sale.
+  assert.deepEqual(misplacedMigrations(persisted), []);
+  assert.equal(
+    ddlProposedTelemetry(persisted.filter(isMigrationPath)),
+    ` [DDL_PROPOSED:${persisted[0]}]`
+  );
+});
+
+test('un .sql PREEXISTENTE en su sitio NO se mueve: ahí el intent lo modifica', () => {
+  // La mitad de la regla original que sigue viva, y la que impide que la
+  // recuperación se convierta en "renombra todo lo que toques": renombrar una
+  // migración que ya está donde debe crearía un duplicado y dejaría la vieja
+  // huérfana con su contenido antiguo.
+  const good = `${MIGRATIONS_DIR}20260824120000_create_orders.sql`;
+  const existing = new Map([[good, 'create table orders();']]);
+
+  assert.deepEqual(persistedPaths([good], existing, 'database_change'), [good]);
+  assert.equal(
+    resolveMigrationTargets([good], existing, NOW, { normalizeDir: true }).size,
+    0,
+    'mapa vacío = no toques nada'
+  );
+});
+
+// --- C-G — EL CASO DE PRODUCCIÓN, CON SU NOMBRE ------------------------------
+//
+// `src/db/migrations/create_pedidos_c2.sql`, proyecto 510afe69. Path literal, sin
+// timestamp y bajo la carpeta que el modelo se inventó. Los fixtures que ya
+// existían cubrían la forma; este cubre el archivo. Se ancla con su nombre para
+// que, si alguien vuelve a estrechar el predicado, falle nombrando al proyecto
+// que se quedó sin migración.
+const C2 = 'src/db/migrations/create_pedidos_c2.sql';
+
+test('C-G 1 — el path de producción, NUEVO, se normaliza (sin timestamp de origen)', () => {
+  const [persisted] = persistedPaths([C2], new Map(), 'database_change');
+
+  assert.ok(isMigrationPath(persisted));
+  // El nombre sobrevive entero: sin prefijo de 14 dígitos, splitStamp devuelve
+  // el fichero como slug y el timestamp lo pone el cliente.
+  assert.match(persisted, /^supabase\/migrations\/\d{14}_create_pedidos_c2\.sql$/);
+});
+
+test('C-G 2 — el path de producción, PREEXISTENTE, se recupera', () => {
+  // El caso que estaba muerto: la fila ya vivía en forge_files, así que el
+  // `taken.has(path)` de antes lo excluía del rename y con él se apagaban la
+  // marca, el botón y el contexto de schema. Ningún reintento lo arreglaba.
+  const existing = new Map([[C2, 'create table pedidos();']]);
+  const targets = resolveMigrationTargets([C2], existing, NOW, { normalizeDir: true });
+
+  assert.equal(targets.size, 1, 'devuelve rename: la recuperación existe');
+  assert.match(targets.get(C2), /^supabase\/migrations\/\d{14}_create_pedidos_c2\.sql$/);
+  // Y el origen que el orquestador tendrá que vaciar es exactamente la clave.
+  assert.deepEqual([...targets.keys()], [C2]);
+});
+
+test('C-G 3 — un preexistente BIEN ubicado sigue sin renombrarse', () => {
+  const good = `${MIGRATIONS_DIR}20260824120000_create_pedidos.sql`;
+  const existing = new Map([[good, 'create table pedidos();']]);
+
+  assert.equal(
+    resolveMigrationTargets([good], existing, NOW, { normalizeDir: true }).size,
+    0,
+    'la regla original intacta: aquí el intent MODIFICA, no mueve'
+  );
+});
+
+test('C-G 4 — un preexistente fuera de sitio SIN normalizeDir sigue quieto', () => {
+  // El gate de doctrina no se abre: fuera de un database_change, un .sql suelto
+  // no tiene por qué ser una migración y este módulo no lo decide.
+  const existing = new Map([[C2, 'create table pedidos();']]);
+
+  assert.equal(
+    resolveMigrationTargets([C2], existing, NOW, { normalizeDir: false }).size,
+    0
+  );
+  assert.equal(resolveMigrationRenames([C2], existing, NOW).size, 0);
+  assert.deepEqual(persistedPaths([C2], existing, 'feature'), [C2]);
 });
 
 test('sin normalizeDir (intent que no es database_change) no se mueve nada', () => {
