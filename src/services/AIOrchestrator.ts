@@ -1601,7 +1601,7 @@ export class AIOrchestrator {
       // contra un único instante para todo el lote: el nombre de una migración
       // es su identidad y su orden, no un detalle cosmético, y pedirle la fecha
       // al modelo reintroduce el fallo por otra vía (no sabe qué hora es).
-      // Sólo se renombra lo que NO existía ya: un intent que MODIFICA una
+      // Un preexistente EN SU SITIO no se renombra: un intent que MODIFICA una
       // migración previa debe escribir sobre ella, no duplicarla.
       // ----------------------------------------------------------------
       // CIRUGÍA 2.2 — el DIRECTORIO también se resuelve aquí, no lo elige el
@@ -1627,12 +1627,31 @@ export class AIOrchestrator {
       // que viaja a modified_files y lo que MigrationRunner tendrá que leer de
       // forge_files, así que a partir de aquí diffPaths ya no es la lista de lo
       // persistido.
+      // C-D' — un rename cuyo ORIGEN ya existía en el proyecto es una
+      // RECUPERACIÓN, y una recuperación tiene dos mitades: escribir el destino
+      // y VACIAR el origen. Sin la segunda, forge_files se queda con las dos
+      // filas —la nueva y la vieja con su contenido antiguo— y el proyecto
+      // acaba con la migración duplicada, que es justo el fallo que el
+      // renombrado existía para evitar. `files` es el mapa PRE-intent, así que
+      // `files.has(path)` es exactamente "esta fila ya estaba en forge_files".
       const persistedPaths: string[] = [];
+      const vacatedPaths: string[] = [];
       for (const path of diffPaths) {
         const content = finalFiles.get(path)!;
         const target = migrationRenames.get(path) ?? path;
         this.notifyFileUpdate(target, content);
         persistedPaths.push(target);
+        if (target !== path && files.has(path)) vacatedPaths.push(path);
+      }
+      // Los pares (viejo → nuevo) que de verdad recuperaron un archivo que ya
+      // vivía fuera de sitio. Alimenta el aviso al usuario: antes se le pedía
+      // recrear la migración a mano, ahora se le dice dónde quedó.
+      const recoveredMigrations = vacatedPaths.map(
+        (from): [string, string] => [from, migrationRenames.get(from)!]
+      );
+      if (recoveredMigrations.length > 0) {
+        console.log('[AIOrchestrator] migraciones preexistentes recuperadas:',
+          recoveredMigrations.map(([from, to]) => `${from} -> ${to}`).join(', '));
       }
 
       // ----------------------------------------------------------------
@@ -1697,7 +1716,17 @@ export class AIOrchestrator {
           revertedDeletes.join(', '));
       }
       const erasedPaths = deletedPaths.filter(p => files.has(p) && !recreatedByRepair.has(p));
-      for (const path of erasedPaths) {
+      // C-D' — los orígenes vaciados por una recuperación salen de forge_files
+      // por el MISMO puente que los borrados del plan, no por un mecanismo
+      // propio: un path que deja de existir en el proyecto es un path que deja
+      // de existir, venga de un delete step o de un rename. Entrar por aquí es
+      // lo que les da el trato completo río abajo —notifyFileDelete, el
+      // re-indexado de la memoria y modified_files— en vez de esquivarlo.
+      // `erasedPaths` (deletes del plan, ausentes de finalFiles) y
+      // `vacatedPaths` (orígenes de rename, presentes en diffPaths) son
+      // disjuntos por construcción; el Set es cinturón, no lógica.
+      const removedPaths = [...new Set([...erasedPaths, ...vacatedPaths])];
+      for (const path of removedPaths) {
         this.notifyFileDelete(path);
       }
 
@@ -1718,7 +1747,7 @@ export class AIOrchestrator {
         // from the component registry before re-indexing, and a deleted file
         // re-indexes to nothing (finalFiles.get -> undefined), so listing it is
         // exactly how its components leave the registry.
-        await ProjectMemoryService.updateAfterChange(projectId, [...persistedPaths, ...erasedPaths], finalFiles);
+        await ProjectMemoryService.updateAfterChange(projectId, [...persistedPaths, ...removedPaths], finalFiles);
         await ProjectMemoryService.recordAction(projectId, {
           action: input.slice(0, 120),
           outcome: 'success',
@@ -1733,7 +1762,7 @@ export class AIOrchestrator {
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,
-          modifiedFiles: [...persistedPaths, ...erasedPaths],
+          modifiedFiles: [...persistedPaths, ...removedPaths],
           affectedFiles: intent.affected_files,
           outcome: 'success',
           // PIEZA 4 — telemetría cableada: compiló, sin error.
@@ -1786,6 +1815,23 @@ export class AIOrchestrator {
           'Detecté y corregí errores de compilación durante la verificación.'
         );
       }
+      // C-D' — el aviso cambia de tiempo verbal. Antes esto sólo podía decir
+      // "está fuera de sitio, pídeme que la vuelva a crear": la máquina veía el
+      // archivo huérfano y le pasaba la reparación al usuario. Ahora la hace, y
+      // lo que se reporta es dónde quedó — el path final es lo que el usuario
+      // necesita para reconocerla en el explorador y en el botón de aprobación.
+      if (recoveredMigrations.length > 0) {
+        warnings.push(
+          `Moví ${recoveredMigrations.map(([from, to]) => `${from} → ${to}`).join(', ')}: ` +
+          `fuera de supabase/migrations/ el sistema no la reconocía como migración ` +
+          `y no podía ofrecerte aplicarla desde el chat.`
+        );
+      }
+      // Lo que sobrevive a la recuperación ya no debería existir para un
+      // database_change (todo .sql del lote acaba bajo el prefijo). Se queda
+      // como checkpoint mecánico: si algún día vuelve a dispararse, es la señal
+      // de que la normalización dejó de cubrir un caso, y decirlo sigue siendo
+      // mejor que el silencio de antes.
       if (misplacedSql.length > 0) {
         warnings.push(
           `${misplacedSql.join(', ')} está fuera de supabase/migrations/, así que no puedo ` +

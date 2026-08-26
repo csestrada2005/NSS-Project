@@ -28,6 +28,11 @@ export function misplacedMigrations(paths: Iterable<string>): string[];
  * prefix both resolved. Only entries that actually change are present; resolve
  * with `targets.get(p) ?? p`. `normalizeDir` moves stray `.sql` files under
  * `supabase/migrations/` — pass it only for a `database_change` intent.
+ *
+ * A pre-existing path that is ALREADY under the prefix is never renamed (the
+ * intent is modifying it). A pre-existing path OUTSIDE the prefix is moved when
+ * `normalizeDir` is set: that one is a recovery, and the caller must also drop
+ * the old row, or the `.sql` ends up duplicated.
  */
 export function resolveMigrationTargets(
   paths: Iterable<string>,
