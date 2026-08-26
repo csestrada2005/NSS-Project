@@ -9,6 +9,7 @@ import {
   isSqlPath,
   normalizeMigrationDir,
   misplacedMigrations,
+  orphanMigrationCandidates,
   resolveMigrationTargets,
   resolveMigrationRenames,
   ddlProposedTelemetry,
@@ -331,5 +332,241 @@ test('el aviso de la auditoría de dependencias no se mezcla con el de reparaci�
     source,
     /Reparé además un error preexistente en: \$\{extras\.join\(', '\)\}/,
     'y la reparación real conserva la suya'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// C-D'' — LOS HUÉRFANOS ENTRAN AL INPUT, NO SÓLO AL PREDICADO.
+//
+// C-D' cambió correctamente el predicado de `resolveMigrationTargets`: un .sql
+// preexistente fuera de sitio SÍ se recupera. Lo que quedó intacto fue su
+// DOMINIO DE ENTRADA. El orquestador le pasa `diffPaths`, que se construye
+// iterando `finalFiles` y por tanto sólo contiene lo que el modelo tocó en ESTE
+// intent. El huérfano que dejó un intent anterior no está ahí.
+//
+// El checkpoint en vivo del 2026-08-26 sobre el proyecto 510afe69 lo enseñó sin
+// margen de duda: la migración nueva normalizó perfecta y
+// `src/db/migrations/create_pedidos_c2.sql` sobrevivió sin entrar JAMÁS a la
+// función. La recuperación de C-D' sólo dispara si el modelo reescribe el
+// huérfano — y no tiene ningún motivo para hacerlo.
+//
+// La cirugía es el BARRIDO: los candidatos salen del mapa completo del proyecto
+// (estado pre-intent), no del diff. C-D' enseñó al sistema a reparar lo que ve;
+// C-D'' le enseña a mirar.
+// ---------------------------------------------------------------------------
+
+/**
+ * El bucle del orquestador tal como queda tras C-D'': barrido gateado por
+ * `database_change`, unión con `diffPaths`, normalización, y persistencia
+ * sacando el contenido de `finalFiles` con caída explícita a `files`. Devuelve
+ * las ESCRITURAS en orden —una
+ * entrada por llamada a notifyFileUpdate, para que un duplicado se vea— y los
+ * orígenes vaciados que salen por el puente de delete.
+ */
+function orchestrate({ files, finalFiles = new Map(), intentType, deletedPaths = [] }) {
+  const diffPaths = [];
+  for (const [p, content] of finalFiles) {
+    if (!files.has(p) || files.get(p) !== content) {
+      if (!diffPaths.includes(p)) diffPaths.push(p);
+    }
+  }
+
+  const sweptOrphans = intentType === 'database_change'
+    ? orphanMigrationCandidates(files).filter(
+        (p) => !diffPaths.includes(p) && !deletedPaths.includes(p)
+      )
+    : [];
+  const migrationInputPaths = [...diffPaths, ...sweptOrphans];
+
+  const targets = resolveMigrationTargets(migrationInputPaths, files, NOW, {
+    normalizeDir: intentType === 'database_change',
+  });
+
+  const writes = [];
+  const vacated = [];
+  for (const p of migrationInputPaths) {
+    const content = finalFiles.get(p) ?? files.get(p);
+    const target = targets.get(p) ?? p;
+    writes.push([target, content]);
+    if (target !== p && files.has(p)) vacated.push(p);
+  }
+  return { writes, vacated, persisted: writes.map(([t]) => t) };
+}
+
+test("C-D'' 1 — el huérfano de producción se recupera SIN que el modelo lo toque", () => {
+  // El caso de hoy, con su nombre: `create_pedidos_c2.sql` ya vivía en el
+  // proyecto y el intent de hoy escribió OTRA migración. Bajo C-D' el huérfano
+  // no entraba a la función y sobrevivía intacto; ahora entra por el barrido.
+  const files = new Map([
+    [C2, 'create table pedidos();'],
+    ['src/App.tsx', 'export default App;'],
+  ]);
+  const finalFiles = new Map([
+    ...files,
+    [`${MIGRATIONS_DIR}20260826060400_create_clientes.sql`, 'create table clientes();'],
+  ]);
+
+  const { writes, vacated, persisted } = orchestrate({
+    files,
+    finalFiles,
+    intentType: 'database_change',
+  });
+
+  // El huérfano NO estaba en diffPaths: el modelo no lo tocó.
+  assert.ok(!writes.some(([t]) => t === C2), 'no se persiste donde estaba');
+
+  const recovered = writes.find(([t]) => /_create_pedidos_c2\.sql$/.test(t));
+  assert.ok(recovered, 'se escribe bajo el prefijo real');
+  assert.match(recovered[0], /^supabase\/migrations\/\d{14}_create_pedidos_c2\.sql$/);
+  // Y con SU contenido. Ojo con el fixture: `finalFiles` es el mapa COMPLETO
+  // del proyecto (el Verifier arranca de `new Map(originalFiles)`), así que el
+  // huérfano intacto SIGUE ahí con su contenido original —que es justo por qué
+  // no entró a `diffPaths`— y los dos mapas coinciden. Lo que se fija aquí es
+  // el contenido, no de cuál de los dos salió.
+  assert.equal(recovered[1], 'create table pedidos();');
+
+  // La fila vieja sale por el puente de delete, igual que en C-D'.
+  assert.deepEqual(vacated, [C2]);
+
+  // Y el corolario que estaba muerto: ahora la propuesta lo incluye y la guarda
+  // de misplaced se queda sin nada que reportar.
+  assert.deepEqual(misplacedMigrations(persisted), []);
+  assert.match(ddlProposedTelemetry(persisted.filter(isMigrationPath)), /_create_pedidos_c2\.sql/);
+});
+
+test("C-D'' 2 — huérfano barrido Y reescrito por el modelo: UNA sola escritura", () => {
+  // El dedupe. Si el modelo sí reescribió el huérfano, viene por `diffPaths` y
+  // el barrido no debe volver a añadirlo: dos entradas serían dos escrituras, y
+  // la segunda pisaría el contenido nuevo con el viejo.
+  const files = new Map([[C2, 'create table pedidos();']]);
+  const finalFiles = new Map([[C2, 'create table pedidos(id uuid);']]);
+
+  const { writes, vacated } = orchestrate({
+    files,
+    finalFiles,
+    intentType: 'database_change',
+  });
+
+  assert.equal(writes.length, 1, 'una entrada, no dos');
+  assert.match(writes[0][0], /^supabase\/migrations\/\d{14}_create_pedidos_c2\.sql$/);
+  assert.equal(writes[0][1], 'create table pedidos(id uuid);', 'gana finalFiles, no el original');
+  assert.deepEqual(vacated, [C2]);
+});
+
+test("C-D'' 3 — un .sql fuera del segmento migrations/ no lo barre nadie", () => {
+  // La doctrina de 2.2, intacta: `src/queries/reporte.sql` no es residuo de
+  // ningún plan, es un archivo que alguien quiso tener ahí, y si es o no una
+  // migración no nos toca decidirlo. El barrido cubre el espacio de alucinación
+  // documentado, no todo el .sql del proyecto.
+  const deliberate = 'src/queries/reporte.sql';
+  const files = new Map([[deliberate, 'select * from pedidos;']]);
+
+  assert.deepEqual(orphanMigrationCandidates(files), []);
+
+  const { writes, vacated } = orchestrate({ files, intentType: 'database_change' });
+  assert.deepEqual(writes, [], 'no se escribe nada');
+  assert.deepEqual(vacated, [], 'y no se vacía nada');
+
+  // Ni por parecido de subcadena: el segmento tiene que ser `migrations/`.
+  assert.deepEqual(orphanMigrationCandidates(['src/dbmigrations/x.sql']), []);
+  // Las tres formas del espacio de alucinación, en cambio, sí.
+  assert.deepEqual(
+    orphanMigrationCandidates([
+      'src/db/migrations/a.sql',
+      'db/migrations/b.sql',
+      'migrations/c.sql',
+      `${MIGRATIONS_DIR}d.sql`,
+    ]),
+    ['src/db/migrations/a.sql', 'db/migrations/b.sql', 'migrations/c.sql']
+  );
+});
+
+test("C-D'' 4 — el gate: fuera de un database_change el huérfano no se toca", () => {
+  const files = new Map([[C2, 'create table pedidos();']]);
+
+  const { writes, vacated } = orchestrate({ files, intentType: 'feature' });
+  assert.deepEqual(writes, []);
+  assert.deepEqual(vacated, []);
+});
+
+test("C-D'' — un huérfano que el plan BORRÓ no se resucita", () => {
+  // Cinturón, no lógica nueva: si este intent eligió eliminar el .sql, el
+  // barrido no puede recolocarlo. `files` es el mapa pre-intent, así que el
+  // huérfano sigue ahí cuando se barre.
+  const files = new Map([[C2, 'create table pedidos();']]);
+
+  const { writes, vacated } = orchestrate({
+    files,
+    intentType: 'database_change',
+    deletedPaths: [C2],
+  });
+  assert.deepEqual(writes, []);
+  assert.deepEqual(vacated, []);
+});
+
+test("C-D'' — la caída a `files` es una GUARDA, y como guarda se fija", () => {
+  // Honestidad sobre el mecanismo: hoy esta caída NO se ejerce nunca. El
+  // Verifier devuelve siempre el mapa completo del proyecto —`new Map(
+  // originalFiles)` de entrada, y cada reparación otra copia entera— así que un
+  // huérfano barrido está en `finalFiles` con su contenido original y el primer
+  // término del `??` ya acierta. El brief de C-D'' daba por hecho lo contrario
+  // ("el bucle escribiría undefined"); la fuente dice que no.
+  //
+  // La caída se queda igual, porque lo que garantiza es lo que importa: un
+  // huérfano se escribe con EL CONTENIDO QUE TIENE, venga del mapa que venga, y
+  // nunca con `undefined`. Este test la ejerce con un `finalFiles` que no lo
+  // carga —el único mundo en que el `!` de antes habría escrito basura— para
+  // que la guarda no se borre por parecer muerta.
+  const files = new Map([[C2, 'create table pedidos();']]);
+  const finalFiles = new Map([
+    [`${MIGRATIONS_DIR}20260826060400_create_clientes.sql`, 'create table clientes();'],
+  ]);
+
+  const { writes } = orchestrate({ files, finalFiles, intentType: 'database_change' });
+
+  const recovered = writes.find(([t]) => /_create_pedidos_c2\.sql$/.test(t));
+  assert.ok(recovered, 'el huérfano se recupera igual');
+  assert.equal(recovered[1], 'create table pedidos();', 'con contenido, no undefined');
+  assert.ok(
+    writes.every(([, content]) => content !== undefined),
+    'ninguna escritura sale con undefined'
+  );
+});
+
+test("C-D'' — el orquestador barre de verdad: el acoplamiento, anclado", () => {
+  // El bucle vive en un método privado de un .ts que `node --test` no puede
+  // importar, así que —igual que el BONUS de arriba— lo que se fija es que la
+  // fuente siga haciendo las tres cosas que estos tests modelan: barrer `files`
+  // (no `diffPaths`), unir, y sacar el contenido del mapa original cuando el
+  // huérfano no está en `finalFiles`.
+  const source = fs.readFileSync(
+    path.join(ROOT, 'src', 'services', 'AIOrchestrator.ts'),
+    'utf8'
+  );
+
+  assert.match(
+    source,
+    /orphanMigrationCandidates\(files\)/,
+    'el barrido mira el mapa COMPLETO del proyecto, no el diff'
+  );
+  assert.match(
+    source,
+    /const migrationInputPaths = \[\.\.\.diffPaths, \.\.\.sweptOrphans\]/,
+    'y su resultado se UNE a la entrada de la normalización'
+  );
+  assert.match(
+    source,
+    /resolveMigrationTargets\(migrationInputPaths, files, Date\.now\(\)/,
+    'resolveMigrationTargets recibe la entrada ampliada'
+  );
+  assert.match(
+    source,
+    /for \(const path of migrationInputPaths\) \{/,
+    'y el bucle de persistencia recorre esa misma lista'
+  );
+  assert.match(
+    source,
+    /const content = finalFiles\.get\(path\) \?\? files\.get\(path\)!/,
+    'el huérfano barrido saca su contenido del mapa original'
   );
 });

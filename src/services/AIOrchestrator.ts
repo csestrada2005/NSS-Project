@@ -20,6 +20,7 @@ import { danglingRefsTelemetry } from '../utils/danglingRefs.js';
 import {
   ddlProposedTelemetry,
   misplacedMigrations,
+  orphanMigrationCandidates,
   resolveMigrationTargets,
   isMigrationPath,
 } from '../utils/migrationPath.js';
@@ -1614,7 +1615,37 @@ export class AIOrchestrator {
       // apagó sin un solo aviso. La normalización se limita a los intents
       // `database_change`: un .sql suelto en otro tipo de intent no tiene por
       // qué ser una migración, y no nos toca decidirlo.
-      const migrationRenames = resolveMigrationTargets(diffPaths, files, Date.now(), {
+      //
+      // C-D'' — EL BARRIDO. `diffPaths` sólo contiene lo que el modelo tocó en
+      // ESTE intent, así que la recuperación de C-D' —que ya funciona— sólo
+      // disparaba si el modelo reescribía el huérfano, cosa que no tiene motivo
+      // para hacer. El checkpoint sobre el proyecto 510afe69 lo enseñó en vivo:
+      // la migración nueva normalizó perfecta y `create_pedidos_c2.sql`
+      // sobrevivió sin entrar jamás a la función. Los candidatos se barren del
+      // mapa COMPLETO del proyecto (estado pre-intent) y se unen a la entrada:
+      // C-D' enseñó al sistema a reparar lo que ve, esto le enseña a mirar.
+      //
+      // El gate es el mismo de siempre: sólo un `database_change`. Y dos
+      // exclusiones, ambas cinturón:
+      //  - lo que ya viene en `diffPaths` no se añade dos veces (el modelo
+      //    reescribió el huérfano): una sola escritura, con el contenido nuevo.
+      //  - lo que el plan BORRÓ no se resucita: un huérfano que este intent
+      //    eligió eliminar no es un archivo que haya que recolocar.
+      const sweptOrphans = intent.type === 'database_change'
+        ? orphanMigrationCandidates(files).filter(
+            p => !diffPaths.includes(p) && !deletedPaths.includes(p)
+          )
+        : [];
+      if (sweptOrphans.length > 0) {
+        console.log('[AIOrchestrator] huérfanos .sql barridos del proyecto:',
+          sweptOrphans.join(', '));
+      }
+      // La entrada real de la normalización, y también la lista que se recorre
+      // al persistir: un huérfano barrido tiene que ESCRIBIRSE en su destino,
+      // no sólo aparecer en el mapa de renombrados.
+      const migrationInputPaths = [...diffPaths, ...sweptOrphans];
+
+      const migrationRenames = resolveMigrationTargets(migrationInputPaths, files, Date.now(), {
         normalizeDir: intent.type === 'database_change',
       });
       if (migrationRenames.size > 0) {
@@ -1636,8 +1667,22 @@ export class AIOrchestrator {
       // `files.has(path)` es exactamente "esta fila ya estaba en forge_files".
       const persistedPaths: string[] = [];
       const vacatedPaths: string[] = [];
-      for (const path of diffPaths) {
-        const content = finalFiles.get(path)!;
+      for (const path of migrationInputPaths) {
+        // C-D'' — DE DÓNDE SALE EL CONTENIDO DE UN HUÉRFANO BARRIDO.
+        //
+        // Hoy `finalFiles` es el mapa COMPLETO del proyecto: el Verifier
+        // arranca de `new Map(originalFiles)` y cada reparación devuelve otra
+        // copia entera, así que un huérfano que el modelo no tocó sigue ahí con
+        // su contenido original —que es exactamente por qué no entró a
+        // `diffPaths`—. Para un path barrido, entonces, los dos mapas dicen lo
+        // mismo, y `files` es la caída explícita por si esa propiedad del
+        // Verifier deja de cumplirse: un huérfano se escribe con el contenido
+        // que tiene, venga del mapa que venga, y nunca con `undefined`.
+        //
+        // Para todo lo demás `finalFiles` manda —incluido el huérfano que el
+        // modelo SÍ reescribió, que entra una sola vez (por `diffPaths`) y con
+        // el contenido nuevo, no con el viejo.
+        const content = finalFiles.get(path) ?? files.get(path)!;
         const target = migrationRenames.get(path) ?? path;
         this.notifyFileUpdate(target, content);
         persistedPaths.push(target);
@@ -1723,8 +1768,10 @@ export class AIOrchestrator {
       // lo que les da el trato completo río abajo —notifyFileDelete, el
       // re-indexado de la memoria y modified_files— en vez de esquivarlo.
       // `erasedPaths` (deletes del plan, ausentes de finalFiles) y
-      // `vacatedPaths` (orígenes de rename, presentes en diffPaths) son
-      // disjuntos por construcción; el Set es cinturón, no lógica.
+      // `vacatedPaths` (orígenes de rename) siguen siendo disjuntos: un origen
+      // vacío viene de `diffPaths` —y un delete que reaparece en finalFiles es
+      // un delete revertido, ya descontado arriba— o de `sweptOrphans`, que
+      // excluye `deletedPaths` justo para esto. El Set es cinturón, no lógica.
       const removedPaths = [...new Set([...erasedPaths, ...vacatedPaths])];
       for (const path of removedPaths) {
         this.notifyFileDelete(path);
