@@ -106,7 +106,7 @@ Additionally output these two fields in your JSON response:
       const cleaned = this.extractJson(text);
       const parsed = JSON.parse(cleaned) as Partial<Intent>;
 
-      const VALID_TYPES = ['create_component', 'modify_component', 'add_route', 'add_feature', 'fix_bug', 'style_change', 'refactor', 'provision_database', 'general', 'new_feature', 'modify_existing', 'add_page', 'database_change', 'question'];
+      const VALID_TYPES = ['fix_bug', 'style_change', 'refactor', 'new_feature', 'modify_existing', 'add_page', 'database_change', 'question'];
       if (!parsed.type || !VALID_TYPES.includes(parsed.type)) {
         console.warn('[IntentClassifier] Invalid or missing type in response:', parsed.type, '| raw text preview:', text.slice(0, 200));
         return DEFAULT_INTENT;
