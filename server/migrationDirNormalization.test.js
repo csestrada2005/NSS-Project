@@ -257,34 +257,54 @@ test('misplacedMigrations sólo mira .sql, y deduplica', () => {
 
 // --- Efecto colateral verificado: el contexto de schema deja de ser ciego ---
 
-test('BONUS: la normalización cura la ceguera de ProjectMemoryService sin tocarlo', () => {
+test('BONUS: la normalización cura la ceguera de ProjectMemoryService', () => {
   // ProjectMemoryService.extractDatabaseSchema alimenta el `database_schema`
   // que vuelve al modelo en prompts posteriores, y filtra por EL MISMO prefijo.
   // Una migración fuera de sitio también era invisible ahí: el modelo no veía
   // el schema que él mismo acababa de escribir.
   //
-  // No se puede importar ese método desde `node --test` (es TypeScript y es
-  // privado), así que lo que se fija aquí es el ACOPLAMIENTO: la condición
-  // exacta que usa, anclada contra su fuente, más la prueba de que el path
-  // normalizado la satisface y el original no. Si esa condición cambia, este
-  // test cae y el razonamiento se revisa en vez de envejecer callado.
+  // C-F — ESTE TEST CAYÓ, Y CAER ERA SU TRABAJO. La versión anterior anclaba
+  // la condición LITERAL (`path.startsWith('supabase/migrations/') &&
+  // path.endsWith('.sql')`), que era una copia a mano de `isMigrationPath`.
+  // Anclar la copia la fijaba: mientras el test exigiera ese texto exacto,
+  // deduplicar era imposible sin romperlo. El propio comentario decía que si
+  // la condición cambiaba se revisaba el razonamiento en vez de envejecer
+  // callado — esto es esa revisión. Lo que se ancla ahora es el CONSUMO del
+  // reconocedor único, no su transcripción.
+  //
+  // El método sigue sin poder importarse desde `node --test` (es TypeScript y
+  // es privado), así que lo que se fija es el ACOPLAMIENTO: que
+  // ProjectMemoryService importe `isMigrationPath` de migrationPath.js y lo
+  // use, más la prueba de que el path normalizado lo satisface y el original
+  // no. El mirror de abajo es ahora la función REAL, importada: si el
+  // reconocedor se ensancha, este test se entera solo.
   const source = fs.readFileSync(
     path.join(ROOT, 'src', 'services', 'ProjectMemoryService.ts'),
     'utf8'
   );
   assert.match(
     source,
-    /path\.startsWith\('supabase\/migrations\/'\)\s*&&\s*path\.endsWith\('\.sql'\)/,
-    'extractDatabaseSchema ya no filtra por el prefijo: revisa este test'
+    /import \{[^}]*\bisMigrationPath\b[^}]*\}\s*from\s*'\.\.\/utils\/migrationPath\.js'/,
+    'ProjectMemoryService debe importar el reconocedor, no reimplementarlo'
+  );
+  assert.match(
+    source,
+    /if \(isMigrationPath\(path\) \|\| path === 'src\/types\.ts'\)/,
+    'extractDatabaseSchema debe filtrar CON isMigrationPath'
+  );
+  assert.doesNotMatch(
+    source,
+    /startsWith\('supabase\/migrations\/'\)/,
+    'no puede quedar ninguna copia a mano del prefijo en ProjectMemoryService'
   );
 
-  const seenByMemory = (p) => p.startsWith(MIGRATIONS_DIR) && p.endsWith('.sql');
+  const seenByMemory = isMigrationPath;
 
   const stray = 'src/db/migrations/20240101000000_create_orders.sql';
   assert.equal(seenByMemory(stray), false, 'antes: el modelo no veía su propio schema');
 
   const [persisted] = persistedPaths([stray], new Map(), 'database_change');
-  assert.equal(seenByMemory(persisted), true, 'después: lo ve, sin tocar ProjectMemoryService');
+  assert.equal(seenByMemory(persisted), true, 'después: lo ve, con el MISMO reconocedor');
 });
 
 // --- El prompt no se puede borrar en silencio -------------------------------

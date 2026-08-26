@@ -1700,6 +1700,39 @@ export class AIOrchestrator {
       }
 
       // ----------------------------------------------------------------
+      // EL MAPA QUE VE LA MEMORIA ES EL DE DESPUÉS DEL RENOMBRADO.
+      //
+      // `finalFiles` sale del Verifier, que nunca supo del renombrado: sus
+      // claves son las de ANTES de normalizar. `ProjectMemoryService`
+      // recalcula `database_schema` recorriendo ESE mapa y filtrando por
+      // `supabase/migrations/`, así que una migración recolocada entraba en la
+      // memoria por su path VIEJO —el que no empieza por el prefijo— y
+      // desaparecía del schema. El archivo quedaba escrito y aprobable en
+      // forge_files y a la vez INVISIBLE para el contexto que vuelve al
+      // modelo: el mismo silencio que la normalización vino a matar,
+      // sobreviviendo un paso más abajo, en el único consumidor que leía el
+      // mapa en crudo en vez de `persistedPaths`.
+      //
+      // La normalización SÍ produce el mapa viejo→nuevo (`migrationRenames`);
+      // lo que faltaba era consumirlo aquí. El contenido se resuelve con la
+      // MISMA caída que la persistencia (`finalFiles` manda, `files` es el
+      // respaldo del huérfano barrido), así que memoria y forge_files no
+      // pueden divergir.
+      //
+      // El origen se VACÍA, y en dos pasadas: dejarlo contaría dos veces la
+      // misma migración en el schema cuando el renombrado ocurre DENTRO del
+      // prefijo —viejo y nuevo empiezan igual, los dos pasan el filtro— y
+      // dejaría en la memoria un path que en el proyecto ya no existe. Los
+      // borrados van después de todas las escrituras porque un destino de este
+      // lote podría, en el límite, coincidir con el origen de otro.
+      // ----------------------------------------------------------------
+      const memoryFiles = new Map(finalFiles);
+      for (const [from, to] of migrationRenames) {
+        memoryFiles.set(to, finalFiles.get(from) ?? files.get(from)!);
+      }
+      for (const from of migrationRenames.keys()) memoryFiles.delete(from);
+
+      // ----------------------------------------------------------------
       // PIEZA A — gate de propuesta. Un intent 'database_change' que dejó al
       // menos una migración escrita NO ha tocado la base de datos: la
       // generación jamás ejecuta DDL. Antes, ese intent cerraba en 'success'
@@ -1792,9 +1825,9 @@ export class AIOrchestrator {
         trackAICall(projectId);
         // Deleted paths go in too: updateAfterChange drops every listed path
         // from the component registry before re-indexing, and a deleted file
-        // re-indexes to nothing (finalFiles.get -> undefined), so listing it is
+        // re-indexes to nothing (memoryFiles.get -> undefined), so listing it is
         // exactly how its components leave the registry.
-        await ProjectMemoryService.updateAfterChange(projectId, [...persistedPaths, ...removedPaths], finalFiles);
+        await ProjectMemoryService.updateAfterChange(projectId, [...persistedPaths, ...removedPaths], memoryFiles);
         await ProjectMemoryService.recordAction(projectId, {
           action: input.slice(0, 120),
           outcome: 'success',

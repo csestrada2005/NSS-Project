@@ -1,4 +1,5 @@
 import { SupabaseService } from './SupabaseService';
+import { isMigrationPath } from '../utils/migrationPath.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -114,10 +115,16 @@ export class ProjectMemoryService {
   private static extractDatabaseSchema(files: Map<string, string>): string {
     const parts: string[] = [];
     for (const [path, content] of files) {
-      if (
-        (path.startsWith('supabase/migrations/') && path.endsWith('.sql')) ||
-        path === 'src/types.ts'
-      ) {
+      // UN SOLO RECONOCEDOR. Esta condición era una COPIA literal de
+      // isMigrationPath: mismo prefijo, misma extensión, escrita a mano aquí.
+      // Dos copias de un predicado son dos predicados en cuanto una cambia, y
+      // ésta es la que decide qué schema ve el modelo: si migrationPath.js
+      // ensancha lo que cuenta como migración (mayúsculas en `.SQL`, otro
+      // prefijo) y esta copia no se entera, el modelo escribe contra un mundo
+      // que ya no existe — el mismo silencio que la Cirugía 2.2 vino a matar,
+      // por la única vía que quedaba abierta. El reconocedor vive en
+      // migrationPath.js; aquí sólo se consume.
+      if (isMigrationPath(path) || path === 'src/types.ts') {
         parts.push(`-- ${path}\n${content.slice(0, 1000)}`);
       }
     }
