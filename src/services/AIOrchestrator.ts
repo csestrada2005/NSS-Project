@@ -33,6 +33,7 @@ import { cachedSystem, cachedSystemBlocks } from './promptCache';
 import { DesignBriefService } from './DesignBriefService';
 import { isAbortError } from '../utils/abort';
 import { canEnterFastLane, isSimpleEditIntent } from '../utils/laneRouting.js';
+import { touchesMigrations } from '../utils/migrationGate.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1612,9 +1613,10 @@ export class AIOrchestrator {
       // única regla de prompt que lo nombraba no llega al plan lane — que es
       // justo la lane a la que laneRouting manda siempre un database_change.
       // Un proyecto real escribió `src/db/migrations/…` y la cadena entera se
-      // apagó sin un solo aviso. La normalización se limita a los intents
-      // `database_change`: un .sql suelto en otro tipo de intent no tiene por
-      // qué ser una migración, y no nos toca decidirlo.
+      // apagó sin un solo aviso. La normalización se activaba sólo en los
+      // intents `database_change`; C-D le añade la vía por contenido (ver el
+      // gate más abajo), porque un .sql que llega al plan bajo otra etiqueta
+      // esquivaba el barrido entero.
       //
       // C-D'' — EL BARRIDO. `diffPaths` sólo contiene lo que el modelo tocó en
       // ESTE intent, así que la recuperación de C-D' —que ya funciona— sólo
@@ -1625,13 +1627,19 @@ export class AIOrchestrator {
       // mapa COMPLETO del proyecto (estado pre-intent) y se unen a la entrada:
       // C-D' enseñó al sistema a reparar lo que ve, esto le enseña a mirar.
       //
-      // El gate es el mismo de siempre: sólo un `database_change`. Y dos
-      // exclusiones, ambas cinturón:
+      // C-D — EL GATE YA NO ES SÓLO LA ETIQUETA. Sigue entrando todo
+      // `database_change` (un intent así activa el barrido aunque su plan aún
+      // no traiga un path reconocible), y AL LADO entra el CONTENIDO: si el
+      // lote toca migraciones —cualquier `.sql`, o cualquier cosa bajo
+      // `supabase/migrations/`— se barre diga lo que diga el clasificador. La
+      // etiqueta la produce un LLM, y un `.sql` que llegaba al plan bajo otro
+      // intent_type esquivaba el barrido ENTERO. Es un OR: añade activaciones,
+      // no quita ninguna. Y dos exclusiones, ambas cinturón:
       //  - lo que ya viene en `diffPaths` no se añade dos veces (el modelo
       //    reescribió el huérfano): una sola escritura, con el contenido nuevo.
       //  - lo que el plan BORRÓ no se resucita: un huérfano que este intent
       //    eligió eliminar no es un archivo que haya que recolocar.
-      const sweptOrphans = intent.type === 'database_change'
+      const sweptOrphans = (intent.type === 'database_change' || touchesMigrations(diffPaths))
         ? orphanMigrationCandidates(files).filter(
             p => !diffPaths.includes(p) && !deletedPaths.includes(p)
           )
@@ -1646,7 +1654,7 @@ export class AIOrchestrator {
       const migrationInputPaths = [...diffPaths, ...sweptOrphans];
 
       const migrationRenames = resolveMigrationTargets(migrationInputPaths, files, Date.now(), {
-        normalizeDir: intent.type === 'database_change',
+        normalizeDir: intent.type === 'database_change' || touchesMigrations(migrationInputPaths),
       });
       if (migrationRenames.size > 0) {
         console.log('[AIOrchestrator] migraciones colocadas en su sitio real:',
