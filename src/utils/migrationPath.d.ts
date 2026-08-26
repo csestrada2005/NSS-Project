@@ -20,6 +20,15 @@ export function isSqlPath(path: string): boolean;
 /** The path a `.sql` must occupy: same file name, under `supabase/migrations/`. */
 export function normalizeMigrationDir(path: string): string;
 
+/**
+ * The project's ORPHAN `.sql` files: under some `migrations/` segment but not
+ * under `supabase/migrations/`. Swept from the full pre-intent file map, not
+ * from the intent's diff — that is the whole point (C-D'').
+ */
+export function orphanMigrationCandidates(
+  existingPaths: Iterable<string> | Map<string, unknown> | Set<string>
+): string[];
+
 /** The `.sql` paths that no migration consumer will recognise (wrong folder). */
 export function misplacedMigrations(paths: Iterable<string>): string[];
 

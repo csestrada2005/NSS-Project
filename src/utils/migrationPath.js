@@ -133,6 +133,68 @@ export function misplacedMigrations(paths) {
 }
 
 /**
+ * ¿Vive este path en algo que alguien llamó `migrations/`?
+ *
+ * Segmento completo, no subcadena: `src/db/migrations/x.sql` y `migrations/x.sql`
+ * sí; `src/dbmigrations/x.sql` no. La carpeta la inventó un plan, pero la
+ * inventó SIEMPRE con ese nombre.
+ *
+ * @param {string} path
+ * @returns {boolean}
+ */
+function underMigrationsSegment(path) {
+  const p = String(path ?? '');
+  return p.startsWith('migrations/') || p.includes('/migrations/');
+}
+
+/**
+ * C-D'' — LOS HUÉRFANOS DEL PROYECTO, BARRIDOS DEL MAPA COMPLETO.
+ *
+ * C-D' enseñó a `resolveMigrationTargets` a RECUPERAR un .sql preexistente mal
+ * ubicado en vez de sólo avisarlo. Lo que no cambió fue su DOMINIO DE ENTRADA:
+ * el orquestador le pasa `diffPaths`, que sólo contiene lo que el modelo tocó
+ * en este intent. El huérfano de un intent ANTERIOR no está ahí, así que la
+ * recuperación sólo disparaba si el modelo volvía a reescribir el archivo — que
+ * no tiene ningún motivo para hacer. El checkpoint de producción sobre el
+ * proyecto 510afe69 lo enseñó en vivo: la migración nueva normalizó perfecta y
+ * `src/db/migrations/create_pedidos_c2.sql` sobrevivió sin entrar jamás a la
+ * función.
+ *
+ * Esto es la otra mitad: los candidatos salen del mapa COMPLETO del proyecto
+ * (estado pre-intent), no del diff. C-D' enseñó al sistema a reparar lo que ve;
+ * esto le enseña a mirar.
+ *
+ * EL PREDICADO, Y POR QUÉ NO ES MÁS ANCHO. Un .sql cuenta como huérfano sólo si
+ * está bajo un segmento `migrations/` y NO bajo el prefijo real. Eso cubre
+ * entero el espacio de alucinación documentado (`src/db/migrations/`,
+ * `db/migrations/`, `migrations/` pelado) y deja en paz un `.sql` deliberado
+ * fuera de ese patrón: `src/queries/reporte.sql` no es residuo de nadie, y si
+ * es o no una migración no nos toca decidirlo a nosotros — la misma doctrina
+ * de 2.2, intacta.
+ *
+ * El caller gatea por `database_change` (fuera de ahí un .sql suelto no tiene
+ * por qué ser una migración) y aporta el contenido desde el mapa original: un
+ * huérfano barrido NO está en el resultado del Verifier.
+ *
+ * @param {Iterable<string>|Map<string, unknown>|Set<string>} existingPaths
+ *        el mapa ORIGINAL del proyecto, pre-intent
+ * @returns {string[]} los .sql huérfanos, en el orden en que aparecen
+ */
+export function orphanMigrationCandidates(existingPaths) {
+  const keys = existingPaths instanceof Map
+    ? existingPaths.keys()
+    : (existingPaths ?? []);
+  const out = [];
+  for (const path of keys) {
+    if (!isSqlPath(path)) continue;
+    if (isMigrationPath(path)) continue;
+    if (!underMigrationsSegment(path)) continue;
+    if (!out.includes(path)) out.push(path);
+  }
+  return out;
+}
+
+/**
  * Instante UTC en el formato de prefijo de Supabase: YYYYMMDDHHMMSS.
  *
  * @param {Date|number} when
