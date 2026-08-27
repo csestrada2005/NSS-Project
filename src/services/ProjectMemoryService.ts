@@ -275,32 +275,43 @@ export class ProjectMemoryService {
 
   static async updateAfterChange(
     projectId: string,
-    modifiedFilePaths: string[],
+    // Ya no se lee: cuando todo campo se recomputa entero desde `allFiles`, la
+    // lista de paths tocados deja de decidir nada. Se conserva en la firma —con
+    // prefijo `_` para noUnusedParameters— porque es la ANOTACIÓN DE INTENCIÓN
+    // del caller: qué escribió este intent. Los cuatro call sites la pasan, el
+    // log de intents la contrasta, y quitarla obligaría a reescribirlos sin
+    // ganar nada. Si algún día vuelve a hacer falta (telemetría, invalidación
+    // selectiva), está donde tiene que estar.
+    _modifiedFilePaths: string[],
     allFiles: Map<string, string>
   ): Promise<void> {
     const existing = await this.get(projectId);
     if (!existing) return;
 
-    // Remove entries for modified files, then re-index them
-    const updatedRegistry = existing.component_registry.filter(
-      e => !modifiedFilePaths.includes(e.path)
-    );
+    // UN SOLO INDEXADOR. Aquí vivía un reindexado incremental (filtrar los
+    // paths modificados y recorrerlos con una regex escrita a mano) cuya regex
+    // era COPIA LITERAL de la de extractComponents: la línea 93 y la 296 eran
+    // el mismo predicado escrito dos veces. Dos copias son dos predicados en
+    // cuanto una cambia, y ésta decide qué componentes ve el modelo: ampliar
+    // extractComponents (otro prefijo, otra forma de export) sin enterarse
+    // aquí devolvía un registro parcial. Se unifica al extractor canónico,
+    // exactamente como isMigrationPath en C-F. allFiles es el mapa COMPLETO
+    // del proyecto en los cuatro call sites, así que recomputar entero da el
+    // mismo resultado que el incremental —sin la copia.
+    existing.component_registry = this.extractComponents(allFiles);
 
-    for (const path of modifiedFilePaths) {
-      if (
-        (!path.startsWith('src/components') && !path.startsWith('src/pages')) ||
-        !path.endsWith('.tsx')
-      ) continue;
-
-      const content = allFiles.get(path) ?? '';
-      const exportRegex = /export\s+(?:default\s+)?(?:function|const|class)\s+([A-Z][A-Za-z0-9_]*)/g;
-      let m: RegExpExecArray | null;
-      while ((m = exportRegex.exec(content)) !== null) {
-        updatedRegistry.push({ name: m[1], path });
-      }
-    }
-
-    existing.component_registry = updatedRegistry;
+    // Misma doctrina para la foto del proyecto: tech_stack, design_tokens,
+    // route_map y code_conventions son proyecciones puras de los archivos, no
+    // estado acumulado. Se recomputan ENTERAS en cada cambio para que la
+    // memoria no quede congelada en el estado del build inicial: una ruta
+    // nueva en App.tsx, un token cambiado en index.css, una dependencia
+    // añadida a package.json o un alias movido en tsconfig entraban antes en
+    // el proyecto sin entrar jamás en la memoria, y el modelo seguía leyendo
+    // la foto del primer día.
+    existing.tech_stack = this.extractTechStack(allFiles);
+    existing.design_tokens = this.extractDesignTokens(allFiles);
+    existing.route_map = this.extractRoutes(allFiles);
+    existing.code_conventions = this.extractConventions(allFiles);
 
     // El schema se recalcula ENTERO desde allFiles, igual que en buildFromFiles.
     // Doctrina: database_schema es la intención acumulada en los archivos del

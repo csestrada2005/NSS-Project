@@ -1846,10 +1846,12 @@ export class AIOrchestrator {
       // Update memory and record success
       if (projectId) {
         trackAICall(projectId);
-        // Deleted paths go in too: updateAfterChange drops every listed path
-        // from the component registry before re-indexing, and a deleted file
-        // re-indexes to nothing (memoryFiles.get -> undefined), so listing it is
-        // exactly how its components leave the registry.
+        // Deleted paths go in too. Ya NO porque la lista los borre del registro
+        // —updateAfterChange recomputa cada campo entero desde `memoryFiles` y
+        // la lista no decide nada—, sino porque `memoryFiles` es el mapa
+        // COMPLETO del proyecto YA sin ellos: un archivo borrado sale de la
+        // memoria por ausencia, no por mención. La lista se sigue pasando como
+        // anotación de intención (qué escribió y qué borró este intent).
         await ProjectMemoryService.updateAfterChange(projectId, [...persistedPaths, ...removedPaths], memoryFiles);
         await ProjectMemoryService.recordAction(projectId, {
           action: input.slice(0, 120),
