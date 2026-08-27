@@ -9,9 +9,29 @@ import {
 } from '@/utils/ddlProposalState.js';
 import { DDLApprovalButton } from './forge/DDLApprovalButton';
 
+/**
+ * CIRUGÍA B1 — forma de un paso del plan tal como lo consume el chat.
+ *
+ * Declarado aquí, estructural, y NO importado de services/Architect: el chat
+ * pinta lo que le llega y no debe acoplarse al módulo que genera el plan. Si el
+ * BuildStep del Architect gana campos, este render sigue compilando.
+ */
+export interface ChatPlanStep {
+  order: number;
+  description: string;
+  file_path: string;
+  action: 'create' | 'modify' | 'delete';
+}
+
 export interface Message {
   role: 'user' | 'assistant';
   content: string;
+  /**
+   * Plan ejecutado por el pipeline (plan lane). Efímero en sesión: appendMessage
+   * persiste sólo `content`, así que tras un refresh el mensaje se rehidrata sin
+   * plan — mismo trato que suggestedAction.
+   */
+  planSteps?: ChatPlanStep[];
   warning?: string;
   errorType?: 'insufficient_credits' | 'compile_error' | 'generic';
   errorDetail?: string;
@@ -33,7 +53,7 @@ interface ChatInterfaceProps {
     message: string,
     onProgress?: (step: number, total: number, file: string, description?: string) => void,
     onRetry?: (attempt: number, error: string) => void
-  ) => Promise<{ success: boolean; modifiedFiles: string[]; error?: string; errorReason?: string; warning?: string; chatResponse?: string; suggestedAction?: string }>;
+  ) => Promise<{ success: boolean; modifiedFiles: string[]; error?: string; errorReason?: string; warning?: string; chatResponse?: string; suggestedAction?: string; planSteps?: ChatPlanStep[] }>;
   selectedElement: { tagName: string; className?: string } | null;
   chatHistory?: Message[];
   onHistoryUpdate?: (history: Message[]) => void;
@@ -331,7 +351,7 @@ export function ChatInterface({
     }
   };
 
-  const buildAssistantMessage = (result: { success: boolean; modifiedFiles: string[]; error?: string; errorReason?: string; warning?: string; chatResponse?: string; suggestedAction?: string }): { content: string; warning?: string; errorType?: 'insufficient_credits' | 'compile_error' | 'generic'; errorDetail?: string; suggestedAction?: string } => {
+  const buildAssistantMessage = (result: { success: boolean; modifiedFiles: string[]; error?: string; errorReason?: string; warning?: string; chatResponse?: string; suggestedAction?: string; planSteps?: ChatPlanStep[] }): { content: string; warning?: string; errorType?: 'insufficient_credits' | 'compile_error' | 'generic'; errorDetail?: string; suggestedAction?: string; planSteps?: ChatPlanStep[] } => {
     if (!result.success) {
       if (result.error === 'INSUFFICIENT_CREDITS') {
         // CAMBIO 2c — the "free build used" copy is only honest when the user
@@ -354,16 +374,19 @@ export function ChatInterface({
       }
       return { content: 'Sorry, something went wrong processing your request.', errorType: 'generic' };
     }
+    // CIRUGÍA B1 — planSteps viaja en las TRES ramas de éxito y en ninguna de
+    // fallo: en el camino de fallo el verify no persistió nada, así que pintar
+    // "Plan ejecutado" sería falso.
     if (result.chatResponse) {
-      return { content: result.chatResponse, warning: result.warning, suggestedAction: result.suggestedAction };
+      return { content: result.chatResponse, warning: result.warning, suggestedAction: result.suggestedAction, planSteps: result.planSteps };
     }
     if (result.modifiedFiles.length > 0) {
       // Propagate suggestedAction here too — on partial success the plan lane
       // reports 'Done. Modified: ...' with a follow-up action, and the action
       // button must render alongside the success message, not only chatResponse.
-      return { content: `Done. Modified: ${result.modifiedFiles.join(', ')}`, warning: result.warning, suggestedAction: result.suggestedAction };
+      return { content: `Done. Modified: ${result.modifiedFiles.join(', ')}`, warning: result.warning, suggestedAction: result.suggestedAction, planSteps: result.planSteps };
     }
-    return { content: 'Done — no files needed changing.', warning: result.warning, suggestedAction: result.suggestedAction };
+    return { content: 'Done — no files needed changing.', warning: result.warning, suggestedAction: result.suggestedAction, planSteps: result.planSteps };
   };
 
   const sendMessage = async (text: string) => {
@@ -437,7 +460,7 @@ export function ChatInterface({
         }
       }
 
-      const { content, warning, errorType, errorDetail, suggestedAction } = buildAssistantMessage(result);
+      const { content, warning, errorType, errorDetail, suggestedAction, planSteps } = buildAssistantMessage(result);
       // CIRUGÍA 2 — la marca de propuesta viaja EN EL CONTENIDO del mensaje.
       //
       // No es telemetría duplicada: es el único sitio donde el estado del botón
@@ -461,6 +484,10 @@ export function ChatInterface({
         errorType,
         errorDetail,
         suggestedAction,
+        // CIRUGÍA B1 — sólo estado de sesión: appendMessage persiste `content` y
+        // nada más, así que el plan no se guarda ni se rehidrata (igual que
+        // suggestedAction). No se toca la persistencia por esto.
+        planSteps,
       });
     } catch (error) {
       clearInterval(intervalId);
@@ -569,6 +596,42 @@ export function ChatInterface({
                 </div>
               ) : (
                 msg.content
+              )}
+              {/* CIRUGÍA B1 — el plan que se ejecutó, en solo lectura. Se ordena
+                  aquí por `order` porque es el campo con el que el Implementer
+                  decide la ejecución; el array puede llegar en el orden de
+                  emisión del Architect (planTrim conserva el orden original). */}
+              {msg.planSteps && msg.planSteps.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-border/50">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+                    Plan ejecutado
+                  </p>
+                  <ul className="space-y-1">
+                    {[...msg.planSteps]
+                      .sort((a, b) => a.order - b.order)
+                      .map((step, idx) => (
+                        <li key={idx} className="flex gap-2 items-start">
+                          <span
+                            className={
+                              step.action === 'create'
+                                ? 'text-green-500 text-sm leading-5'
+                                : step.action === 'delete'
+                                ? 'text-red-400 text-sm leading-5'
+                                : 'text-blue-400 text-sm leading-5'
+                            }
+                          >
+                            {step.action === 'create' ? '+' : step.action === 'delete' ? '✕' : '✎'}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-sm">{step.description}</span>
+                            <span className="block text-xs font-mono text-muted-foreground truncate">
+                              {step.file_path}
+                            </span>
+                          </span>
+                        </li>
+                      ))}
+                  </ul>
+                </div>
               )}
               {msg.warning && (
                 <p className="text-yellow-400 text-xs mt-2">⚠️ {msg.warning}</p>
