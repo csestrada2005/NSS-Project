@@ -18,6 +18,12 @@ import { buildImportedByBlock } from '../utils/importGraph.js';
 import { deletionTargetsTelemetry } from '../utils/deletionGuard.js';
 import { danglingRefsTelemetry } from '../utils/danglingRefs.js';
 import {
+  missingRequiredPaths,
+  injectMissingSteps,
+  planRepairedTelemetry,
+  buildPlanRepairNote,
+} from '../utils/planGuard.js';
+import {
   ddlProposedTelemetry,
   misplacedMigrations,
   orphanMigrationCandidates,
@@ -1362,7 +1368,12 @@ export class AIOrchestrator {
     // navbar, "App Name" is gone and this flag is false for every later edit.
     const headerContent = files.get('src/components/layout/Header.tsx') ?? '';
     const isInitialBuild = headerContent.includes('App Name');
-    const { steps, wasTrimmed, originalCount, deletionTargets } = await Architect.plan(
+    // `let` y no `const`: la guardia estructural de más abajo puede sustituir
+    // el payload entero por el del reintento. Los cuatro campos viajan juntos
+    // porque describen UN plan: adoptar los steps de un replan y conservar los
+    // deletionTargets del anterior mediría los borrados nuevos contra una
+    // autorización que no es la suya.
+    let { steps, wasTrimmed, originalCount, deletionTargets } = await Architect.plan(
       input,
       memoryFormatted,
       intent,
@@ -1404,6 +1415,63 @@ export class AIOrchestrator {
         });
       }
       return result;
+    }
+
+    // ------------------------------------------------------------------
+    // G-1 — GUARDIA ESTRUCTURAL DEL INITIAL BUILD.
+    //
+    // En el primer build, un plan que no reclama Header.tsx, Footer.tsx e
+    // Index.tsx con un step propio deja el chrome en su estado de plantilla: el
+    // Implementer sólo abre `step.file_path`, así que mencionar el footer dentro
+    // de la descripción de otro step no escribe el footer. El `initialBuildRule`
+    // del Architect lleva prohibiendo ese plegado desde a246007/f5e99dc y la
+    // regresión se repitió con esas reglas activas — un prompt es una petición,
+    // no una garantía, igual que con los deletes sobre infraestructura.
+    //
+    // Escalón 1: un ÚNICO reintento nombrando los paths ausentes (el modelo
+    // suele acertar cuando se le dice exactamente qué falta). Escalón 2, si
+    // reincide: inyección determinista, más la marca [PLAN_REPAIRED:...] para
+    // que la reparación sea contable y no un silencio.
+    //
+    // Fuera del initial build el guard no interviene jamás: un proyecto ya
+    // branded puede legítimamente no tocar su header.
+    // ------------------------------------------------------------------
+    let planRepairedMark = '';
+    if (isInitialBuild) {
+      const missing = missingRequiredPaths(steps);
+      if (missing.length > 0) {
+        console.warn('[AIOrchestrator] plan_guard missing=' + missing.join(','));
+        const repaired = await Architect.plan(
+          input,
+          memoryFormatted,
+          intent,
+          designContext,
+          blueprint,
+          importedByBlock,
+          isInitialBuild,
+          signal,
+          buildPlanRepairNote(missing)
+        );
+        // Un abort DURANTE el reintento no puede caer al camino del plan vacío:
+        // ahí se interpretaría como "el Architect no devolvió nada" y arrancaría
+        // el heavy lane después de que el usuario ya había cancelado.
+        if (signal?.aborted) {
+          return await this.finalizeCancelled({
+            input, intent, writtenPaths: [], projectId, creditUserId, startTime,
+          });
+        }
+        // Un reintento vacío (error de API, JSON ilegible) no destruye el plan
+        // que sí teníamos: nos quedamos con el primero y lo reparamos.
+        if (repaired.steps.length > 0) {
+          ({ steps, wasTrimmed, originalCount, deletionTargets } = repaired);
+        }
+        const stillMissing = missingRequiredPaths(steps);
+        if (stillMissing.length > 0) {
+          steps = injectMissingSteps(steps, stillMissing);
+          planRepairedMark = planRepairedTelemetry(stillMissing);
+          console.warn('[AIOrchestrator] plan_guard injected=' + stillMissing.join(','));
+        }
+      }
     }
 
     // ------------------------------------------------------------------
@@ -1863,7 +1931,7 @@ export class AIOrchestrator {
           // [CLARIFY_ASKED], sufijo en el prompt, sin tocar columnas ni enums.
           prompt: (hasPartial ? `${input} [PARTIAL:${partialOrders.join(',')}]` : input) +
             targetsMark + rejectedDeleteMark + restoredMark + danglingMark + ddlProposedMark +
-            ddlMisplacedMark,
+            ddlMisplacedMark + planRepairedMark,
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,
@@ -1985,7 +2053,11 @@ export class AIOrchestrator {
         });
         await this.logIntent({
           projectId,
-          prompt: input + targetsMark + rejectedDeleteMark + restoredMark + danglingMark,
+          // [PLAN_REPAIRED:...] va TAMBIÉN aquí: la reparación es un hecho del
+          // plan, anterior a saber si compila. Si sólo estuviera en el camino de
+          // éxito, un intent reparado que luego falla el verify sería invisible.
+          prompt: input + targetsMark + rejectedDeleteMark + restoredMark + danglingMark +
+            planRepairedMark,
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,
