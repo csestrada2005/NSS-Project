@@ -1400,7 +1400,7 @@ export function StudioEngine() {
     onProgress?: (step: number, total: number, file: string, description?: string) => void,
     onRetry?: (attempt: number, error: string) => void,
     filesOverride?: Map<string, string>
-  ): Promise<{ success: boolean; modifiedFiles: string[]; error?: string; errorReason?: string; warning?: string; chatResponse?: string; suggestedAction?: string }> => {
+  ): Promise<{ success: boolean; modifiedFiles: string[]; error?: string; errorReason?: string; warning?: string; chatResponse?: string; suggestedAction?: string; planSteps?: { order: number; description: string; file_path: string; action: 'create' | 'modify' | 'delete' }[] }> => {
     if (isReadOnly) return { success: false, modifiedFiles: [] };
 
     // Persistencia del mensaje del usuario: embudo común de TODOS los envíos.
@@ -1519,6 +1519,11 @@ export function StudioEngine() {
         warning: result.warning,
         chatResponse: result.chatResponse,
         suggestedAction: result.suggestedAction,
+        // CIRUGÍA B1 — el plan que el Implementer ejecutó ya viajaba en
+        // OrchestratorResult.steps y moría aquí. Se cablea al chat para que el
+        // mensaje del asistente pueda mostrarlo; es informativo y efímero (no se
+        // persiste), igual que suggestedAction.
+        planSteps: result.steps,
       };
     } catch (error) {
       // CAMBIO 2 — última red de seguridad de la ruta de cancelación: una
