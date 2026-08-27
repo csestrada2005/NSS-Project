@@ -22,6 +22,15 @@ export interface Intent {
   reasoning: string;
   requiredPatternIds?: string[];
   domain?: 'auth' | 'payments' | 'realtime' | 'forms' | 'data' | 'ui' | 'general';
+  /**
+   * Cuál de los cuatro caminos de default disparó, o `undefined` si la
+   * clasificación fue normal. Los cuatro devuelven el MISMO DEFAULT_INTENT
+   * —mismo type, mismo risk, mismo reasoning literal—, así que desde el objeto
+   * retornado eran indistinguibles entre sí y de un 'modify_existing' legítimo.
+   * Este marcador es la única diferencia observable; viaja hasta la columna
+   * `classifier_default` de forge_intent_log (NULL = clasificación normal).
+   */
+  classifierDefault?: 'api_error' | 'invalid_type' | 'missing_risk' | 'parse_error';
 }
 
 const DEFAULT_INTENT: Intent = {
@@ -106,7 +115,7 @@ Additionally output these two fields in your JSON response:
 
       if (data.error) {
         console.warn('[IntentClassifier] API error:', data.error);
-        return DEFAULT_INTENT;
+        return { ...DEFAULT_INTENT, classifierDefault: 'api_error' };
       }
 
       const text: string = data.content?.[0]?.text ?? '';
@@ -116,11 +125,12 @@ Additionally output these two fields in your JSON response:
       const VALID_TYPES = ['fix_bug', 'style_change', 'refactor', 'new_feature', 'modify_existing', 'add_page', 'database_change', 'question'];
       if (!parsed.type || !VALID_TYPES.includes(parsed.type)) {
         console.warn('[IntentClassifier] Invalid or missing type in response:', parsed.type, '| raw text preview:', text.slice(0, 200));
-        return DEFAULT_INTENT;
+        return { ...DEFAULT_INTENT, classifierDefault: 'invalid_type' };
       }
 
       if (!parsed.risk) {
-        return DEFAULT_INTENT;
+        console.warn('[IntentClassifier] Missing risk in response; using safe default.');
+        return { ...DEFAULT_INTENT, classifierDefault: 'missing_risk' };
       }
 
       return {
@@ -134,7 +144,7 @@ Additionally output these two fields in your JSON response:
       };
     } catch (e) {
       console.warn('[IntentClassifier] Failed to classify:', e);
-      return DEFAULT_INTENT;
+      return { ...DEFAULT_INTENT, classifierDefault: 'parse_error' };
     }
   }
 
