@@ -68,7 +68,13 @@ export class Architect {
     // semántica del nombre. Opcional para no romper llamadas existentes.
     importedByBlock: string = '',
     isInitialBuild: boolean = false,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    // Nota del guard estructural del initial build (src/utils/planGuard.js) para
+    // el ÚNICO reintento: nombra los archivos que el plan anterior omitió. Va en
+    // parámetro propio y NO concatenada al `prompt`, que es lo que dijo el
+    // usuario y no debe llevar texto del sistema. Último de la lista y con
+    // default vacío: ninguna llamada existente cambia.
+    repairNote: string = ''
   ): Promise<{
     steps: BuildStep[];
     wasTrimmed: boolean;
@@ -185,6 +191,13 @@ OUTPUT FORMAT — return ONLY a valid JSON object with exactly these two keys, n
       const importGraphSection = importedByBlock.trim().length > 0
         ? `${importedByBlock.trim()}\n\n`
         : '';
+      // La nota de reparación va en su propio bloque del user message, el
+      // último antes de la instrucción final: máxima recencia, y sin tocar el
+      // system, cuyos bloques están cacheados (cachedSystemBlocks) y se
+      // invalidarían al mutar.
+      const repairSection = repairNote.trim().length > 0
+        ? `${repairNote.trim()}\n\n`
+        : '';
       const userMessage =
         `${memoryFormatted}\n\n` +
         importGraphSection +
@@ -195,6 +208,7 @@ OUTPUT FORMAT — return ONLY a valid JSON object with exactly these two keys, n
         `- Needs new files: ${intent.needs_new_files}\n` +
         `- Risk: ${intent.risk}\n` +
         `- Reasoning: ${intent.reasoning}\n\n` +
+        repairSection +
         `Plan the implementation as a JSON array of BuildStep objects:`;
 
       const response = await platformService.callForgeChat({
