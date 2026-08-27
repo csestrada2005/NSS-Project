@@ -819,6 +819,12 @@ export class AIOrchestrator {
     durationMs: number;
     requiredPatternIds?: string[];
     domain?: string;
+    /**
+     * Cuál de los cuatro caminos de default del clasificador produjo este
+     * intent, o undefined si la clasificación fue normal. Lo emite
+     * IntentClassifier (Intent.classifierDefault); aquí sólo viaja.
+     */
+    classifierDefault?: 'api_error' | 'invalid_type' | 'missing_risk' | 'parse_error';
   }): Promise<IntentLogResult> {
     try {
       const supabase = SupabaseService.getInstance().client;
@@ -847,6 +853,10 @@ export class AIOrchestrator {
         duration_ms: params.durationMs,
         required_pattern_ids: params.requiredPatternIds ?? [],
         domain: params.domain ?? 'general',
+        // NULL = clasificación normal. Un valor identifica cuál de los cuatro
+        // defaults del clasificador disparó, que hasta ahora sólo existía como
+        // console.warn y era indistinguible de un 'modify_existing' legítimo.
+        classifier_default: params.classifierDefault ?? null,
       });
       // supabase-js NO lanza cuando PostgREST rechaza: devuelve `{ error }`. El
       // valor se DEVUELVE en vez de tragarse; los callers generales lo ignoran
@@ -1043,6 +1053,7 @@ export class AIOrchestrator {
         durationMs: Date.now() - params.startTime,
         requiredPatternIds: params.intent.requiredPatternIds,
         domain: params.intent.domain,
+        classifierDefault: params.intent.classifierDefault,
       });
     }
 
@@ -1201,6 +1212,7 @@ export class AIOrchestrator {
             durationMs: Date.now() - startTime,
             requiredPatternIds: intent.requiredPatternIds,
             domain: intent.domain,
+            classifierDefault: intent.classifierDefault,
           });
         }
         return {
@@ -1253,6 +1265,7 @@ export class AIOrchestrator {
           durationMs: Date.now() - startTime,
           requiredPatternIds: intent.requiredPatternIds,
           domain: intent.domain,
+          classifierDefault: intent.classifierDefault,
         });
       }
       return result;
@@ -1302,6 +1315,7 @@ export class AIOrchestrator {
           durationMs: Date.now() - startTime,
           requiredPatternIds: intent.requiredPatternIds,
           domain: intent.domain,
+          classifierDefault: intent.classifierDefault,
         });
       }
       return result;
@@ -1386,6 +1400,7 @@ export class AIOrchestrator {
           durationMs: Date.now() - startTime,
           requiredPatternIds: intent.requiredPatternIds,
           domain: intent.domain,
+          classifierDefault: intent.classifierDefault,
         });
       }
       return result;
@@ -1859,6 +1874,7 @@ export class AIOrchestrator {
           durationMs: Date.now() - startTime,
           requiredPatternIds: intent.requiredPatternIds,
           domain: intent.domain,
+          classifierDefault: intent.classifierDefault,
         });
       }
 
@@ -1980,6 +1996,7 @@ export class AIOrchestrator {
           durationMs: Date.now() - startTime,
           requiredPatternIds: intent.requiredPatternIds,
           domain: intent.domain,
+          classifierDefault: intent.classifierDefault,
         });
       }
 
@@ -2555,6 +2572,7 @@ export class AIOrchestrator {
           durationMs: Date.now() - startTime,
           requiredPatternIds: intent.requiredPatternIds,
           domain: intent.domain,
+          classifierDefault: intent.classifierDefault,
         });
       }
 
