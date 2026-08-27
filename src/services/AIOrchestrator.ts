@@ -17,6 +17,7 @@ import { REACT_TAILWIND_RULES, buildProjectContextPrefix, buildBlueprintBlock } 
 import { buildImportedByBlock } from '../utils/importGraph.js';
 import { deletionTargetsTelemetry } from '../utils/deletionGuard.js';
 import { danglingRefsTelemetry } from '../utils/danglingRefs.js';
+import { detectCreatedOrphans, orphanCreatedTelemetry } from '../utils/orphanDetect.js';
 import {
   missingRequiredPaths,
   injectMissingSteps,
@@ -1870,6 +1871,35 @@ export class AIOrchestrator {
         );
       }
 
+      // ----------------------------------------------------------------
+      // G-2 — HUÉRFANO DE CREACIÓN (telemetría, no reparación). Un componente
+      // que este plan creó bajo src/components/ y que el proyecto final no
+      // importa desde ningún sitio compila en verde, persiste, y no produce
+      // error, warning ni marca: invisible en el preview (nadie lo monta) e
+      // invisible en el log. La marca es lo único que lo hace contable.
+      //
+      // Va SÓLO aquí, en el cierre de éxito, y es una consecuencia del
+      // contrato del Verifier, no una preferencia: en el camino de fallo
+      // `verifyResult.files` es `originalFiles` —el mapa PRE-plan, sin los
+      // archivos creados (Verifier.ts, los dos returns con success:false)— y
+      // ese logIntent cierra con `modifiedFiles: []`. Medido allí, el criterio
+      // "existe en el mapa final" no se cumpliría nunca y la marca sería
+      // estructuralmente vacía. La marca significa, por tanto, "quedó un
+      // huérfano PERSISTIDO en el proyecto".
+      //
+      // NO repara: no recablea, no avisa al usuario, no cambia el flujo.
+      // Tampoco cubre la variante C (importado pero desactualizado) — ésa es
+      // de G-1. Aquí sólo huérfanos de creación.
+      // ----------------------------------------------------------------
+      const createdOrphans = detectCreatedOrphans(steps, finalFiles);
+      const orphanCreatedMark = orphanCreatedTelemetry(createdOrphans);
+      if (createdOrphans.length > 0) {
+        console.warn(
+          '[AIOrchestrator] componente creado que nadie importa:',
+          createdOrphans.join(', ')
+        );
+      }
+
       // Notify StudioEngine about each DELETED file. This needs its own bridge:
       // diffPaths is built by iterating finalFiles, which by definition can no
       // longer contain a path that was deleted — without this loop the plan's
@@ -1940,7 +1970,7 @@ export class AIOrchestrator {
           // [CLARIFY_ASKED], sufijo en el prompt, sin tocar columnas ni enums.
           prompt: (hasPartial ? `${input} [PARTIAL:${partialOrders.join(',')}]` : input) +
             targetsMark + rejectedDeleteMark + restoredMark + danglingMark + ddlProposedMark +
-            ddlMisplacedMark + planRepairedMark + trimmedMark,
+            ddlMisplacedMark + planRepairedMark + trimmedMark + orphanCreatedMark,
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,
