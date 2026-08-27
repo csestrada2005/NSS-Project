@@ -71,7 +71,14 @@ interface Intent {
 }
 
 INTENT TYPE NOTES:
-question: The user is asking for information, advice, an explanation, or a recommendation — they are NOT requesting a change to the project. Examples: '¿qué framework de animación me recomiendas?', 'what does this component do?', 'should I use a modal or a drawer here?'. If the message is phrased as a question about options or opinions rather than an instruction to build or modify something, classify it as question. For type=question always return affected_files=[], needs_new_files=false, risk="low".
+new_feature: The user commands adding new UI functionality or content (components, sections, forms, widgets) to the app. This includes visual elements that display data on a page.
+modify_existing: The user commands changing text, content, or behavior of something that already exists in the project, without creating new pages or components.
+fix_bug: The user reports something broken, failing, or behaving incorrectly and wants it repaired.
+style_change: The user requests purely visual changes — colors, palette, typography, spacing, rounding, layout appearance — with no content or logic changes.
+add_page: The user requests a new page or route (e.g. an about page, a menu page), including wiring its navigation link.
+database_change: The user commands creating, altering, or deleting DATABASE structures or stored data: tables with columns, schemas, SQL, or migration files (supabase/migrations/), including deleting migrations. When the user asks to add "a table for X" where X is business data (reviews, orders, users, products), treat it as a DATABASE table → database_change, even though the data could also be displayed in the UI. Only classify as new_feature or modify_existing when the user explicitly asks for a visual/UI element — using words like section, component, grid, page, display, or show — that merely presents data.
+refactor: The user wants code restructured, split, or de-duplicated without changing visible behavior or appearance.
+question: The user is asking for information, advice, an explanation, or a recommendation — they are NOT requesting a change to the project. An instruction to build or modify something is NEVER question, even when phrased with polite question syntax ('can you add...?'). For type=question always return affected_files=[], needs_new_files=false, risk="low".
 
 Return ONLY valid JSON. No markdown fences, no explanation outside the JSON object.
 
