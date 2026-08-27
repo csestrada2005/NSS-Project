@@ -43,6 +43,15 @@ export interface Message {
   actionLabel?: string;
 }
 
+// Label de una línea de progreso: la description real del step truncada a 60
+// chars y, si no hay description (callers viejos), el nombre de archivo. Extraído
+// para que el plan pintado por onPlanReady y el avance de onProgress usen
+// literalmente la misma lógica.
+const progressLabel = (description: string | undefined, file: string): string =>
+  description && description.trim()
+    ? (description.length > 60 ? `${description.slice(0, 60)}…` : description)
+    : file;
+
 // Saludo inicial. Se usa sólo cuando no hay historial rehidratado; extraído a
 // constante para poder detectar (y no duplicar) el estado "sólo saludo".
 const INITIAL_GREETING = 'Hello! How can I help you today?';
@@ -52,7 +61,8 @@ interface ChatInterfaceProps {
   onSendMessage: (
     message: string,
     onProgress?: (step: number, total: number, file: string, description?: string) => void,
-    onRetry?: (attempt: number, error: string) => void
+    onRetry?: (attempt: number, error: string) => void,
+    onPlanReady?: (steps: ChatPlanStep[]) => void
   ) => Promise<{ success: boolean; modifiedFiles: string[]; error?: string; errorReason?: string; warning?: string; chatResponse?: string; suggestedAction?: string; planSteps?: ChatPlanStep[] }>;
   selectedElement: { tagName: string; className?: string } | null;
   chatHistory?: Message[];
@@ -223,6 +233,10 @@ export function ChatInterface({
     text: string;
     status: 'pending' | 'done' | 'error';
   }[]>([]);
+  // CIRUGÍA B2 — file_path → índice de su línea en progressLines, poblado por
+  // onPlanReady. Vacío en las lanes sin plan (simple/fix) y con callers que no
+  // pasan onPlanReady: ahí onProgress conserva su append de siempre.
+  const planLineIndexRef = useRef<Map<string, number>>(new Map());
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [lastError, setLastError] = useState<string | null>(null);
   const [buildLogExpanded, setBuildLogExpanded] = useState(false);
@@ -414,10 +428,21 @@ export function ChatInterface({
           // step del plan (qué se está construyendo), truncada a 60 chars, en vez
           // del "Creating <archivo>" genérico. Si no hay description (callers
           // viejos), cae al nombre de archivo.
-          const label = description && description.trim()
-            ? (description.length > 60 ? `${description.slice(0, 60)}…` : description)
-            : file;
+          const label = progressLabel(description, file);
           setProgressLines(prev => {
+            // CIRUGÍA B2 — con el plan ya pintado por onPlanReady no se hace
+            // append: las líneas existen todas desde el principio. onProgress
+            // dispara AL INICIAR un step, así que se marcan 'done' las líneas
+            // anteriores y la del file actual se queda 'pending' — mismo patrón
+            // visual de siempre (la última pending, las previas done).
+            const planIndex = planLineIndexRef.current.get(file);
+            if (planIndex !== undefined) {
+              return prev.map((line, i) =>
+                i < planIndex && line.status === 'pending'
+                  ? { ...line, status: 'done' as const }
+                  : line
+              );
+            }
             const next = [...prev];
             if (next.length > 0 && next[next.length - 1].status === 'pending') {
               next[next.length - 1].status = 'done';
@@ -435,10 +460,30 @@ export function ChatInterface({
             next.push({ text: `Fixing compile error (attempt ${attempt}/3)...`, status: 'pending' });
             return next;
           });
+        },
+        steps => {
+          // CIRUGÍA B2 — el plan llega ANTES de ejecutarse: se pintan todas sus
+          // líneas de golpe (todas 'pending', sustituyendo el "Planning...") para
+          // que el usuario vea qué se va a construir, no sólo lo ya construido.
+          const ordered = [...steps].sort((a, b) => a.order - b.order);
+          const index = new Map<string, number>();
+          // Primera ocurrencia gana: si un file_path se repite en el plan, la
+          // línea que se ilumina es la primera y el avance sigue siendo monótono.
+          ordered.forEach((step, i) => {
+            if (!index.has(step.file_path)) index.set(step.file_path, i);
+          });
+          planLineIndexRef.current = index;
+          setProgressLines(ordered.map(step => ({
+            text: `Creating ${progressLabel(step.description, step.file_path)}`,
+            status: 'pending' as const,
+          })));
         }
       );
 
       clearInterval(intervalId);
+      // CIRUGÍA B2 — el mapa del plan muere con el run: la próxima corrida vuelve
+      // a poblarlo (o no, si su lane no tiene plan).
+      planLineIndexRef.current = new Map();
 
       if (result.success) {
         setProgressLines([{ text: `Modified ${result.modifiedFiles.length} files in ${elapsedSeconds}s`, status: 'done' }]);
@@ -491,6 +536,7 @@ export function ChatInterface({
       });
     } catch (error) {
       clearInterval(intervalId);
+      planLineIndexRef.current = new Map();
       console.error('Error in chat:', error);
       setProgressLines(prev => {
         const next = [...prev];
