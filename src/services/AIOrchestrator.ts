@@ -23,6 +23,7 @@ import {
   planRepairedTelemetry,
   buildPlanRepairNote,
 } from '../utils/planGuard.js';
+import { trimTelemetry, buildTrimWarning } from '../utils/planTrim.js';
 import {
   ddlProposedTelemetry,
   misplacedMigrations,
@@ -1369,11 +1370,12 @@ export class AIOrchestrator {
     const headerContent = files.get('src/components/layout/Header.tsx') ?? '';
     const isInitialBuild = headerContent.includes('App Name');
     // `let` y no `const`: la guardia estructural de más abajo puede sustituir
-    // el payload entero por el del reintento. Los cuatro campos viajan juntos
+    // el payload entero por el del reintento. Los cinco campos viajan juntos
     // porque describen UN plan: adoptar los steps de un replan y conservar los
     // deletionTargets del anterior mediría los borrados nuevos contra una
-    // autorización que no es la suya.
-    let { steps, wasTrimmed, originalCount, deletionTargets } = await Architect.plan(
+    // autorización que no es la suya, y conservar los conteos del anterior
+    // marcaría `[TRIMMED:N→M]` con el recorte de un plan que ya no existe.
+    let { steps, wasTrimmed, originalCount, trimmedCount, deletionTargets } = await Architect.plan(
       input,
       memoryFormatted,
       intent,
@@ -1463,7 +1465,7 @@ export class AIOrchestrator {
         // Un reintento vacío (error de API, JSON ilegible) no destruye el plan
         // que sí teníamos: nos quedamos con el primero y lo reparamos.
         if (repaired.steps.length > 0) {
-          ({ steps, wasTrimmed, originalCount, deletionTargets } = repaired);
+          ({ steps, wasTrimmed, originalCount, trimmedCount, deletionTargets } = repaired);
         }
         const stillMissing = missingRequiredPaths(steps);
         if (stillMissing.length > 0) {
@@ -1473,6 +1475,13 @@ export class AIOrchestrator {
         }
       }
     }
+
+    // Marca del recorte. Se calcula DESPUÉS del guard porque el reintento del
+    // guard puede haber sustituido el plan entero (y con él sus conteos), y
+    // ANTES de ejecutar nada porque el recorte es un hecho del plan: cuántos
+    // steps pidió la petición y cuántos cupieron. Cadena vacía si no hubo
+    // recorte, misma gramática que los demás sufijos del user_prompt.
+    const trimmedMark = trimTelemetry(originalCount, trimmedCount);
 
     // ------------------------------------------------------------------
     // LAYER 4 — Implementer: execute each step
@@ -1931,7 +1940,7 @@ export class AIOrchestrator {
           // [CLARIFY_ASKED], sufijo en el prompt, sin tocar columnas ni enums.
           prompt: (hasPartial ? `${input} [PARTIAL:${partialOrders.join(',')}]` : input) +
             targetsMark + rejectedDeleteMark + restoredMark + danglingMark + ddlProposedMark +
-            ddlMisplacedMark + planRepairedMark,
+            ddlMisplacedMark + planRepairedMark + trimmedMark,
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,
@@ -1958,9 +1967,12 @@ export class AIOrchestrator {
       // ----------------------------------------------------------------
       const warnings: string[] = [];
       if (wasTrimmed) {
-        warnings.push(
-          `This request needed ${originalCount} steps. Only the first 6 were built. Send a follow-up to continue.`
-        );
+        // El mensaje lo construye planTrim a partir de los conteos reales y de
+        // TRIM_MAX_STEPS. El texto anterior estaba fosilizado dos veces: decía
+        // "the first 6" con el tope real en 8 desde f5e99dc, y "the first"
+        // cuando el corte ya no es por posición sino por `order`.
+        const trimWarning = buildTrimWarning(originalCount, trimmedCount);
+        if (trimWarning) warnings.push(trimWarning);
       }
       if (extras.length > 0) {
         warnings.push(`Reparé además un error preexistente en: ${extras.join(', ')}`);
@@ -2053,11 +2065,13 @@ export class AIOrchestrator {
         });
         await this.logIntent({
           projectId,
-          // [PLAN_REPAIRED:...] va TAMBIÉN aquí: la reparación es un hecho del
-          // plan, anterior a saber si compila. Si sólo estuviera en el camino de
-          // éxito, un intent reparado que luego falla el verify sería invisible.
+          // [PLAN_REPAIRED:...] y [TRIMMED:...] van TAMBIÉN aquí: reparación y
+          // recorte son hechos del plan, anteriores a saber si compila. Si sólo
+          // estuvieran en el camino de éxito, un intent recortado que luego
+          // falla el verify sería invisible — y son justamente los planes
+          // recortados los que más probablemente fallan.
           prompt: input + targetsMark + rejectedDeleteMark + restoredMark + danglingMark +
-            planRepairedMark,
+            planRepairedMark + trimmedMark,
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,
