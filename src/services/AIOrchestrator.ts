@@ -1081,6 +1081,7 @@ export class AIOrchestrator {
     projectId?: string,
     onProgress?: ProgressCallback,
     onRetry?: RetryCallback,
+    onPlanReady?: (steps: BuildStep[]) => void,
     chatHistory?: Array<{ role: string; content: string }>,
     signal?: AbortSignal
   ): Promise<OrchestratorResult> {
@@ -1483,6 +1484,9 @@ export class AIOrchestrator {
     // steps pidió la petición y cuántos cupieron. Cadena vacía si no hubo
     // recorte, misma gramática que los demás sufijos del user_prompt.
     const trimmedMark = trimTelemetry(originalCount, trimmedCount);
+
+    // El plan final (post-trim, post-guard) se notifica a la UI antes de ejecutar; punto de anclaje del futuro gate.
+    onPlanReady?.(steps);
 
     // ------------------------------------------------------------------
     // LAYER 4 — Implementer: execute each step

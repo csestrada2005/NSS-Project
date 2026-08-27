@@ -723,7 +723,7 @@ export function StudioEngine() {
           // generation, so every lane sees the brief. Best-effort — a null result
           // (API/JSON failure) leaves the scaffold untouched.
           const briefFiles = await applyDesignBrief(promptToRun, loadedFiles);
-          result = await handleSendMessage(promptToRun, undefined, undefined, briefFiles);
+          result = await handleSendMessage(promptToRun, undefined, undefined, undefined, briefFiles);
         }
 
         // CAMBIO 5 — mensaje de cierre determinista (sin LLM). El flujo del prompt
@@ -1399,6 +1399,11 @@ export function StudioEngine() {
     message: string,
     onProgress?: (step: number, total: number, file: string, description?: string) => void,
     onRetry?: (attempt: number, error: string) => void,
+    // CIRUGÍA B2 — el plan final del Architect, ya recortado y validado, camino
+    // del chat: misma forma inline que planSteps (B1), sin acoplar la página al
+    // BuildStep del Architect. Va en 4ª posición porque es la que le corresponde
+    // en la prop onSendMessage de ChatInterface; filesOverride pasa a la 5ª.
+    onPlanReady?: (steps: { order: number; description: string; file_path: string; action: 'create' | 'modify' | 'delete' }[]) => void,
     filesOverride?: Map<string, string>
   ): Promise<{ success: boolean; modifiedFiles: string[]; error?: string; errorReason?: string; warning?: string; chatResponse?: string; suggestedAction?: string; planSteps?: { order: number; description: string; file_path: string; action: 'create' | 'modify' | 'delete' }[] }> => {
     if (isReadOnly) return { success: false, modifiedFiles: [] };
@@ -1468,6 +1473,9 @@ export function StudioEngine() {
           );
           onRetry?.(attempt, errorMsg);
         },
+        // CIRUGÍA B2 — plan visible en vivo: el orchestrator anuncia el plan
+        // definitivo antes de ejecutarlo y el chat pinta sus líneas de golpe.
+        onPlanReady,
         // Aislamiento del contexto del modelo: el display history puede crecer
         // a 30 mensajes enriquecidos, pero el pipeline de AI sigue recibiendo el
         // mismo volumen de antes (últimos 10) y en la firma pelada {role,
