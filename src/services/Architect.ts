@@ -7,6 +7,8 @@ import type { Intent } from './IntentClassifier';
 // Types
 // ---------------------------------------------------------------------------
 
+import { trimPlan, TRIM_MAX_STEPS } from '../utils/planTrim.js';
+
 export interface BuildStep {
   order: number;
   description: string;
@@ -79,6 +81,13 @@ export class Architect {
     steps: BuildStep[];
     wasTrimmed: boolean;
     originalCount: number;
+    /**
+     * Steps que SOBREVIVIERON al recorte (la M de `[TRIMMED:N→M]`). Viaja junto
+     * a `originalCount` porque `steps.length` ya no la contesta aguas arriba: el
+     * planGuard puede inyectar steps DESPUÉS del trim, así que contar el array
+     * final mezclaría dos hechos distintos.
+     */
+    trimmedCount: number;
     /**
      * Paths the USER'S REQUEST named for removal — la referencia EXTERNA al
      * plan que autoriza sus deletes. El guard determinista la expande con las
@@ -227,7 +236,7 @@ OUTPUT FORMAT — return ONLY a valid JSON object with exactly these two keys, n
 
       if (data.error) {
         console.error('[Architect] API error:', data.error);
-        return { steps: [], wasTrimmed: false, originalCount: 0, deletionTargets: [] };
+        return { steps: [], wasTrimmed: false, originalCount: 0, trimmedCount: 0, deletionTargets: [] };
       }
 
       const text: string = data.content?.[0]?.text ?? '';
@@ -238,26 +247,21 @@ OUTPUT FORMAT — return ONLY a valid JSON object with exactly these two keys, n
       const { steps: rawSteps, deletionTargets } = this.extractPlanPayload(text);
       let steps = rawSteps;
 
-      if (!Array.isArray(steps)) return { steps: [], wasTrimmed: false, originalCount: 0, deletionTargets: [] };
+      if (!Array.isArray(steps)) return { steps: [], wasTrimmed: false, originalCount: 0, trimmedCount: 0, deletionTargets: [] };
 
-      const originalCount = steps.length;
-      let wasTrimmed = false;
-      if (steps.length > 8) {
-        // Protect the layout chrome: never trim Header.tsx or Footer.tsx steps.
-        // Cut sections before layout — drop non-layout steps first, keeping the
-        // layout steps even if that means keeping fewer sections.
-        const isLayoutStep = (s: BuildStep) => {
-          const p = (s.file_path ?? '').replace(/\\/g, '/');
-          return p.endsWith('layout/Header.tsx') || p.endsWith('layout/Footer.tsx');
-        };
-        const layoutSteps = steps.filter(isLayoutStep);
-        const nonLayoutSteps = steps.filter(s => !isLayoutStep(s));
-        const roomForNonLayout = Math.max(0, 8 - layoutSteps.length);
-        const kept = [...nonLayoutSteps.slice(0, roomForNonLayout), ...layoutSteps];
-        // Preserve original ordering.
-        steps = steps.filter(s => kept.includes(s));
-        wasTrimmed = true;
-        console.warn(`[Architect] Plan trimmed from ${originalCount} to ${steps.length} steps (layout steps protected)`);
+      // El recorte vive en src/utils/planTrim.js (plain JS, testable desde
+      // `node --test`, mismo arreglo que planGuard/deletionGuard). Corta por
+      // `order` —el campo con el que el Implementer decide la ejecución— y no
+      // por posición de array, y protege los cuatro archivos del set: el chrome
+      // de G-1 (Header, Footer, Index) más el router (App.tsx).
+      const trim = trimPlan<BuildStep>(steps);
+      const { wasTrimmed, originalCount, keptCount: trimmedCount } = trim;
+      steps = trim.steps;
+      if (wasTrimmed) {
+        console.warn(
+          `[Architect] Plan trimmed from ${originalCount} to ${trimmedCount} steps ` +
+          `(cap ${TRIM_MAX_STEPS}, protected paths kept)`
+        );
       }
 
       const filteredAndMappedSteps = steps
@@ -278,10 +282,10 @@ OUTPUT FORMAT — return ONLY a valid JSON object with exactly these two keys, n
           };
         });
 
-      return { steps: filteredAndMappedSteps, wasTrimmed, originalCount, deletionTargets };
+      return { steps: filteredAndMappedSteps, wasTrimmed, originalCount, trimmedCount, deletionTargets };
     } catch (e) {
       console.error('[Architect] Failed to plan:', e);
-      return { steps: [], wasTrimmed: false, originalCount: 0, deletionTargets: [] };
+      return { steps: [], wasTrimmed: false, originalCount: 0, trimmedCount: 0, deletionTargets: [] };
     }
   }
 
