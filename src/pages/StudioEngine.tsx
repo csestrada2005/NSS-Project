@@ -751,7 +751,11 @@ export function StudioEngine() {
       try {
         let result;
         if (files.size > 0) {
-          result = await handleSendMessage(promptToRun);
+          // CIRUGÍA B3 — `allowPlanGate: false`. Este camino corre bajo el
+          // overlay "Generando tu proyecto…", que se pinta desde el montaje y
+          // tapa la pantalla: los botones de aprobar/rechazar quedarían detrás
+          // y el run esperaría una respuesta que nadie puede dar.
+          result = await handleSendMessage(promptToRun, undefined, undefined, undefined, undefined, false);
         } else {
           isAutoLoadingTemplate.current = true;
           const loadedFiles = await handleLoadTemplate('landing-page');
@@ -760,7 +764,8 @@ export function StudioEngine() {
           // generation, so every lane sees the brief. Best-effort — a null result
           // (API/JSON failure) leaves the scaffold untouched.
           const briefFiles = await applyDesignBrief(promptToRun, loadedFiles);
-          result = await handleSendMessage(promptToRun, undefined, undefined, undefined, briefFiles);
+          // Sin gate, igual que la rama de arriba y por el mismo motivo.
+          result = await handleSendMessage(promptToRun, undefined, undefined, undefined, briefFiles, false);
         }
 
         // CAMBIO 5 — mensaje de cierre determinista (sin LLM). El flujo del prompt
@@ -1508,7 +1513,19 @@ export function StudioEngine() {
     // BuildStep del Architect. Va en 4ª posición porque es la que le corresponde
     // en la prop onSendMessage de ChatInterface; filesOverride pasa a la 5ª.
     onPlanReady?: (steps: { order: number; description: string; file_path: string; action: 'create' | 'modify' | 'delete' }[]) => void,
-    filesOverride?: Map<string, string>
+    filesOverride?: Map<string, string>,
+    // CIRUGÍA B3 — ¿puede alguien contestar al gate del plan en este camino?
+    //
+    // Default `true` porque el caso normal es el chat: hay pantalla, hay
+    // botones y hay quien los pulse. Sólo la generación inicial pasa `false`, y
+    // lo hace en su propio call site en vez de deducirse aquí de algún estado —
+    // quién puede contestar lo sabe quien llama, no esta función.
+    //
+    // En `false`, `onPlanDecision` ni siquiera se construye: al orquestador le
+    // viaja `undefined` y no hay gate, jamás. Ésa es la garantía por
+    // construcción que sella el acta de #290, y se expresa aquí como lo que es,
+    // un argumento, y no como una condición que pueda cambiar sola.
+    allowPlanGate: boolean = true
   ): Promise<{ success: boolean; modifiedFiles: string[]; error?: string; errorReason?: string; warning?: string; chatResponse?: string; suggestedAction?: string; planSteps?: { order: number; description: string; file_path: string; action: 'create' | 'modify' | 'delete' }[] }> => {
     if (isReadOnly) return { success: false, modifiedFiles: [] };
 
@@ -1530,20 +1547,6 @@ export function StudioEngine() {
     // fixes) llevan el prompt del usuario. Capturamos el flag antes de cualquier
     // await para que el compile exitoso que pone hasBuiltProject=true no lo mueva.
     const isInitialGeneration = !hasBuiltProject;
-    // CIRUGÍA B3 — la generación inicial NO se gatea, y aquí es donde eso se
-    // decide. Ese camino (el efecto del initialPrompt, que entra por esta misma
-    // función sin pasar por el chat) corre bajo el overlay "Generando tu
-    // proyecto…", que se pinta DESDE EL MONTAJE y tapa la pantalla: los botones
-    // de aprobar/rechazar existirían en el DOM del chat pero detrás del overlay,
-    // así que el run se quedaría esperando una respuesta que nadie puede dar.
-    //
-    // `awaitingInitialGeneration` es exactamente ese tramo —se enciende al
-    // montar con un initialPrompt pendiente y se apaga en el `finally` del
-    // efecto—, así que sirve de condición sin inventar estado nuevo. Sin
-    // callback no hay gate, jamás: es la garantía por construcción que sella el
-    // acta de #290, y se respeta aquí en vez de en el orquestador porque es
-    // aquí, en el único caller con UI, donde se sabe si hay quien conteste.
-    const canAnswerPlanGate = !awaitingInitialGeneration;
     // CAMBIO 4 — una nueva generación supersede cualquier overlay de cancelación
     // previo: el overlay "Generando…" toma el relevo y, si esta corrida completa,
     // el estado cancelado no debe reaparecer.
@@ -1604,7 +1607,7 @@ export function StudioEngine() {
         // CIRUGÍA B3 — los dos parámetros del gate, al final y en este orden
         // (después de `signal`), que es donde los dejó #290 para no desplazar
         // ningún argumento posicional existente.
-        canAnswerPlanGate
+        allowPlanGate
           ? steps => requestPlanDecision(steps, abortController.signal)
           : undefined,
         planModeEnabled
