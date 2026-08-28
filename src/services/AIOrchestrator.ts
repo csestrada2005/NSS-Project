@@ -42,6 +42,7 @@ import { DesignBriefService } from './DesignBriefService';
 import { isAbortError } from '../utils/abort';
 import { canEnterFastLane, isSimpleEditIntent } from '../utils/laneRouting.js';
 import { touchesMigrations } from '../utils/migrationGate.js';
+import { shouldGatePlan, planRejectedTelemetry } from '../utils/planGate.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1029,8 +1030,16 @@ export class AIOrchestrator {
     startTime: number;
     planSteps?: BuildStep[];
     compileAttempts?: number;
+    // Marca del sufijo que va al `user_prompt` de forge_intent_log. El default
+    // es el literal que este método concatenaba antes de existir el parámetro,
+    // byte a byte — mismo espacio delante, mismos corchetes — para que ningún
+    // caller previo cambie de comportamiento al pasar por aquí. El gate del
+    // plan pasa ' [PLAN_REJECTED]' (planGate.js) reutilizando este mismo cierre:
+    // un rechazo ES una cancelación, sólo que decidida antes de ejecutar nada.
+    mark?: string;
   }): Promise<OrchestratorResult> {
     const { writtenPaths, projectId, creditUserId } = params;
+    const mark = params.mark ?? ' [CANCELLED]';
 
     // Créditos: sólo cobramos si el run llegó a producir archivos completos. Un
     // abort sin salida útil no quema el free-prompt del usuario. El server
@@ -1049,7 +1058,7 @@ export class AIOrchestrator {
       }
       await this.logIntent({
         projectId,
-        prompt: `${params.input} [CANCELLED]`,
+        prompt: params.input + mark,
         intentType: params.intent.type,
         intentRisk: params.intent.risk,
         planSteps: params.planSteps,
@@ -1083,7 +1092,17 @@ export class AIOrchestrator {
     onRetry?: RetryCallback,
     onPlanReady?: (steps: BuildStep[]) => void,
     chatHistory?: Array<{ role: string; content: string }>,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    // Los DOS parámetros del gate van AL FINAL, después de `signal`, porque
+    // todos los callers de este método son posicionales: cualquier otra
+    // posición desplazaría argumentos existentes en silencio.
+    //
+    // Sin `onPlanDecision` NO hay gate, jamás. Es la garantía por construcción
+    // de que la generación inicial (StudioEngine, que llama sin callbacks) no
+    // puede quedarse esperando una aprobación que nadie va a dar: no existe UI
+    // que la pida en ese camino.
+    onPlanDecision?: (steps: BuildStep[]) => Promise<'approved' | 'rejected'>,
+    planModeEnabled: boolean = false
   ): Promise<OrchestratorResult> {
     this.retryCount = 0;
     const startTime = Date.now();
@@ -1485,8 +1504,68 @@ export class AIOrchestrator {
     // recorte, misma gramática que los demás sufijos del user_prompt.
     const trimmedMark = trimTelemetry(originalCount, trimmedCount);
 
-    // El plan final (post-trim, post-guard) se notifica a la UI antes de ejecutar; punto de anclaje del futuro gate.
+    // El plan final (post-trim, post-guard) se notifica a la UI antes de ejecutar; punto de anclaje del gate.
     onPlanReady?.(steps);
+
+    // ------------------------------------------------------------------
+    // GATE DEL PLAN — última parada antes de que el Implementer escriba nada.
+    //
+    // Va aquí y no antes porque lo que se aprueba tiene que ser el plan REAL:
+    // post-trim y post-guard, el mismo array de steps que acaba de ver la UI
+    // por `onPlanReady`. Aprobar un plan y ejecutar otro sería peor que no
+    // preguntar.
+    //
+    // Dos condiciones, ambas necesarias: que haya callback (si nadie puede
+    // contestar, no se pregunta) y que `shouldGatePlan` diga que sí. La
+    // decisión de CUÁNDO parar vive entera en planGate.js; aquí sólo se
+    // ejecuta la pausa.
+    // ------------------------------------------------------------------
+    if (onPlanDecision && shouldGatePlan(steps, planModeEnabled)) {
+      let decision: 'approved' | 'rejected';
+      try {
+        decision = await onPlanDecision(steps);
+      } catch {
+        // Fail-closed: si la promesa del callback revienta o se rechaza, no
+        // sabemos qué contestó el usuario. Ante la ambigüedad no se ejecuta —
+        // el coste de no hacer un cambio que se pidió es que lo repita; el de
+        // hacer uno que no se aprobó puede ser un delete.
+        decision = 'rejected';
+      }
+
+      // El abort se mira PRIMERO, antes que la decisión: si el usuario canceló
+      // mientras la pregunta estaba en pantalla, el turno terminó cancelado
+      // gane quien gane la carrera con el click. Mismo camino de cierre que
+      // cualquier otra cancelación de este método, misma marca [CANCELLED].
+      if (signal?.aborted) {
+        return await this.finalizeCancelled({
+          input, intent, writtenPaths: [], projectId, creditUserId, startTime,
+          planSteps: steps,
+        });
+      }
+
+      if (decision === 'rejected') {
+        // Un rechazo es una cancelación decidida antes de ejecutar: mismo
+        // outcome 'cancelled' del enum existente, cero columnas nuevas (R2).
+        // `writtenPaths: []` no es una suposición sino un hecho del sitio donde
+        // estamos — el Implementer todavía no ha corrido, así que no hay nada
+        // que persistir y no se cobra ni un crédito.
+        //
+        // `planSteps: steps` es toda la telemetría del rechazo: el plan que se
+        // rechazó viaja entero en la columna `plan_steps`, que es donde
+        // AIHistoryPanel lo lee. Por eso el sufijo del prompt es sólo la marca.
+        const rejected = await this.finalizeCancelled({
+          input, intent, writtenPaths: [], projectId, creditUserId, startTime,
+          planSteps: steps,
+          mark: planRejectedTelemetry(),
+        });
+        // El mensaje del cierre genérico ("se conservaron 0 archivos") sería
+        // cierto pero desorientador: aquí no se conservó nada porque nada llegó
+        // a escribirse. El resto del resultado —outcome, modifiedFiles— se
+        // respeta tal cual lo dejó finalizeCancelled.
+        return { ...rejected, chatResponse: 'Plan rechazado — no se modificó nada.' };
+      }
+      // 'approved' → el pipeline sigue de largo, idéntico al de siempre.
+    }
 
     // ------------------------------------------------------------------
     // LAYER 4 — Implementer: execute each step
