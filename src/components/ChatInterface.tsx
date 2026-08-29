@@ -89,6 +89,21 @@ interface ChatInterfaceProps {
   // legible, pero no hay dónde ejecutarla.
   projectId?: string | null;
   isReadOnly?: boolean;
+  // CIRUGÍA B3 — gate del plan. Los steps EN ESPERA de decisión, no los
+  // ejecutados: llegan del padre (StudioEngine), nunca de estado propio. El
+  // motivo es el mismo por el que chatHistory vive arriba — esta instancia se
+  // desmonta al cerrar el modal y un useState local dejaría el run congelado
+  // con los botones fuera de pantalla y nadie capaz de contestar.
+  //
+  // `null` (o lista vacía) = no hay gate activo. Los dos callbacks resuelven la
+  // Promise que el orquestador está esperando; el padre es quien la sostiene.
+  pendingPlanSteps?: ChatPlanStep[] | null;
+  onApprovePlan?: () => void;
+  onRejectPlan?: () => void;
+  // Toggle de plan mode: valor y setter, ambos del padre (persistido en
+  // sessionStorage allí). Aquí sólo se pinta y se reporta el cambio.
+  planModeEnabled?: boolean;
+  onPlanModeChange?: (enabled: boolean) => void;
 }
 
 function BuildProgress({
@@ -177,6 +192,96 @@ function BuildProgress({
   );
 }
 
+/**
+ * CIRUGÍA B3 — la parada del plan, en pantalla.
+ *
+ * Se pinta DEBAJO de las líneas del plan que ya pintó B2 (`BuildProgress`), no
+ * en lugar de ellas: esas líneas son el plan completo y siguen siendo la
+ * lectura principal. Lo que este bloque añade es lo que esas líneas no pueden
+ * decir — todas rezan "Creating …", también las de un borrado — más los dos
+ * botones que resuelven la espera.
+ *
+ * De ahí que la lista de aquí sea SÓLO la de los deletes, con la misma marca
+ * roja del plan ejecutado (B1). Repetir el plan entero justo bajo el plan
+ * entero no informaría de nada; enseñar los borrados sí, porque son la única
+ * operación del turno sin deshacer barato.
+ *
+ * LA NOTA "sujeto a guardia" NO ES DECORACIÓN. Aprobar aquí es el TECHO de lo
+ * que puede borrarse, nunca el piso: deletionGuard sigue corriendo después y
+ * puede rechazar cualquiera de estos paths. Sin la nota, un borrado aprobado
+ * que luego no ocurre parece un fallo; con ella, es el diseño.
+ */
+function PlanGate({
+  steps,
+  onApprove,
+  onReject,
+}: {
+  steps: ChatPlanStep[];
+  onApprove?: () => void;
+  onReject?: () => void;
+}) {
+  const deletions = steps.filter(step => step.action === 'delete');
+
+  return (
+    <div className="flex justify-start w-full">
+      <div className="bg-background border border-primary/40 rounded-lg p-3 w-[85%]">
+        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+          Plan en espera
+        </p>
+        <p className="text-sm text-foreground">
+          {steps.length === 1
+            ? 'El plan tiene 1 paso. Nada se ha escrito todavía.'
+            : `El plan tiene ${steps.length} pasos. Nada se ha escrito todavía.`}
+        </p>
+
+        {deletions.length > 0 && (
+          <div className="mt-2 pt-2 border-t border-border/50">
+            <ul className="space-y-1">
+              {[...deletions]
+                .sort((a, b) => a.order - b.order)
+                .map((step, idx) => (
+                  <li key={idx} className="flex gap-2 items-start">
+                    {/* Misma marca roja que el plan ejecutado de B1: un borrado
+                        se lee igual antes y después de aprobarse. */}
+                    <span className="text-red-400 text-sm leading-5">✕</span>
+                    <span className="min-w-0">
+                      <span className="block text-sm">{step.description}</span>
+                      <span className="block text-xs font-mono text-muted-foreground truncate">
+                        {step.file_path}
+                      </span>
+                      <span className="block text-xs text-red-400/80">sujeto a guardia</span>
+                    </span>
+                  </li>
+                ))}
+            </ul>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Aprobar es el techo de lo que puede borrarse, no el piso: la guardia
+              de eliminación se ejecuta igualmente y puede rechazar cualquiera de
+              estos borrados.
+            </p>
+          </div>
+        )}
+
+        <div className="mt-3 flex gap-2">
+          <button
+            onClick={onApprove}
+            className="flex items-center gap-1.5 bg-primary text-white px-3 py-2 rounded-md hover:bg-primary/90 transition-colors text-sm"
+          >
+            <CheckCircle className="w-4 h-4 shrink-0" />
+            <span>Aprobar plan</span>
+          </button>
+          <button
+            onClick={onReject}
+            className="flex items-center gap-1.5 bg-muted text-foreground border border-border px-3 py-2 rounded-md hover:bg-accent transition-colors text-sm"
+          >
+            <span>Rechazar</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CompileErrorDetail({ errorDetail }: { errorDetail: string }) {
   const [expanded, setExpanded] = useState(false);
   return (
@@ -210,6 +315,11 @@ export function ChatInterface({
   onInjectedConsumed,
   projectId,
   isReadOnly = false,
+  pendingPlanSteps = null,
+  onApprovePlan,
+  onRejectPlan,
+  planModeEnabled = false,
+  onPlanModeChange,
 }: ChatInterfaceProps) {
   // Rehidratación: si el padre trae historial (sobreviviente de un cierre del
   // modal), arrancamos con él. Sólo si está vacío usamos el saludo inicial, de
@@ -228,6 +338,14 @@ export function ChatInterface({
     try { return sessionStorage.getItem('forge_chat_input') ?? ''; } catch { return ''; }
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // CIRUGÍA B3 — el input al que se devuelve el foco tras un rechazo. Rechazar
+  // no es cerrar la conversación: es decir "esto no", y lo siguiente que el
+  // usuario quiere hacer es escribir qué quiere en su lugar.
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // ¿Hay una decisión de plan esperando en pantalla? Derivado del prop, sin
+  // estado propio: quien sostiene la Promise es el padre y esto es su reflejo.
+  const hasPendingPlan = !!pendingPlanSteps && pendingPlanSteps.length > 0;
 
   const [progressLines, setProgressLines] = useState<{
     text: string;
@@ -404,7 +522,10 @@ export function ChatInterface({
   };
 
   const sendMessage = async (text: string) => {
-    if (!text.trim() || isLoading) return;
+    // CIRUGÍA B3 — `hasPendingPlan` en el guard además de en el `disabled` del
+    // input: por aquí pasan también el mensaje inyectado y el botón de acción
+    // sugerida, que no miran el estado del input.
+    if (!text.trim() || isLoading || hasPendingPlan) return;
 
     const userMessage = text.trim();
     appendMessage({ role: 'user', content: userMessage });
@@ -550,7 +671,7 @@ export function ChatInterface({
   };
 
   const handleSend = () => {
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading || hasPendingPlan) return;
     const text = input;
     setInput('');
     try { sessionStorage.removeItem('forge_chat_input'); } catch { /* ignore */ }
@@ -577,6 +698,27 @@ export function ChatInterface({
     sendMessage(msg);
     onInjectedConsumed?.();
   }, [injectedMessage, isLoading]);
+
+  // CIRUGÍA B3 — re-foco tras rechazar.
+  //
+  // No se puede enfocar en el propio click: en ese instante el input sigue
+  // deshabilitado (el gate acaba de resolverse pero el run todavía está
+  // cerrándose, isLoading=true) y `focus()` sobre un input deshabilitado no
+  // hace nada. Así que se marca la intención y se cobra cuando el input vuelve
+  // a estar habilitado — es decir, cuando el rechazo ya terminó de cerrar el
+  // turno. La bandera se consume una sola vez: un rechazo, un foco.
+  const refocusAfterRejectRef = useRef(false);
+  useEffect(() => {
+    if (!refocusAfterRejectRef.current) return;
+    if (hasPendingPlan || isLoading) return;
+    refocusAfterRejectRef.current = false;
+    inputRef.current?.focus();
+  }, [hasPendingPlan, isLoading]);
+
+  const handleRejectPlanClick = () => {
+    refocusAfterRejectRef.current = true;
+    onRejectPlan?.();
+  };
 
   // CIRUGÍA 2 — el estado de cada propuesta de DDL, DERIVADO del historial.
   //
@@ -724,7 +866,18 @@ export function ChatInterface({
             lastError={lastError}
           />
         )}
-        {isLoading && progressLines.length === 0 && (
+        {/* CIRUGÍA B3 — el gate va justo DEBAJO de las líneas del plan: el
+            orquestador pregunta inmediatamente después de anunciarlo por
+            onPlanReady, así que lo que se aprueba es exactamente lo que se
+            acaba de leer arriba. */}
+        {hasPendingPlan && (
+          <PlanGate
+            steps={pendingPlanSteps!}
+            onApprove={onApprovePlan}
+            onReject={handleRejectPlanClick}
+          />
+        )}
+        {isLoading && !hasPendingPlan && progressLines.length === 0 && (
           <div className="flex justify-start w-full">
              <div className="bg-muted text-foreground rounded-lg p-3 text-sm flex items-center gap-1">
                <Loader2 className="w-4 h-4 animate-spin" />
@@ -743,6 +896,22 @@ export function ChatInterface({
             </span>
           </div>
         )}
+        {/* CIRUGÍA B3 — el toggle de plan mode, discreto y junto al input: es una
+            preferencia del envío, no un ajuste de la página. Deshabilitado
+            durante un run porque el valor se lee AL ENVIAR: cambiarlo a mitad
+            de turno no afecta al turno en curso, y ofrecerlo lo insinuaría. */}
+        {onPlanModeChange && (
+          <label className="mb-2 flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={planModeEnabled}
+              onChange={e => onPlanModeChange(e.target.checked)}
+              disabled={isLoading}
+              className="h-3.5 w-3.5 shrink-0 accent-primary disabled:cursor-not-allowed"
+            />
+            <span>Plan Mode — enseña el plan y espera tu aprobación antes de tocar ningún archivo.</span>
+          </label>
+        )}
         <div className="flex gap-2">
           <input
             type="text"
@@ -752,9 +921,13 @@ export function ChatInterface({
               try { sessionStorage.setItem('forge_chat_input', e.target.value); } catch { /* ignore */ }
             }}
             onKeyDown={handleKeyDown}
-            placeholder="Type a message..."
+            placeholder={hasPendingPlan ? 'Aprueba o rechaza el plan para continuar…' : 'Type a message...'}
             className="flex-1 bg-accent text-foreground border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={isLoading}
+            // CIRUGÍA B3 — con una decisión en pantalla el run está CONGELADO
+            // esperando respuesta. Aceptar texto aquí encolaría un prompt sobre
+            // un turno que todavía no sabe si va a ejecutarse.
+            disabled={isLoading || hasPendingPlan}
+            ref={inputRef}
           />
           {isLoading && onCancel ? (
             // CAMBIO 2 — botón Cancelar: visible sólo durante la generación. Un

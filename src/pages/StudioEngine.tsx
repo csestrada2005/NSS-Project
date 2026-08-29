@@ -15,7 +15,7 @@ import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useProjectFiles } from '../hooks/useProjectFiles';
 import '../App.css';
-import { ChatInterface, type Message } from '../components/ChatInterface';
+import { ChatInterface, type ChatPlanStep, type Message } from '../components/ChatInterface';
 import { Terminal, type TerminalRef } from '../components/Terminal';
 import { PropertyPanel } from '../components/studio/PropertyPanel';
 import { AIOrchestrator } from '../services/AIOrchestrator';
@@ -180,6 +180,20 @@ function summarizeVisualEdits(
   return `${propLabel} en ${compLabel}`;
 }
 
+/**
+ * CIRUGÍA B3 — una decisión de plan en espera: el plan que se pregunta y el
+ * resolver de la Promise que el orquestador está awaitando por él.
+ *
+ * Nombrado (y no inline en el useState) porque `requestPlanDecision` construye
+ * una entrada que se referencia a sí misma dentro de su propio `resolve`, para
+ * limpiar sólo su propio gate. Sin anotación explícita, esa autorreferencia es
+ * un ciclo de inferencia y TypeScript la degrada a `any`.
+ */
+type PendingPlanDecision = {
+  steps: ChatPlanStep[];
+  resolve: (decision: 'approved' | 'rejected') => void;
+};
+
 export function StudioEngine() {
   // -------------------------------------------------------------------------
   // Routing
@@ -272,6 +286,29 @@ export function StudioEngine() {
   // opcionales warning/suggestedAction/errorType/errorDetail) que maneja
   // ChatInterface, no la versión pelada {role, content}.
   const [chatHistory, setChatHistory] = useState<Message[]>([]);
+  // CIRUGÍA B3 — la decisión de plan pendiente vive AQUÍ, no en el chat, por el
+  // mismo motivo que chatHistory y cancelledInfo: ChatInterface se desmonta al
+  // cerrar el modal, y un useState suyo se llevaría por delante los resolvers de
+  // una Promise que el orquestador sigue esperando. El run quedaría congelado
+  // para siempre con los botones que podían descongelarlo ya desmontados.
+  //
+  // `null` = no hay gate activo. `resolve` es el único resolver que se guarda:
+  // la Promise que sostiene NUNCA se rechaza. El orquestador trata un reject
+  // como 'rejected' (fail-closed), así que un `reject` guardado sería un
+  // segundo camino hacia el mismo sitio y una manera más de dejarla colgada.
+  const [pendingPlanDecision, setPendingPlanDecision] = useState<PendingPlanDecision | null>(null);
+  // Espejo síncrono: los handlers de los botones son callbacks estables y deben
+  // resolver la decisión VIVA en el instante del click, no la capturada al
+  // pintarlos. Mismo patrón que pendingEditsRef.
+  const pendingPlanDecisionRef = useRef(pendingPlanDecision);
+  pendingPlanDecisionRef.current = pendingPlanDecision;
+  // CIRUGÍA B3 — toggle de plan mode. sessionStorage y NO base de datos: v1 no
+  // toca schema, y el alcance de una sesión es exactamente el de la preferencia
+  // ("en este rato quiero revisar antes de ejecutar"). Mismo arreglo que el
+  // borrador del input del chat (forge_chat_input).
+  const [planModeEnabled, setPlanModeEnabled] = useState<boolean>(() => {
+    try { return sessionStorage.getItem('forge_plan_mode') === 'true'; } catch { return false; }
+  });
   const [editMode, setEditMode] = useState<'interaction' | 'visual'>('interaction');
   // CAMBIO 1 (sesión de edición con Guardar) — buffer de cambios visuales
   // pendientes. Los ajustes del panel aplican SOLO al DOM (optimista) y se
@@ -714,7 +751,11 @@ export function StudioEngine() {
       try {
         let result;
         if (files.size > 0) {
-          result = await handleSendMessage(promptToRun);
+          // CIRUGÍA B3 — `allowPlanGate: false`. Este camino corre bajo el
+          // overlay "Generando tu proyecto…", que se pinta desde el montaje y
+          // tapa la pantalla: los botones de aprobar/rechazar quedarían detrás
+          // y el run esperaría una respuesta que nadie puede dar.
+          result = await handleSendMessage(promptToRun, undefined, undefined, undefined, undefined, false);
         } else {
           isAutoLoadingTemplate.current = true;
           const loadedFiles = await handleLoadTemplate('landing-page');
@@ -723,7 +764,8 @@ export function StudioEngine() {
           // generation, so every lane sees the brief. Best-effort — a null result
           // (API/JSON failure) leaves the scaffold untouched.
           const briefFiles = await applyDesignBrief(promptToRun, loadedFiles);
-          result = await handleSendMessage(promptToRun, undefined, undefined, undefined, briefFiles);
+          // Sin gate, igual que la rama de arriba y por el mismo motivo.
+          result = await handleSendMessage(promptToRun, undefined, undefined, undefined, briefFiles, false);
         }
 
         // CAMBIO 5 — mensaje de cierre determinista (sin LLM). El flujo del prompt
@@ -1393,6 +1435,73 @@ export function StudioEngine() {
   );
 
   // -------------------------------------------------------------------------
+  // CIRUGÍA B3 — gate del plan
+  // -------------------------------------------------------------------------
+
+  // Persistir el toggle en el mismo sitio donde se cambia, no en un efecto: así
+  // no hay ventana en la que el estado y sessionStorage discrepen, y un fallo de
+  // escritura (modo privado, cuota) no impide que el toggle funcione en esta
+  // sesión — sólo que sobreviva a un refresh.
+  const handlePlanModeChange = useCallback((enabled: boolean) => {
+    setPlanModeEnabled(enabled);
+    try { sessionStorage.setItem('forge_plan_mode', String(enabled)); } catch { /* ignore */ }
+  }, []);
+
+  /**
+   * Callback que el orquestador awaita para parar el plan. Devuelve una Promise
+   * y deja su resolver en `pendingPlanDecision`, que es lo que hace aparecer los
+   * botones en el chat.
+   *
+   * LA ENTRADA ES SU PROPIA IDENTIDAD. Tanto el click como el abort limpian el
+   * estado con una comparación contra `entry`, de modo que un cierre tardío de
+   * un run viejo no pueda borrar el gate de un run nuevo.
+   *
+   * EL ABORT NO PUEDE QUEDARSE FUERA. Si el usuario cancela con la pregunta en
+   * pantalla, nadie va a pulsar ya ninguno de los dos botones: sin este listener
+   * la Promise quedaría colgada y el run congelado para siempre, con el overlay
+   * de generación puesto. Resolvemos 'rejected' —el orquestador mira
+   * `signal.aborted` ANTES que la decisión, así que el turno cierra por su
+   * camino de cancelación de siempre, no por el de rechazo.
+   */
+  const requestPlanDecision = useCallback(
+    (steps: ChatPlanStep[], signal: AbortSignal): Promise<'approved' | 'rejected'> =>
+      new Promise<'approved' | 'rejected'>(resolve => {
+        // Cancelado antes de llegar aquí: no se pregunta lo que ya no se va a
+        // ejecutar, y sobre todo no se pinta un gate que nadie va a resolver.
+        if (signal.aborted) {
+          resolve('rejected');
+          return;
+        }
+
+        const entry: PendingPlanDecision = {
+          steps,
+          resolve: (decision: 'approved' | 'rejected') => {
+            signal.removeEventListener('abort', onAbort);
+            setPendingPlanDecision(prev => (prev === entry ? null : prev));
+            // Resolver dos veces una Promise es un no-op, así que un doble click
+            // o un abort que llega justo tras el click no necesitan más guardas.
+            resolve(decision);
+          },
+        };
+        function onAbort() {
+          entry.resolve('rejected');
+        }
+
+        signal.addEventListener('abort', onAbort, { once: true });
+        setPendingPlanDecision(entry);
+      }),
+    []
+  );
+
+  const handleApprovePlan = useCallback(() => {
+    pendingPlanDecisionRef.current?.resolve('approved');
+  }, []);
+
+  const handleRejectPlan = useCallback(() => {
+    pendingPlanDecisionRef.current?.resolve('rejected');
+  }, []);
+
+  // -------------------------------------------------------------------------
   // AI chat handler
   // -------------------------------------------------------------------------
   const handleSendMessage = async (
@@ -1404,7 +1513,19 @@ export function StudioEngine() {
     // BuildStep del Architect. Va en 4ª posición porque es la que le corresponde
     // en la prop onSendMessage de ChatInterface; filesOverride pasa a la 5ª.
     onPlanReady?: (steps: { order: number; description: string; file_path: string; action: 'create' | 'modify' | 'delete' }[]) => void,
-    filesOverride?: Map<string, string>
+    filesOverride?: Map<string, string>,
+    // CIRUGÍA B3 — ¿puede alguien contestar al gate del plan en este camino?
+    //
+    // Default `true` porque el caso normal es el chat: hay pantalla, hay
+    // botones y hay quien los pulse. Sólo la generación inicial pasa `false`, y
+    // lo hace en su propio call site en vez de deducirse aquí de algún estado —
+    // quién puede contestar lo sabe quien llama, no esta función.
+    //
+    // En `false`, `onPlanDecision` ni siquiera se construye: al orquestador le
+    // viaja `undefined` y no hay gate, jamás. Ésa es la garantía por
+    // construcción que sella el acta de #290, y se expresa aquí como lo que es,
+    // un argumento, y no como una condición que pueda cambiar sola.
+    allowPlanGate: boolean = true
   ): Promise<{ success: boolean; modifiedFiles: string[]; error?: string; errorReason?: string; warning?: string; chatResponse?: string; suggestedAction?: string; planSteps?: { order: number; description: string; file_path: string; action: 'create' | 'modify' | 'delete' }[] }> => {
     if (isReadOnly) return { success: false, modifiedFiles: [] };
 
@@ -1482,7 +1603,14 @@ export function StudioEngine() {
         // content} que consume el orchestrator. Display history y model context
         // son cosas distintas: subir el cap de display no debe multiplicar tokens.
         chatHistory.slice(-10).map(({ role, content }) => ({ role, content })),
-        abortController.signal
+        abortController.signal,
+        // CIRUGÍA B3 — los dos parámetros del gate, al final y en este orden
+        // (después de `signal`), que es donde los dejó #290 para no desplazar
+        // ningún argumento posicional existente.
+        allowPlanGate
+          ? steps => requestPlanDecision(steps, abortController.signal)
+          : undefined,
+        planModeEnabled
       );
       if (result.modifiedFiles.length > 0) {
         const promptLabel = truncateLabel(message, 80);
@@ -2174,6 +2302,11 @@ export function StudioEngine() {
                   onInjectedConsumed={() => setPendingChatSend(null)}
                   projectId={projectId}
                   isReadOnly={isReadOnly}
+                  pendingPlanSteps={pendingPlanDecision?.steps ?? null}
+                  onApprovePlan={handleApprovePlan}
+                  onRejectPlan={handleRejectPlan}
+                  planModeEnabled={planModeEnabled}
+                  onPlanModeChange={handlePlanModeChange}
                 />
               </div>
               <div className={`w-full h-full ${activeBottomTab === 'visual' ? 'block' : 'hidden'}`}>
