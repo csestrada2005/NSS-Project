@@ -360,6 +360,16 @@ export function ChatInterface({
   const [buildLogExpanded, setBuildLogExpanded] = useState(false);
   const startTimeRef = useRef<number | null>(null);
 
+  // Un plan pendiente de aprobación no se aprueba a ciegas: al entrar en ese
+  // estado desplegamos el registro de progreso para que los steps que el gate
+  // pide aprobar estén a la vista. Depende SOLO de hasPendingPlan, así que
+  // corre en la transición y no vuelve a forzar el estado en repintados
+  // posteriores: si el usuario pliega el registro a mano mientras el plan sigue
+  // pendiente, esa decisión se respeta.
+  useEffect(() => {
+    if (hasPendingPlan) setBuildLogExpanded(true);
+  }, [hasPendingPlan]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
