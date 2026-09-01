@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Send, Bot, Loader2, CheckCircle, ChevronDown, ChevronUp, Wand2, Square } from 'lucide-react';
+import { Send, Bot, Loader2, CheckCircle, ChevronDown, ChevronUp, Wand2, Square, Clock } from 'lucide-react';
 import {
   ddlProposedMark,
   resolveDdlProposals,
@@ -112,16 +112,23 @@ function BuildProgress({
   isExpanded,
   onToggleExpand,
   lastError,
+  hasPendingPlan,
 }: {
   lines: { text: string; status: 'pending' | 'done' | 'error' }[];
   elapsedSeconds: number;
   isExpanded: boolean;
   onToggleExpand: () => void;
   lastError: string | null;
+  hasPendingPlan: boolean;
 }) {
   const isLastDone = lines.length > 0 && lines[lines.length - 1].status !== 'pending';
 
   const getPlainEnglish = () => {
+    // Con un plan esperando aprobación nada se está ejecutando: las líneas de
+    // detalle describen lo que se HARÁ, no lo que se hace. Cortar aquí, antes
+    // de cualquier coincidencia por substring, evita que el panel afirme un
+    // trabajo en curso que el gate de abajo desmiente en la misma pantalla.
+    if (hasPendingPlan) return 'Esperando tu aprobación...';
     const pending = lines.find(l => l.status === 'pending');
     const lastLine = pending || lines[lines.length - 1];
     if (!lastLine) return 'Working on it...';
@@ -137,11 +144,13 @@ function BuildProgress({
     <div className="flex justify-start w-full">
       <div className="bg-background border border-border rounded-lg p-3 w-[85%]">
         <div className="flex items-center gap-2 text-sm text-foreground">
-          {isLastDone
-            ? <CheckCircle size={14} className="text-green-400 shrink-0" />
-            : <Loader2 size={14} className="animate-spin shrink-0" />}
+          {hasPendingPlan
+            ? <Clock size={14} className="shrink-0" />
+            : isLastDone
+              ? <CheckCircle size={14} className="text-green-400 shrink-0" />
+              : <Loader2 size={14} className="animate-spin shrink-0" />}
           <span>{getPlainEnglish()}</span>
-          {!isLastDone && (
+          {!hasPendingPlan && !isLastDone && (
             <span className="text-gray-500 text-xs">{elapsedSeconds}s</span>
           )}
         </div>
@@ -874,6 +883,7 @@ export function ChatInterface({
             isExpanded={buildLogExpanded}
             onToggleExpand={() => setBuildLogExpanded(v => !v)}
             lastError={lastError}
+            hasPendingPlan={hasPendingPlan}
           />
         )}
         {/* CIRUGÍA B3 — el gate va justo DEBAJO de las líneas del plan: el
