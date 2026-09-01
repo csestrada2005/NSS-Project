@@ -3,10 +3,8 @@ import { X, Lock, Github, Rocket, Database, Globe, Mail, BarChart3 } from 'lucid
 import { DeployManager } from '../deploy/DeployManager';
 import { gitHubService } from '../../services/GitHubService';
 import type { FileSystemTree } from '@webcontainer/api';
-import { DatabaseOverview } from './db/DatabaseOverview';
 import { SchemaViewer } from './db/SchemaViewer';
 import { SQLEditor } from './db/SQLEditor';
-import { EdgeFunctionsPanel } from './db/EdgeFunctionsPanel';
 import { SecretsPanel } from './db/SecretsPanel';
 import { TrafficCharts } from './analytics/TrafficCharts';
 import { LighthousePanel } from './analytics/LighthousePanel';
@@ -22,19 +20,17 @@ interface SettingsModalProps {
 }
 
 type MainTab = 'secrets' | 'github' | 'deploy' | 'domains' | 'database' | 'email' | 'analytics';
-type DbSubTab = 'overview' | 'schema' | 'sql' | 'functions' | 'secrets';
+type DbSubTab = 'schema' | 'sql' | 'secrets';
 
 const DB_SUB_TABS: { id: DbSubTab; label: string }[] = [
-  { id: 'overview', label: 'Overview' },
   { id: 'schema', label: 'Schema' },
   { id: 'sql', label: 'SQL' },
-  { id: 'functions', label: 'Functions' },
   { id: 'secrets', label: 'Secrets' },
 ];
 
 export function SettingsModal({ onClose, fileTree, files, projectId: propProjectId }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<MainTab>('secrets');
-  const [dbSubTab, setDbSubTab] = useState<DbSubTab>('overview');
+  const [dbSubTab, setDbSubTab] = useState<DbSubTab>('schema');
 
   const projectId = propProjectId ?? sessionStorage.getItem('forge_project_id');
 
@@ -220,10 +216,8 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
               </div>
 
               <div>
-                {dbSubTab === 'overview' && <DatabaseOverview projectId={projectId} />}
                 {dbSubTab === 'schema' && <SchemaViewer projectId={projectId} />}
                 {dbSubTab === 'sql' && <SQLEditor projectId={projectId} />}
-                {dbSubTab === 'functions' && <EdgeFunctionsPanel fileTree={fileTree} />}
                 {dbSubTab === 'secrets' && <SecretsPanel projectId={projectId} />}
               </div>
             </div>
