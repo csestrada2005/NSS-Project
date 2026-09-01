@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Send, Bot, Loader2, CheckCircle, ChevronDown, ChevronUp, Wand2, Square } from 'lucide-react';
+import { Send, Bot, Loader2, CheckCircle, ChevronDown, ChevronUp, Wand2, Square, Clock } from 'lucide-react';
 import {
   ddlProposedMark,
   resolveDdlProposals,
@@ -51,6 +51,13 @@ const progressLabel = (description: string | undefined, file: string): string =>
   description && description.trim()
     ? (description.length > 60 ? `${description.slice(0, 60)}…` : description)
     : file;
+
+// El verbo de la línea de progreso sale de `step.action`, que el plan ya trae y
+// hasta ahora nadie leía: cada línea rezaba "Creating", también las de un
+// borrado. Anunciar un delete como "Creating" ataca justo el mecanismo que el
+// gate de aprobación sostiene — el usuario aprueba un plan y ve ejecutarse otro.
+const actionVerb = (action: ChatPlanStep['action']): string =>
+  action === 'delete' ? 'Deleting' : action === 'modify' ? 'Updating' : 'Creating';
 
 // Saludo inicial. Se usa sólo cuando no hay historial rehidratado; extraído a
 // constante para poder detectar (y no duplicar) el estado "sólo saludo".
@@ -112,22 +119,35 @@ function BuildProgress({
   isExpanded,
   onToggleExpand,
   lastError,
+  hasPendingPlan,
 }: {
   lines: { text: string; status: 'pending' | 'done' | 'error' }[];
   elapsedSeconds: number;
   isExpanded: boolean;
   onToggleExpand: () => void;
   lastError: string | null;
+  hasPendingPlan: boolean;
 }) {
   const isLastDone = lines.length > 0 && lines[lines.length - 1].status !== 'pending';
 
   const getPlainEnglish = () => {
+    // Con un plan esperando aprobación nada se está ejecutando: las líneas de
+    // detalle describen lo que se HARÁ, no lo que se hace. Cortar aquí, antes
+    // de cualquier coincidencia por substring, evita que el panel afirme un
+    // trabajo en curso que el gate de abajo desmiente en la misma pantalla.
+    if (hasPendingPlan) return 'Esperando tu aprobación...';
     const pending = lines.find(l => l.status === 'pending');
     const lastLine = pending || lines[lines.length - 1];
     if (!lastLine) return 'Working on it...';
     const text = lastLine.text;
     if (text === 'Planning...') return 'Figuring out what to build...';
     if (text.includes('Creating')) return 'Writing new components...';
+    // Los verbos nuevos necesitan su rama o la cabecera cae al genérico
+    // 'Working on it...' en todo plan de modify/delete — honesto pero mudo.
+    // Parche mínimo y consciente: sigue siendo matching por substring, y muere
+    // entero cuando la línea lleve su propio `kind` (Fase 2, en catálogo).
+    if (text.includes('Updating')) return 'Updating existing files...';
+    if (text.includes('Deleting')) return 'Removing files...';
     if (text.includes('Fixing')) return 'Fixing a small issue...';
     if (text.includes('Modified')) return 'All done ✓';
     return 'Working on it...';
@@ -137,11 +157,13 @@ function BuildProgress({
     <div className="flex justify-start w-full">
       <div className="bg-background border border-border rounded-lg p-3 w-[85%]">
         <div className="flex items-center gap-2 text-sm text-foreground">
-          {isLastDone
-            ? <CheckCircle size={14} className="text-green-400 shrink-0" />
-            : <Loader2 size={14} className="animate-spin shrink-0" />}
+          {hasPendingPlan
+            ? <Clock size={14} className="shrink-0" />
+            : isLastDone
+              ? <CheckCircle size={14} className="text-green-400 shrink-0" />
+              : <Loader2 size={14} className="animate-spin shrink-0" />}
           <span>{getPlainEnglish()}</span>
-          {!isLastDone && (
+          {!hasPendingPlan && !isLastDone && (
             <span className="text-gray-500 text-xs">{elapsedSeconds}s</span>
           )}
         </div>
@@ -197,9 +219,8 @@ function BuildProgress({
  *
  * Se pinta DEBAJO de las líneas del plan que ya pintó B2 (`BuildProgress`), no
  * en lugar de ellas: esas líneas son el plan completo y siguen siendo la
- * lectura principal. Lo que este bloque añade es lo que esas líneas no pueden
- * decir — todas rezan "Creating …", también las de un borrado — más los dos
- * botones que resuelven la espera.
+ * lectura principal. Lo que este bloque añade son los dos botones que resuelven
+ * la espera, y el foco sobre los borrados.
  *
  * De ahí que la lista de aquí sea SÓLO la de los deletes, con la misma marca
  * roja del plan ejecutado (B1). Repetir el plan entero justo bajo el plan
@@ -354,7 +375,9 @@ export function ChatInterface({
   // CIRUGÍA B2 — file_path → índice de su línea en progressLines, poblado por
   // onPlanReady. Vacío en las lanes sin plan (simple/fix) y con callers que no
   // pasan onPlanReady: ahí onProgress conserva su append de siempre.
-  const planLineIndexRef = useRef<Map<string, number>>(new Map());
+  // El `action` viaja junto al índice para que el verbo de la línea salga del
+  // plan sin ampliar la firma de onProgress (contrato con StudioEngine intacto).
+  const planLineIndexRef = useRef<Map<string, { index: number; action: ChatPlanStep['action'] }>>(new Map());
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [lastError, setLastError] = useState<string | null>(null);
   const [buildLogExpanded, setBuildLogExpanded] = useState(false);
@@ -566,14 +589,17 @@ export function ChatInterface({
             // dispara AL INICIAR un step, así que se marcan 'done' las líneas
             // anteriores y la del file actual se queda 'pending' — mismo patrón
             // visual de siempre (la última pending, las previas done).
-            const planIndex = planLineIndexRef.current.get(file);
-            if (planIndex !== undefined) {
+            const planEntry = planLineIndexRef.current.get(file);
+            if (planEntry !== undefined) {
               return prev.map((line, i) =>
-                i < planIndex && line.status === 'pending'
+                i < planEntry.index && line.status === 'pending'
                   ? { ...line, status: 'done' as const }
                   : line
               );
             }
+            // Sin entrada de plan no hay `action` que leer (lanes simple/fix, o
+            // callers sin onPlanReady): "Creating" sigue siendo el único verbo
+            // honesto disponible aquí, no una suposición sobre la operación.
             const next = [...prev];
             if (next.length > 0 && next[next.length - 1].status === 'pending') {
               next[next.length - 1].status = 'done';
@@ -597,15 +623,15 @@ export function ChatInterface({
           // líneas de golpe (todas 'pending', sustituyendo el "Planning...") para
           // que el usuario vea qué se va a construir, no sólo lo ya construido.
           const ordered = [...steps].sort((a, b) => a.order - b.order);
-          const index = new Map<string, number>();
+          const index = new Map<string, { index: number; action: ChatPlanStep['action'] }>();
           // Primera ocurrencia gana: si un file_path se repite en el plan, la
           // línea que se ilumina es la primera y el avance sigue siendo monótono.
           ordered.forEach((step, i) => {
-            if (!index.has(step.file_path)) index.set(step.file_path, i);
+            if (!index.has(step.file_path)) index.set(step.file_path, { index: i, action: step.action });
           });
           planLineIndexRef.current = index;
           setProgressLines(ordered.map(step => ({
-            text: `Creating ${progressLabel(step.description, step.file_path)}`,
+            text: `${actionVerb(step.action)} ${progressLabel(step.description, step.file_path)}`,
             status: 'pending' as const,
           })));
         }
@@ -874,6 +900,7 @@ export function ChatInterface({
             isExpanded={buildLogExpanded}
             onToggleExpand={() => setBuildLogExpanded(v => !v)}
             lastError={lastError}
+            hasPendingPlan={hasPendingPlan}
           />
         )}
         {/* CIRUGÍA B3 — el gate va justo DEBAJO de las líneas del plan: el
