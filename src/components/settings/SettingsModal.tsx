@@ -5,12 +5,9 @@ import { gitHubService } from '../../services/GitHubService';
 import type { FileSystemTree } from '@webcontainer/api';
 import { DatabaseOverview } from './db/DatabaseOverview';
 import { SchemaViewer } from './db/SchemaViewer';
-import { UsersManager } from './db/UsersManager';
 import { SQLEditor } from './db/SQLEditor';
 import { EdgeFunctionsPanel } from './db/EdgeFunctionsPanel';
-import { LogsViewer } from './db/LogsViewer';
 import { SecretsPanel } from './db/SecretsPanel';
-import { UsagePanel } from './db/UsagePanel';
 import { TrafficCharts } from './analytics/TrafficCharts';
 import { LighthousePanel } from './analytics/LighthousePanel';
 import { TopPagesTable } from './analytics/TopPagesTable';
@@ -25,17 +22,14 @@ interface SettingsModalProps {
 }
 
 type MainTab = 'secrets' | 'github' | 'deploy' | 'domains' | 'database' | 'email' | 'analytics';
-type DbSubTab = 'overview' | 'schema' | 'users' | 'sql' | 'functions' | 'logs' | 'secrets' | 'usage';
+type DbSubTab = 'overview' | 'schema' | 'sql' | 'functions' | 'secrets';
 
 const DB_SUB_TABS: { id: DbSubTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'schema', label: 'Schema' },
-  { id: 'users', label: 'Users' },
   { id: 'sql', label: 'SQL' },
   { id: 'functions', label: 'Functions' },
-  { id: 'logs', label: 'Logs' },
   { id: 'secrets', label: 'Secrets' },
-  { id: 'usage', label: 'Usage' },
 ];
 
 export function SettingsModal({ onClose, fileTree, files, projectId: propProjectId }: SettingsModalProps) {
@@ -228,12 +222,9 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
               <div>
                 {dbSubTab === 'overview' && <DatabaseOverview projectId={projectId} />}
                 {dbSubTab === 'schema' && <SchemaViewer projectId={projectId} />}
-                {dbSubTab === 'users' && <UsersManager />}
                 {dbSubTab === 'sql' && <SQLEditor projectId={projectId} />}
                 {dbSubTab === 'functions' && <EdgeFunctionsPanel fileTree={fileTree} />}
-                {dbSubTab === 'logs' && <LogsViewer />}
                 {dbSubTab === 'secrets' && <SecretsPanel projectId={projectId} />}
-                {dbSubTab === 'usage' && <UsagePanel />}
               </div>
             </div>
           )}
