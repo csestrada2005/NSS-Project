@@ -1189,12 +1189,13 @@ app.post('/api/platform-check', (req, res) => {
 // ---------------------------------------------------------------------------
 
 app.post('/api/compile', async (req, res) => {
-  console.log('[compile] endpoint hit, file count:', Object.keys(req.body?.files ?? {}).length);
+  const { files, projectId } = req.body;
+  console.log('[compile] endpoint hit, file count:', Object.keys(req.body?.files ?? {}).length, 'projectId:', projectId || 'none');
   req.setTimeout(30000);
-  const { files } = req.body;
   if (!files || typeof files !== 'object') {
     return res.status(400).json({ error: 'files object is required' });
   }
+  if (projectId && !(await requireProjectOwnership(req, res, projectId))) return;
   // CAMBIO 5 — observabilidad del compile. Los 502 del gateway (OOM/timeout de
   // Render) NO son logueables por este proceso — mueren en la puerta de enlace —
   // pero sí podemos loguear cada error REAL de compilación y cada compile de

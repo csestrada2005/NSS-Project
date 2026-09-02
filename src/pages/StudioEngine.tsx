@@ -620,7 +620,7 @@ export function StudioEngine() {
       runExclusive(async () => {
         setIsCompiling(true);
         try {
-          const { html, oidMap, verdict } = await compileWithMeta(files);
+          const { html, oidMap, verdict } = await compileWithMeta(files, projectId ? { projectId } : undefined);
           // CAMBIO 2 — guardar el oidMap de cada compile para PR-2 (sin consumidores
           // aún). Sólo se pisa con un mapa poblado: un compile con error de red o de
           // compilación devuelve {} y no debe borrar el último mapa válido.
@@ -652,7 +652,7 @@ export function StudioEngine() {
     }, COMPILE_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [files, isGenerating, runExclusive]);
+  }, [files, isGenerating, runExclusive, projectId]);
 
   // -------------------------------------------------------------------------
   // Memory initialization overlay
@@ -887,7 +887,7 @@ export function StudioEngine() {
           setIsCompiling(true);
           runExclusive(async () => {
             try {
-              const { html, oidMap, verdict } = await compileWithMeta(filesRef.current);
+              const { html, oidMap, verdict } = await compileWithMeta(filesRef.current, projectId ? { projectId } : undefined);
               if (Object.keys(oidMap).length > 0) oidMapRef.current = oidMap;
               if (verdict !== 'server-error') applyPreviewHtml(html);
             } catch (e) {
@@ -913,7 +913,7 @@ export function StudioEngine() {
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, [files, runExclusive, applyPreviewHtml]);
+  }, [files, runExclusive, applyPreviewHtml, projectId]);
 
   // -------------------------------------------------------------------------
   // Keyboard shortcuts (Ctrl+Z / Ctrl+Y handled by browser native undo in textarea)
@@ -1017,7 +1017,7 @@ export function StudioEngine() {
           if (settled) return;
           runExclusive(async () => {
             if (settled) return;
-            const result = await compileWithMeta(restoredFiles);
+            const result = await compileWithMeta(restoredFiles, projectId ? { projectId } : undefined);
             if (Object.keys(result.oidMap).length > 0) oidMapRef.current = result.oidMap;
             const decision = classifyCompileResult(result);
             if (decision.status === 'ok') {
@@ -1034,7 +1034,7 @@ export function StudioEngine() {
       };
       attempt(0);
     },
-    [runExclusive, applyPreviewHtml],
+    [runExclusive, applyPreviewHtml, projectId],
   );
 
   // -------------------------------------------------------------------------
@@ -1097,7 +1097,7 @@ export function StudioEngine() {
         setIsCompiling(true);
         try {
           if (restoredFiles.size === 0) { restore.outcome = 'ok'; return; }
-          const result = await compileWithMeta(restoredFiles);
+          const result = await compileWithMeta(restoredFiles, projectId ? { projectId } : undefined);
           if (Object.keys(result.oidMap).length > 0) oidMapRef.current = result.oidMap;
           const decision = classifyCompileResult(result);
           if (decision.status === 'ok') {
@@ -1355,6 +1355,7 @@ export function StudioEngine() {
       try {
         const result = await compileWithMeta(finalFiles, {
           onServerRetry: () => toast.message('Servidor ocupado — reintentando…'),
+          ...(projectId ? { projectId } : null),
         });
         const { html, oidMap, verdict } = result;
         if (Object.keys(oidMap).length > 0) oidMapRef.current = oidMap;
@@ -1396,7 +1397,7 @@ export function StudioEngine() {
           void saveFile(path, original);
           reverted.set(path, original);
         }
-        const revertRes = await compileWithMeta(reverted);
+        const revertRes = await compileWithMeta(reverted, projectId ? { projectId } : undefined);
         applyPreviewHtml(revertRes.html);
       } catch (e) {
         console.error('[StudioEngine] visual save compile error:', e);
@@ -1404,7 +1405,7 @@ export function StudioEngine() {
         setIsCompiling(false);
       }
     });
-  }, [runExclusive, applyPreviewHtml, updateLocalFile, saveFile, saveSnapshot]);
+  }, [runExclusive, applyPreviewHtml, updateLocalFile, saveFile, saveSnapshot, projectId]);
 
   // (d) Descartar: soltar el buffer y re-renderizar el DOM desde el último
   // estado compilado (remonta el iframe → srcdoc del compiledHtml vigente).
@@ -1903,7 +1904,7 @@ export function StudioEngine() {
       setIsCompiling(true);
       runExclusive(async () => {
         try {
-          const { html, oidMap, verdict } = await compileWithMeta(filesRef.current);
+          const { html, oidMap, verdict } = await compileWithMeta(filesRef.current, projectId ? { projectId } : undefined);
           if (Object.keys(oidMap).length > 0) oidMapRef.current = oidMap;
           // Un reintento manual sí pinta el resultado, sea cual sea (incluida la
           // página "servidor ocupado"), para dar feedback honesto al usuario.
@@ -1918,7 +1919,7 @@ export function StudioEngine() {
     };
     window.addEventListener('message', handleRetryCompile);
     return () => window.removeEventListener('message', handleRetryCompile);
-  }, [files, runExclusive, applyPreviewHtml]);
+  }, [files, runExclusive, applyPreviewHtml, projectId]);
 
   // -------------------------------------------------------------------------
   // Render
