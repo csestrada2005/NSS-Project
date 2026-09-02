@@ -784,7 +784,7 @@ pre { white-space: pre-wrap; word-break: break-word; }
 </body></html>`;
 }
 
-export async function compileFiles(filesObj) {
+export async function compileFiles(filesObj, dbCredentials = null) {
   if (!filesObj || typeof filesObj !== 'object') {
     return { error: 'filesObj must be an object', errorDetails: null };
   }
@@ -827,7 +827,11 @@ export async function compileFiles(filesObj) {
       resolveExtensions: ['.tsx', '.ts', '.jsx', '.js', '.mjs', '.cjs', '.css', '.json'],
       define: {
         'process.env.NODE_ENV': '"development"',
-        'global': 'window'
+        'global': 'window',
+        'import.meta.env.VITE_SUPABASE_URL': dbCredentials?.url
+          ? JSON.stringify(dbCredentials.url) : 'undefined',
+        'import.meta.env.VITE_SUPABASE_ANON_KEY': dbCredentials?.anonKey
+          ? JSON.stringify(dbCredentials.anonKey) : 'undefined',
       },
       alias: ALIAS,
       banner: {

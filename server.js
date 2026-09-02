@@ -1188,21 +1188,55 @@ app.post('/api/platform-check', (req, res) => {
 // Phase 2: Server-side compilation
 // ---------------------------------------------------------------------------
 
+// Caché module-level de credenciales Supabase por projectId, TTL 60s. Evita
+// pegarle a forge_projects en cada keystroke del preview. El caso null (sin
+// credenciales) no se cachea: mismo espíritu que esmShCache.
+const dbCredentialsCache = new Map();
+const DB_CREDENTIALS_TTL_MS = 60000;
+
+async function getDbCredentialsForProject(projectId) {
+  const cached = dbCredentialsCache.get(projectId);
+  if (cached && (Date.now() - cached.fetchedAt) < DB_CREDENTIALS_TTL_MS) {
+    return cached.credentials;
+  }
+  try {
+    const { data: project, error } = await supabaseAdmin
+      .from('forge_projects')
+      .select('supabase_project_url, supabase_anon_key')
+      .eq('id', projectId)
+      .single();
+    if (error || !project?.supabase_project_url || !project?.supabase_anon_key) {
+      return null;
+    }
+    const credentials = { url: project.supabase_project_url, anonKey: project.supabase_anon_key };
+    dbCredentialsCache.set(projectId, { credentials, fetchedAt: Date.now() });
+    return credentials;
+  } catch (err) {
+    console.error('[compile] Error fetching db credentials:', err?.message || err);
+    return null;
+  }
+}
+
 app.post('/api/compile', async (req, res) => {
   const { files, projectId } = req.body;
-  console.log('[compile] endpoint hit, file count:', Object.keys(req.body?.files ?? {}).length, 'projectId:', projectId || 'none');
   req.setTimeout(30000);
   if (!files || typeof files !== 'object') {
     return res.status(400).json({ error: 'files object is required' });
   }
   if (projectId && !(await requireProjectOwnership(req, res, projectId))) return;
+
+  let dbCredentials = null;
+  if (projectId && supabaseAdmin) {
+    dbCredentials = await getDbCredentialsForProject(projectId);
+  }
+  console.log('[compile] endpoint hit, file count:', Object.keys(req.body?.files ?? {}).length, 'projectId:', projectId || 'none', 'db:', dbCredentials ? 'yes' : 'no');
   // CAMBIO 5 — observabilidad del compile. Los 502 del gateway (OOM/timeout de
   // Render) NO son logueables por este proceso — mueren en la puerta de enlace —
   // pero sí podemos loguear cada error REAL de compilación y cada compile de
   // duración anómala (>10s), que suele preceder a esos 502 bajo carga.
   const startedAt = Date.now();
   try {
-    const result = await compileFiles(files);
+    const result = await compileFiles(files, dbCredentials);
     const durationMs = Date.now() - startedAt;
     if (durationMs > 10000) {
       console.warn(`[compile] SLOW: ${durationMs}ms (file count: ${Object.keys(files).length})`);
