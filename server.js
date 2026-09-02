@@ -1641,8 +1641,83 @@ app.post('/api/db/:projectId/query', async (req, res) => {
     const projectClient = createClient(project.supabase_project_url, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
+
+    // PASO 1 — SQL del usuario, sin cambios. Siempre corre antes del barrido.
     const { data, error } = await projectClient.rpc('exec_sql', { query: sql });
-    res.json({ data, error });
+
+    // PASO 2/3 — barrido de RLS. Aislado en su propio try/catch: un fallo aquí
+    // NUNCA debe tumbar { data, error } del paso 1, sólo queda en rlsSweep.error.
+    const rlsSweep = { tables: [], swept: false, error: null };
+    try {
+      const RLS_STATE_QUERY = `
+        select c.relname as table_name,
+               c.relrowsecurity as rls_on,
+               coalesce(obj_description(c.oid,'pg_class') like '%wyrd:read=public%', false) as marked_public,
+               exists (select 1 from pg_policies p
+                       where p.schemaname='public' and p.tablename=c.relname
+                         and p.policyname='wyrd_public_read') as has_read_policy
+        from pg_class c
+        join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname='public' and c.relkind='r'
+        order by c.relname
+      `;
+
+      const stateResult = await projectClient.rpc('exec_sql', { query: RLS_STATE_QUERY });
+      if (stateResult.error) throw new Error(stateResult.error.message || String(stateResult.error));
+      let tables = stateResult.data ?? [];
+
+      const needsSweepTables = tables.filter(
+        (t) => t.rls_on === false || (t.marked_public === true && t.has_read_policy === false)
+      );
+
+      if (needsSweepTables.length > 0) {
+        const RLS_SWEEP_SQL = `
+          do $wyrd_rls$
+          declare r record;
+          begin
+            for r in
+              select c.relname from pg_class c
+              join pg_namespace n on n.oid = c.relnamespace
+              where n.nspname='public' and c.relkind='r' and not c.relrowsecurity
+            loop
+              execute format('alter table public.%I enable row level security', r.relname);
+            end loop;
+
+            for r in
+              select c.relname from pg_class c
+              join pg_namespace n on n.oid = c.relnamespace
+              where n.nspname='public' and c.relkind='r'
+                and obj_description(c.oid,'pg_class') like '%wyrd:read=public%'
+                and not exists (select 1 from pg_policies p
+                                where p.schemaname='public' and p.tablename=c.relname
+                                  and p.policyname='wyrd_public_read')
+            loop
+              execute format('create policy wyrd_public_read on public.%I for select to anon using (true)', r.relname);
+            end loop;
+          end
+          $wyrd_rls$;
+        `;
+
+        const sweepResult = await projectClient.rpc('exec_sql', { query: RLS_SWEEP_SQL });
+        if (sweepResult.error) throw new Error(sweepResult.error.message || String(sweepResult.error));
+
+        const rereadResult = await projectClient.rpc('exec_sql', { query: RLS_STATE_QUERY });
+        if (rereadResult.error) throw new Error(rereadResult.error.message || String(rereadResult.error));
+        tables = rereadResult.data ?? [];
+        rlsSweep.swept = true;
+
+        console.log(
+          `[RLS_SWEEP:${projectId}] tables affected: ${needsSweepTables.map((t) => t.table_name).join(', ')}`
+        );
+      }
+
+      rlsSweep.tables = tables;
+    } catch (sweepErr) {
+      console.error(`[RLS_SWEEP:${projectId}] Error:`, sweepErr.message || sweepErr);
+      rlsSweep.error = sweepErr.message || String(sweepErr);
+    }
+
+    res.json({ data, error, rlsSweep });
   } catch (err) {
     console.error('[DB Query] Error:', err);
     res.status(500).json({ error: 'Query failed' });
