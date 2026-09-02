@@ -128,7 +128,8 @@ const ALLOWED_DEPS = {
   'scheduler': 'scheduler',
   'react-router-dom-preview': 'react-router-dom-preview',
   'react-router': 'react-router',
-  '@remix-run/router': '@remix-run/router'
+  '@remix-run/router': '@remix-run/router',
+  '@supabase/supabase-js': '@supabase/supabase-js'
 };
 
 // Plugin que reescribe react-router-dom para sustituir BrowserRouter/HashRouter por MemoryRouter
@@ -379,7 +380,13 @@ const ALIAS = {
   'motion-dom': new URL('../node_modules/motion-dom/dist/es/index.mjs', import.meta.url).pathname,
   'motion-utils': new URL('../node_modules/motion-utils/dist/es/index.mjs', import.meta.url).pathname,
   'clsx': new URL('../node_modules/clsx/dist/clsx.mjs', import.meta.url).pathname,
-  'tailwind-merge': new URL('../node_modules/tailwind-merge/dist/bundle-mjs.mjs', import.meta.url).pathname
+  'tailwind-merge': new URL('../node_modules/tailwind-merge/dist/bundle-mjs.mjs', import.meta.url).pathname,
+  // Cliente Supabase del preview. Su entry ESM importa a su vez, por bare
+  // specifier, los sub-paquetes @supabase/auth-js|functions-js|postgrest-js|
+  // realtime-js|storage-js — no están en ALIAS, así que caen al fallback CDN
+  // de esmShResolverPlugin (mismo mecanismo híbrido que resuelve date-fns,
+  // zustand, los @radix-ui/*, etc.).
+  '@supabase/supabase-js': new URL('../node_modules/@supabase/supabase-js/dist/index.mjs', import.meta.url).pathname
 };
 
 // Base URL del CDN, configurable vía env para tests / mirrors

@@ -32,6 +32,7 @@ const commonFiles = {
           // BrowserRouter/Routes/Route/Outlet/Link API, unchanged across v6→v7.
           "react-router-dom": "^7.18.2",
           "framer-motion": FRAMER_MOTION_VERSION,
+          "@supabase/supabase-js": "^2.45.0",
           ...SHADCN_DEPENDENCIES,
           ...UI_COMPONENT_DEPENDENCIES
         },
@@ -298,7 +299,28 @@ export default App;
   },
   'lib': {
       directory: {
-          'utils.ts': SHADCN_FILES['src/lib/utils.ts']
+          'utils.ts': SHADCN_FILES['src/lib/utils.ts'],
+          // Cliente Supabase del preview. persistSession/autoRefreshToken en false
+          // son OBLIGATORIOS: el preview corre en un iframe sandbox sin
+          // allow-same-origin (origen opaco), donde localStorage lanza SecurityError.
+          // supabase-js persiste sesión en localStorage por defecto y reventaría al
+          // construirse si no se desactiva aquí.
+          'supabase.ts': {
+              file: {
+                  contents: `
+import { createClient } from '@supabase/supabase-js'
+
+const url = import.meta.env.VITE_SUPABASE_URL
+const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+export const supabase = url && anonKey
+  ? createClient(url, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+  : null
+                  `
+              }
+          }
       }
   },
   'pages': {
