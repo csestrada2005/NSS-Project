@@ -32,7 +32,7 @@ const commonFiles = {
           // BrowserRouter/Routes/Route/Outlet/Link API, unchanged across v6→v7.
           "react-router-dom": "^7.18.2",
           "framer-motion": FRAMER_MOTION_VERSION,
-          "@supabase/supabase-js": "^2.45.0",
+          "@supabase/supabase-js": "^2.95.3",
           ...SHADCN_DEPENDENCIES,
           ...UI_COMPONENT_DEPENDENCIES
         },
