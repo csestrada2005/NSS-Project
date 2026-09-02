@@ -304,7 +304,10 @@ export default App;
           // son OBLIGATORIOS: el preview corre en un iframe sandbox sin
           // allow-same-origin (origen opaco), donde localStorage lanza SecurityError.
           // supabase-js persiste sesión en localStorage por defecto y reventaría al
-          // construirse si no se desactiva aquí.
+          // construirse si no se desactiva aquí. lock en paso directo también es
+          // OBLIGATORIO: GoTrueClient usa navigator.locks al inicializarse y la Web
+          // Locks API está denegada en ese mismo origen opaco, lanzando SecurityError
+          // antes de cualquier query. Sin sesión ni refresco no hay nada que serializar.
           'supabase.ts': {
               file: {
                   contents: `
@@ -315,7 +318,11 @@ const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 export const supabase = url && anonKey
   ? createClient(url, anonKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        lock: async (_name, _acquireTimeout, fn) => await fn(),
+      },
     })
   : null
                   `
