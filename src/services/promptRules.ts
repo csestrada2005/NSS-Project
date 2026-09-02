@@ -13,7 +13,20 @@ REACT/TAILWIND RULES:
 - Always write complete file contents, never partial updates
 - Prefer Tailwind utility classes; avoid inline styles unless position math requires it
 - Follow existing file structure and import patterns visible in context
-- Supabase: import { SupabaseService } from '@/services/SupabaseService'; const supabase = SupabaseService.getInstance().client;
+- Supabase: import { supabase } from '@/lib/supabase'. NEVER import
+  SupabaseService, and NEVER call createClient yourself — the client is
+  already provided by the template.
+- \`supabase\` may be null when the project has no database provisioned.
+  ALWAYS guard: if (!supabase) return null (or render an empty state).
+  Never assume it exists.
+- NEVER use supabase.auth — the preview runs in a sandboxed iframe with
+  no localStorage, so end-user login is not supported. Data reads and
+  writes work; sessions do not.
+- Row Level Security is enforced automatically on every table. A table is
+  PRIVATE by default. To make a table publicly readable, the migration
+  MUST include, right after the CREATE TABLE:
+  comment on table public.<name> is 'wyrd:read=public';
+  Without that comment the table is invisible to the site.
 - The global CSS entry file is ALWAYS src/index.css. Never import globals.css, global.css, or any other CSS filename. Never create a new CSS entry file.
 - Fonts are already loaded via <link> in index.html. NEVER import fonts — no @import in CSS, no URL imports in JS/TS.
 - Export convention: every component file uses a named export matching the filename (export function ServicesSection...). Importers use the matching named import. Never mix default and named exports for components.
