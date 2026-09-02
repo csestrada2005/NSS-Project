@@ -165,6 +165,13 @@ export interface CompileOptions {
    * "Servidor ocupado — reintentando…" sin acoplar el backoff a la UI.
    */
   onServerRetry?: (attempt: number) => void;
+  /**
+   * Cuando viene, el servidor verifica ownership del proyecto antes de
+   * compilar. Omitido (no `undefined` en el body) cuando no aplica —
+   * PublicPreviewPage nunca lo manda, así que su body queda byte a byte
+   * como hoy: { files }.
+   */
+  projectId?: string;
 }
 
 /** Backoff exponencial: 1ª espera 1s, 2ª espera 2s. */
@@ -181,7 +188,11 @@ async function compileRequest(files: Map<string, string>, opts?: CompileOptions)
     return { html: generateLoadingHTML(), oidMap: {}, verdict: 'ok' };
   }
 
-  const body = JSON.stringify({ files: Object.fromEntries(files) });
+  const body = JSON.stringify(
+    opts?.projectId
+      ? { files: Object.fromEntries(files), projectId: opts.projectId }
+      : { files: Object.fromEntries(files) }
+  );
   // Tipo de fallo del último intento, para decidir el veredicto al agotar los
   // reintentos: 'server' (5xx/vacío/timeout) o 'network' (fetch rechazado).
   let lastFailure: 'server' | 'network' = 'server';
