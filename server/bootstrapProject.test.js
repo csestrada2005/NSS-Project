@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { bootstrapProject, EXEC_SQL_DDL } from './bootstrapProject.js';
+import { bootstrapProject, EXEC_SQL_DDL, RLS_TRIGGER_DDL } from './bootstrapProject.js';
 
 // ---------------------------------------------------------------------------
 // EXEC_SQL_DDL — el contrato congelado.
@@ -99,6 +99,42 @@ test('EXEC_SQL_DDL: es idempotente (create OR REPLACE, no create a secas)', () =
 });
 
 // ---------------------------------------------------------------------------
+// RLS_TRIGGER_DDL — el barrido de cobertura, congelado igual que EXEC_SQL_DDL.
+// ---------------------------------------------------------------------------
+test('RLS_TRIGGER_DDL: security definer con search_path fijado a public', () => {
+  assert.match(RLS_TRIGGER_DDL, /security definer/);
+  assert.match(RLS_TRIGGER_DDL, /set search_path = public/);
+});
+
+test('RLS_TRIGGER_DDL: dispara en ddl_command_end sobre CREATE TABLE', () => {
+  assert.match(RLS_TRIGGER_DDL, /on ddl_command_end/);
+  assert.match(RLS_TRIGGER_DDL, /when tag in \('CREATE TABLE'\)/);
+});
+
+test('RLS_TRIGGER_DDL: el drop event trigger va antes del create event trigger', () => {
+  const iDrop = RLS_TRIGGER_DDL.indexOf('drop event trigger if exists');
+  const iCreate = RLS_TRIGGER_DDL.indexOf('create event trigger');
+  assert.notEqual(iDrop, -1);
+  assert.notEqual(iCreate, -1);
+  assert.ok(iDrop < iCreate, 'el drop debe ir antes del create, no después');
+});
+
+test('RLS_TRIGGER_DDL: dos ramas exception when others, ambas seguidas de null;', () => {
+  const branches = RLS_TRIGGER_DDL.match(/exception when others then/g) ?? [];
+  assert.equal(branches.length, 2, 'se esperan exactamente dos ramas exception when others');
+  const guarded = RLS_TRIGGER_DDL.match(/exception when others then\s*\n\s*null;/g) ?? [];
+  assert.equal(
+    guarded.length,
+    2,
+    'las dos ramas exception when others deben ir seguidas de null; — nunca puede propagar y revertir el CREATE TABLE'
+  );
+});
+
+test('RLS_TRIGGER_DDL: filtra por schema_name = public', () => {
+  assert.match(RLS_TRIGGER_DDL, /obj\.schema_name = 'public'/);
+});
+
+// ---------------------------------------------------------------------------
 // bootstrapProject — contrato de error: LANZA, nunca resuelve en silencio.
 // ---------------------------------------------------------------------------
 function withFetch(impl, fn) {
@@ -122,21 +158,62 @@ test('bootstrapProject: sin management token lanza y conserva el ref', async () 
   );
 });
 
-test('bootstrapProject: 200 → resuelve y manda el DDL al ref correcto', async () => {
-  let seen = null;
+test('bootstrapProject: 200 → resuelve y manda EXEC_SQL_DDL y RLS_TRIGGER_DDL, en ese orden, como envíos separados', async () => {
+  const calls = [];
   await withFetch(
     async (url, opts) => {
-      seen = { url, opts };
+      calls.push({ url, opts });
       return { ok: true, status: 200, text: async () => '{}' };
     },
     async () => {
       await bootstrapProject('ref_ok', 'tok');
     }
   );
-  assert.equal(seen.url, 'https://api.supabase.com/v1/projects/ref_ok/database/query');
-  assert.equal(seen.opts.method, 'POST');
-  assert.equal(seen.opts.headers.Authorization, 'Bearer tok');
-  assert.equal(JSON.parse(seen.opts.body).query, EXEC_SQL_DDL);
+  assert.equal(calls.length, 2, 'se esperan dos envíos separados a la Management API');
+
+  assert.equal(calls[0].url, 'https://api.supabase.com/v1/projects/ref_ok/database/query');
+  assert.equal(calls[0].opts.method, 'POST');
+  assert.equal(calls[0].opts.headers.Authorization, 'Bearer tok');
+  assert.equal(JSON.parse(calls[0].opts.body).query, EXEC_SQL_DDL);
+
+  assert.equal(calls[1].url, 'https://api.supabase.com/v1/projects/ref_ok/database/query');
+  assert.equal(calls[1].opts.method, 'POST');
+  assert.equal(calls[1].opts.headers.Authorization, 'Bearer tok');
+  assert.equal(JSON.parse(calls[1].opts.body).query, RLS_TRIGGER_DDL);
+});
+
+test('bootstrapProject: EXEC_SQL_DDL ok pero RLS_TRIGGER_DDL falla → resuelve normal (no lanza)', async () => {
+  const originalError = console.error;
+  const logs = [];
+  console.error = (...args) => logs.push(args.join(' '));
+
+  let callCount = 0;
+  try {
+    await withFetch(
+      async () => {
+        callCount += 1;
+        if (callCount === 1) {
+          return { ok: true, status: 200, text: async () => '{}' };
+        }
+        return {
+          ok: false,
+          status: 500,
+          text: async () => JSON.stringify({ message: 'event trigger requires superuser' }),
+        };
+      },
+      async () => {
+        await assert.doesNotReject(() => bootstrapProject('ref_rls_fail', 'tok'));
+      }
+    );
+  } finally {
+    console.error = originalError;
+  }
+
+  assert.equal(callCount, 2, 'ambos envíos deben intentarse aunque el segundo falle');
+  assert.ok(
+    logs.some(line => line.includes('[RLS_TRIGGER_FAILED:ref_rls_fail]') && line.includes('event trigger requires superuser')),
+    'debe loguear [RLS_TRIGGER_FAILED:<ref>] con el mensaje completo'
+  );
 });
 
 test('bootstrapProject: Management API no-ok lanza con ref, status y mensaje completo', async () => {

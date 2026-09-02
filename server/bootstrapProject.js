@@ -66,29 +66,64 @@ grant execute on function public.exec_sql(text) to service_role;
 `;
 
 /**
- * Ejecuta el DDL contra el proyecto `ref` vía Management API.
+ * DDL del event trigger que fuerza RLS en toda tabla nueva creada en el
+ * proyecto generado. Es un barrido de cobertura, no el contrato mínimo:
+ * un proyecto sin este trigger sigue siendo usable (exec_sql ya está
+ * instalado), por eso se envía en un segundo request separado del de
+ * EXEC_SQL_DDL — ver bootstrapProject().
  *
- * Contrato de error: si algo falla LANZA. Nunca resuelve en silencio, para que
- * el llamador no pueda responder 200 con un fallo escondido en el body.
- * El Error lleva:
+ * Ambas ramas `exception when others then null;` son deliberadas: ni un
+ * fallo de ALTER TABLE (rama interna, por tabla) ni un fallo del propio
+ * event trigger (rama externa) pueden propagar y revertir el CREATE TABLE
+ * que lo disparó.
+ */
+export const RLS_TRIGGER_DDL = `
+create or replace function public.wyrd_force_rls()
+returns event_trigger
+language plpgsql
+security definer
+set search_path = public
+as $wyrd_force_rls$
+declare obj record;
+begin
+  for obj in select * from pg_event_trigger_ddl_commands()
+  loop
+    if obj.command_tag = 'CREATE TABLE' and obj.schema_name = 'public' then
+      begin
+        execute format('alter table %s enable row level security', obj.object_identity);
+      exception when others then
+        null;
+      end;
+    end if;
+  end loop;
+exception when others then
+  null;
+end;
+$wyrd_force_rls$;
+
+drop event trigger if exists wyrd_force_rls_trigger;
+
+create event trigger wyrd_force_rls_trigger
+on ddl_command_end
+when tag in ('CREATE TABLE')
+execute function public.wyrd_force_rls();
+`;
+
+/**
+ * Envía un statement SQL al proyecto `ref` vía Management API.
+ *
+ * Contrato de error: si algo falla LANZA. El Error lleva:
  *   - err.message  → el mensaje COMPLETO de la Management API (para el log
  *                    server-side; NO debe viajar al cliente tal cual).
  *   - err.ref      → el ref del proyecto afectado.
  *   - err.status   → el status HTTP de la Management API, si lo hubo.
  *
- * Nunca borra el proyecto: un bootstrap fallido deja el proyecto vivo y
- * reintentables (ver POST /api/admin/bootstrap-db/:projectRef).
- *
  * @param {string} ref             Ref del proyecto Supabase generado.
  * @param {string} managementToken Token de la Supabase Management API.
+ * @param {string} sql             Statement a ejecutar.
  * @returns {Promise<void>}
  */
-export async function bootstrapProject(ref, managementToken) {
-  if (!ref) throw Object.assign(new Error('bootstrapProject: missing project ref'), { ref: null });
-  if (!managementToken) {
-    throw Object.assign(new Error('bootstrapProject: missing Supabase management token'), { ref });
-  }
-
+async function sendManagementQuery(ref, managementToken, sql) {
   let response;
   try {
     response = await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`, {
@@ -97,7 +132,7 @@ export async function bootstrapProject(ref, managementToken) {
         Authorization: `Bearer ${managementToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ query: EXEC_SQL_DDL }),
+      body: JSON.stringify({ query: sql }),
     });
   } catch (err) {
     throw Object.assign(new Error(`bootstrapProject: network failure — ${err.message}`), { ref });
@@ -117,5 +152,36 @@ export async function bootstrapProject(ref, managementToken) {
       new Error(`bootstrapProject: Management API ${response.status} — ${detail}`),
       { ref, status: response.status }
     );
+  }
+}
+
+/**
+ * Instala el contrato SQL en el proyecto `ref` vía Management API, en dos
+ * envíos SEPARADOS y en este orden:
+ *   a) EXEC_SQL_DDL     — el contrato mínimo. Si falla, LANZA: sin esto el
+ *                          proyecto es inutilizable.
+ *   b) RLS_TRIGGER_DDL  — barrido de cobertura. Si falla, NO lanza: el
+ *                          proyecto ya es usable con (a) instalado, así que
+ *                          se loguea y bootstrapProject resuelve normal.
+ *
+ * Nunca borra el proyecto: un bootstrap fallido deja el proyecto vivo y
+ * reintentable (ver POST /api/admin/bootstrap-db/:projectRef).
+ *
+ * @param {string} ref             Ref del proyecto Supabase generado.
+ * @param {string} managementToken Token de la Supabase Management API.
+ * @returns {Promise<void>}
+ */
+export async function bootstrapProject(ref, managementToken) {
+  if (!ref) throw Object.assign(new Error('bootstrapProject: missing project ref'), { ref: null });
+  if (!managementToken) {
+    throw Object.assign(new Error('bootstrapProject: missing Supabase management token'), { ref });
+  }
+
+  await sendManagementQuery(ref, managementToken, EXEC_SQL_DDL);
+
+  try {
+    await sendManagementQuery(ref, managementToken, RLS_TRIGGER_DDL);
+  } catch (err) {
+    console.error(`[RLS_TRIGGER_FAILED:${ref}] ${err.message}`);
   }
 }
