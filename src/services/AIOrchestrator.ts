@@ -488,6 +488,7 @@ const KNOWN_DEP_VERSIONS: Record<string, string> = {
   // lockstep with the template package.json (shadcnDefaults + shadcnComponents +
   // templates.ts) so an exported project reproduces the tree the preview ran.
   'framer-motion': '11.15.0',
+  '@supabase/supabase-js': '^2.95.3',
   'lucide-react': '0.469.0',
   clsx: '2.1.1',
   'tailwind-merge': '2.6.0',

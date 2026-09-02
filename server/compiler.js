@@ -1,5 +1,6 @@
 import * as esbuild from 'esbuild';
 import path from 'path';
+import fs from 'fs';
 import * as babelParser from '@babel/parser';
 import _traverse from '@babel/traverse';
 
@@ -128,7 +129,13 @@ const ALLOWED_DEPS = {
   'scheduler': 'scheduler',
   'react-router-dom-preview': 'react-router-dom-preview',
   'react-router': 'react-router',
-  '@remix-run/router': '@remix-run/router'
+  '@remix-run/router': '@remix-run/router',
+  '@supabase/supabase-js': '@supabase/supabase-js',
+  '@supabase/auth-js': '@supabase/auth-js',
+  '@supabase/postgrest-js': '@supabase/postgrest-js',
+  '@supabase/realtime-js': '@supabase/realtime-js',
+  '@supabase/storage-js': '@supabase/storage-js',
+  '@supabase/functions-js': '@supabase/functions-js'
 };
 
 // Plugin que reescribe react-router-dom para sustituir BrowserRouter/HashRouter por MemoryRouter
@@ -243,8 +250,23 @@ function virtualFilesPlugin(files, oidMap) {
         // Sólo imports RELATIVOS ('.'): un specifier con '@' es un paquete con
         // scope (p.ej. '@remix-run/router') o el alias '@/' del proyecto, nunca
         // una ruta de disco — esos siguen su camino habitual (alias / filesObj).
-        if (args.path.startsWith('.') && args.namespace === 'file' && args.importer && path.isAbsolute(args.importer))
-          return { path: path.resolve(path.dirname(args.importer), args.path), sideEffects: false };
+        if (args.path.startsWith('.') && args.namespace === 'file' && args.importer && path.isAbsolute(args.importer)) {
+          const resolved = path.resolve(path.dirname(args.importer), args.path);
+          // Al devolver un `path` explícito nos saltamos el resolveExtensions
+          // nativo de esbuild, así que hay que probarlas a mano. Para
+          // framer-motion/lucide-react (siempre extensión explícita en sus
+          // relativos) el primer candidato ya es un archivo real y esto es un
+          // no-op. Para paquetes con salida tsc extension-less (p.ej. los
+          // dist/module/*.js de @supabase/auth-js|realtime-js|functions-js,
+          // que importan entre sí como './AuthClient' sin '.js') hace falta
+          // probar sufijos o el import no resuelve.
+          const candidates = [resolved, resolved + '.js', resolved + '.mjs', resolved + '.cjs',
+            resolved + '/index.js', resolved + '/index.mjs'];
+          const match = candidates.find(c => {
+            try { return fs.statSync(c).isFile(); } catch { return false; }
+          });
+          return { path: match || resolved, sideEffects: false };
+        }
 
         let resolvedPath;
 
@@ -379,7 +401,22 @@ const ALIAS = {
   'motion-dom': new URL('../node_modules/motion-dom/dist/es/index.mjs', import.meta.url).pathname,
   'motion-utils': new URL('../node_modules/motion-utils/dist/es/index.mjs', import.meta.url).pathname,
   'clsx': new URL('../node_modules/clsx/dist/clsx.mjs', import.meta.url).pathname,
-  'tailwind-merge': new URL('../node_modules/tailwind-merge/dist/bundle-mjs.mjs', import.meta.url).pathname
+  'tailwind-merge': new URL('../node_modules/tailwind-merge/dist/bundle-mjs.mjs', import.meta.url).pathname,
+  // Cliente Supabase del preview. Su entry ESM reexporta, por bare specifier,
+  // los 5 sub-paquetes de abajo — cada uno vendorizado a su propio entry ESM
+  // (campo "module" de su package.json, verificado en node_modules; ninguno
+  // expone cjs/umd aquí) para que esbuild trate el árbol completo como local y
+  // no dispare fetch a esm.sh por cada uno. Grafo de relativos recorrido
+  // completo con @babel/parser (no basta con grep: hay comentarios/strings
+  // que citan nombres de paquete sin ser imports reales). Únicos terceros que
+  // siguen resolviendo por esm.sh porque no están vendorizados: tslib (vía
+  // auth-js y functions-js) e iceberg-js (vía storage-js).
+  '@supabase/supabase-js': new URL('../node_modules/@supabase/supabase-js/dist/index.mjs', import.meta.url).pathname,
+  '@supabase/auth-js': new URL('../node_modules/@supabase/auth-js/dist/module/index.js', import.meta.url).pathname,
+  '@supabase/postgrest-js': new URL('../node_modules/@supabase/postgrest-js/dist/index.mjs', import.meta.url).pathname,
+  '@supabase/realtime-js': new URL('../node_modules/@supabase/realtime-js/dist/module/index.js', import.meta.url).pathname,
+  '@supabase/storage-js': new URL('../node_modules/@supabase/storage-js/dist/index.mjs', import.meta.url).pathname,
+  '@supabase/functions-js': new URL('../node_modules/@supabase/functions-js/dist/module/index.js', import.meta.url).pathname
 };
 
 // Base URL del CDN, configurable vía env para tests / mirrors
