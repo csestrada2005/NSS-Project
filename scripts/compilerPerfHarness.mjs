@@ -96,6 +96,30 @@
  *     un `alias` opcional para esto; el ALIAS base (con
  *     ALIAS_EXTRA_SOLO_HARNESS) no se modifica.
  *
+ * ---------------------------------------------------------------------------
+ * AMPLIACIÓN v4 — E10/E11 (pure: ['createLucideIcon']) y E12 (framer solo)
+ * ---------------------------------------------------------------------------
+ *   - prebundlePackage() acepta ahora un `extraOptions` opcional que se
+ *     spreadea sobre las opciones del esbuild.build previo (para poder pasar
+ *     pure:['createLucideIcon'] SOLO al pre-empaquetado de lucide-react de
+ *     E10/E11, sin tocar el pre-empaquetado ya existente que usan E7-E9).
+ *   - runBuild() acepta un tercer parámetro opcional `options` con
+ *     `extraBuildOptions` (spreadeado sobre las opciones del build
+ *     CONSUMIDOR — usado por E11 para añadir pure:['createLucideIcon'] ahí
+ *     también) y `checkIconNames` (array de nombres a buscar en el texto de
+ *     los outputFiles JS resultantes — usado por E10/E11 para el criterio de
+ *     verificación obligatorio de Heart/Star/Menu).
+ *   - E10 reusa filesObj de E1 con ALIAS['lucide-react'] apuntando a un
+ *     pre-empaquetado NUEVO (pure:['createLucideIcon'] en el build de
+ *     pre-empaquetado); framer-motion se deja EXACTAMENTE como ALIAS base
+ *     (node_modules, sin pre-empaquetar).
+ *   - E11 es igual que E10 pero además pasa pure:['createLucideIcon'] al
+ *     build CONSUMIDOR (extraBuildOptions), para descartar cuál de los dos
+ *     sitios es el correcto.
+ *   - E12 reusa filesObj de E1 con SOLO ALIAS['framer-motion'] apuntando al
+ *     pre-empaquetado ya existente (el mismo que usa E7-E9); lucide-react se
+ *     deja EXACTAMENTE como ALIAS base (node_modules, tal cual hoy).
+ *
  * EJECUCIÓN:  node scripts/compilerPerfHarness.mjs
  */
 
@@ -726,7 +750,8 @@ function sumOutputBytes(outputFiles) {
 // R225/statSync, el metafile resumido, result.errors.length y los bytes de
 // salida JS/CSS (requisito A).
 // ===========================================================================
-async function runBuild(filesObj, alias = ALIAS) {
+async function runBuild(filesObj, alias = ALIAS, options = {}) {
+  const { extraBuildOptions = {}, checkIconNames = null } = options;
   const entry = resolveEntry(filesObj);
 
   resetPointStats();
@@ -744,6 +769,7 @@ async function runBuild(filesObj, alias = ALIAS) {
   let metafileSummary = null;
   let bytesJS = null;
   let bytesCSS = null;
+  let iconPresence = null; // requisito v4 — sólo se rellena si checkIconNames viene dado
 
   try {
     const result = await esbuild.build({
@@ -780,11 +806,15 @@ async function runBuild(filesObj, alias = ALIAS) {
         esmShResolverPluginInstrumented()
       ],
       metafile: true, // requisito nuevo 1
-      logLevel: 'silent'
+      logLevel: 'silent',
+      ...extraBuildOptions, // v4 — E11 pasa aquí pure:['createLucideIcon']
     });
     errorsLength = result.errors.length;
     metafileSummary = summarizeMetafile(result.metafile);
     ({ bytesJS, bytesCSS } = sumOutputBytes(result.outputFiles)); // requisito A
+    if (checkIconNames) {
+      iconPresence = checkIconsPresent(result.outputFiles, checkIconNames); // v4
+    }
   } catch (err) {
     rejected = err && err.message ? err.message : String(err);
   } finally {
@@ -806,7 +836,28 @@ async function runBuild(filesObj, alias = ALIAS) {
     vfsStatSyncCalls,
     vfsStatSyncMs,
     fetchAttempts,
+    iconPresence, // v4 — null salvo que options.checkIconNames viniera dado
   };
+}
+
+// ===========================================================================
+// v4 — comprueba, por nombre, si un icono sigue presente en el JS de salida
+// (result.outputFiles, ignorando CSS). Búsqueda por palabra completa sobre
+// el texto concatenado de todos los outputFiles JS; sin minify (no se pasa
+// minify:true en ningún build de este harness) los identificadores de
+// createLucideIcon('Heart', ...) / export { Heart } sobreviven tal cual si
+// no se eliminan por tree-shaking.
+// ===========================================================================
+function checkIconsPresent(outputFiles, iconNames) {
+  const combined = (outputFiles || [])
+    .filter(o => !o.path.endsWith('.css'))
+    .map(o => o.text)
+    .join('\n');
+  const presence = {};
+  for (const name of iconNames) {
+    presence[name] = new RegExp(`\\b${name}\\b`).test(combined);
+  }
+  return presence;
 }
 
 function topImporters(im, n = 5) {
@@ -872,7 +923,7 @@ function printScenarioRunLine(scenarioId, runIdx, r) {
 // (compiler.js:862-864). Se mide tiempo y bytes del .mjs resultante. Esto se
 // llama UNA VEZ por paquete, fuera del cronómetro de cualquier escenario.
 // ===========================================================================
-async function prebundlePackage(pkgName, entryPath, outDir) {
+async function prebundlePackage(pkgName, entryPath, outDir, extraOptions = {}) {
   const safeName = pkgName.replace(/[@/]/g, '_');
   const outfile = path.join(outDir, `${safeName}.mjs`);
   const start = Date.now();
@@ -888,6 +939,7 @@ async function prebundlePackage(pkgName, entryPath, outDir) {
     conditions: ['development', 'module', 'browser', 'default'],
     resolveExtensions: ['.tsx', '.ts', '.jsx', '.js', '.mjs', '.cjs', '.css', '.json'],
     logLevel: 'silent',
+    ...extraOptions, // v4 — E10/E11 pasan pure:['createLucideIcon'] aquí
   });
   const ms = Date.now() - start;
   const bytes = fs.statSync(outfile).size;
@@ -1004,6 +1056,75 @@ async function main() {
   }
 
   // ---------------------------------------------------------------------
+  // v4 — E10/E11: rescatar el tree-shaking de lucide-react vía
+  // pure:['createLucideIcon'] en el pre-empaquetado (E10) y además en el
+  // build consumidor (E11). framer-motion se deja EXACTAMENTE como ALIAS
+  // base (node_modules, sin pre-empaquetar) en ambos — sólo se toca
+  // lucide-react.
+  // ---------------------------------------------------------------------
+  console.log("\n########## ESCENARIOS PURE:['createLucideIcon'] (E10-E11) ##########");
+  const ICON_NAMES = ['Heart', 'Star', 'Menu'];
+  const lucidePrebundlePure = await prebundlePackage(
+    'lucide-react-pure',
+    ALIAS['lucide-react'],
+    prebundleDir,
+    { pure: ['createLucideIcon'] }
+  );
+  console.log(`pre-empaquetado lucide-react (pure:['createLucideIcon']): ms=${lucidePrebundlePure.ms} bytes=${lucidePrebundlePure.bytes} outfile=${lucidePrebundlePure.outfile}`);
+
+  const aliasE10 = { ...ALIAS, 'lucide-react': lucidePrebundlePure.outfile };
+
+  const pureScenarios = [
+    {
+      id: 'E10',
+      desc: "E7 pero el pre-empaquetado de lucide-react lleva pure:['createLucideIcon']",
+      alias: aliasE10,
+      extraBuildOptions: {},
+    },
+    {
+      id: 'E11',
+      desc: "E10 + pure:['createLucideIcon'] también en el build consumidor",
+      alias: aliasE10,
+      extraBuildOptions: { pure: ['createLucideIcon'] },
+    },
+  ];
+
+  for (const scenario of pureScenarios) {
+    console.log(`\n--- ${scenario.id}: ${scenario.desc} ---`);
+    const runs = [];
+    for (let i = 1; i <= 3; i++) {
+      const r = await runBuild(baselineFiles, scenario.alias, {
+        extraBuildOptions: scenario.extraBuildOptions,
+        checkIconNames: ICON_NAMES,
+      });
+      runs.push(r);
+      printScenarioRunLine(scenario.id, i, r);
+      printMetafileSummary(`${scenario.id} run${i}`, r.metafileSummary);
+      const icons = r.iconPresence || {};
+      console.log(`${scenario.id} run${i} iconos_presentes: ` +
+        ICON_NAMES.map(name => `${name}=${icons[name] ?? 'N/A'}`).join(' '));
+    }
+    scenarioResults[scenario.id] = runs;
+  }
+
+  // ---------------------------------------------------------------------
+  // v4 — E12: SOLO framer-motion pre-empaquetado (reusa el .mjs de E7-E9).
+  // lucide-react se deja EXACTAMENTE como está hoy (ALIAS base, sin tocar).
+  // ---------------------------------------------------------------------
+  console.log('\n########## E12: FRAMER SOLO (candidato seguro) ##########');
+  const aliasE12 = { ...ALIAS, 'framer-motion': framerPrebundle.outfile };
+  {
+    const runs = [];
+    for (let i = 1; i <= 3; i++) {
+      const r = await runBuild(baselineFiles, aliasE12);
+      runs.push(r);
+      printScenarioRunLine('E12', i, r);
+      printMetafileSummary(`E12 run${i}`, r.metafileSummary);
+    }
+    scenarioResults.E12 = runs;
+  }
+
+  // ---------------------------------------------------------------------
   // requisito D — comparativa final. Una línea por escenario (E1..E9), con
   // los valores de la corrida MEDIANA por ms_total (misma corrida para
   // inputs/bytes_JS/errors — no se mezclan entre corridas). Más dos líneas
@@ -1011,15 +1132,30 @@ async function main() {
   // ---------------------------------------------------------------------
   console.log('\n=== COMPARATIVA FINAL (requisito D) ===');
   console.log('escenario | ms_mediana | inputs | bytes_JS | errors');
-  const allScenarioIds = ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'E9'];
+  const allScenarioIds = ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'E9', 'E10', 'E11', 'E12'];
   for (const id of allScenarioIds) {
     const runs = scenarioResults[id];
     const med = medianRun(runs);
     const inputs = med.metafileSummary ? med.metafileSummary.totalInputs : 'N/A';
     console.log(`${id} | ${med.esbuildMs} | ${inputs} | ${bytesLabel(med.bytesJS)} | ${errorsLabel(med)}`);
+    if (med.iconPresence) {
+      console.log(`  ${id} iconos_presentes (corrida mediana): ` +
+        ICON_NAMES.map(name => `${name}=${med.iconPresence[name] ?? 'N/A'}`).join(' '));
+    }
   }
   console.log(`pre-empaquetado lucide-react | ${lucidePrebundle.ms} | ${lucidePrebundle.bytes}`);
   console.log(`pre-empaquetado framer-motion | ${framerPrebundle.ms} | ${framerPrebundle.bytes}`);
+  console.log(`pre-empaquetado lucide-react (pure:['createLucideIcon']) | ${lucidePrebundlePure.ms} | ${lucidePrebundlePure.bytes}`);
+
+  console.log('\n=== E10/E11 CRITERIO DE ÉXITO (bascula) ===');
+  console.log('objetivo: bytes_JS cercano a E1 (~1.861.443) con el tiempo de E7 (~812ms). Si bytes_JS > 2.5M, el candidato ha fallado.');
+  for (const id of ['E10', 'E11']) {
+    const med = medianRun(scenarioResults[id]);
+    const veredicto = med.bytesJS === null
+      ? 'INVALIDO (build rechazado)'
+      : (med.bytesJS > 2_500_000 ? 'FALLIDO (bytes_JS > 2.5M)' : 'bytes_JS <= 2.5M');
+    console.log(`${id}: bytes_JS=${bytesLabel(med.bytesJS)} ms=${med.esbuildMs} -> ${veredicto}`);
+  }
 
   console.log('\n=== RESUMEN ===');
   console.log(`esbuild total baseline run1=${baselineResults[0].esbuildMs}ms run2=${baselineResults[1].esbuildMs}ms run3=${baselineResults[2].esbuildMs}ms`);
