@@ -78,12 +78,31 @@
  * es 0 la medición de esa corrida no vale y se marca explícitamente como tal
  * en la salida, sin promediarla con las demás.
  *
+ * ---------------------------------------------------------------------------
+ * AMPLIACIÓN v3 — bytes de salida, pre-empaquetado de vendor, E7-E9
+ * ---------------------------------------------------------------------------
+ *   - Cada corrida (BASELINE y E1-E9) suma ahora bytes reales de JS y de CSS
+ *     de result.outputFiles (write:false se mantiene igual que
+ *     compiler.js:855; sólo se agregan los bytes que esbuild ya devuelve).
+ *   - prebundlePackage() corre, UNA SOLA VEZ y fuera del cronómetro de
+ *     cualquier escenario, un esbuild.build previo (bundle:true, format:esm,
+ *     splitting:false, minify:false, write:true) sobre el entry actual de
+ *     ALIAS['lucide-react'] / ALIAS['framer-motion'], produciendo un único
+ *     .mjs por paquete en un directorio temporal (borrado al final de
+ *     main()).
+ *   - E7/E8/E9 reusan el filesObj de E1/E6 pero con una COPIA de ALIAS cuyas
+ *     entradas lucide-react/framer-motion apuntan a esos .mjs
+ *     pre-empaquetados en vez de a node_modules/ — runBuild() acepta ahora
+ *     un `alias` opcional para esto; el ALIAS base (con
+ *     ALIAS_EXTRA_SOLO_HARNESS) no se modifica.
+ *
  * EJECUCIÓN:  node scripts/compilerPerfHarness.mjs
  */
 
 import * as esbuild from 'esbuild';
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { instrumentSource, fileSlugFor } from '../server/compiler.js';
 
@@ -680,12 +699,34 @@ function printMetafileSummary(label, summary) {
 }
 
 // ===========================================================================
-// Una corrida de build, con las MISMAS opciones que compiler.js:852-882
-// (salvo dbCredentials=null y metafile:true añadido — requisito 1). Devuelve
-// las métricas de los 6 puntos, el desglose R225/statSync, el metafile
-// resumido y result.errors.length.
+// requisito A — bytes de salida. write:false sigue igual que
+// compiler.js:855 (nunca se escribe a disco); lo nuevo es que SUMAMOS los
+// outputFiles que ya devuelve esbuild, exactamente con el mismo criterio de
+// partición JS/CSS que compileFiles usa al armar el bundle (compiler.js:
+// 887-893: out.path.endsWith('.css') → CSS, si no → JS). Bytes reales
+// (Buffer.byteLength), no longitud de string.
 // ===========================================================================
-async function runBuild(filesObj) {
+function sumOutputBytes(outputFiles) {
+  let bytesJS = 0;
+  let bytesCSS = 0;
+  for (const out of outputFiles) {
+    const bytes = Buffer.byteLength(out.text, 'utf8');
+    if (out.path.endsWith('.css')) bytesCSS += bytes;
+    else bytesJS += bytes;
+  }
+  return { bytesJS, bytesCSS };
+}
+
+// ===========================================================================
+// Una corrida de build, con las MISMAS opciones que compiler.js:852-882
+// (salvo dbCredentials=null y metafile:true añadido — requisito 1). `alias`
+// es opcional: por defecto el ALIAS de arriba; los escenarios E7-E9
+// (requisito C) pasan una copia con lucide-react/framer-motion apuntando al
+// .mjs pre-empaquetado. Devuelve las métricas de los 6 puntos, el desglose
+// R225/statSync, el metafile resumido, result.errors.length y los bytes de
+// salida JS/CSS (requisito A).
+// ===========================================================================
+async function runBuild(filesObj, alias = ALIAS) {
   const entry = resolveEntry(filesObj);
 
   resetPointStats();
@@ -701,6 +742,8 @@ async function runBuild(filesObj) {
   let rejected = null;
   let errorsLength = null; // null = build rechazado, no hay metafile/errors fiables
   let metafileSummary = null;
+  let bytesJS = null;
+  let bytesCSS = null;
 
   try {
     const result = await esbuild.build({
@@ -724,7 +767,7 @@ async function runBuild(filesObj) {
         'import.meta.env.VITE_SUPABASE_ANON_KEY': dbCredentials?.anonKey
           ? JSON.stringify(dbCredentials.anonKey) : 'undefined',
       },
-      alias: ALIAS,
+      alias,
       banner: {
         js: '// Wyrd Forge preview bundle\n;(function(){'
       },
@@ -741,6 +784,7 @@ async function runBuild(filesObj) {
     });
     errorsLength = result.errors.length;
     metafileSummary = summarizeMetafile(result.metafile);
+    ({ bytesJS, bytesCSS } = sumOutputBytes(result.outputFiles)); // requisito A
   } catch (err) {
     rejected = err && err.message ? err.message : String(err);
   } finally {
@@ -753,6 +797,8 @@ async function runBuild(filesObj) {
     rejected,               // string si esbuild.build() rechazó la promesa, si no null
     errorsLength,            // null si rejected !== null (sin metafile/errors fiables)
     metafileSummary,
+    bytesJS,                 // requisito A — null si rejected !== null
+    bytesCSS,                // requisito A — null si rejected !== null
     pointStats: new Map(pointStats),
     pointImporters: new Map([...pointImporters].map(([k, v]) => [k, new Map(v)])),
     vfs225Guard,
@@ -801,13 +847,59 @@ function printFullPointReport(label, r) {
   printMetafileSummary(label, r.metafileSummary);
 
   console.log(`\nesbuild ${label} = ${r.esbuildMs}ms`);
+  console.log(`bytes de salida ${label}: JS=${bytesLabel(r.bytesJS)} CSS=${bytesLabel(r.bytesCSS)}`);
   console.log(`fetches esm.sh intentados en ${label}: ${r.fetchAttempts}`);
 }
 
-// requisito nuevo 2 — línea compacta ms/errors.length/inputs por corrida
+function bytesLabel(b) {
+  return b === null ? 'N/A' : String(b);
+}
+
+// requisito nuevo 2 / requisito A — línea compacta ms/errors.length/inputs/
+// bytes_JS/bytes_CSS por corrida, aplica a TODOS los escenarios (E1-E9) y a
+// BASELINE.
 function printScenarioRunLine(scenarioId, runIdx, r) {
   const inputs = r.metafileSummary ? r.metafileSummary.totalInputs : 'N/A';
-  console.log(`${scenarioId} run${runIdx} | ms=${r.esbuildMs} | errors.length=${errorsLabel(r)} | inputs=${inputs}`);
+  console.log(`${scenarioId} run${runIdx} | ms=${r.esbuildMs} | errors.length=${errorsLabel(r)} | inputs=${inputs} | bytes_JS=${bytesLabel(r.bytesJS)} | bytes_CSS=${bytesLabel(r.bytesCSS)}`);
+}
+
+// ===========================================================================
+// requisito B — pre-empaquetado de vendor. Dado un nombre de paquete y su
+// entry actual del ALIAS, produce UN SOLO .mjs pre-empaquetado en un
+// directorio temporal con un esbuild.build PREVIO (bundle:true, format:esm,
+// splitting:false, minify:false, write:true), usando los mismos
+// mainFields/conditions/resolveExtensions que el build principal
+// (compiler.js:862-864). Se mide tiempo y bytes del .mjs resultante. Esto se
+// llama UNA VEZ por paquete, fuera del cronómetro de cualquier escenario.
+// ===========================================================================
+async function prebundlePackage(pkgName, entryPath, outDir) {
+  const safeName = pkgName.replace(/[@/]/g, '_');
+  const outfile = path.join(outDir, `${safeName}.mjs`);
+  const start = Date.now();
+  await esbuild.build({
+    entryPoints: [entryPath],
+    bundle: true,
+    format: 'esm',
+    splitting: false,
+    minify: false,
+    write: true,
+    outfile,
+    mainFields: ['module', 'main'],
+    conditions: ['development', 'module', 'browser', 'default'],
+    resolveExtensions: ['.tsx', '.ts', '.jsx', '.js', '.mjs', '.cjs', '.css', '.json'],
+    logLevel: 'silent',
+  });
+  const ms = Date.now() - start;
+  const bytes = fs.statSync(outfile).size;
+  return { pkgName, outfile, ms, bytes };
+}
+
+// requisito D — mediana de 3 corridas por ms_total; devuelve la corrida
+// mediana completa (inputs/bytes/errors reportados vienen de esa misma
+// corrida, no se mezclan entre corridas).
+function medianRun(runs) {
+  const sorted = [...runs].sort((a, b) => a.esbuildMs - b.esbuildMs);
+  return sorted[Math.floor(sorted.length / 2)];
 }
 
 async function main() {
@@ -870,24 +962,82 @@ async function main() {
     const l309 = r.pointStats.get('L309') ?? { count: 0, ms: 0 };
     console.log(`E6 run${i} L309: invocaciones=${l309.count} ms_total=${l309.ms.toFixed(3)} ms_medio=${(l309.count > 0 ? l309.ms / l309.count : 0).toFixed(3)}`);
   }
+  scenarioResults.E6 = e6Results;
+
+  // ---------------------------------------------------------------------
+  // requisito B — pre-empaquetado de vendor. UNA VEZ, fuera del cronómetro
+  // de cualquier escenario. Entry actual = ALIAS['lucide-react'] /
+  // ALIAS['framer-motion'] (los mismos .mjs que ya usa el build principal).
+  // ---------------------------------------------------------------------
+  console.log('\n########## PRE-EMPAQUETADO DE VENDOR (requisito B, corre UNA VEZ) ##########');
+  const prebundleDir = fs.mkdtempSync(path.join(os.tmpdir(), 'compiler-perf-harness-vendor-'));
+  const lucidePrebundle = await prebundlePackage('lucide-react', ALIAS['lucide-react'], prebundleDir);
+  const framerPrebundle = await prebundlePackage('framer-motion', ALIAS['framer-motion'], prebundleDir);
+  console.log(`pre-empaquetado lucide-react: ms=${lucidePrebundle.ms} bytes=${lucidePrebundle.bytes} outfile=${lucidePrebundle.outfile}`);
+  console.log(`pre-empaquetado framer-motion: ms=${framerPrebundle.ms} bytes=${framerPrebundle.bytes} outfile=${framerPrebundle.outfile}`);
+
+  // ---------------------------------------------------------------------
+  // requisito C — E7/E8/E9: mismo filesObj que E1/E6, pero con ALIAS
+  // sustituyendo lucide-react y/o framer-motion por el .mjs pre-empaquetado.
+  // ---------------------------------------------------------------------
+  console.log('\n########## ESCENARIOS DE PRE-EMPAQUETADO (E7-E9) ##########');
+  const aliasE7 = { ...ALIAS, 'lucide-react': lucidePrebundle.outfile };
+  const aliasE8 = { ...ALIAS, 'lucide-react': lucidePrebundle.outfile, 'framer-motion': framerPrebundle.outfile };
+  const aliasE9 = aliasE8;
+
+  const prebundleScenarios = [
+    { id: 'E7', desc: "E1 con 'lucide-react' pre-empaquetado", filesObj: baselineFiles, alias: aliasE7 },
+    { id: 'E8', desc: "E7 + 'framer-motion' pre-empaquetado", filesObj: baselineFiles, alias: aliasE8 },
+    { id: 'E9', desc: 'E8 + cadena de 60 .tsx (equivalente a E6)', filesObj: e6Files, alias: aliasE9 },
+  ];
+
+  for (const scenario of prebundleScenarios) {
+    console.log(`\n--- ${scenario.id}: ${scenario.desc} ---`);
+    const runs = [];
+    for (let i = 1; i <= 3; i++) {
+      const r = await runBuild(scenario.filesObj, scenario.alias);
+      runs.push(r);
+      printScenarioRunLine(scenario.id, i, r);
+      printMetafileSummary(`${scenario.id} run${i}`, r.metafileSummary);
+    }
+    scenarioResults[scenario.id] = runs;
+  }
+
+  // ---------------------------------------------------------------------
+  // requisito D — comparativa final. Una línea por escenario (E1..E9), con
+  // los valores de la corrida MEDIANA por ms_total (misma corrida para
+  // inputs/bytes_JS/errors — no se mezclan entre corridas). Más dos líneas
+  // de pre-empaquetado.
+  // ---------------------------------------------------------------------
+  console.log('\n=== COMPARATIVA FINAL (requisito D) ===');
+  console.log('escenario | ms_mediana | inputs | bytes_JS | errors');
+  const allScenarioIds = ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'E9'];
+  for (const id of allScenarioIds) {
+    const runs = scenarioResults[id];
+    const med = medianRun(runs);
+    const inputs = med.metafileSummary ? med.metafileSummary.totalInputs : 'N/A';
+    console.log(`${id} | ${med.esbuildMs} | ${inputs} | ${bytesLabel(med.bytesJS)} | ${errorsLabel(med)}`);
+  }
+  console.log(`pre-empaquetado lucide-react | ${lucidePrebundle.ms} | ${lucidePrebundle.bytes}`);
+  console.log(`pre-empaquetado framer-motion | ${framerPrebundle.ms} | ${framerPrebundle.bytes}`);
 
   console.log('\n=== RESUMEN ===');
   console.log(`esbuild total baseline run1=${baselineResults[0].esbuildMs}ms run2=${baselineResults[1].esbuildMs}ms run3=${baselineResults[2].esbuildMs}ms`);
-  for (const scenario of scenarios) {
-    const runs = scenarioResults[scenario.id];
-    console.log(`esbuild total ${scenario.id} run1=${runs[0].esbuildMs}ms run2=${runs[1].esbuildMs}ms run3=${runs[2].esbuildMs}ms`);
+  for (const id of allScenarioIds) {
+    const runs = scenarioResults[id];
+    console.log(`esbuild total ${id} run1=${runs[0].esbuildMs}ms run2=${runs[1].esbuildMs}ms run3=${runs[2].esbuildMs}ms`);
   }
-  console.log(`esbuild total E6 run1=${e6Results[0].esbuildMs}ms run2=${e6Results[1].esbuildMs}ms run3=${e6Results[2].esbuildMs}ms`);
 
   const allResults = [
     ...baselineResults,
     ...Object.values(scenarioResults).flat(),
-    ...e6Results,
   ];
   const totalFetches = allResults.reduce((sum, r) => sum + r.fetchAttempts, 0);
   console.log(`fetches esm.sh intentados (todas las corridas): ${totalFetches}`);
   const invalidRuns = allResults.filter(r => r.rejected !== null).length;
   console.log(`corridas con build RECHAZADO (medición no válida): ${invalidRuns} de ${allResults.length}`);
+
+  fs.rmSync(prebundleDir, { recursive: true, force: true });
 
   console.log('\nPara reejecutar exactamente esto:');
   console.log('  node scripts/compilerPerfHarness.mjs');
