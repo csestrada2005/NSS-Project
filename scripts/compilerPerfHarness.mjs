@@ -120,6 +120,48 @@
  *     pre-empaquetado ya existente (el mismo que usa E7-E9); lucide-react se
  *     deja EXACTAMENTE como ALIAS base (node_modules, tal cual hoy).
  *
+ * ---------------------------------------------------------------------------
+ * AMPLIACIÓN v5 — E13/E13b/E13c: fachada de lucide-react por análisis
+ * estático real (@babel/parser, mismo parser que compiler.js:41 usa para
+ * instrumentSource — NO regex)
+ * ---------------------------------------------------------------------------
+ * PASO PREVIO verificado (obligatorio antes de implementar, ver salida real
+ * en el mensaje de la tarea): `ls node_modules/lucide-react/dist/esm/icons/`
+ * confirma que cada icono vive en su PROPIO archivo, en kebab-case
+ * (p.ej. heart.js, no Heart.js), y ese archivo exporta el icono como
+ * `export { ..., Heart as default }` — es decir, DEFAULT export, no named.
+ * El barrel (lucide-react.js) hace `export { default as Heart, default as
+ * HeartIcon, default as LucideHeart } from './icons/heart.js'` por cada
+ * icono, con hasta 3 alias por icono (nombre canónico, sufijo Icon, prefijo
+ * Lucide) y algunos alias NO triviales por convención kebab (p.ej. Verified
+ * → badge-check.js). Por eso la fachada NO deriva el nombre de archivo con
+ * un kebab-case hecho a mano: parsea el barrel REAL una vez con
+ * @babel/parser y construye un mapa nombre-exportado → './icons/xxx.js',
+ * así cualquier alias que el barrel real reconozca, la fachada también lo
+ * reconoce.
+ *
+ * lucideFacadePlugin(filesObj, exportMap):
+ *   1. scanLucideImports() parsea CADA archivo de filesObj con
+ *      @babel/parser (mismos plugins ['jsx','typescript'] que
+ *      instrumentSource) y recoge, de cada ImportDeclaration cuyo
+ *      source === 'lucide-react', los ImportSpecifier nombrados
+ *      (import.imported.name). Si encuentra un ImportDefaultSpecifier
+ *      (import default) o un ImportNamespaceSpecifier (import * as X),
+ *      marca fail-safe inmediatamente con el motivo.
+ *   2. Si no hubo fail-safe, cada specifier se busca en exportMap; si
+ *      falta, o si el .js resuelto no existe en disco (fs.existsSync),
+ *      fail-safe también.
+ *   3. Si la fachada queda activa: el plugin registra onResolve para
+ *      'lucide-react' → namespace propio, y onLoad de ese namespace genera
+ *      `export { default as X } from "<ruta absoluta>/icons/x.js"` SOLO
+ *      para los iconos detectados.
+ *   4. Si fail-safe: el plugin NO registra ningún onResolve para
+ *      'lucide-react' — esbuild cae a la resolución por defecto, que usa
+ *      el ALIAS sin modificar (barrel completo), exactamente como E1.
+ * runBuild() acepta ahora `options.extraPlugins` (array, prependeado a la
+ * lista de plugins) para inyectar este plugin sin tocar la firma de las
+ * demás llamadas.
+ *
  * EJECUCIÓN:  node scripts/compilerPerfHarness.mjs
  */
 
@@ -129,6 +171,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { instrumentSource, fileSlugFor } from '../server/compiler.js';
+import * as babelParser from '@babel/parser'; // v5 — E13, mismo parser que compiler.js:41 usa para instrumentSource
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '..');
@@ -447,6 +490,125 @@ function esmShResolverPlugin() {
 }
 
 // ===========================================================================
+// v5 — E13: fachada de lucide-react por análisis estático real.
+// ===========================================================================
+const LUCIDE_ICONS_DIR = new URL('../node_modules/lucide-react/dist/esm/icons/', import.meta.url).pathname;
+const LUCIDE_BARREL_PATH = ALIAS['lucide-react'];
+const BABEL_PARSE_OPTS = { sourceType: 'module', plugins: ['jsx', 'typescript'], errorRecovery: false };
+
+// Parsea el barrel REAL una vez (@babel/parser, no regex) y construye
+// nombre-exportado → './icons/xxx.js' leyendo cada
+// `export { default as X, ... } from './icons/xxx.js'`.
+function buildLucideExportMap() {
+  const barrelSrc = fs.readFileSync(LUCIDE_BARREL_PATH, 'utf8');
+  const ast = babelParser.parse(barrelSrc, BABEL_PARSE_OPTS);
+  const map = new Map();
+  for (const node of ast.program.body) {
+    if (node.type !== 'ExportNamedDeclaration' || !node.source) continue;
+    const src = node.source.value;
+    if (!src.startsWith('./icons/')) continue;
+    for (const spec of node.specifiers) {
+      if (spec.type !== 'ExportSpecifier') continue;
+      const exportedName = spec.exported.name ?? spec.exported.value;
+      map.set(exportedName, src);
+    }
+  }
+  return map;
+}
+
+// Escanea filesObj con @babel/parser y devuelve los specifiers nombrados de
+// TODOS los `import { ... } from 'lucide-react'`, más el motivo de
+// fail-safe si aparece un import default o `import * as X`.
+function scanLucideImports(filesObj) {
+  const specifiers = new Set();
+  let failSafeReason = null;
+
+  for (const [filePath, source] of Object.entries(filesObj)) {
+    if (!/\.(tsx|jsx|ts|js)$/.test(filePath)) continue;
+    let ast;
+    try {
+      ast = babelParser.parse(source, BABEL_PARSE_OPTS);
+    } catch {
+      continue; // el error de parseo real, si lo hay, lo reporta el build principal
+    }
+    for (const node of ast.program.body) {
+      if (node.type !== 'ImportDeclaration' || node.source.value !== 'lucide-react') continue;
+      if (node.importKind === 'type') continue; // import type { ... } no genera binding en runtime
+      for (const spec of node.specifiers) {
+        if (spec.type === 'ImportSpecifier') {
+          if (spec.importKind === 'type') continue;
+          specifiers.add(spec.imported.name ?? spec.imported.value);
+        } else if (spec.type === 'ImportDefaultSpecifier') {
+          failSafeReason = failSafeReason ?? `import default de 'lucide-react' en ${filePath}`;
+        } else if (spec.type === 'ImportNamespaceSpecifier') {
+          failSafeReason = failSafeReason ?? `import * as ... de 'lucide-react' en ${filePath}`;
+        }
+      }
+    }
+  }
+
+  return { specifiers: [...specifiers], failSafeReason };
+}
+
+// Construye el plugin de fachada para UN filesObj concreto. Devuelve tanto
+// el plugin (para pasar a runBuild vía options.extraPlugins) como el
+// diagnóstico (active/failSafeReason/specifiers) para reportarlo en cada
+// corrida sin tener que re-derivarlo del resultado del build.
+function makeLucideFacadePlugin(filesObj, exportMap) {
+  const { specifiers, failSafeReason: importFailSafeReason } = scanLucideImports(filesObj);
+  let failSafeReason = importFailSafeReason;
+  const resolvedIcons = [];
+
+  if (!failSafeReason) {
+    for (const name of specifiers) {
+      const relPath = exportMap.get(name);
+      if (!relPath) {
+        failSafeReason = `icono '${name}' no está en el mapa de exports del barrel real de lucide-react`;
+        break;
+      }
+      const absPath = path.join(LUCIDE_ICONS_DIR, relPath.slice('./icons/'.length));
+      if (!fs.existsSync(absPath)) {
+        failSafeReason = `archivo de icono no existe en disco para '${name}': ${absPath}`;
+        break;
+      }
+      resolvedIcons.push({ name, absPath });
+    }
+  }
+
+  const active = failSafeReason === null;
+
+  const plugin = {
+    name: 'lucide-facade',
+    setup(build) {
+      if (!active) return; // fail-safe: no registra onResolve, esbuild cae al ALIAS (barrel completo)
+      build.onResolve({ filter: /^lucide-react$/ }, () => ({ path: 'lucide-react-facade', namespace: 'lucide-facade' }));
+      // Los `export { default as X } from "<ruta absoluta>"` DENTRO del módulo
+      // generado son rutas de disco ya resueltas — sin este onResolve,
+      // esmShResolverPlugin (que registra un onResolve /.*/ genérico más
+      // adelante en la cadena) las trataría como specifiers "no locales" y
+      // las mandaría a esm.sh. Al restringir por namespace:'lucide-facade'
+      // sólo se capturan resolves de imports que parten del propio módulo
+      // generado, forzando la carga normal de archivo.
+      build.onResolve({ filter: /.*/, namespace: 'lucide-facade' }, args => ({ path: args.path }));
+      build.onLoad({ filter: /.*/, namespace: 'lucide-facade' }, () => {
+        const contents = resolvedIcons
+          .map(({ name, absPath }) => `export { default as ${name} } from ${JSON.stringify(absPath)};`)
+          .join('\n');
+        return { contents, loader: 'js', resolveDir: REPO_ROOT };
+      });
+    }
+  };
+
+  return { plugin, active, failSafeReason, specifiers, resolvedIconCount: resolvedIcons.length };
+}
+
+function printFacadeStatus(scenarioId, runIdx, facade) {
+  console.log(`${scenarioId} run${runIdx} fachada_lucide: activa=${facade.active} ` +
+    `specifiers=[${facade.specifiers.join(', ')}] iconos_resueltos=${facade.resolvedIconCount} ` +
+    `fail_safe=${facade.failSafeReason ?? 'no'}`);
+}
+
+// ===========================================================================
 // requisito 6 — fetch() envuelto: cuenta intentos hacia esm.sh y, si la red
 // falla, devuelve un Response sintético con ok:false en vez de dejar que la
 // excepción tumbe todo el build. No hay llamadas reales de red esperadas
@@ -751,7 +913,7 @@ function sumOutputBytes(outputFiles) {
 // salida JS/CSS (requisito A).
 // ===========================================================================
 async function runBuild(filesObj, alias = ALIAS, options = {}) {
-  const { extraBuildOptions = {}, checkIconNames = null } = options;
+  const { extraBuildOptions = {}, checkIconNames = null, extraPlugins = [] } = options;
   const entry = resolveEntry(filesObj);
 
   resetPointStats();
@@ -801,6 +963,7 @@ async function runBuild(filesObj, alias = ALIAS, options = {}) {
         js: '})();'
       },
       plugins: [
+        ...extraPlugins, // v5 — E13: lucideFacadePlugin, cuando se pasa
         routerShimPluginInstrumented(),
         virtualFilesPluginInstrumented(filesObj, oidMap),
         esmShResolverPluginInstrumented()
@@ -1125,6 +1288,75 @@ async function main() {
   }
 
   // ---------------------------------------------------------------------
+  // v5 — E13/E13b/E13c: fachada de lucide-react por análisis estático real.
+  // ---------------------------------------------------------------------
+  console.log('\n########## E13/E13b/E13c: FACHADA DE LUCIDE POR ANÁLISIS ESTÁTICO ##########');
+  const lucideExportMap = buildLucideExportMap();
+  console.log(`lucideExportMap: ${lucideExportMap.size} nombres exportados mapeados desde el barrel real`);
+
+  // E13 — E1 con la fachada (mismo filesObj y alias que E1; sólo se añade el plugin)
+  const facadeE13 = makeLucideFacadePlugin(baselineFiles, lucideExportMap);
+  console.log(`\n--- E13: E1 con la fachada de lucide-react ---`);
+  {
+    const runs = [];
+    for (let i = 1; i <= 3; i++) {
+      const r = await runBuild(baselineFiles, ALIAS, {
+        extraPlugins: [facadeE13.plugin],
+        checkIconNames: ICON_NAMES,
+      });
+      runs.push(r);
+      printScenarioRunLine('E13', i, r);
+      printMetafileSummary(`E13 run${i}`, r.metafileSummary);
+      printFacadeStatus('E13', i, facadeE13);
+      const icons = r.iconPresence || {};
+      console.log(`E13 run${i} iconos_presentes: ` +
+        ICON_NAMES.map(name => `${name}=${icons[name] ?? 'N/A'}`).join(' '));
+    }
+    scenarioResults.E13 = runs;
+  }
+
+  // E13b — E13 + framer-motion pre-empaquetado (misma fachada de lucide; sólo cambia el alias de framer)
+  const aliasE13b = { ...ALIAS, 'framer-motion': framerPrebundle.outfile };
+  console.log(`\n--- E13b: E13 + framer-motion pre-empaquetado ---`);
+  {
+    const runs = [];
+    for (let i = 1; i <= 3; i++) {
+      const r = await runBuild(baselineFiles, aliasE13b, {
+        extraPlugins: [facadeE13.plugin],
+        checkIconNames: ICON_NAMES,
+      });
+      runs.push(r);
+      printScenarioRunLine('E13b', i, r);
+      printMetafileSummary(`E13b run${i}`, r.metafileSummary);
+      printFacadeStatus('E13b', i, facadeE13);
+      const icons = r.iconPresence || {};
+      console.log(`E13b run${i} iconos_presentes: ` +
+        ICON_NAMES.map(name => `${name}=${icons[name] ?? 'N/A'}`).join(' '));
+    }
+    scenarioResults.E13b = runs;
+  }
+
+  // E13c — fail-safe: mismo E13 pero App.tsx AÑADE `import * as Icons from 'lucide-react'`.
+  // Debe caer al barrel completo (fachada inactiva) y dar inputs/bytes ~= E1.
+  console.log(`\n--- E13c: fail-safe — 'import * as Icons' fuerza la caída al barrel ---`);
+  const e13cFiles = makeFilesObj({ lucide: true, framer: true, supabase: true, chainLength: 0 });
+  e13cFiles['src/App.tsx'] = `import * as Icons from 'lucide-react';\n${e13cFiles['src/App.tsx']}`;
+  const facadeE13c = makeLucideFacadePlugin(e13cFiles, lucideExportMap);
+  {
+    const runs = [];
+    for (let i = 1; i <= 3; i++) {
+      const r = await runBuild(e13cFiles, ALIAS, {
+        extraPlugins: [facadeE13c.plugin],
+      });
+      runs.push(r);
+      printScenarioRunLine('E13c', i, r);
+      printMetafileSummary(`E13c run${i}`, r.metafileSummary);
+      printFacadeStatus('E13c', i, facadeE13c);
+    }
+    scenarioResults.E13c = runs;
+  }
+
+  // ---------------------------------------------------------------------
   // requisito D — comparativa final. Una línea por escenario (E1..E9), con
   // los valores de la corrida MEDIANA por ms_total (misma corrida para
   // inputs/bytes_JS/errors — no se mezclan entre corridas). Más dos líneas
@@ -1132,7 +1364,7 @@ async function main() {
   // ---------------------------------------------------------------------
   console.log('\n=== COMPARATIVA FINAL (requisito D) ===');
   console.log('escenario | ms_mediana | inputs | bytes_JS | errors');
-  const allScenarioIds = ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'E9', 'E10', 'E11', 'E12'];
+  const allScenarioIds = ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'E9', 'E10', 'E11', 'E12', 'E13', 'E13b', 'E13c'];
   for (const id of allScenarioIds) {
     const runs = scenarioResults[id];
     const med = medianRun(runs);
@@ -1155,6 +1387,46 @@ async function main() {
       ? 'INVALIDO (build rechazado)'
       : (med.bytesJS > 2_500_000 ? 'FALLIDO (bytes_JS > 2.5M)' : 'bytes_JS <= 2.5M');
     console.log(`${id}: bytes_JS=${bytesLabel(med.bytesJS)} ms=${med.esbuildMs} -> ${veredicto}`);
+  }
+
+  console.log('\n=== E13 CRITERIO DE ÉXITO (bascula, misma corrida que E1/E2) ===');
+  console.log('objetivo: inputs ~= E2, bytes_JS ~= E1 (dentro de un 1%), iconos presentes.');
+  {
+    const medE1 = medianRun(scenarioResults.E1);
+    const medE2 = medianRun(scenarioResults.E2);
+    const medE13 = medianRun(scenarioResults.E13);
+    const inputsE1 = medE1.metafileSummary ? medE1.metafileSummary.totalInputs : null;
+    const inputsE2 = medE2.metafileSummary ? medE2.metafileSummary.totalInputs : null;
+    const inputsE13 = medE13.metafileSummary ? medE13.metafileSummary.totalInputs : null;
+    const bytesE1 = medE1.bytesJS;
+    const bytesE13 = medE13.bytesJS;
+    const bytesDeltaPct = (bytesE1 !== null && bytesE13 !== null && bytesE1 !== 0)
+      ? ((bytesE13 - bytesE1) / bytesE1 * 100) : null;
+    const iconsOk = medE13.iconPresence
+      ? ICON_NAMES.every(n => medE13.iconPresence[n] === true)
+      : false;
+    console.log(`E1 (referencia, esta corrida): inputs=${inputsE1 ?? 'N/A'} bytes_JS=${bytesLabel(bytesE1)}`);
+    console.log(`E2 (referencia, esta corrida): inputs=${inputsE2 ?? 'N/A'} bytes_JS=${bytesLabel(medE2.bytesJS)}`);
+    console.log(`E13: inputs=${inputsE13 ?? 'N/A'} bytes_JS=${bytesLabel(bytesE13)} delta_vs_E1=${bytesDeltaPct === null ? 'N/A' : bytesDeltaPct.toFixed(2) + '%'}`);
+    console.log(`E13 iconos_presentes: ` + ICON_NAMES.map(n => `${n}=${medE13.iconPresence ? (medE13.iconPresence[n] ?? 'N/A') : 'N/A'}`).join(' '));
+    const dentroDelUno = bytesDeltaPct !== null && Math.abs(bytesDeltaPct) <= 1;
+    const veredictoE13 = (dentroDelUno && iconsOk)
+      ? 'EXITO (bytes_JS dentro de 1% de E1, iconos presentes)'
+      : 'FALLIDO' + (!dentroDelUno ? ' (bytes_JS fuera del 1% de E1)' : '') + (!iconsOk ? ' (falta algún icono)' : '');
+    console.log(`E13 veredicto: ${veredictoE13}`);
+  }
+
+  console.log('\n=== E13c CRITERIO DE ÉXITO (fail-safe) ===');
+  {
+    const medE1 = medianRun(scenarioResults.E1);
+    const medE13c = medianRun(scenarioResults.E13c);
+    console.log(`E13c fail_safe_activo=${facadeE13c.active === false} motivo=${facadeE13c.failSafeReason ?? 'N/A'}`);
+    console.log(`E1 (referencia): inputs=${medE1.metafileSummary ? medE1.metafileSummary.totalInputs : 'N/A'} bytes_JS=${bytesLabel(medE1.bytesJS)}`);
+    console.log(`E13c: inputs=${medE13c.metafileSummary ? medE13c.metafileSummary.totalInputs : 'N/A'} bytes_JS=${bytesLabel(medE13c.bytesJS)}`);
+    const inputsMatch = medE1.metafileSummary && medE13c.metafileSummary &&
+      medE1.metafileSummary.totalInputs === medE13c.metafileSummary.totalInputs;
+    const bytesMatch = medE1.bytesJS === medE13c.bytesJS;
+    console.log(`E13c veredicto: ${(facadeE13c.active === false && inputsMatch && bytesMatch) ? 'EXITO (cayó al barrel, inputs/bytes = E1)' : 'FALLIDO (no cayó al barrel o inputs/bytes no coinciden con E1)'}`);
   }
 
   console.log('\n=== RESUMEN ===');
