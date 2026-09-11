@@ -8,7 +8,7 @@ import dns from 'dns/promises';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 import { compileFiles } from './server/compiler.js';
-import { searchUnsplash } from './server/unsplash.js';
+import { searchUnsplash, triggerUnsplashDownloads } from './server/unsplash.js';
 import { computeCreditsFromTokens } from './server/credits.js';
 import { createIntentAccumulator } from './server/intentAccumulator.js';
 import { bootstrapProject } from './server/bootstrapProject.js';
@@ -998,6 +998,20 @@ app.post('/api/images/search', async (req, res) => {
     const { keywords } = req.body || {};
     const result = await searchUnsplash({ keywords, accessKey: UNSPLASH_ACCESS_KEY });
     console.log(`[images/search] keywords=${Array.isArray(keywords) ? keywords.length : 0} → ${result.images.length} images`);
+
+    const downloadLocations = [
+      ...new Set(
+        (result.images || [])
+          .map((img) => img.download_location)
+          .filter((u) => typeof u === 'string' && u.trim().length > 0)
+      ),
+    ];
+    triggerUnsplashDownloads({ downloadLocations, accessKey: UNSPLASH_ACCESS_KEY })
+      .then(({ triggered, failed }) => {
+        console.log(`[images/search] download triggers: triggered=${triggered} failed=${failed}`);
+      })
+      .catch(() => {});
+
     res.json(result);
   } catch (err) {
     console.error('[images/search] Error:', err);
