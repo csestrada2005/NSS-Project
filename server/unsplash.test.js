@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { searchUnsplash } from './unsplash.js';
+import { searchUnsplash, triggerUnsplashDownloads } from './unsplash.js';
 
 /** Build a fake Unsplash photo result. */
 function photo(id, { url, alt, name, link, downloadLocation } = {}) {
@@ -206,4 +206,110 @@ test('download_location missing → empty string, no exception', async () => {
   const { images } = await searchUnsplash({ keywords: ['bread'], accessKey: 'test-key', fetchImpl });
 
   assert.equal(images[0].download_location, '');
+});
+
+test('triggerUnsplashDownloads: sends Authorization header and preserves query params as-is', async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ url, init });
+    return { ok: true };
+  };
+
+  const downloadLocations = [
+    'https://api.unsplash.com/photos/a/download?ixid=abc123&other=1',
+  ];
+
+  const result = await triggerUnsplashDownloads({
+    downloadLocations,
+    accessKey: 'test-key',
+    fetchImpl,
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, downloadLocations[0], 'URL used exactly as given, never rebuilt');
+  assert.equal(calls[0].init.headers.Authorization, 'Client-ID test-key');
+  assert.ok(calls[0].init.signal, 'per-request AbortController signal is passed');
+  assert.deepEqual(result, { triggered: 1, failed: 0 });
+});
+
+test('triggerUnsplashDownloads: no accessKey → zero calls', async () => {
+  let called = false;
+  const fetchImpl = async () => {
+    called = true;
+    return { ok: true };
+  };
+
+  const result = await triggerUnsplashDownloads({
+    downloadLocations: ['https://api.unsplash.com/photos/a/download'],
+    accessKey: '',
+    fetchImpl,
+  });
+
+  assert.equal(called, false);
+  assert.deepEqual(result, { triggered: 0, failed: 0 });
+});
+
+test('triggerUnsplashDownloads: empty array → zero calls', async () => {
+  let called = false;
+  const fetchImpl = async () => {
+    called = true;
+    return { ok: true };
+  };
+
+  const result = await triggerUnsplashDownloads({
+    downloadLocations: [],
+    accessKey: 'test-key',
+    fetchImpl,
+  });
+
+  assert.equal(called, false);
+  assert.deepEqual(result, { triggered: 0, failed: 0 });
+});
+
+test('triggerUnsplashDownloads: fetch throws → does not propagate, counts as failed', async () => {
+  const fetchImpl = async () => {
+    throw new Error('ECONNRESET');
+  };
+
+  const result = await triggerUnsplashDownloads({
+    downloadLocations: ['https://api.unsplash.com/photos/a/download'],
+    accessKey: 'test-key',
+    fetchImpl,
+  });
+
+  assert.deepEqual(result, { triggered: 0, failed: 1 });
+});
+
+test('triggerUnsplashDownloads: non-2xx response → does not throw, counts as failed', async () => {
+  const fetchImpl = async () => ({ ok: false, status: 500 });
+
+  const result = await triggerUnsplashDownloads({
+    downloadLocations: ['https://api.unsplash.com/photos/a/download'],
+    accessKey: 'test-key',
+    fetchImpl,
+  });
+
+  assert.deepEqual(result, { triggered: 0, failed: 1 });
+});
+
+test('triggerUnsplashDownloads: counts correctly across a mix of outcomes', async () => {
+  const fetchImpl = async (url) => {
+    if (url.includes('ok1')) return { ok: true };
+    if (url.includes('ok2')) return { ok: true };
+    if (url.includes('bad')) return { ok: false, status: 403 };
+    throw new Error('boom');
+  };
+
+  const result = await triggerUnsplashDownloads({
+    downloadLocations: [
+      'https://api.unsplash.com/photos/ok1/download',
+      'https://api.unsplash.com/photos/ok2/download',
+      'https://api.unsplash.com/photos/bad/download',
+      'https://api.unsplash.com/photos/throws/download',
+    ],
+    accessKey: 'test-key',
+    fetchImpl,
+  });
+
+  assert.deepEqual(result, { triggered: 2, failed: 2 });
 });

@@ -128,3 +128,64 @@ export async function searchUnsplash({
     return { images: [] };
   }
 }
+
+/**
+ * Fire the Unsplash download-trigger GET for each given download_location URL,
+ * as required by the Unsplash API guidelines when a photo is actually used.
+ *
+ * The URLs come from Unsplash already fully formed (including ixid and any
+ * other query params) — they are used AS-IS, never rebuilt, per the terms.
+ *
+ * Contract: same as searchUnsplash — NEVER throws. This is telemetry toward
+ * Unsplash; a failure here must never affect a generation.
+ *
+ * @param {Object}   opts
+ * @param {string[]} opts.downloadLocations   download_location URLs (already deduped by caller)
+ * @param {string}   opts.accessKey           UNSPLASH_ACCESS_KEY (server env)
+ * @param {Function} [opts.fetchImpl=fetch]   injectable fetch (for tests)
+ * @param {number}   [opts.timeoutMs=5000]    per-request timeout
+ * @returns {Promise<{ triggered: number, failed: number }>}
+ */
+export async function triggerUnsplashDownloads({
+  downloadLocations,
+  accessKey,
+  fetchImpl = fetch,
+  timeoutMs = 5000,
+}) {
+  try {
+    const safeLocations = Array.isArray(downloadLocations)
+      ? downloadLocations.filter((u) => typeof u === 'string' && u.trim().length > 0)
+      : [];
+
+    if (!accessKey || safeLocations.length === 0) return { triggered: 0, failed: 0 };
+
+    let triggered = 0;
+    let failed = 0;
+
+    for (const location of safeLocations) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetchImpl(location, {
+          headers: { Authorization: `Client-ID ${accessKey}` },
+          signal: controller.signal,
+        });
+        if (res && res.ok) {
+          triggered += 1;
+        } else {
+          failed += 1;
+        }
+      } catch {
+        // Timeout, network error — count as failed, never propagate.
+        failed += 1;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    return { triggered, failed };
+  } catch {
+    // Belt-and-suspenders: this must never throw into the caller.
+    return { triggered: 0, failed: 0 };
+  }
+}
