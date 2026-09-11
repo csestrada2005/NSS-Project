@@ -416,27 +416,47 @@ export class DesignBriefService {
     if (!Array.isArray(images) || images.length === 0) return markdown;
 
     const cell = (s: string) => (s || '').replace(/\r?\n/g, ' ').replace(/\|/g, '\\|').trim();
+    const credit = (img: PoolImage) => {
+      const name = cell(img.author_name);
+      return name ? (img.author_link ? `[${name}](${cell(img.author_link)})` : name) : '';
+    };
+
+    // The first image is, by construction, the first result of the first
+    // keyword — the most representative photo for the business — so it is
+    // reserved exclusively for the hero section. A pool of exactly one image
+    // is the one exception: reserving it would leave the rest of the site
+    // without any photos at all, so with a single image nothing is reserved.
+    const reserveHero = images.length > 1;
+
     const rows = images
-      .map((img) => {
-        const name = cell(img.author_name);
-        const credit = name
-          ? img.author_link
-            ? `[${name}](${cell(img.author_link)})`
-            : name
-          : '';
-        return `| ${cell(img.url)} | ${cell(img.description)} | ${credit} |`;
+      .map((img, i) => {
+        const base = `| ${cell(img.url)} | ${cell(img.description)} | ${credit(img)} |`;
+        return reserveHero ? `${base} ${i === 0 ? 'HERO (exclusive)' : ''} |` : base;
       })
       .join('\n');
+
+    const header = reserveHero
+      ? '| URL | Description | Credit | Role |'
+      : '| URL | Description | Credit |';
+    const separator = reserveHero ? '| --- | --- | --- | --- |' : '| --- | --- | --- |';
+
+    const intro = reserveHero
+      ? [
+          'Use ONLY these images. Choose by description. Keep URL params as given.',
+          '',
+          'Row 1 is marked HERO in the Role column: that image is reserved exclusively for the hero section and must NOT be reused in any other section.',
+        ]
+      : ['Use ONLY these images. Choose by description. Keep URL params as given.'];
 
     return [
       markdown.trimEnd(),
       '',
       '## Approved Image Pool',
       '',
-      'Use ONLY these images. Choose by description. Keep URL params as given.',
+      ...intro,
       '',
-      '| URL | Description | Credit |',
-      '| --- | --- | --- |',
+      header,
+      separator,
       rows,
       '',
     ].join('\n');
