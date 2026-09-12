@@ -158,3 +158,52 @@ export function buildBlueprintBlock(blueprint?: string): string {
   }
   return '';
 }
+
+/**
+ * BACKEND_RULES — shared backend guidance for every lane that can generate
+ * backend code (the legacy step executor, the heavy-lane fallback, and the
+ * main Implementer pipeline).
+ *
+ * Used to live duplicated inline in AIOrchestrator with an unconditional
+ * rule 1 ("any backend request gets a table + types.ts + hook") that pushed
+ * data access into the browser even when the request had nothing to do with
+ * client-side data, and a reactive rule 7 ("if the user asks for an Edge
+ * Function") that only fired when the user knew Edge Functions exist and
+ * asked for one by name — which the typical user of this platform never
+ * does. Both are now conditional on what the request actually needs.
+ */
+export const BACKEND_RULES = `BACKEND RULES:
+1. If the request needs client-side data access (e.g. "save this to the database", "create a user profile table", "list my orders"), perform this 3-step process:
+   a. Generate a valid PostgreSQL CREATE TABLE statement wrapped in a file named \`supabase/migrations/<timestamp>_create_<table_name>.sql\`.
+   b. Update or create \`src/integrations/supabase/types.ts\` to include the TypeScript interface for the new table.
+      Example for types.ts:
+      export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
+      export interface Database {
+        public: {
+          Tables: {
+            profiles: {
+              Row: { id: string; created_at: string; username: string | null; }
+              Insert: { id: string; created_at?: string; username?: string | null; }
+              Update: { id?: string; created_at?: string; username?: string | null; }
+            }
+          }
+        }
+      }
+   c. Create a custom hook \`src/hooks/use<Entity>.ts\` that encapsulates the Supabase client logic (select, insert, update, delete) using the generated types.
+      Example for useTodos.ts:
+      import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+      import { supabase } from '../integrations/supabase/client';
+      export const useTodos = () => {
+        const queryClient = useQueryClient();
+        const fetchTodos = async () => { const { data, error } = await supabase.from('todos').select('*'); if (error) throw error; return data; };
+        const addTodo = async (todo: any) => { const { data, error } = await supabase.from('todos').insert(todo).select(); if (error) throw error; return data; };
+        return { todos: useQuery({ queryKey: ['todos'], queryFn: fetchTodos }), addTodo: useMutation({ mutationFn: addTodo, onSuccess: () => queryClient.invalidateQueries({ queryKey: ['todos'] }) }) };
+      };
+2. Do NOT try to execute the SQL directly.
+3. If the user asks to 'Mock' the data, generate a src/data.json file instead of SQL.
+4. Use the \`cn()\` utility from \`src/lib/utils\` for merging Tailwind classes dynamically.
+5. Recognize on your own — without the user ever naming "Edge Function" — when logic CANNOT live in the browser, and generate a Deno-compatible TypeScript file at \`supabase/functions/<slug>/index.ts\` (slug: lowercase letters, digits and hyphens only — the server rejects anything else with a 400). The typical user of this platform does not know Edge Functions exist and will never ask for one by name; you must decide this from what the request needs. Move logic server-side when ANY of these apply:
+   a. It needs a secret the browser must never hold (a service-role key, a third-party API key such as an AI provider's).
+   b. It needs to verify identity or permissions in a way the client cannot forge.
+   c. It is logic the user must not be able to alter (moderation, calculations with real consequences, privileged writes).
+6. If you need a Shadcn component (e.g., sheet, accordion, dialog) that is not currently in the src/components/ui folder, you MUST include 'npx shadcn-ui@latest add [component-name]' in the 'installCommands' array in your JSON response.`;
