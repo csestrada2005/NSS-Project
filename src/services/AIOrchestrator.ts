@@ -32,6 +32,7 @@ import {
   resolveMigrationTargets,
   isMigrationPath,
 } from '../utils/migrationPath.js';
+import { edgeFunctionSlug } from '../utils/edgeFunctionPath.js';
 import {
   buildMigrationIntentParams,
   intentLogResult,
@@ -72,6 +73,13 @@ export interface OrchestratorResult {
    */
   errorReason?: string;
   warning?: string;
+  /**
+   * BLOQUE 1 (A+B) — sufijo `[FUNCTION_DEPLOY_FAILED:<slug>]` (uno por cada
+   * función que no se pudo desplegar), listo para concatenar a `prompt` en
+   * forge_intent_log. Mismo mecanismo que [DDL_PROPOSED:...] y
+   * [PLAN_REPAIRED:...]. Cadena vacía o undefined cuando no hubo fallos.
+   */
+  functionDeployFailedMark?: string;
   tokensInput?: number;
   tokensOutput?: number;
   chatResponse?: string;
@@ -706,8 +714,9 @@ export class AIOrchestrator {
   // -------------------------------------------------------------------------
 
   static async executeNextStep(
-    files: Map<string, string>
-  ): Promise<{ modifiedFiles: string[] } | null> {
+    files: Map<string, string>,
+    projectId?: string
+  ): Promise<{ modifiedFiles: string[]; warning?: string } | null> {
     this.retryCount = 0;
 
     const planContent = files.get('PLAN.md');
@@ -757,16 +766,12 @@ export class AIOrchestrator {
       const response: LLMResponse = JSON.parse(cleanJson);
 
       const modifiedPaths: string[] = [];
+      const modifiedContents = new Map<string, string>();
       for (const file of response.modifiedFiles) {
-        this.notifyFileUpdate(file.path, this.stripCodeFences(file.newContent));
+        const content = this.stripCodeFences(file.newContent);
+        this.notifyFileUpdate(file.path, content);
         modifiedPaths.push(file.path);
-
-        if (file.path.startsWith('supabase/functions/') && file.path.endsWith('index.ts')) {
-          const parts = file.path.split('/');
-          if (parts.length === 4) {
-            SupabaseService.getInstance().deployEdgeFunction(parts[2], file.newContent);
-          }
-        }
+        modifiedContents.set(file.path, content);
       }
 
       lines[nextStepIndex] = lines[nextStepIndex].replace('- [ ]', '- [x]');
@@ -775,7 +780,16 @@ export class AIOrchestrator {
       modifiedPaths.push('PLAN.md');
 
       this.lastModifiedFiles = modifiedPaths;
-      return { modifiedFiles: modifiedPaths };
+
+      // Deploy DESPUÉS de confirmar que los archivos ya se persistieron
+      // (los notifyFileUpdate de arriba) — nunca antes.
+      const { failed } = await this.deployGeneratedFunctions(
+        modifiedPaths,
+        (p) => modifiedContents.get(p),
+        projectId
+      );
+
+      return { modifiedFiles: modifiedPaths, warning: this.functionDeployFailureWarning(failed) };
     } catch (error) {
       console.error('[AIOrchestrator] Error executing step:', error);
       return null;
@@ -991,6 +1005,88 @@ export class AIOrchestrator {
   }
 
   /**
+   * BLOQUE 1 (A+B) — despliega cada Edge Function ya PERSISTIDA contra la
+   * Supabase del proyecto generado, server-mediado. Se llama SÓLO con paths
+   * que el caller ya confirmó escritos en forge_files (nunca antes): un
+   * deploy fallido no debe revertir el archivo, y un archivo que no llegó a
+   * persistir no tiene nada que desplegar.
+   *
+   * B-5 — automático, sin aprobación humana. A diferencia del DDL (un DROP
+   * destruye datos irrecuperables, de ahí [DDL_PROPOSED:...] + botón), un
+   * deploy de función es idempotente: el mismo slug sobreescribe, y un error
+   * se corrige simplemente redesplegando. La asimetría de tratamiento
+   * responde a una asimetría real de riesgo.
+   *
+   * Nunca lanza: cada fallo queda en `failed`, con el `code` que el servidor
+   * devolvió (p. ej. NO_PROJECT_DB) cuando lo hay. El caller decide qué decir
+   * en el chat y qué marca escribir en forge_intent_log — este helper sólo
+   * intenta el despliegue y reporta qué pasó.
+   */
+  private static async deployGeneratedFunctions(
+    persistedPaths: Iterable<string>,
+    contentOf: (path: string) => string | undefined,
+    projectId: string | undefined
+  ): Promise<{ deployed: string[]; failed: { slug: string; reason: string; code?: string }[] }> {
+    const deployed: string[] = [];
+    const failed: { slug: string; reason: string; code?: string }[] = [];
+
+    for (const path of persistedPaths) {
+      const slug = edgeFunctionSlug(path);
+      if (!slug) continue;
+      const code = contentOf(path);
+      if (code == null) continue;
+
+      if (!projectId) {
+        // No hay proyecto contra el que resolver un ref: mismo motivo que
+        // NO_PROJECT_DB en el servidor, pero detectado antes de llamar.
+        failed.push({ slug, reason: 'Project database not provisioned', code: 'NO_PROJECT_DB' });
+        continue;
+      }
+
+      const result = await SupabaseService.getInstance().deployEdgeFunction(projectId, slug, code);
+      if (result.ok) {
+        deployed.push(slug);
+      } else {
+        failed.push({ slug, reason: result.reason, code: result.code });
+      }
+    }
+
+    return { deployed, failed };
+  }
+
+  /**
+   * Mensaje honesto para el chat cuando uno o más deploys fallaron: distingue
+   * explícitamente "se escribió" de "se desplegó" (son dos verdades
+   * independientes) y da a NO_PROJECT_DB su propio texto, porque con el
+   * Bloque 2 activo va a ser el caso FRECUENTE, no la excepción.
+   */
+  private static functionDeployFailureWarning(
+    failed: { slug: string; reason: string; code?: string }[]
+  ): string | undefined {
+    if (failed.length === 0) return undefined;
+    return failed
+      .map(({ slug, reason, code }) =>
+        code === 'NO_PROJECT_DB'
+          ? `Escribí la función \`${slug}\` pero no pude desplegarla: este proyecto necesita ` +
+            `su base de datos provisionada antes de poder desplegar funciones.`
+          : `Escribí la función \`${slug}\` pero no pude desplegarla: ${reason}`
+      )
+      .join(' ');
+  }
+
+  /**
+   * Sufijo de telemetría para forge_intent_log: mismo mecanismo que
+   * [DDL_PROPOSED:...] y [PLAN_REPAIRED:...] — sufijo en el prompt, sin tocar
+   * columnas ni enums.
+   */
+  private static functionDeployFailedTelemetry(
+    failed: { slug: string; reason: string; code?: string }[]
+  ): string {
+    if (failed.length === 0) return '';
+    return failed.map(({ slug }) => ` [FUNCTION_DEPLOY_FAILED:${slug}]`).join('');
+  }
+
+  /**
    * DEPRECATED (CIRUGÍA: cobro dentro del pipeline servido). Charging no longer
    * happens from a client call at intent close — it is applied SERVER-SIDE from
    * the tokens the server itself accumulates per intent (see PlatformService
@@ -1123,8 +1219,10 @@ export class AIOrchestrator {
       input.toLowerCase().trim() === 'execute next step' ||
       input.toLowerCase().trim() === 'continue plan'
     ) {
-      const result = await this.executeNextStep(files);
-      return result ? { modifiedFiles: result.modifiedFiles } : { modifiedFiles: [] };
+      const result = await this.executeNextStep(files, projectId);
+      return result
+        ? { modifiedFiles: result.modifiedFiles, warning: result.warning }
+        : { modifiedFiles: [] };
     }
 
     // ------------------------------------------------------------------
@@ -1424,7 +1522,7 @@ export class AIOrchestrator {
       if (projectId) {
         await this.logIntent({
           projectId,
-          prompt: input,
+          prompt: input + (result.functionDeployFailedMark ?? ''),
           intentType: intent.type,
           intentRisk: intent.risk,
           modifiedFiles: result.modifiedFiles,
@@ -1883,6 +1981,27 @@ export class AIOrchestrator {
       }
 
       // ----------------------------------------------------------------
+      // BLOQUE 1 (A+B) — el pipeline principal (Architect → Implementer →
+      // Verifier) no tenía NINGÚN gancho de deploy: una Edge Function
+      // generada aquí se escribía en forge_files y ahí moría, nunca llegaba a
+      // existir en ninguna Supabase real. Va AQUÍ, después de que el loop de
+      // arriba ya confirmó cada path en `persistedPaths` como escrito — nunca
+      // antes: no se despliega código que no llegó a persistir.
+      //
+      // B-5 — automático, sin aprobación humana: un deploy de función es
+      // idempotente (mismo slug sobreescribe), a diferencia del DDL, donde un
+      // DROP destruye datos irrecuperables y por eso existe el gate humano de
+      // [DDL_PROPOSED:...] + botón.
+      // ----------------------------------------------------------------
+      const { failed: functionDeployFailures } = await this.deployGeneratedFunctions(
+        persistedPaths,
+        (p) => finalFiles.get(p) ?? files.get(p),
+        projectId
+      );
+      const functionDeployFailedMark = this.functionDeployFailedTelemetry(functionDeployFailures);
+      const functionDeployWarning = this.functionDeployFailureWarning(functionDeployFailures);
+
+      // ----------------------------------------------------------------
       // EL MAPA QUE VE LA MEMORIA ES EL DE DESPUÉS DEL RENOMBRADO.
       //
       // `finalFiles` sale del Verifier, que nunca supo del renombrado: sus
@@ -2065,7 +2184,8 @@ export class AIOrchestrator {
           // [CLARIFY_ASKED], sufijo en el prompt, sin tocar columnas ni enums.
           prompt: (hasPartial ? `${input} [PARTIAL:${partialOrders.join(',')}]` : input) +
             targetsMark + rejectedDeleteMark + restoredMark + danglingMark + ddlProposedMark +
-            ddlMisplacedMark + planRepairedMark + trimmedMark + orphanCreatedMark,
+            ddlMisplacedMark + planRepairedMark + trimmedMark + orphanCreatedMark +
+            functionDeployFailedMark,
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,
@@ -2157,6 +2277,11 @@ export class AIOrchestrator {
           `Generé ${completedCount} de ${total} pasos. Falló: ${failedList} ` +
           `por sobrecarga temporal del modelo. Puedes pedirme completar lo que falta.`
         );
+      }
+      // PIEZA 4 del deploy — "se escribió" y "se desplegó" son dos verdades
+      // independientes, y un deploy fallido no revierte los archivos escritos.
+      if (functionDeployWarning) {
+        warnings.push(functionDeployWarning);
       }
 
       return {
@@ -2898,16 +3023,12 @@ export class AIOrchestrator {
       const response: LLMResponse = JSON.parse(cleanJson);
 
       const modifiedPaths: string[] = [];
+      const modifiedContents = new Map<string, string>();
       for (const file of response.modifiedFiles) {
-        this.notifyFileUpdate(file.path, this.stripCodeFences(file.newContent));
+        const content = this.stripCodeFences(file.newContent);
+        this.notifyFileUpdate(file.path, content);
         modifiedPaths.push(file.path);
-
-        if (file.path.startsWith('supabase/functions/') && file.path.endsWith('index.ts')) {
-          const parts = file.path.split('/');
-          if (parts.length === 4) {
-            SupabaseService.getInstance().deployEdgeFunction(parts[2], file.newContent);
-          }
-        }
+        modifiedContents.set(file.path, content);
       }
 
       this.lastModifiedFiles = modifiedPaths;
@@ -2916,11 +3037,23 @@ export class AIOrchestrator {
         trackAICall(projectId);
       }
 
+      // Deploy DESPUÉS de confirmar que los archivos ya se persistieron
+      // (los notifyFileUpdate de arriba) — nunca antes.
+      const { failed } = await this.deployGeneratedFunctions(
+        modifiedPaths,
+        (p) => modifiedContents.get(p),
+        projectId
+      );
+
       return {
         modifiedFiles: modifiedPaths,
         outcome: 'success',
+        warning: this.functionDeployFailureWarning(failed),
         tokensInput: rawResponse.tokensInput,
         tokensOutput: rawResponse.tokensOutput,
+        // El caller (parseUserCommand) lee esto para completar la marca de
+        // forge_intent_log — mismo patrón que el resto de sufijos telemétricos.
+        functionDeployFailedMark: this.functionDeployFailedTelemetry(failed),
       };
     } catch (error) {
       if (isAbortError(error)) return { modifiedFiles: [], outcome: 'cancelled' };

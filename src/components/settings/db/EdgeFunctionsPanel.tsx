@@ -84,7 +84,10 @@ export function EdgeFunctionsPanel({ fileTree }: EdgeFunctionsPanelProps) {
   const handleDeploy = async (name: string) => {
     setDeployingId(name);
     try {
-      await SupabaseService.getInstance().deployEdgeFunction(name, '');
+      // Fix mecánico de compilación: deployEdgeFunction ahora requiere
+      // projectId (Bloque 1 A+B). Este panel sigue huérfano y sin montar —
+      // queda para Panel Cloud reconectarlo con un projectId real.
+      await SupabaseService.getInstance().deployEdgeFunction('', name, '');
     } finally {
       setDeployingId(null);
     }

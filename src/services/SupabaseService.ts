@@ -60,11 +60,35 @@ export class SupabaseService {
   }
 
   /**
-   * Deploys an Edge Function.
-   * This is a mock implementation as we don't have direct access to the Management API
-   * without a user's access token (which is different from the anon key).
+   * Despliega una Edge Function contra la Supabase DEL PROYECTO GENERADO,
+   * siempre server-mediado (POST /api/projects/:projectId/edge-functions/deploy).
+   *
+   * Nunca lanza y nunca se traga el error en silencio: el resultado tipado es
+   * lo único que el caller necesita para distinguir "se escribió el archivo"
+   * de "se desplegó de verdad" — son dos verdades independientes, y antes de
+   * esto la segunda no existía (el mock sólo hacía console.log).
    */
-  public async deployEdgeFunction(name: string, code: string): Promise<void> {
-    console.log(`[SupabaseService] Edge Function '${name}' registered (deployment requires Supabase CLI).\n`, code.slice(0, 200));
+  public async deployEdgeFunction(
+    projectId: string,
+    slug: string,
+    code: string
+  ): Promise<{ ok: true; slug: string } | { ok: false; reason: string; code?: string }> {
+    try {
+      const { Authorization } = await this.getAuthHeader();
+      const response = await fetch(`/api/projects/${projectId}/edge-functions/deploy`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization },
+        body: JSON.stringify({ slug, code }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        return { ok: false, reason: body?.error || `HTTP ${response.status}`, code: body?.code };
+      }
+
+      return { ok: true, slug };
+    } catch (err) {
+      return { ok: false, reason: err instanceof Error ? err.message : String(err) };
+    }
   }
 }
