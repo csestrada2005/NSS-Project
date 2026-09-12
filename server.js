@@ -12,6 +12,7 @@ import { searchUnsplash, triggerUnsplashDownloads } from './server/unsplash.js';
 import { computeCreditsFromTokens } from './server/credits.js';
 import { createIntentAccumulator } from './server/intentAccumulator.js';
 import { bootstrapProject } from './server/bootstrapProject.js';
+import { deployEdgeFunctionViaManagement, validateEdgeFunctionDeployRequest } from './server/edgeFunctionDeploy.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -159,12 +160,12 @@ async function requireAuth(req, res, next) {
 // appropriate status/body to `res` and returns false, so callers do:
 //     if (!(await requireProjectOwnership(req, res, projectId))) return;
 // ---------------------------------------------------------------------------
-async function requireProjectOwnership(req, res, projectId) {
+async function requireProjectOwnership(req, res, projectId, adminClient = supabaseAdmin) {
   if (!projectId) {
     res.status(400).json({ error: 'projectId is required' });
     return false;
   }
-  if (!supabaseAdmin) {
+  if (!adminClient) {
     // No admin client. In production requireAuth already 503'd before we get
     // here; in local dev there is no ownership data to check against.
     if (IS_PRODUCTION) {
@@ -173,7 +174,7 @@ async function requireProjectOwnership(req, res, projectId) {
     }
     return true;
   }
-  const { data: project, error } = await supabaseAdmin
+  const { data: project, error } = await adminClient
     .from('forge_projects')
     .select('user_id')
     .eq('id', projectId)
@@ -1817,6 +1818,50 @@ app.get('/api/db/:projectId/schema', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Despliegue de una Edge Function generada por la IA, contra la Supabase DEL
+// PROYECTO GENERADO — nunca la principal (ver AVISO en server/edgeFunctionDeploy.js).
+// Antes de esto, SupabaseService.deployEdgeFunction() era un mock (sólo
+// console.log): el archivo se escribía en el proyecto pero jamás llegaba a
+// existir en ninguna Supabase real.
+// ---------------------------------------------------------------------------
+app.post('/api/projects/:projectId/edge-functions/deploy', async (req, res) => {
+  const { projectId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Database not configured' });
+  if (!SUPABASE_MANAGEMENT_TOKEN) {
+    return res.status(503).json({ error: 'Edge function deploy not configured' });
+  }
+
+  const { slug, code } = req.body || {};
+
+  const { data: project } = await supabaseAdmin
+    .from('forge_projects')
+    .select('supabase_project_ref')
+    .eq('id', projectId)
+    .single();
+
+  // REGLA DURA: sin `supabase_project_ref` no hay a qué desplegar. Nunca cae a
+  // VITE_SUPABASE_URL, a un ref por defecto, ni al proyecto principal — ese
+  // fallback es exactamente el bug que este endpoint existe para matar.
+  const ref = project?.supabase_project_ref;
+  const decision = validateEdgeFunctionDeployRequest({ slug, code, projectRef: ref });
+  if (!decision.ok) {
+    return res.status(decision.status).json({ error: decision.error, code: decision.code });
+  }
+
+  try {
+    await deployEdgeFunctionViaManagement(ref, SUPABASE_MANAGEMENT_TOKEN, slug, code);
+    return res.status(201).json({ ok: true, slug });
+  } catch (err) {
+    // Mensaje COMPLETO de la Management API solo en el log server-side, mismo
+    // patrón que [BOOTSTRAP_FAILED:...].
+    console.error(`[EdgeFunctionDeploy] [FUNCTION_DEPLOY_FAILED:${slug}]`, err.message);
+    const status = err.status && err.status < 500 ? err.status : 502;
+    return res.status(status).json({ error: 'Edge function deploy failed', code: 'DEPLOY_FAILED', slug });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Phase 6: Email service management (Resend)
 // ---------------------------------------------------------------------------
 
@@ -2335,14 +2380,23 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  // CAMBIO 1 — make the auth posture visible in the Render logs at boot.
-  if (supabaseAdmin) {
-    console.log('[Auth] AUTH ACTIVE — Supabase admin client configured; sessions are verified.');
-  } else if (IS_PRODUCTION) {
-    console.error('[Auth] AUTH MISCONFIGURED — production environment but no Supabase admin client; /api/* will fail closed with 503.');
-  } else {
-    console.warn('[Auth] AUTH DISABLED (dev) — no Supabase admin client; /api/* auth checks are skipped in local dev only.');
-  }
-});
+// Guardado tras el entry point real (`node server.js`, que es como arrancan
+// tanto `npm start` como Render): así `server/*.test.js` puede importar `app`,
+// `requireAuth` y `requireProjectOwnership` sin abrir un puerto real. El
+// comportamiento en producción no cambia — sigue siendo exactamente
+// `node server.js` quien decide si esto corre.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    // CAMBIO 1 — make the auth posture visible in the Render logs at boot.
+    if (supabaseAdmin) {
+      console.log('[Auth] AUTH ACTIVE — Supabase admin client configured; sessions are verified.');
+    } else if (IS_PRODUCTION) {
+      console.error('[Auth] AUTH MISCONFIGURED — production environment but no Supabase admin client; /api/* will fail closed with 503.');
+    } else {
+      console.warn('[Auth] AUTH DISABLED (dev) — no Supabase admin client; /api/* auth checks are skipped in local dev only.');
+    }
+  });
+}
+
+export { app, requireAuth, requireProjectOwnership };
