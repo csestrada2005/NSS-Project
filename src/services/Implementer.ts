@@ -3,7 +3,7 @@ import type { ProjectMemory } from './ProjectMemoryService';
 import { SupabaseService } from './SupabaseService';
 import { platformService } from './PlatformService';
 import { sanitizeFileContent } from '../utils/sanitizeFileContent';
-import { buildProjectContextPrefix, buildBlueprintBlock } from './promptRules';
+import { buildProjectContextPrefix, buildBlueprintBlock, BACKEND_RULES } from './promptRules';
 import { cachedSystemBlocks } from './promptCache';
 import { applyEditsFromResponse } from '../utils/applyEdits';
 import {
@@ -522,6 +522,12 @@ export class Implementer {
     const stablePrefix = buildProjectContextPrefix(designContext);
     const blueprintBlock = buildBlueprintBlock(blueprint);
 
+    // BACKEND_RULES is its own cached block, separate from stablePrefix: it is
+    // truly static (unlike stablePrefix, which depends on designContext and
+    // varies per project), so it deserves its own cache_control breakpoint
+    // rather than being folded into either the stable prefix or the blueprint.
+    const backendRulesBlock = BACKEND_RULES;
+
     // Lane role block: full-file contract for create, surgical-edit contract for
     // modify. This is the ONLY part of the system prompt that changes by action;
     // it sits after the shared prefix so the prefix cache is reused regardless.
@@ -619,7 +625,7 @@ export class Implementer {
     const result = await this.callStepWithRetry({
       model: 'claude-sonnet-4-6',
       max_tokens: 8192,
-      system: cachedSystemBlocks(stablePrefix, blueprintBlock, roleBlock),
+      system: cachedSystemBlocks(stablePrefix, blueprintBlock, backendRulesBlock, roleBlock),
       messages: [{ role: 'user', content: userMessage }],
       // CAMBIO 2 (telemetría en Render) — el modo del step viaja como header a
       // /api/chat-forge para que la línea [chat-forge] del server lo loguee junto
@@ -662,6 +668,7 @@ export class Implementer {
         system: cachedSystemBlocks(
           stablePrefix,
           blueprintBlock,
+          backendRulesBlock,
           `You are an expert React + TypeScript engineer implementing one specific step in a build plan.\n${FORMAT_INSTRUCTION}`
         ),
         messages: [{

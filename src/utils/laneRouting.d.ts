@@ -19,15 +19,20 @@ export interface LaneIntent {
 /** Tipos de intent que siempre siguen al plan lane, sea cual sea su risk. */
 export const PLAN_LANE_ONLY_TYPES: readonly string[];
 
-/** ¿Este intent tiene prohibidas las lanes rápidas por su tipo? */
-export function isPlanLaneOnly(intent: LaneIntent): boolean;
+/**
+ * ¿Este intent tiene prohibidas las lanes rápidas? Por su tipo, por tener
+ * `affected_files` fuera del universo de fast/simple lane (fail-closed ante
+ * un valor ilegible), o porque el prompt crudo menciona `supabase/functions/`.
+ */
+export function isPlanLaneOnly(intent: LaneIntent, prompt?: string): boolean;
 
 /** Gate del fast lane: selección resuelta a un archivo real + intent barato. */
 export function canEnterFastLane(args: {
   intent: LaneIntent;
   hasSelection: boolean;
   selectionFileExists: boolean;
+  prompt?: string;
 }): boolean;
 
-/** Gate del simple lane, decidido sólo con el intent. */
-export function isSimpleEditIntent(intent: LaneIntent): boolean;
+/** Gate del simple lane, decidido con el intent y opcionalmente el prompt crudo. */
+export function isSimpleEditIntent(intent: LaneIntent, prompt?: string): boolean;

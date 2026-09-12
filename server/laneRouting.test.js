@@ -175,3 +175,86 @@ test('database_change es plan-lane-only; los demás tipos no lo son', () => {
     assert.equal(isPlanLaneOnly(intent({ type })), false, type);
   }
 });
+
+// ---------------------------------------------------------------------------
+// C1-b/c — affected_files fuera del universo de src/ y el cinturón de
+// `supabase/functions/` sobre el prompt crudo. Bloque 2 (C).
+// ---------------------------------------------------------------------------
+
+test('affected_files: [src/App.tsx] sigue permitiendo el simple lane', () => {
+  assert.equal(
+    isSimpleEditIntent(intent({ type: 'fix_bug', risk: 'low', affected_files: ['src/App.tsx'] })),
+    true
+  );
+});
+
+test('affected_files con una Edge Function fuerza el plan lane', () => {
+  assert.equal(
+    isPlanLaneOnly(
+      intent({ type: 'fix_bug', risk: 'low', affected_files: ['supabase/functions/x/index.ts'] })
+    ),
+    true
+  );
+});
+
+test('affected_files mezclando src/ y una Edge Function fuerza el plan lane (basta uno)', () => {
+  assert.equal(
+    isPlanLaneOnly(
+      intent({
+        type: 'fix_bug',
+        risk: 'low',
+        affected_files: ['src/App.tsx', 'supabase/functions/x/index.ts'],
+      })
+    ),
+    true
+  );
+});
+
+test('affected_files con una migración SQL fuerza el plan lane', () => {
+  assert.equal(
+    isPlanLaneOnly(
+      intent({ type: 'fix_bug', risk: 'low', affected_files: ['supabase/migrations/x.sql'] })
+    ),
+    true
+  );
+});
+
+test('affected_files: [] no cambia el comportamiento de hoy', () => {
+  assert.equal(
+    isPlanLaneOnly(intent({ type: 'fix_bug', risk: 'low', affected_files: [] })),
+    false
+  );
+});
+
+test('affected_files null o malformado es fail-closed a plan lane', () => {
+  assert.equal(isPlanLaneOnly(intent({ type: 'fix_bug', risk: 'low', affected_files: null })), true);
+  assert.equal(
+    isPlanLaneOnly(intent({ type: 'fix_bug', risk: 'low', affected_files: 'not-an-array' })),
+    true
+  );
+  assert.equal(
+    isPlanLaneOnly(intent({ type: 'fix_bug', risk: 'low', affected_files: [42] })),
+    true
+  );
+});
+
+test('el prompt crudo mencionando supabase/functions/ fuerza el plan lane aunque el intent sea barato', () => {
+  const cheapIntent = intent({ type: 'style_change', risk: 'low', affected_files: [] });
+  assert.equal(
+    isSimpleEditIntent(cheapIntent, 'crea una Edge Function en supabase/functions/ping-test/index.ts'),
+    false
+  );
+  assert.equal(
+    isPlanLaneOnly(cheapIntent, 'crea una Edge Function en supabase/functions/ping-test/index.ts'),
+    true
+  );
+});
+
+test('style_change con affected_files vacío sigue en fast/simple lane (no regresión)', () => {
+  const cheapIntent = intent({ type: 'style_change', risk: 'low', affected_files: [] });
+  assert.equal(isSimpleEditIntent(cheapIntent), true);
+  assert.equal(
+    canEnterFastLane({ intent: cheapIntent, hasSelection: true, selectionFileExists: true }),
+    true
+  );
+});

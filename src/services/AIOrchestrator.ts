@@ -13,7 +13,7 @@ import { Architect, type BuildStep } from './Architect';
 import { Implementer, type ProgressCallback } from './Implementer';
 import { Verifier, type RetryCallback } from './Verifier';
 import { CreditService } from './CreditService';
-import { REACT_TAILWIND_RULES, buildProjectContextPrefix, buildBlueprintBlock } from './promptRules';
+import { REACT_TAILWIND_RULES, BACKEND_RULES, buildProjectContextPrefix, buildBlueprintBlock } from './promptRules';
 import { buildImportedByBlock } from '../utils/importGraph.js';
 import { deletionTargetsTelemetry } from '../utils/deletionGuard.js';
 import { danglingRefsTelemetry } from '../utils/danglingRefs.js';
@@ -439,41 +439,10 @@ const AVAILABLE_RUNTIME_CONTEXT =
   '- For animations, framer-motion is available and encouraged for hero sections,\n' +
   '  transitions, and micro-interactions.';
 
-// REACT_TAILWIND_RULES is imported from ./promptRules — the single shared
-// constant used by every generation lane (plan, simple, heavy, and the
-// per-step Implementer), including the anti-template / brand rules.
-
-const BACKEND_RULES = `When the user asks for backend features (e.g., 'save this to the database' or 'create a user profile table'), you must perform a 3-step process:
-1. Generate a valid PostgreSQL CREATE TABLE statement wrapped in a file named \`supabase/migrations/<timestamp>_create_<table_name>.sql\`.
-2. Update or create \`src/integrations/supabase/types.ts\` to include the TypeScript interface for the new table.
-   Example for types.ts:
-   export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
-   export interface Database {
-     public: {
-       Tables: {
-         profiles: {
-           Row: { id: string; created_at: string; username: string | null; }
-           Insert: { id: string; created_at?: string; username?: string | null; }
-           Update: { id?: string; created_at?: string; username?: string | null; }
-         }
-       }
-     }
-   }
-3. Create a custom hook \`src/hooks/use<Entity>.ts\` that encapsulates the Supabase client logic (select, insert, update, delete) using the generated types.
-   Example for useTodos.ts:
-   import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-   import { supabase } from '../integrations/supabase/client';
-   export const useTodos = () => {
-     const queryClient = useQueryClient();
-     const fetchTodos = async () => { const { data, error } = await supabase.from('todos').select('*'); if (error) throw error; return data; };
-     const addTodo = async (todo: any) => { const { data, error } = await supabase.from('todos').insert(todo).select(); if (error) throw error; return data; };
-     return { todos: useQuery({ queryKey: ['todos'], queryFn: fetchTodos }), addTodo: useMutation({ mutationFn: addTodo, onSuccess: () => queryClient.invalidateQueries({ queryKey: ['todos'] }) }) };
-   };
-4. Do NOT try to execute the SQL directly.
-5. If the user asks to 'Mock' the data, generate a src/data.json file instead of SQL.
-6. Use the \`cn()\` utility from \`src/lib/utils\` for merging Tailwind classes dynamically.
-7. If the user asks for backend logic (e.g., 'handle Stripe payments' or 'Edge Function'), generate a Deno-compatible TypeScript file at \`supabase/functions/<name>/index.ts\`.
-8. If you need a Shadcn component (e.g., sheet, accordion, dialog) that is not currently in the src/components/ui folder, you MUST include 'npx shadcn-ui@latest add [component-name]' in the 'installCommands' array in your JSON response.`;
+// REACT_TAILWIND_RULES and BACKEND_RULES are imported from ./promptRules —
+// the single shared constants used by every generation lane (plan, simple,
+// heavy, and the per-step Implementer), including the anti-template / brand
+// rules.
 
 // ---------------------------------------------------------------------------
 // Dependency audit (P0-2) — deterministic, no LLM
@@ -1372,6 +1341,7 @@ export class AIOrchestrator {
         hasSelection: Boolean(selectedElement),
         selectionFileExists:
           typeof fastLaneFilePath === 'string' && files.has(fastLaneFilePath),
+        prompt: input,
       })
     ) {
       const result = await this.runFastLane(input, files, selectedElement, signal);
@@ -1418,7 +1388,7 @@ export class AIOrchestrator {
     // (.ts/.tsx/.js/.jsx bajo src/), así que una migración de supabase/migrations/
     // no puede ser objetivo por construcción y el intent moriría en un clarify
     // sin salida en vez de escribir el .sql.
-    const isSimpleEdit = isSimpleEditIntent(intent);
+    const isSimpleEdit = isSimpleEditIntent(intent, input);
 
     if (isSimpleEdit && files.size > 0) {
       const result = await this.runSimpleLane(input, files, selectedElement, intent, projectId, signal, previousClarifyQuestion);
