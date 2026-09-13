@@ -32,6 +32,12 @@ import {
   resolveMigrationTargets,
   isMigrationPath,
 } from '../utils/migrationPath.js';
+import {
+  evaluateRlsPolicies,
+  removeDangerousPolicies,
+  rlsPolicyBlockedTelemetry,
+  rlsPolicyWarnings,
+} from '../utils/rlsPolicyGuard.js';
 import { edgeFunctionSlug } from '../utils/edgeFunctionPath.js';
 import {
   buildMigrationIntentParams,
@@ -1973,6 +1979,49 @@ export class AIOrchestrator {
       }
 
       // ----------------------------------------------------------------
+      // BLOQUE 1 (cirugía G-2) — GUARD DE POLÍTICAS RLS PELIGROSAS.
+      //
+      // El agujero medido en vivo: un Architect puede generar, en el mismo
+      // lote, una Edge Function con service-role para las mutaciones
+      // privilegiadas Y una migración que abre INSERT/UPDATE públicos sobre
+      // la misma tabla con columna de rol. La función queda decorativa —
+      // cualquiera con la consola del navegador se la salta con un UPDATE
+      // directo. Va AQUÍ: el SQL ya está persistido (el loop de arriba ya
+      // corrió notifyFileUpdate), así que la reacción no es un reintento al
+      // Architect —tocaría deshacer escrituras, otra cirugía— sino una
+      // reescritura determinista del archivo YA escrito, ANTES de que
+      // `memoryFiles` tome su fotografía y ANTES de que la migración se
+      // ofrezca al usuario con el botón de aprobación. No se gatea por
+      // `intent.type`, misma doctrina que C-D: la etiqueta la produce un LLM,
+      // y un guard de seguridad no puede depender de que el clasificador
+      // haya acertado.
+      // ----------------------------------------------------------------
+      const rlsMigrationPaths = persistedPaths.filter(isMigrationPath);
+      const rlsVerdict = evaluateRlsPolicies(
+        rlsMigrationPaths.map((path) => ({ path, sql: finalFiles.get(path) ?? files.get(path) }))
+      );
+      const rlsFindingsByPath = new Map<string, typeof rlsVerdict.findings>();
+      for (const finding of rlsVerdict.findings) {
+        if (finding.reason !== 'public-write-policy') continue;
+        const list = rlsFindingsByPath.get(finding.path) ?? [];
+        list.push(finding);
+        rlsFindingsByPath.set(finding.path, list);
+      }
+      for (const [path, pathFindings] of rlsFindingsByPath) {
+        const original = finalFiles.get(path) ?? files.get(path)!;
+        const cleaned = removeDangerousPolicies(original, pathFindings);
+        if (cleaned === original) continue;
+        finalFiles.set(path, cleaned);
+        this.notifyFileUpdate(path, cleaned);
+        console.warn(
+          '[AIOrchestrator] política RLS peligrosa eliminada de', path, ':',
+          pathFindings.map((f) => `${f.table}:${f.policy}`).join(', ')
+        );
+      }
+      const rlsPolicyBlockedMark = rlsPolicyBlockedTelemetry(rlsVerdict.findings);
+      const rlsWarnings = rlsPolicyWarnings(rlsVerdict.findings);
+
+      // ----------------------------------------------------------------
       // BLOQUE 1 (A+B) — el pipeline principal (Architect → Implementer →
       // Verifier) no tenía NINGÚN gancho de deploy: una Edge Function
       // generada aquí se escribía en forge_files y ahí moría, nunca llegaba a
@@ -2177,7 +2226,7 @@ export class AIOrchestrator {
           prompt: (hasPartial ? `${input} [PARTIAL:${partialOrders.join(',')}]` : input) +
             targetsMark + rejectedDeleteMark + restoredMark + danglingMark + ddlProposedMark +
             ddlMisplacedMark + planRepairedMark + trimmedMark + orphanCreatedMark +
-            functionDeployFailedMark,
+            functionDeployFailedMark + rlsPolicyBlockedMark,
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,
@@ -2261,6 +2310,14 @@ export class AIOrchestrator {
           `${misplacedSql.join(', ')} está fuera de supabase/migrations/, así que no puedo ` +
           `ofrecerte aplicarla desde el chat. Pídeme que la vuelva a crear y la escribiré en su sitio.`
         );
+      }
+      // BLOQUE 1 (cirugía G-2) — el aviso NO es opcional: un guard que actúa
+      // sin rastro visible es el mismo patrón de fallo que esta cirugía viene
+      // a matar. `warning` es el campo que esta rama de éxito de verdad pinta
+      // en el chat (ver rlsPolicyGuard.test.js, el test que ancla esto contra
+      // la fuente).
+      for (const rlsWarning of rlsWarnings) {
+        warnings.push(rlsWarning);
       }
       if (hasPartial) {
         const total = steps.length;
