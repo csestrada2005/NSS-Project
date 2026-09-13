@@ -89,11 +89,21 @@ function promptMentionsEdgeFunction(prompt) {
  * @param {string} [prompt] Texto crudo del usuario — opcional, para el
  *   cinturón determinista de `supabase/functions/` sin romper firmas
  *   existentes.
+ *
+ * También fuerza el plan lane cuando `intent.needs_server === true`: ese eje
+ * es independiente del type (C2-3) y su entregable vive en
+ * `supabase/functions/`, fuera del universo de src/ que fast/simple lane saben tocar.
  */
 export function isPlanLaneOnly(intent, prompt) {
   if (PLAN_LANE_ONLY_TYPES.includes(intent?.type)) return true;
   if (hasOutOfUniverseWork(intent?.affected_files)) return true;
   if (promptMentionsEdgeFunction(prompt)) return true;
+  // needs_server es un eje independiente del type (C2-3): el entregable vive
+  // en supabase/functions/, fuera del universo de fast/simple lane. Sin esto,
+  // un needs_server con risk='low' y affected_files bajo src/ entraría al
+  // simple lane y nunca llegaría al Architect, que es quien sabe escribir la
+  // Edge Function.
+  if (intent?.needs_server === true) return true;
   return false;
 }
 

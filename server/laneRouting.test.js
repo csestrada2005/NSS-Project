@@ -258,3 +258,44 @@ test('style_change con affected_files vacío sigue en fast/simple lane (no regre
     true
   );
 });
+
+// ---------------------------------------------------------------------------
+// C2-3 — needs_server es un eje independiente del type: fuerza el plan lane
+// sea cual sea risk y affected_files, porque el entregable vive en
+// supabase/functions/, fuera del universo de fast/simple lane.
+// ---------------------------------------------------------------------------
+
+test('needs_server=true fuerza plan lane con risk=low y affected_files vacío', () => {
+  const cheapIntent = intent({ type: 'style_change', risk: 'low', affected_files: [], needs_server: true });
+  assert.equal(isPlanLaneOnly(cheapIntent), true);
+  assert.equal(isSimpleEditIntent(cheapIntent), false);
+  assert.equal(
+    canEnterFastLane({ intent: cheapIntent, hasSelection: true, selectionFileExists: true }),
+    false
+  );
+});
+
+test('needs_server=true fuerza plan lane incluso con un solo affected_file bajo src/', () => {
+  const cheapIntent = intent({
+    type: 'modify_existing',
+    risk: 'low',
+    affected_files: ['src/App.tsx'],
+    needs_server: true,
+  });
+  assert.equal(isPlanLaneOnly(cheapIntent), true);
+  assert.equal(isSimpleEditIntent(cheapIntent), false);
+});
+
+test('needs_server=false o ausente no cambia nada de lo que ya pasaba', () => {
+  const noServerIntent = intent({ type: 'style_change', risk: 'low', affected_files: [], needs_server: false });
+  assert.equal(isPlanLaneOnly(noServerIntent), false);
+  assert.equal(isSimpleEditIntent(noServerIntent), true);
+
+  const noFieldIntent = intent({ type: 'style_change', risk: 'low', affected_files: [] });
+  assert.equal(isPlanLaneOnly(noFieldIntent), false);
+  assert.equal(isSimpleEditIntent(noFieldIntent), true);
+  assert.equal(
+    canEnterFastLane({ intent: noFieldIntent, hasSelection: true, selectionFileExists: true }),
+    true
+  );
+});

@@ -14,6 +14,7 @@ export interface LaneIntent {
   risk: string;
   affected_files: string[];
   requiredPatternIds?: string[];
+  needs_server?: boolean;
 }
 
 /** Tipos de intent que siempre siguen al plan lane, sea cual sea su risk. */
@@ -22,7 +23,8 @@ export const PLAN_LANE_ONLY_TYPES: readonly string[];
 /**
  * ¿Este intent tiene prohibidas las lanes rápidas? Por su tipo, por tener
  * `affected_files` fuera del universo de fast/simple lane (fail-closed ante
- * un valor ilegible), o porque el prompt crudo menciona `supabase/functions/`.
+ * un valor ilegible), porque el prompt crudo menciona `supabase/functions/`,
+ * o porque `intent.needs_server === true` (eje independiente del type).
  */
 export function isPlanLaneOnly(intent: LaneIntent, prompt?: string): boolean;
 

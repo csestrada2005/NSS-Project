@@ -1,6 +1,7 @@
 import { platformService } from './PlatformService';
 import type { ProjectMemory } from './ProjectMemoryService';
 import { PATTERN_SUMMARY } from './patterns/registry';
+import { promptNeedsServer } from '../utils/serverLogicSignals.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -31,6 +32,15 @@ export interface Intent {
    * `classifier_default` de forge_intent_log (NULL = clasificación normal).
    */
   classifierDefault?: 'api_error' | 'invalid_type' | 'missing_risk' | 'parse_error';
+  /**
+   * Eje independiente del type: ¿esta petición necesita lógica que NO puede
+   * vivir en el navegador (roles/permisos, API keys de terceros, envío de
+   * email, agregación de datos, moderación de contenido)? Cualquiera de los
+   * 8 types puede llevar needs_server=true.
+   */
+  needs_server: boolean;
+  /** Una frase corta con el disparador que aplica, o '' si needs_server es false. */
+  server_reason: string;
 }
 
 const DEFAULT_INTENT: Intent = {
@@ -41,6 +51,8 @@ const DEFAULT_INTENT: Intent = {
   reasoning: 'Could not classify intent; using safe default.',
   requiredPatternIds: [],
   domain: 'general',
+  needs_server: false,
+  server_reason: '',
 };
 
 // ---------------------------------------------------------------------------
@@ -89,6 +101,16 @@ database_change: The user commands creating, altering, or deleting DATABASE stru
 refactor: The user wants code restructured, split, or de-duplicated without changing visible behavior or appearance.
 question: The user is asking for information, advice, an explanation, or a recommendation — they are NOT requesting a change to the project. An instruction to build or modify something is NEVER question, even when phrased with polite question syntax ('can you add...?'). For type=question always return affected_files=[], needs_new_files=false, risk="low".
 
+SERVER-SIDE LOGIC (independent of type — a request can be any type AND also need server logic):
+Output needs_server: true when fulfilling the request requires logic that must NOT run in the user's browser. Trigger cases:
+(1) assigning, changing or checking user roles/permissions/admin status; inviting, disabling or deleting users;
+(2) calling any third-party API that requires a secret key (AI/LLM APIs, payment providers, email senders);
+(3) sending email or notifications;
+(4) aggregating, summarising or analysing stored data across many rows (reports, monthly summaries);
+(5) moderating, filtering or validating user-submitted content before it is stored.
+Output needs_server: false for purely visual work, content edits, page creation, refactors, questions, and for plain table creation with no logic attached.
+server_reason: one short sentence naming which trigger applies, or empty string when false.
+
 Return ONLY valid JSON. No markdown fences, no explanation outside the JSON object.
 
 AVAILABLE ARCHITECTURE PATTERNS: ${PATTERN_SUMMARY}
@@ -115,7 +137,7 @@ Additionally output these two fields in your JSON response:
 
       if (data.error) {
         console.warn('[IntentClassifier] API error:', data.error);
-        return { ...DEFAULT_INTENT, classifierDefault: 'api_error' };
+        return this.withServerBelt({ ...DEFAULT_INTENT, classifierDefault: 'api_error' }, prompt);
       }
 
       const text: string = data.content?.[0]?.text ?? '';
@@ -125,15 +147,15 @@ Additionally output these two fields in your JSON response:
       const VALID_TYPES = ['fix_bug', 'style_change', 'refactor', 'new_feature', 'modify_existing', 'add_page', 'database_change', 'question'];
       if (!parsed.type || !VALID_TYPES.includes(parsed.type)) {
         console.warn('[IntentClassifier] Invalid or missing type in response:', parsed.type, '| raw text preview:', text.slice(0, 200));
-        return { ...DEFAULT_INTENT, classifierDefault: 'invalid_type' };
+        return this.withServerBelt({ ...DEFAULT_INTENT, classifierDefault: 'invalid_type' }, prompt);
       }
 
       if (!parsed.risk) {
         console.warn('[IntentClassifier] Missing risk in response; using safe default.');
-        return { ...DEFAULT_INTENT, classifierDefault: 'missing_risk' };
+        return this.withServerBelt({ ...DEFAULT_INTENT, classifierDefault: 'missing_risk' }, prompt);
       }
 
-      return {
+      return this.withServerBelt({
         type: parsed.type,
         affected_files: Array.isArray(parsed.affected_files) ? parsed.affected_files : [],
         needs_new_files: parsed.needs_new_files ?? false,
@@ -141,11 +163,29 @@ Additionally output these two fields in your JSON response:
         reasoning: parsed.reasoning ?? '',
         requiredPatternIds: Array.isArray(parsed.requiredPatternIds) ? parsed.requiredPatternIds : [],
         domain: parsed.domain ?? 'general',
-      };
+        needs_server: parsed.needs_server === true,
+        server_reason: typeof parsed.server_reason === 'string' ? parsed.server_reason : '',
+      }, prompt);
     } catch (e) {
       console.warn('[IntentClassifier] Failed to classify:', e);
-      return { ...DEFAULT_INTENT, classifierDefault: 'parse_error' };
+      return this.withServerBelt({ ...DEFAULT_INTENT, classifierDefault: 'parse_error' }, prompt);
     }
+  }
+
+  /**
+   * Cinturón determinista sobre needs_server (Cambio 2): OR entre lo que dijo
+   * el LLM y promptNeedsServer(prompt) sobre el texto crudo. No sustituye al
+   * LLM — se suma, para que needs_server siga funcionando aunque Haiku
+   * devuelva error, tipo inválido, risk ausente, o un JSON que no parsea.
+   * server_reason sólo se sobreescribe cuando el LLM no dio ninguna razón.
+   */
+  private static withServerBelt(intent: Intent, prompt: string): Intent {
+    if (!promptNeedsServer(prompt)) return intent;
+    return {
+      ...intent,
+      needs_server: true,
+      server_reason: intent.server_reason || 'deterministic signal',
+    };
   }
 
   private static extractJson(text: string): string {

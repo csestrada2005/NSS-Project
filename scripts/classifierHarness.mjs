@@ -52,6 +52,7 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '..');
 const ENTRY_TS = path.join(REPO_ROOT, 'src/services/IntentClassifier.ts');
+const SERVER_SIGNALS_PATH = path.join(REPO_ROOT, 'src/utils/serverLogicSignals.js');
 
 // ---------------------------------------------------------------------------
 // Configuración
@@ -159,6 +160,34 @@ const PROJECT_MEMORY = Object.freeze({
 const CHAT_HISTORY = [];
 
 // ---------------------------------------------------------------------------
+// C2-3 — sondas nuevas de needs_server. Independientes de las 18 de arriba:
+// no se tocan ni se mezclan con su preflight ni su tabla de match por type.
+//
+// 3 que deben dar true, 6 que deben dar false, y 2 de frontera marcadas como
+// informativas (correo de confirmación, chat con IA): casos donde razonar si
+// hace falta servidor es legítimamente discutible, así que no cuentan para
+// el "# match needs_server" — se registran para poder leerlas, no para
+// aprobar o reprobar sobre ellas.
+// ---------------------------------------------------------------------------
+
+const SERVER_PROBES = [
+  // --- deben dar true ---
+  { id: 'SV1', prompt: 'quiero poder invitar usuarios y asignarles un rol de administrador', expectedServer: true },
+  { id: 'SV2', prompt: 'necesito llamar a una API de IA que requiere una clave secreta', expectedServer: true },
+  { id: 'SV3', prompt: 'hazme un resumen mensual automático de ventas', expectedServer: true },
+  // --- deben dar false ---
+  { id: 'SV4', prompt: 'cambia el color principal del sitio', expectedServer: false },
+  { id: 'SV5', prompt: 'agrega una sección de testimonios a la landing page', expectedServer: false },
+  { id: 'SV6', prompt: 'crea una tabla para guardar los pedidos', expectedServer: false },
+  { id: 'SV7', prompt: 'refactoriza el Navbar en componentes más pequeños', expectedServer: false },
+  { id: 'SV8', prompt: 'agrega una página de contacto', expectedServer: false },
+  { id: 'SV9', prompt: 'arregla el botón que no funciona en móvil', expectedServer: false },
+  // --- frontera, informativas: no entran en el conteo de match ---
+  { id: 'SV10', prompt: 'envía un correo de confirmación cuando el usuario se registre', expectedServer: 'INFO' },
+  { id: 'SV11', prompt: 'agrega un chat con IA para atender a los clientes', expectedServer: 'INFO' },
+];
+
+// ---------------------------------------------------------------------------
 // Transporte: sustituto de platformService.callForgeChat.
 // Estado a nivel de módulo — la batería es estrictamente secuencial, así que
 // lastStatus/lastError describen siempre la invocación en curso.
@@ -239,6 +268,35 @@ const stubPlatformService = {
   },
 };
 
+/**
+ * Envuelve promptNeedsServer (el cinturón determinista de serverLogicSignals.js,
+ * Cambio 2) para poder apagarlo desde el harness sin tocar el módulo real. Con
+ * globalThis.__HARNESS_BELT_DISABLED__ activo, needs_server en la respuesta de
+ * classify() es EXACTAMENTE lo que devolvió Haiku, sin el OR determinista —
+ * así srv_llm y srv_final (belt encendido, comportamiento real en producción)
+ * se pueden medir por separado en vez de adivinar cuál de los dos aportó el true.
+ */
+const stubServerLogicBelt = {
+  name: 'stub-server-logic-belt',
+  setup(build) {
+    build.onResolve({ filter: /(^|\/)serverLogicSignals\.js$/ }, () => ({
+      path: 'stub:serverLogicSignals',
+      namespace: 'harness-stub-belt',
+    }));
+    build.onLoad({ filter: /.*/, namespace: 'harness-stub-belt' }, () => ({
+      contents: `
+        import { promptNeedsServer as realPromptNeedsServer } from ${JSON.stringify('file://' + SERVER_SIGNALS_PATH)};
+        export function promptNeedsServer(prompt) {
+          if (globalThis.__HARNESS_BELT_DISABLED__) return false;
+          return realPromptNeedsServer(prompt);
+        }
+      `,
+      loader: 'js',
+      resolveDir: REPO_ROOT,
+    }));
+  },
+};
+
 async function loadClassifier() {
   const result = await esbuild.build({
     entryPoints: [ENTRY_TS],
@@ -248,7 +306,7 @@ async function loadClassifier() {
     platform: 'node',
     target: 'node22',
     logLevel: 'silent',
-    plugins: [stubPlatformService],
+    plugins: [stubPlatformService, stubServerLogicBelt],
   });
   const code = result.outputFiles[0].text;
   const mod = await import('data:text/javascript,' + encodeURIComponent(code));
@@ -326,6 +384,26 @@ function preflight() {
 
   if (PROBES.length !== 18) {
     problems.push(`Se esperaban 18 sondas, hay ${PROBES.length}.`);
+  }
+
+  const pendingServer = SERVER_PROBES.filter(
+    (p) => p.prompt.startsWith('<<PENDING'),
+  );
+  if (pendingServer.length > 0) {
+    problems.push(
+      `Hay ${pendingServer.length} sondas de needs_server con placeholder sin rellenar: ` +
+      pendingServer.map((p) => p.id).join(', '),
+    );
+  }
+
+  const badExpectedServer = SERVER_PROBES.filter(
+    (p) => p.expectedServer !== true && p.expectedServer !== false && p.expectedServer !== 'INFO',
+  );
+  if (badExpectedServer.length > 0) {
+    problems.push(
+      'expectedServer inválido (debe ser true, false o \'INFO\'): ' +
+      badExpectedServer.map((p) => `${p.id}=${p.expectedServer}`).join(', '),
+    );
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -429,6 +507,78 @@ async function main() {
   console.log(`# match con expected: ${matches}/${rows.length}`);
   console.log(`# unánimes: ${unanimous}/${rows.length}`);
   console.log(`# sondas con al menos un ERROR: ${errored}/${rows.length}`);
+
+  // -------------------------------------------------------------------------
+  // C2-3 — batería de needs_server. Por sonda: una llamada con el cinturón
+  // apagado (srv_llm = lo que devolvió Haiku puro) y otra con el cinturón
+  // encendido (srv_final = comportamiento real de classify() en producción,
+  // tras el OR determinista). Las dos llamadas usan el mismo prompt; la única
+  // variable es globalThis.__HARNESS_BELT_DISABLED__.
+  // -------------------------------------------------------------------------
+
+  console.log('');
+  console.log('# batería needs_server (C2-3)');
+  console.log(`# sondas=${SERVER_PROBES.length} (3 true, 6 false, 2 informativas de frontera)`);
+  console.log('');
+
+  const serverRows = [];
+
+  for (const probe of SERVER_PROBES) {
+    globalThis.__HARNESS_BELT_DISABLED__ = true;
+    transport.reset();
+    let llmIntent = null;
+    try {
+      llmIntent = await IntentClassifier.classify(probe.prompt, PROJECT_MEMORY, CHAT_HISTORY);
+    } catch (err) {
+      transport.lastError = transport.lastError ?? `throw: ${err?.message ?? String(err)}`;
+    }
+    const srvLlm = llmIntent?.needs_server === true;
+    const llmError = transport.lastError;
+
+    globalThis.__HARNESS_BELT_DISABLED__ = false;
+    transport.reset();
+    let finalIntent = null;
+    try {
+      finalIntent = await IntentClassifier.classify(probe.prompt, PROJECT_MEMORY, CHAT_HISTORY);
+    } catch (err) {
+      transport.lastError = transport.lastError ?? `throw: ${err?.message ?? String(err)}`;
+    }
+    const srvFinal = finalIntent?.needs_server === true;
+    const finalError = transport.lastError;
+
+    const isInfo = probe.expectedServer === 'INFO';
+    const match = isInfo ? null : srvFinal === probe.expectedServer;
+
+    console.log(
+      `RAW ${pad(probe.id, 4)} srv_llm=${pad(srvLlm, 6)} srv_final=${pad(srvFinal, 6)}` +
+      (llmError ? ` llm_err="${llmError}"` : '') +
+      (finalError ? ` final_err="${finalError}"` : '') +
+      ` reason="${(finalIntent?.server_reason ?? '').replace(/\s+/g, ' ')}"`,
+    );
+
+    serverRows.push({ id: probe.id, expected: probe.expectedServer, srvLlm, srvFinal, isInfo, match });
+
+    if (DELAY_MS > 0) await sleep(DELAY_MS);
+  }
+
+  console.log('');
+  console.log('# resumen needs_server');
+  console.log(
+    pad('id', 6) + pad('expected', 11) + pad('srv_llm', 10) + pad('srv_final', 11) + 'match',
+  );
+  console.log('-'.repeat(50));
+  for (const r of serverRows) {
+    console.log(
+      pad(r.id, 6) + pad(r.isInfo ? 'INFO' : r.expected, 11) +
+      pad(r.srvLlm, 10) + pad(r.srvFinal, 11) +
+      (r.isInfo ? '—' : (r.match ? 'sí' : 'no')),
+    );
+  }
+
+  const evaluable = serverRows.filter((r) => !r.isInfo);
+  const serverMatches = evaluable.filter((r) => r.match).length;
+  console.log('-'.repeat(50));
+  console.log(`# match needs_server: ${serverMatches}/${evaluable.length}`);
 }
 
 main().catch((err) => {

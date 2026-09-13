@@ -216,7 +216,12 @@ OUTPUT FORMAT — return ONLY a valid JSON object with exactly these two keys, n
         `- Affected files: ${intent.affected_files.join(', ') || 'to be determined'}\n` +
         `- Needs new files: ${intent.needs_new_files}\n` +
         `- Risk: ${intent.risk}\n` +
-        `- Reasoning: ${intent.reasoning}\n\n` +
+        `- Reasoning: ${intent.reasoning}\n` +
+        (intent.needs_server
+          ? `- Requires server-side logic: YES — ${intent.server_reason}\n` +
+            `- This logic MUST live in a Supabase Edge Function under supabase/functions/<slug>/index.ts, NOT in a file under src/. The browser code may only call the function.\n`
+          : '') +
+        `\n` +
         repairSection +
         `Plan the implementation as a JSON array of BuildStep objects:`;
 
