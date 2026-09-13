@@ -42,6 +42,7 @@ import { cachedSystem, cachedSystemBlocks } from './promptCache';
 import { DesignBriefService } from './DesignBriefService';
 import { isAbortError } from '../utils/abort';
 import { canEnterFastLane, isSimpleEditIntent } from '../utils/laneRouting.js';
+import { promptNeedsServer } from '../utils/serverLogicSignals.js';
 import { touchesMigrations } from '../utils/migrationGate.js';
 import { shouldGatePlan, planRejectedTelemetry } from '../utils/planGate.js';
 
@@ -1248,6 +1249,12 @@ export class AIOrchestrator {
     // ------------------------------------------------------------------
     // LAYER 2 — IntentClassifier: classify the user prompt
     // ------------------------------------------------------------------
+    // Sin memory no hay clasificador que corra (no hay ProjectMemory que
+    // pasarle), así que este fallback no puede apoyarse en el LLM para
+    // needs_server. Pero SÍ tiene el prompt crudo — el mismo cinturón
+    // determinista que respalda a classify() cuando Haiku falla (Cambio 2)
+    // aplica igual aquí, en vez de fijar needs_server=false a ciegas.
+    const noMemoryNeedsServer = promptNeedsServer(input);
     const intent = memory
       ? await IntentClassifier.classify(input, memory, chatHistory, signal)
       : {
@@ -1256,8 +1263,8 @@ export class AIOrchestrator {
           needs_new_files: false,
           risk: 'medium' as const,
           reasoning: 'No memory available; defaulting to modify_existing.',
-          needs_server: false,
-          server_reason: '',
+          needs_server: noMemoryNeedsServer,
+          server_reason: noMemoryNeedsServer ? 'deterministic signal' : '',
         };
 
     // Tag the open intent with its classified type so the server records it on
