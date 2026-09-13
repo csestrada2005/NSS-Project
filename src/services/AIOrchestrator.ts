@@ -42,6 +42,7 @@ import { cachedSystem, cachedSystemBlocks } from './promptCache';
 import { DesignBriefService } from './DesignBriefService';
 import { isAbortError } from '../utils/abort';
 import { canEnterFastLane, isSimpleEditIntent } from '../utils/laneRouting.js';
+import { promptNeedsServer } from '../utils/serverLogicSignals.js';
 import { touchesMigrations } from '../utils/migrationGate.js';
 import { shouldGatePlan, planRejectedTelemetry } from '../utils/planGate.js';
 
@@ -816,6 +817,13 @@ export class AIOrchestrator {
      * IntentClassifier (Intent.classifierDefault); aquí sólo viaja.
      */
     classifierDefault?: 'api_error' | 'invalid_type' | 'missing_risk' | 'parse_error';
+    /**
+     * needs_server del Intent (C2-3): eje independiente del type — ¿esta
+     * petición necesita lógica que no puede vivir en el navegador? Mismo
+     * patrón que classifierDefault: IntentClassifier lo produce, aquí sólo
+     * viaja hasta la columna needs_server de forge_intent_log.
+     */
+    needsServer?: boolean;
   }): Promise<IntentLogResult> {
     try {
       const supabase = SupabaseService.getInstance().client;
@@ -848,6 +856,7 @@ export class AIOrchestrator {
         // defaults del clasificador disparó, que hasta ahora sólo existía como
         // console.warn y era indistinguible de un 'modify_existing' legítimo.
         classifier_default: params.classifierDefault ?? null,
+        needs_server: params.needsServer ?? false,
       });
       // supabase-js NO lanza cuando PostgREST rechaza: devuelve `{ error }`. El
       // valor se DEVUELVE en vez de tragarse; los callers generales lo ignoran
@@ -1135,6 +1144,7 @@ export class AIOrchestrator {
         requiredPatternIds: params.intent.requiredPatternIds,
         domain: params.intent.domain,
         classifierDefault: params.intent.classifierDefault,
+        needsServer: params.intent.needs_server,
       });
     }
 
@@ -1239,6 +1249,12 @@ export class AIOrchestrator {
     // ------------------------------------------------------------------
     // LAYER 2 — IntentClassifier: classify the user prompt
     // ------------------------------------------------------------------
+    // Sin memory no hay clasificador que corra (no hay ProjectMemory que
+    // pasarle), así que este fallback no puede apoyarse en el LLM para
+    // needs_server. Pero SÍ tiene el prompt crudo — el mismo cinturón
+    // determinista que respalda a classify() cuando Haiku falla (Cambio 2)
+    // aplica igual aquí, en vez de fijar needs_server=false a ciegas.
+    const noMemoryNeedsServer = promptNeedsServer(input);
     const intent = memory
       ? await IntentClassifier.classify(input, memory, chatHistory, signal)
       : {
@@ -1247,6 +1263,8 @@ export class AIOrchestrator {
           needs_new_files: false,
           risk: 'medium' as const,
           reasoning: 'No memory available; defaulting to modify_existing.',
+          needs_server: noMemoryNeedsServer,
+          server_reason: noMemoryNeedsServer ? 'deterministic signal' : '',
         };
 
     // Tag the open intent with its classified type so the server records it on
@@ -1307,6 +1325,7 @@ export class AIOrchestrator {
             requiredPatternIds: intent.requiredPatternIds,
             domain: intent.domain,
             classifierDefault: intent.classifierDefault,
+            needsServer: intent.needs_server,
           });
         }
         return {
@@ -1361,6 +1380,7 @@ export class AIOrchestrator {
           requiredPatternIds: intent.requiredPatternIds,
           domain: intent.domain,
           classifierDefault: intent.classifierDefault,
+          needsServer: intent.needs_server,
         });
       }
       return result;
@@ -1411,6 +1431,7 @@ export class AIOrchestrator {
           requiredPatternIds: intent.requiredPatternIds,
           domain: intent.domain,
           classifierDefault: intent.classifierDefault,
+          needsServer: intent.needs_server,
         });
       }
       return result;
@@ -1502,6 +1523,7 @@ export class AIOrchestrator {
           requiredPatternIds: intent.requiredPatternIds,
           domain: intent.domain,
           classifierDefault: intent.classifierDefault,
+          needsServer: intent.needs_server,
         });
       }
       return result;
@@ -2169,6 +2191,7 @@ export class AIOrchestrator {
           requiredPatternIds: intent.requiredPatternIds,
           domain: intent.domain,
           classifierDefault: intent.classifierDefault,
+          needsServer: intent.needs_server,
         });
       }
 
@@ -2305,6 +2328,7 @@ export class AIOrchestrator {
           requiredPatternIds: intent.requiredPatternIds,
           domain: intent.domain,
           classifierDefault: intent.classifierDefault,
+          needsServer: intent.needs_server,
         });
       }
 
@@ -2881,6 +2905,7 @@ export class AIOrchestrator {
           requiredPatternIds: intent.requiredPatternIds,
           domain: intent.domain,
           classifierDefault: intent.classifierDefault,
+          needsServer: intent.needs_server,
         });
       }
 
