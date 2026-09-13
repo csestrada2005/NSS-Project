@@ -18,9 +18,35 @@
  * regla dura que el modelo incumple se resuelve con un guard determinista,
  * nunca con más texto en el system prompt.
  *
+ * BLOQUE 1-BIS — DE LISTA DE PROHIBIDOS A LISTA DE PERMITIDOS
+ * -------------------------------------------------------------
+ * La primera versión de este guard enumeraba qué era peligroso: "INSERT,
+ * UPDATE o ALL". El checkpoint en vivo sobre Vertigo
+ * (087ddaf3-6236-47ae-ba72-bc96887a9691) enseñó por qué una enumeración de
+ * prohibidos no cierra la categoría: el guard eliminó correctamente las
+ * políticas públicas de insert y update, pero dejó viva ésta:
+ *
+ *   create policy "public_delete_app_users"
+ *     on public.app_users
+ *     for delete
+ *     using (true);
+ *
+ * DELETE público sobre la tabla de usuarios — cualquier visitante borra a
+ * todos los administradores desde la consola del navegador. `DELETE` no
+ * estaba en la lista de prohibidos porque nadie lo puso; ésa es exactamente
+ * la falla estructural de enumerar lo malo. Desde BLOQUE 1-BIS el criterio
+ * está invertido: sobre una tabla con columna de rol, la ÚNICA política
+ * pública/anónima ACEPTABLE es SELECT (`ALLOWED_PUBLIC_COMMANDS`). Cualquier
+ * otra —DELETE, INSERT, UPDATE, ALL, o una forma futura que hoy no existe—
+ * cae. Esto cierra la categoría entera en vez de los casos que se nos
+ * ocurrieron, la misma doctrina fail-closed que ya documenta la cabecera de
+ * `migrationGate.js` ("ante la duda, true"): un falso positivo cuesta una
+ * política de más eliminada, un falso negativo cuesta un agujero de
+ * privilegios, y la asimetría decide el default.
+ *
  * LA CONDICIÓN PELIGROSA — LAS TRES A LA VEZ
  * -------------------------------------------
- *  (1) una política RLS que concede INSERT, UPDATE o ALL
+ *  (1) una política RLS que concede cualquier operación DISTINTA de SELECT
  *  (2) a un rol público/anónimo (`anon`, `public`, o sin cláusula `TO` —que
  *      en Postgres cae por defecto a PUBLIC)
  *  (3) sobre una tabla que tiene una columna de rol/permisos
@@ -28,34 +54,42 @@
  * Una política pública de SELECT sobre una tabla de productos no dispara
  * nada. Una política de INSERT restringida a `authenticated` tampoco: la
  * asimetría de riesgo está en la escritura pública sobre una tabla que
- * decide privilegios, no en RLS pública en general.
+ * decide privilegios, no en RLS pública en general — y una tabla SIN columna
+ * de rol no se toca, haga lo que haga su RLS: el alcance de este guard son
+ * las tablas de permisos, no la seguridad general del proyecto.
  *
  * "TABLA CON COLUMNA DE ROL" — CÓMO SE IDENTIFICA, Y EL ANCLAJE
  * ---------------------------------------------------------------
- * Por el propio DDL del lote (`CREATE TABLE` / `ALTER TABLE ... ADD COLUMN`),
- * contra el set cerrado `ROLE_COLUMN_NAMES`. La comparación es SIEMPRE por
- * IDENTIFICADOR COMPLETO, nunca por subcadena ni por regex de límite de
- * palabra: un `\b` de regex no separa `control` de `rol` (son la misma
- * "palabra" para el motor de regex, `_` y letras son todos `\w`), así que un
- * anclaje por `\b` habría dejado pasar el mismo falso positivo. La única
- * forma de que "una tabla llamada `roles_de_juego`" o "una columna llamada
- * `control`" no disparen el guard es no buscar subcadenas en el SQL crudo en
- * ningún punto: aquí se extrae cada identificador de columna como token
- * completo (`CREATE TABLE (...)`, `ADD COLUMN <nombre>`) y se compara con
- * `===` contra el set, tras normalizar comillas/mayúsculas. `roles_de_juego`
- * no es igual a `roles`; `control` no es igual a `role`. Precedente medido:
- * C2-3, donde el literal `'rol'` hizo match dentro de `"control"`.
+ * INTOCADO por BLOQUE 1-BIS. Por el propio DDL del lote (`CREATE TABLE` /
+ * `ALTER TABLE ... ADD COLUMN`), contra el set cerrado `ROLE_COLUMN_NAMES`.
+ * La comparación es SIEMPRE por IDENTIFICADOR COMPLETO, nunca por subcadena
+ * ni por regex de límite de palabra: un `\b` de regex no separa `control` de
+ * `rol` (son la misma "palabra" para el motor de regex, `_` y letras son
+ * todos `\w`), así que un anclaje por `\b` habría dejado pasar el mismo falso
+ * positivo. La única forma de que "una tabla llamada `roles_de_juego`" o "una
+ * columna llamada `control`" no disparen el guard es no buscar subcadenas en
+ * el SQL crudo en ningún punto: aquí se extrae cada identificador de columna
+ * como token completo (`CREATE TABLE (...)`, `ADD COLUMN <nombre>`) y se
+ * compara con `===` contra el set, tras normalizar comillas/mayúsculas.
+ * `roles_de_juego` no es igual a `roles`; `control` no es igual a `role`.
+ * Precedente medido: C2-3, donde el literal `'rol'` hizo match dentro de
+ * `"control"`.
  *
  * FAIL-CLOSED
  * -----------
- * Un archivo cuyo contenido no es una cadena legible (no string, vacío) no
- * puede analizarse para NINGUNA de las tres condiciones — ni para descartar
- * las políticas, ni para encontrar las tablas con columna de rol. Ante esa
- * duda el veredicto es peligroso, con `reason: 'unparseable'`: no hay
- * `table`/`policy` que reportar porque no hay nada que se haya podido leer,
- * pero `dangerous` sigue en `true`. La asimetría lo justifica, mismo
- * razonamiento que `migrationGate.js`: un falso positivo cuesta un aviso de
- * más, un falso negativo cuesta un agujero de privilegios.
+ * INTOCADO por BLOQUE 1-BIS. Un archivo cuyo contenido no es una cadena
+ * legible (no string, vacío) no puede analizarse para NINGUNA de las tres
+ * condiciones — ni para descartar las políticas, ni para encontrar las
+ * tablas con columna de rol. Ante esa duda el veredicto es peligroso, con
+ * `reason: 'unparseable'`: no hay `table`/`policy` que reportar porque no hay
+ * nada que se haya podido leer, pero `dangerous` sigue en `true`. La
+ * asimetría lo justifica, mismo razonamiento que `migrationGate.js`.
+ *
+ * EL GATEO SIGUE SIENDO POR CONTENIDO, NO POR intent.type
+ * ---------------------------------------------------------
+ * Decisión deliberada, no un descuido: la etiqueta la produce un LLM y un
+ * guard de seguridad no puede depender de que el clasificador haya acertado
+ * — misma doctrina que C-D. No se "arregla" gateándolo a `database_change`.
  *
  * FORMA DEL VEREDICTO
  * -------------------
@@ -63,6 +97,24 @@
  * `statement` SQL exacto que lo disparó (para poder eliminarlo sin tocar el
  * resto del archivo), porque ese detalle viaja al aviso del usuario y a la
  * telemetría.
+ *
+ * LOS COMENTARIOS HUÉRFANOS (BLOQUE 1-BIS, CAMBIO 2)
+ * -----------------------------------------------------
+ * El mismo checkpoint de Vertigo enseñó un segundo fallo: al eliminar una
+ * política, la primera versión dejaba vivo el comentario SQL que la
+ * introducía —
+ *
+ *   -- Allow anyone to insert new rows (required for the invite flow without auth)
+ *
+ * — con la política ya borrada debajo. No es cosmético: esa migración vuelve
+ * al modelo como contexto de schema en corridas posteriores, y dejar escrito
+ * "allow anyone to insert" es dejarle instrucciones para reabrir el agujero
+ * que este guard acaba de cerrar. `removeDangerousPolicies` ahora se lleva,
+ * junto con la política, el bloque de comentarios `--` pegado
+ * INMEDIATAMENTE encima (sin línea en blanco de por medio) y colapsa a lo
+ * sumo una línea en blanco en la costura — conservador a propósito: sólo
+ * toca lo pegado a la política que elimina, nunca la cabecera del archivo ni
+ * un comentario separado por una línea en blanco.
  *
  * Plain JS (no TS) para que sea importable desde `node --test`, igual que
  * migrationGate.js, migrationPath.js y planGuard.js. El tipado vive en
@@ -96,8 +148,13 @@ const TABLE_CONSTRAINT_KEYWORDS = new Set([
   'like',
 ]);
 
-/** Comandos de escritura que esta guarda vigila. SELECT y DELETE quedan fuera a propósito. */
-const DANGEROUS_COMMANDS = new Set(['INSERT', 'UPDATE', 'ALL']);
+/**
+ * BLOQUE 1-BIS — lista de PERMITIDOS, no de prohibidos. La única operación
+ * pública aceptable sobre una tabla con columna de rol es SELECT; cualquier
+ * otra (`DELETE` incluido — el caso real que motivó la inversión) cae. Ver
+ * la cabecera del módulo.
+ */
+const ALLOWED_PUBLIC_COMMANDS = new Set(['SELECT']);
 
 /** Roles que cuentan como "público/anónimo" para efectos de esta guarda. */
 const PUBLIC_ROLES = new Set(['public', 'anon']);
@@ -353,9 +410,12 @@ export function evaluateRlsPolicies(migrations) {
   for (const { path, sql } of readable) {
     for (const policy of findPoliciesInSql(sql)) {
       const isPublicRole = policy.roles.some((r) => PUBLIC_ROLES.has(r));
-      const isDangerousCommand = DANGEROUS_COMMANDS.has(policy.command);
+      // BLOQUE 1-BIS: peligroso es "no está en la lista de permitidos", no
+      // "está en la lista de prohibidos" — así DELETE (y cualquier forma
+      // futura) cae sin que nadie tenga que enumerarla.
+      const isDisallowedCommand = !ALLOWED_PUBLIC_COMMANDS.has(policy.command);
       const tableHasRole = roleTables.has(policy.tableNorm);
-      if (isPublicRole && isDangerousCommand && tableHasRole) {
+      if (isPublicRole && isDisallowedCommand && tableHasRole) {
         findings.push({
           path,
           table: policy.tableDisplay,
@@ -372,14 +432,70 @@ export function evaluateRlsPolicies(migrations) {
 }
 
 /**
+ * Elimina, de un texto SQL, la sentencia que empieza en `statementIndex` (de
+ * `statementLength` caracteres) Y el bloque de comentarios `--` pegado
+ * INMEDIATAMENTE encima —sin línea en blanco de por medio—, colapsando a lo
+ * sumo una línea en blanco en la costura que deja la eliminación.
+ *
+ * Conservador a propósito (BLOQUE 1-BIS, CAMBIO 2): sólo se lleva el
+ * comentario directamente pegado a ESTA política. Una línea en blanco entre
+ * el comentario y la política corta la cadena — ese comentario no es de
+ * esta política y se queda. No toca nada más del archivo: ni la cabecera, ni
+ * comentarios de otras políticas, ni el formato del resto del SQL.
+ *
+ * @param {string} text
+ * @param {number} statementIndex
+ * @param {number} statementLength
+ * @returns {string}
+ */
+function removeStatementAndAdjacentComment(text, statementIndex, statementLength) {
+  const lines = text.split('\n');
+  const startLine = text.slice(0, statementIndex).split('\n').length - 1;
+  const statementText = text.slice(statementIndex, statementIndex + statementLength);
+  const endLine = startLine + statementText.split('\n').length - 1;
+
+  // Camina hacia arriba mientras cada línea sea un comentario `--`: una línea
+  // en blanco o de código corta la cadena de inmediato, que es justo "sin
+  // línea en blanco de por medio".
+  let firstLine = startLine;
+  let j = startLine - 1;
+  while (j >= 0 && lines[j].trim().startsWith('--')) {
+    firstLine = j;
+    j--;
+  }
+
+  const before = lines.slice(0, firstLine);
+  const after = lines.slice(endLine + 1);
+
+  // La costura puede dejar dos líneas en blanco pegadas (la que cerraba el
+  // bloque anterior y la que abría el siguiente): colapsa a lo sumo una.
+  while (
+    before.length > 0 &&
+    after.length > 0 &&
+    before[before.length - 1].trim() === '' &&
+    after[0].trim() === ''
+  ) {
+    after.shift();
+  }
+
+  return [...before, ...after].join('\n');
+}
+
+/**
  * El SQL de UN archivo con los `findings` (de ESE mismo `path`) eliminados —
- * la sentencia `CREATE POLICY ...;` completa fuera, nada más tocado.
+ * cada sentencia `CREATE POLICY ...;` completa, junto con el comentario `--`
+ * pegado encima si lo tiene, fuera; nada más tocado.
  *
  * Idempotente: un `finding` cuyo `statement` ya no está presente (porque ya
  * se eliminó en una pasada anterior) simplemente no encuentra nada que
  * reemplazar. Los hallazgos `reason: 'unparseable'` no traen `statement`
  * (no hubo nada legible que localizar) y se ignoran aquí a propósito: no hay
  * texto que borrar de un archivo que no se pudo leer.
+ *
+ * Los índices se recalculan en cada iteración sobre el texto YA actualizado
+ * (`out`, no el original): un `finding` que ya se aplicó, o una eliminación
+ * previa que desplazó el resto del archivo, nunca puede pisar contenido que
+ * ya cambió de sitio.
  *
  * @param {string} sql
  * @param {Iterable<{ statement: string | null }>} findings
@@ -390,9 +506,10 @@ export function removeDangerousPolicies(sql, findings) {
   let out = sql;
   for (const finding of findings ?? []) {
     const statement = finding?.statement;
-    if (typeof statement === 'string' && statement.length > 0 && out.includes(statement)) {
-      out = out.replace(statement, '');
-    }
+    if (typeof statement !== 'string' || statement.length === 0) continue;
+    const idx = out.indexOf(statement);
+    if (idx === -1) continue;
+    out = removeStatementAndAdjacentComment(out, idx, statement.length);
   }
   return out;
 }
@@ -422,27 +539,42 @@ export function rlsPolicyBlockedTelemetry(findings) {
 }
 
 /**
- * Los avisos, en el texto literal acordado, uno por tabla distinta afectada
- * (deduplicado, en el orden en que se descubrieron). `<tabla>` es la única
- * sustitución permitida en el texto — el resto es literal, no se reescribe.
+ * Los avisos, en el texto acordado, uno por tabla distinta afectada
+ * (deduplicado, en el orden en que se descubrieron). `<tabla>` y la lista de
+ * operaciones son las únicas sustituciones — el resto es literal.
+ *
+ * BLOQUE 1-BIS: con la lista de permitidos el guard puede eliminar varias
+ * políticas de tipos distintos sobre la misma tabla en un solo intent (el
+ * caso real: INSERT, UPDATE y DELETE a la vez), así que el aviso nombra QUÉ
+ * operaciones se eliminaron — ordenadas y deduplicadas, comparables entre
+ * avisos igual que la telemetría — en vez de callar el detalle.
  *
  * Sólo `reason: 'public-write-policy'` produce aviso: un hallazgo
- * `unparseable` no tiene tabla que nombrar en esta frase.
+ * `unparseable` no tiene tabla ni comando que nombrar en esta frase.
  *
- * @param {Iterable<{ table: string | null, reason: string }>} findings
+ * @param {Iterable<{ table: string | null, command: string | null, reason: string }>} findings
  * @returns {string[]}
  */
 export function rlsPolicyWarnings(findings) {
-  const tables = [];
+  const order = [];
+  const commandsByTable = new Map();
   for (const f of findings ?? []) {
     if (!f || f.reason !== 'public-write-policy') continue;
     if (typeof f.table !== 'string' || f.table.length === 0) continue;
-    if (!tables.includes(f.table)) tables.push(f.table);
+    if (!commandsByTable.has(f.table)) {
+      commandsByTable.set(f.table, new Set());
+      order.push(f.table);
+    }
+    if (typeof f.command === 'string' && f.command.length > 0) {
+      commandsByTable.get(f.table).add(f.command);
+    }
   }
-  return tables.map(
-    (table) =>
-      'Guard de seguridad: se corrigió la migración generada. Política de escritura pública ' +
-      `sobre ${table} (tabla con columna de rol). Eliminada antes de proponer la migración. ` +
-      'La gestión de usuarios sigue por la función de servidor correspondiente.'
-  );
+  return order.map((table) => {
+    const ops = [...commandsByTable.get(table)].sort().join(', ');
+    return (
+      'Guard de seguridad: se corrigió la migración generada. Política(s) pública(s) de ' +
+      `${ops} sobre ${table} (tabla con columna de rol). Eliminada(s) antes de proponer la ` +
+      'migración. La gestión de usuarios sigue por la función de servidor correspondiente.'
+    );
+  });
 }
