@@ -97,3 +97,85 @@ test('entradas basura (null, número, array, undefined, string vacío) devuelven
   assert.equal(promptNeedsServer({ text: 'invitar usuario' }), false);
   assert.equal(promptNeedsServer(''), false);
 });
+
+// ---------------------------------------------------------------------------
+// REGRESIÓN — bug de recursión infinita en scripts/classifierHarness.mjs.
+//
+// El bug NUNCA estuvo en promptNeedsServer en sí (esta función es correcta y
+// sin recursión, como prueban los tests de arriba). Vivía en el plugin de
+// esbuild del harness (stubServerLogicBelt): su onResolve interceptaba
+// CUALQUIER resolución de una ruta que terminara en 'serverLogicSignals.js',
+// incluida la vía de escape que el propio stub usaba para llegar al archivo
+// real — así que esa "vía de escape" se redirigía de vuelta al mismo stub,
+// y promptNeedsServer terminaba llamándose a sí mismo indefinidamente
+// (RangeError: Maximum call stack size exceeded) en CUALQUIER prompt que
+// pasara por el harness con el cinturón encendido, no sólo en éste.
+//
+// Este caso fija el prompt literal de la sonda M2 del harness como
+// regresión directa sobre la función real (sin esbuild de por medio): si
+// alguien reintroduce recursión aquí, este test la detecta sin depender de
+// que el harness también se ejecute.
+// ---------------------------------------------------------------------------
+
+test('regresión: el prompt literal de M2 no dispara needs_server (edición de contenido)', () => {
+  assert.equal(
+    promptNeedsServer('can you update the footer to show our opening hours?'),
+    false
+  );
+});
+
+// ---------------------------------------------------------------------------
+// REGRESIÓN — falso positivo de 'rol' como substring, descubierto por la
+// batería de las 18 sondas del harness (K2). 'rol' matcheaba dentro de
+// "control" porque promptNeedsServer usaba includes() crudo sobre el string
+// en minúsculas; "control_cd" no tiene absolutamente nada que ver con roles
+// de usuario. El fix ancla cada disparador a límites de palabra (\b).
+// ---------------------------------------------------------------------------
+
+test('regresión: "control" no dispara needs_server vía el disparador \'rol\' (falso positivo por substring)', () => {
+  assert.equal(promptNeedsServer('Add a table called control_cd with columns id and note'), false);
+  assert.equal(promptNeedsServer('this component controls the modal state'), false);
+  assert.equal(promptNeedsServer('the security patrol checks the perimeter'), false);
+});
+
+// ---------------------------------------------------------------------------
+// Las 18 sondas de scripts/classifierHarness.mjs (PROBES), pasadas por
+// promptNeedsServer directamente, sin LLM. Son entradas ya conocidas y
+// baratas de correr; cubren el hueco que dejaban los tests de arriba —
+// ninguno ejercitaba la función completa contra el vocabulario real de la
+// batería de clasificación de type, sólo contra frases inventadas para cada
+// disparador.
+//
+// Copiadas literalmente de scripts/classifierHarness.mjs — si esa lista
+// cambia, esta debe actualizarse junto con ella (mismo trade-off asumido
+// que PROJECT_MEMORY en el harness: coherencia frente a duplicación).
+// Ninguna de las 18 nombra un disparador de needs_server, así que las 18
+// deben dar false.
+// ---------------------------------------------------------------------------
+
+const HARNESS_TYPE_PROBES = [
+  { id: 'F1', prompt: 'add a contact form to the page' },
+  { id: 'F2', prompt: 'how do I add a contact form' },
+  { id: 'F3', prompt: 'can you add a testimonials section?' },
+  { id: 'F4', prompt: 'add a table for customer reviews' },
+  { id: 'F5', prompt: 'add a customer reviews section to the landing page' },
+  { id: 'F6', prompt: 'what tables does my database have?' },
+  { id: 'K1', prompt: 'A simple landing page for a bakery' },
+  { id: 'K2', prompt: 'Add a table called control_cd with columns id and note' },
+  { id: 'M1', prompt: 'change the hero headline to "Fresh bread daily"' },
+  { id: 'M2', prompt: 'can you update the footer to show our opening hours?' },
+  { id: 'B1', prompt: 'the contact form doesn\'t submit anything when I click send, fix it' },
+  { id: 'B2', prompt: 'fix the broken image on the homepage' },
+  { id: 'S1', prompt: 'make all the buttons rounded and blue' },
+  { id: 'S2', prompt: 'change the color palette to warm earth tones' },
+  { id: 'P1', prompt: 'add an about us page' },
+  { id: 'P2', prompt: 'create a new menu page and link it from the navbar' },
+  { id: 'R1', prompt: 'refactor the Navbar into smaller components without changing how it looks' },
+  { id: 'R2', prompt: 'clean up the duplicated code in the section components' },
+];
+
+for (const probe of HARNESS_TYPE_PROBES) {
+  test(`sonda ${probe.id} del harness ("${probe.prompt}") → promptNeedsServer: false`, () => {
+    assert.equal(promptNeedsServer(probe.prompt), false);
+  });
+}

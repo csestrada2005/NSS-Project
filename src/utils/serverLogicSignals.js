@@ -34,6 +34,23 @@ const TRIGGERS = [
   'moderar', 'filtrar comentarios', 'moderate', 'profanity', 'spam filter',
 ];
 
+function escapeRegExp(literal) {
+  return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Un patrón por disparador, anclado a límites de palabra (\b) en vez de
+ * substring crudo. `includes()` hacía falsos positivos: 'rol' —pensado para
+ * cazar "rol"/"role"/"roles"— también aparece dentro de "control", "patrol",
+ * "enrolled"... Con \b, 'rol' sólo casa cuando aparece como palabra propia
+ * ("el rol de administrador"), no enterrado dentro de otra palabra. Los
+ * disparadores de varias palabras ('invitar usuario', 'api key'...) llevan
+ * el mismo ancla en sus dos extremos.
+ */
+const TRIGGER_PATTERNS = TRIGGERS.map(
+  trigger => new RegExp(`\\b${escapeRegExp(trigger)}\\b`, 'i')
+);
+
 /**
  * ¿El prompt crudo del usuario menciona, en español o inglés, alguno de los
  * disparadores deterministas de lógica de servidor?
@@ -45,6 +62,5 @@ const TRIGGERS = [
  */
 export function promptNeedsServer(prompt) {
   if (typeof prompt !== 'string' || prompt.length === 0) return false;
-  const lower = prompt.toLowerCase();
-  return TRIGGERS.some(trigger => lower.includes(trigger));
+  return TRIGGER_PATTERNS.some(pattern => pattern.test(prompt));
 }

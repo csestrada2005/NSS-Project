@@ -279,13 +279,28 @@ const stubPlatformService = {
 const stubServerLogicBelt = {
   name: 'stub-server-logic-belt',
   setup(build) {
-    build.onResolve({ filter: /(^|\/)serverLogicSignals\.js$/ }, () => ({
-      path: 'stub:serverLogicSignals',
-      namespace: 'harness-stub-belt',
-    }));
+    build.onResolve({ filter: /(^|\/)serverLogicSignals\.js$/ }, (args) => {
+      // GUARDA CONTRA AUTO-RECURSIÓN: el módulo sintético de abajo (namespace
+      // 'harness-stub-belt') importa el archivo REAL por su ruta absoluta en
+      // disco para tener una vía de escape hacia la implementación de
+      // verdad. Esa ruta TAMBIÉN termina en 'serverLogicSignals.js', así que
+      // sin esta guarda el mismo onResolve la interceptaría OTRA VEZ y la
+      // redirigiría de vuelta a este mismo stub — promptNeedsServer llamaría
+      // a "realPromptNeedsServer", que en realidad sería el mismo
+      // promptNeedsServer sintético, en un bucle infinito
+      // (RangeError: Maximum call stack size exceeded en cualquier prompt,
+      // no sólo con el cinturón encendido). Cuando la petición de resolución
+      // viene DESDE este namespace, se deja pasar sin interceptar para que
+      // esbuild la resuelva por su cuenta contra el archivo real.
+      if (args.namespace === 'harness-stub-belt') return undefined;
+      return {
+        path: 'stub:serverLogicSignals',
+        namespace: 'harness-stub-belt',
+      };
+    });
     build.onLoad({ filter: /.*/, namespace: 'harness-stub-belt' }, () => ({
       contents: `
-        import { promptNeedsServer as realPromptNeedsServer } from ${JSON.stringify('file://' + SERVER_SIGNALS_PATH)};
+        import { promptNeedsServer as realPromptNeedsServer } from ${JSON.stringify(SERVER_SIGNALS_PATH)};
         export function promptNeedsServer(prompt) {
           if (globalThis.__HARNESS_BELT_DISABLED__) return false;
           return realPromptNeedsServer(prompt);
