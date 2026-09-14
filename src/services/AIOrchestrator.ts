@@ -37,6 +37,7 @@ import {
   removeDangerousPolicies,
   addMissingRls,
   rlsPolicyBlockedTelemetry,
+  rlsEnabledTelemetry,
   rlsPolicyWarnings,
 } from '../utils/rlsPolicyGuard.js';
 import { edgeFunctionSlug } from '../utils/edgeFunctionPath.js';
@@ -2042,6 +2043,7 @@ export class AIOrchestrator {
         }
       }
       const rlsPolicyBlockedMark = rlsPolicyBlockedTelemetry(rlsVerdict.findings);
+      const rlsEnabledMark = rlsEnabledTelemetry(rlsVerdict.findings);
       const rlsWarnings = rlsPolicyWarnings(rlsVerdict.findings);
 
       // ----------------------------------------------------------------
@@ -2249,7 +2251,7 @@ export class AIOrchestrator {
           prompt: (hasPartial ? `${input} [PARTIAL:${partialOrders.join(',')}]` : input) +
             targetsMark + rejectedDeleteMark + restoredMark + danglingMark + ddlProposedMark +
             ddlMisplacedMark + planRepairedMark + trimmedMark + orphanCreatedMark +
-            functionDeployFailedMark + rlsPolicyBlockedMark,
+            functionDeployFailedMark + rlsPolicyBlockedMark + rlsEnabledMark,
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,

@@ -93,6 +93,16 @@ export function rlsPolicyBlockedTelemetry(
 ): string;
 
 /**
+ * ` [RLS_ENABLED:table,...]` suffix for forge_intent_log (BLOQUE 1-TER); ''
+ * when empty. Sorted and deduplicated, log-only — never the user prompt.
+ * Only `reason: 'missing-rls'` findings feed this mark; coexists with
+ * `rlsPolicyBlockedTelemetry` when both conditions fire in the same run.
+ */
+export function rlsEnabledTelemetry(
+  findings: Iterable<Pick<RlsFinding, 'table' | 'reason'>>
+): string;
+
+/**
  * The user-facing warning strings, one per distinct affected table, covering
  * both `'public-write-policy'` (names the operations removed) and
  * `'missing-rls'` (names that RLS was enabled and warns of the functional

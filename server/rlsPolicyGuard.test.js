@@ -8,6 +8,7 @@ import {
   removeDangerousPolicies,
   addMissingRls,
   rlsPolicyBlockedTelemetry,
+  rlsEnabledTelemetry,
   rlsPolicyWarnings,
   ROLE_COLUMN_NAMES,
 } from '../src/utils/rlsPolicyGuard.js';
@@ -311,6 +312,43 @@ test('G-2 TER: rlsPolicyBlockedTelemetry no se ve afectada por hallazgos missing
   assert.equal(rlsPolicyBlockedTelemetry(findings), '');
 });
 
+// --- rlsEnabledTelemetry (AÑADIDO al BLOQUE 1-TER) -------------------------
+
+test('G-2 TER: rlsEnabledTelemetry es cadena vacía cuando no se encendió ninguna RLS', () => {
+  assert.equal(rlsEnabledTelemetry([]), '');
+  assert.equal(
+    rlsEnabledTelemetry([{ table: 'app_users', reason: 'public-write-policy' }]),
+    ''
+  );
+});
+
+test('G-2 TER: rlsEnabledTelemetry produce la marca con una sola tabla', () => {
+  const findings = [{ table: 'app_users', reason: 'missing-rls' }];
+  assert.equal(rlsEnabledTelemetry(findings), ' [RLS_ENABLED:app_users]');
+});
+
+test('G-2 TER: rlsEnabledTelemetry ordena y deduplica varias tablas', () => {
+  const findings = [
+    { table: 'invites', reason: 'missing-rls' },
+    { table: 'app_users', reason: 'missing-rls' },
+    { table: 'app_users', reason: 'missing-rls' },
+  ];
+  assert.equal(rlsEnabledTelemetry(findings), ' [RLS_ENABLED:app_users,invites]');
+});
+
+test('G-2 TER: rlsEnabledTelemetry y rlsPolicyBlockedTelemetry coexisten en la misma corrida', () => {
+  const sql = `
+    create table app_users (id uuid primary key, role text);
+    create policy "public delete" on app_users for delete using (true);
+  `;
+  const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql }]);
+  assert.equal(rlsEnabledTelemetry(verdict.findings), ' [RLS_ENABLED:app_users]');
+  assert.equal(
+    rlsPolicyBlockedTelemetry(verdict.findings),
+    ' [RLS_POLICY_BLOCKED:app_users:public delete]'
+  );
+});
+
 // --- Contrato intacto de BLOQUE 1-BIS ------------------------------------
 
 test('G-2 TER: ROLE_COLUMN_NAMES sigue siendo el mismo set cerrado congelado', () => {
@@ -342,8 +380,8 @@ test('G-2 TER: AIOrchestrator engancha addMissingRls ANTES de removeDangerousPol
 
   assert.match(
     source,
-    /import \{\s*evaluateRlsPolicies,\s*removeDangerousPolicies,\s*addMissingRls,\s*rlsPolicyBlockedTelemetry,\s*rlsPolicyWarnings,\s*\} from '\.\.\/utils\/rlsPolicyGuard\.js';/,
-    'el guard entra desde el módulo puro, con addMissingRls'
+    /import \{\s*evaluateRlsPolicies,\s*removeDangerousPolicies,\s*addMissingRls,\s*rlsPolicyBlockedTelemetry,\s*rlsEnabledTelemetry,\s*rlsPolicyWarnings,\s*\} from '\.\.\/utils\/rlsPolicyGuard\.js';/,
+    'el guard entra desde el módulo puro, con addMissingRls y rlsEnabledTelemetry'
   );
 
   assert.match(
@@ -366,7 +404,13 @@ test('G-2 TER: AIOrchestrator engancha addMissingRls ANTES de removeDangerousPol
 
   assert.match(
     source,
-    /functionDeployFailedMark \+ rlsPolicyBlockedMark,/,
-    'la marca de telemetría entra al user_prompt de forge_intent_log'
+    /const rlsEnabledMark = rlsEnabledTelemetry\(rlsVerdict\.findings\);/,
+    'la marca de RLS encendida se calcula junto a la de políticas bloqueadas'
+  );
+
+  assert.match(
+    source,
+    /functionDeployFailedMark \+ rlsPolicyBlockedMark \+ rlsEnabledMark,/,
+    'las dos marcas de telemetría entran al user_prompt de forge_intent_log'
   );
 });

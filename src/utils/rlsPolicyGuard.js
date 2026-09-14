@@ -763,6 +763,35 @@ export function rlsPolicyBlockedTelemetry(findings) {
 }
 
 /**
+ * Sufijo de telemetría para forge_intent_log de BLOQUE 1-TER: mismo
+ * mecanismo exacto que `rlsPolicyBlockedTelemetry` y `planRepairedTelemetry`
+ * — espacio delante, contenido entre corchetes, tablas ordenadas y
+ * deduplicadas, cadena vacía cuando no hubo ninguna. Va al log, NUNCA al
+ * prompt del usuario.
+ *
+ * Coexiste con `rlsPolicyBlockedTelemetry`: una misma corrida puede emitir
+ * las dos marcas si una tabla llegó sin RLS Y con una política pública
+ * eliminable — cada marca cubre su propia comprobación, independiente de la
+ * otra, igual que el resto de este módulo desde BLOQUE 1-TER.
+ *
+ * Sólo cuenta `reason: 'missing-rls'`: un hallazgo `public-write-policy` o
+ * `unparseable` no pertenece a esta marca.
+ *
+ * @param {Iterable<{ table: string | null, reason: string }>} findings
+ * @returns {string}
+ */
+export function rlsEnabledTelemetry(findings) {
+  const tables = [];
+  for (const f of findings ?? []) {
+    if (!f || f.reason !== 'missing-rls') continue;
+    if (typeof f.table !== 'string' || f.table.length === 0) continue;
+    tables.push(f.table);
+  }
+  if (tables.length === 0) return '';
+  return ` [RLS_ENABLED:${[...new Set(tables)].sort().join(',')}]`;
+}
+
+/**
  * Los avisos, en el texto acordado, uno por tabla distinta afectada
  * (deduplicado, en el orden en que se descubrieron), cubriendo las DOS
  * comprobaciones de este módulo a la vez: `reason: 'public-write-policy'`
