@@ -6,54 +6,45 @@ import { fileURLToPath } from 'node:url';
 import {
   evaluateRlsPolicies,
   removeDangerousPolicies,
+  addMissingRls,
   rlsPolicyBlockedTelemetry,
   rlsPolicyWarnings,
   ROLE_COLUMN_NAMES,
 } from '../src/utils/rlsPolicyGuard.js';
 
 // ---------------------------------------------------------------------------
-// BLOQUE 1-BIS (cirugía G-2) — DE LISTA DE PROHIBIDOS A LISTA DE PERMITIDOS.
+// BLOQUE 1-TER (cirugía G-2) — EXIGIR QUE RLS ESTÉ ENCENDIDA.
 //
-// El checkpoint en vivo sobre Vertigo (087ddaf3-6236-47ae-ba72-bc96887a9691)
-// enseñó que la primera versión ("INSERT, UPDATE o ALL son peligrosos")
-// dejaba pasar `public_delete_app_users` — DELETE público sobre la tabla de
-// usuarios, nadie la había enumerado. Desde este bloque el criterio está
-// invertido: sobre una tabla con columna de rol, lo único ACEPTABLE en
-// público es SELECT; cualquier otra cosa cae, exista hoy o no.
+// El segundo checkpoint en vivo sobre Vertigo (087ddaf3-6236-47ae-ba72-
+// bc96887a9691) generó una tabla app_users con columna role, CERO políticas
+// RLS, y sin `enable row level security`. Una tabla del esquema public sin
+// RLS habilitada es accesible con la clave anónima sin restricción alguna —
+// select, insert, update y delete desde la consola del navegador. Mayor
+// agujero que el del primer checkpoint, y que el guard de políticas no podía
+// ver: inspecciona políticas, y aquí no había ninguna.
 //
-// El mismo checkpoint enseñó un segundo fallo: al eliminar una política, el
-// guard dejaba vivo el comentario `--` que la introducía. Ese comentario
-// vuelve al modelo como contexto de schema y le dice, literalmente, que
-// reabra el agujero. `removeDangerousPolicies` ahora se lo lleva con ella.
+// La comprobación de RLS es SEGUNDA e INDEPENDIENTE de la de políticas
+// (BLOQUE 1-BIS), con la misma fuente de verdad ("tabla con columna de rol").
 // ---------------------------------------------------------------------------
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-// --- El caso de resultado conocido, primero y obligatorio -------------------
+const applyGuard = (sql, findings) => removeDangerousPolicies(addMissingRls(sql, findings), findings);
 
-const VERTIGO_SQL = `
+// --- FIXTURE A — checkpoint 1, v2: RLS ya encendida, sólo la de políticas dispara --
+
+const FIXTURE_A_SQL = `
 create table if not exists public.app_users (
   id uuid primary key default gen_random_uuid(),
   email text not null,
   role text not null default 'member'
 );
 
--- Allow anyone to select rows (public read, sandboxed preview environment)
+alter table public.app_users enable row level security;
+
 create policy "public_select_app_users"
   on public.app_users
   for select
-  using (true);
-
--- Allow anyone to insert new rows (required for the invite flow without auth)
-create policy "public_insert_app_users"
-  on public.app_users
-  for insert
-  with check (true);
-
--- Allow anyone to update rows (required for role assignment and deactivation)
-create policy "public_update_app_users"
-  on public.app_users
-  for update
   using (true);
 
 create policy "public_delete_app_users"
@@ -62,241 +53,267 @@ create policy "public_delete_app_users"
   using (true);
 `;
 
-test('G-2 BIS: el caso real de Vertigo — deja select, elimina insert/update/delete y sus comentarios', () => {
-  const verdict = evaluateRlsPolicies([
-    { path: 'supabase/migrations/20240101000000_app_users.sql', sql: VERTIGO_SQL },
-  ]);
+test('G-2 TER — FIXTURE A (checkpoint 1, v2): RLS ya encendida, no se toca; se elimina public_delete', () => {
+  const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql: FIXTURE_A_SQL }]);
 
-  assert.equal(verdict.dangerous, true);
-  assert.deepEqual(
-    verdict.findings.map((f) => f.command).sort(),
-    ['DELETE', 'INSERT', 'UPDATE']
-  );
+  const missingRls = verdict.findings.filter((f) => f.reason === 'missing-rls');
+  const policies = verdict.findings.filter((f) => f.reason === 'public-write-policy');
 
-  const cleaned = removeDangerousPolicies(VERTIGO_SQL, verdict.findings);
+  assert.equal(missingRls.length, 0, 'RLS ya estaba encendida: la comprobación de RLS no se dispara');
+  assert.equal(policies.length, 1);
+  assert.equal(policies[0].command, 'DELETE');
 
-  assert.ok(cleaned.includes('public_select_app_users'), 'la política de SELECT sobrevive');
-  assert.ok(
-    cleaned.includes('Allow anyone to select rows'),
-    'su comentario, no tocado, sobrevive con ella'
+  const cleaned = applyGuard(FIXTURE_A_SQL, verdict.findings);
+  assert.ok(cleaned.includes('public_select_app_users'), 'select sobrevive');
+  assert.ok(!cleaned.includes('public_delete_app_users'), 'delete eliminada');
+  assert.equal(
+    (cleaned.match(/enable row level security/g) ?? []).length,
+    1,
+    'RLS sigue apareciendo UNA sola vez — no se duplicó'
   );
-  assert.ok(!cleaned.includes('public_insert_app_users'), 'insert eliminada');
-  assert.ok(!cleaned.includes('public_update_app_users'), 'update eliminada');
-  assert.ok(!cleaned.includes('public_delete_app_users'), 'delete eliminada — el fallo real');
-  assert.ok(
-    !cleaned.includes('Allow anyone to insert'),
-    'el comentario huérfano de insert no sobrevive'
-  );
-  assert.ok(
-    !cleaned.includes('Allow anyone to update'),
-    'el comentario huérfano de update no sobrevive'
-  );
-  assert.ok(!/\n{3,}/.test(cleaned), 'no quedan más de dos saltos de línea seguidos');
 });
 
-// --- Cada comando por separado -----------------------------------------
+// --- FIXTURE B — checkpoint 2, v3: el SQL real, sin RLS y sin políticas -----
 
-test('G-2 BIS: política pública de DELETE sobre tabla con rol se elimina', () => {
+const FIXTURE_B_SQL = `drop table if exists public.app_users;
+
+create table public.app_users (
+  id           uuid primary key default gen_random_uuid(),
+  email        text not null unique,
+  role         text not null default 'cliente' check (role in ('admin','cliente')),
+  status       text not null default 'active' check (status in ('active','inactive')),
+  invited_at   timestamptz not null default now()
+);
+
+comment on table public.app_users is 'wyrd:read=public';
+create index if not exists app_users_role_idx on public.app_users (role);
+create index if not exists app_users_status_idx on public.app_users (status);
+`;
+
+test('G-2 TER — FIXTURE B (checkpoint 2, v3): sin RLS y sin políticas, se añade enable RLS y no se inventa ninguna política', () => {
+  const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql: FIXTURE_B_SQL }]);
+
+  const missingRls = verdict.findings.filter((f) => f.reason === 'missing-rls');
+  const policies = verdict.findings.filter((f) => f.reason === 'public-write-policy');
+
+  assert.equal(missingRls.length, 1);
+  assert.equal(missingRls[0].table, 'app_users');
+  assert.equal(missingRls[0].statement, 'alter table public.app_users enable row level security;');
+  assert.equal(policies.length, 0, 'no había ninguna política que eliminar');
+
+  const cleaned = applyGuard(FIXTURE_B_SQL, verdict.findings);
+  assert.ok(
+    cleaned.includes('alter table public.app_users enable row level security;'),
+    'la sentencia se añadió tal cual'
+  );
+  assert.ok(!/create policy/i.test(cleaned), 'no se inventó ninguna política');
+
+  // La sentencia va justo tras el CREATE TABLE, antes del resto del lote.
+  const createIdx = cleaned.indexOf('create table public.app_users');
+  const enableIdx = cleaned.indexOf('enable row level security');
+  const commentIdx = cleaned.indexOf("comment on table public.app_users");
+  assert.ok(createIdx < enableIdx, 'la sentencia queda después del CREATE TABLE');
+  assert.ok(enableIdx < commentIdx, 'la sentencia queda antes del resto del lote');
+
+  const warnings = rlsPolicyWarnings(verdict.findings);
+  assert.equal(warnings.length, 1);
+  assert.ok(warnings[0].includes('app_users'), 'el aviso nombra la tabla');
+  assert.ok(
+    warnings[0].includes('no será legible desde el navegador') ||
+      warnings[0].includes('no es legible desde el navegador'),
+    'el aviso advierte de la consecuencia funcional'
+  );
+});
+
+// --- Casos granulares mínimos ------------------------------------------
+
+test('G-2 TER: CREATE TABLE con columna de rol, sin enable RLS, se añade', () => {
+  const sql = `
+    create table app_users (id uuid primary key, role text);
+  `;
+  const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql }]);
+  const missingRls = verdict.findings.filter((f) => f.reason === 'missing-rls');
+  assert.equal(missingRls.length, 1);
+  assert.equal(missingRls[0].table, 'app_users');
+  const cleaned = applyGuard(sql, verdict.findings);
+  assert.ok(cleaned.includes('alter table app_users enable row level security;'));
+});
+
+test('G-2 TER: CREATE TABLE con columna de rol, CON enable RLS, queda intacta', () => {
+  const sql = `
+    create table app_users (id uuid primary key, role text);
+    alter table app_users enable row level security;
+  `;
+  const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql }]);
+  const missingRls = verdict.findings.filter((f) => f.reason === 'missing-rls');
+  assert.equal(missingRls.length, 0);
+  assert.equal(applyGuard(sql, verdict.findings), sql);
+});
+
+test('G-2 TER: CREATE TABLE sin columna de rol, sin enable RLS, queda intacta', () => {
+  const sql = `
+    create table productos (id uuid primary key, nombre text);
+  `;
+  const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql }]);
+  const missingRls = verdict.findings.filter((f) => f.reason === 'missing-rls');
+  assert.equal(missingRls.length, 0);
+  assert.equal(applyGuard(sql, verdict.findings), sql);
+});
+
+test('G-2 TER: ALTER TABLE que añade columna de rol a tabla existente, sin enable RLS en el lote, se añade', () => {
+  const sql = `
+    alter table app_users add column role text not null default 'member';
+  `;
+  const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql }]);
+  const missingRls = verdict.findings.filter((f) => f.reason === 'missing-rls');
+  assert.equal(missingRls.length, 1);
+  assert.equal(missingRls[0].statement, 'alter table app_users enable row level security;');
+  const cleaned = applyGuard(sql, verdict.findings);
+  assert.ok(cleaned.includes('alter table app_users enable row level security;'));
+  // Se añade DESPUÉS del ALTER que trajo la columna, no antes.
+  assert.ok(cleaned.indexOf("add column role") < cleaned.indexOf('enable row level security'));
+});
+
+test('G-2 TER: tabla con rol sin RLS Y con política pública de delete — se disparan las dos, el aviso menciona ambas', () => {
   const sql = `
     create table app_users (id uuid primary key, role text);
     create policy "public delete" on app_users for delete using (true);
   `;
   const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql }]);
-  assert.equal(verdict.dangerous, true);
-  assert.equal(verdict.findings[0].command, 'DELETE');
+  const missingRls = verdict.findings.filter((f) => f.reason === 'missing-rls');
+  const policies = verdict.findings.filter((f) => f.reason === 'public-write-policy');
+  assert.equal(missingRls.length, 1);
+  assert.equal(policies.length, 1);
+
+  const cleaned = applyGuard(sql, verdict.findings);
+  assert.ok(cleaned.includes('alter table app_users enable row level security;'));
+  assert.ok(!cleaned.includes('public delete'));
+
+  const warnings = rlsPolicyWarnings(verdict.findings);
+  assert.equal(warnings.length, 1, 'un solo aviso por tabla, no dos');
+  assert.ok(warnings[0].includes('Row level security'), 'menciona RLS');
+  assert.ok(warnings[0].includes('DELETE'), 'menciona la operación eliminada');
 });
 
-test('G-2 BIS: política pública de SELECT sobre tabla con rol se CONSERVA', () => {
-  const sql = `
-    create table app_users (id uuid primary key, role text);
-    create policy "public select" on app_users for select using (true);
-  `;
-  const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql }]);
-  assert.equal(verdict.dangerous, false);
-  const cleaned = removeDangerousPolicies(sql, verdict.findings);
-  assert.equal(cleaned, sql);
-});
+// --- El anclaje (reutilizado sin relajar) -----------------------------
 
-test('G-2 BIS: política pública de INSERT sobre tabla con rol se elimina', () => {
-  const sql = `
-    create table app_users (id uuid primary key, role text);
-    create policy "public insert" on app_users for insert with check (true);
-  `;
-  const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql }]);
-  assert.equal(verdict.dangerous, true);
-  assert.equal(verdict.findings[0].command, 'INSERT');
-});
-
-test('G-2 BIS: política pública de UPDATE sobre tabla con rol se elimina', () => {
-  const sql = `
-    create table app_users (id uuid primary key, role text);
-    create policy "public update" on app_users for update using (true);
-  `;
-  const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql }]);
-  assert.equal(verdict.dangerous, true);
-  assert.equal(verdict.findings[0].command, 'UPDATE');
-});
-
-test('G-2 BIS: política ALL sobre tabla con rol se elimina', () => {
-  const sql = `
-    create table app_users (id uuid primary key, role text);
-    create policy "manage all" on app_users for all using (true) with check (true);
-  `;
-  const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql }]);
-  assert.equal(verdict.dangerous, true);
-  assert.equal(verdict.findings[0].command, 'ALL');
-});
-
-test('G-2 BIS: política restringida a authenticated sobre tabla con rol se conserva', () => {
-  const sql = `
-    create table app_users (id uuid primary key, role text);
-    create policy "authenticated delete" on app_users for delete to authenticated using (true);
-  `;
-  const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql }]);
-  assert.equal(verdict.dangerous, false);
-});
-
-test('G-2 BIS: política pública de DELETE sobre tabla SIN columna de rol se conserva', () => {
-  const sql = `
-    create table productos (id uuid primary key, nombre text);
-    create policy "public delete" on productos for delete using (true);
-  `;
-  const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql }]);
-  assert.equal(verdict.dangerous, false);
-});
-
-// --- El anclaje (intocado) -----------------------------------------------
-
-test('G-2 BIS: una tabla llamada roles_de_juego, sin columna de rol, queda intacta', () => {
+test('G-2 TER: una tabla llamada roles_de_juego, sin columna de rol, queda intacta', () => {
   const sql = `
     create table roles_de_juego (id uuid primary key, puntuacion integer);
-    create policy "public delete" on roles_de_juego for delete using (true);
   `;
   const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql }]);
-  assert.equal(verdict.dangerous, false);
-  assert.equal(removeDangerousPolicies(sql, verdict.findings), sql);
+  assert.equal(verdict.findings.filter((f) => f.reason === 'missing-rls').length, 0);
+  assert.equal(applyGuard(sql, verdict.findings), sql);
 });
 
-test('G-2 BIS: una columna llamada control queda intacta (precedente C2-3)', () => {
+test('G-2 TER: una columna llamada control queda intacta (precedente C2-3)', () => {
   const sql = `
     create table configuraciones (id uuid primary key, control text);
-    create policy "public delete" on configuraciones for delete using (true);
   `;
   const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql }]);
-  assert.equal(verdict.dangerous, false);
-  assert.equal(removeDangerousPolicies(sql, verdict.findings), sql);
+  assert.equal(verdict.findings.filter((f) => f.reason === 'missing-rls').length, 0);
+  assert.equal(applyGuard(sql, verdict.findings), sql);
 });
 
-// --- Fail-closed (intocado) ------------------------------------------------
+// --- Fail-closed (compartido con BLOQUE 1-BIS) ------------------------
 
-test('G-2 BIS: SQL ilegible o vacío sigue siendo peligroso (fail-closed)', () => {
+test('G-2 TER: SQL ilegible o vacío sigue siendo peligroso (fail-closed)', () => {
   assert.equal(evaluateRlsPolicies([{ path: 'x.sql', sql: '' }]).dangerous, true);
   assert.equal(evaluateRlsPolicies([{ path: 'x.sql', sql: null }]).dangerous, true);
   assert.equal(evaluateRlsPolicies([{ path: 'x.sql', sql: 42 }]).dangerous, true);
 });
 
-// --- La limpieza de comentarios huérfanos -----------------------------
+// --- Aislamiento entre las dos comprobaciones (defensivo) -----------------
 
-test('G-2 BIS: el comentario pegado a la política eliminada se va con ella', () => {
-  const sql =
-    'create table app_users (id uuid primary key, role text);\n' +
-    '-- Allow anyone to delete rows\n' +
-    'create policy "public delete" on app_users for delete using (true);\n';
-  const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql }]);
-  const cleaned = removeDangerousPolicies(sql, verdict.findings);
-  assert.ok(!cleaned.includes('Allow anyone to delete rows'));
-  assert.ok(!cleaned.includes('public delete'));
-  assert.ok(cleaned.includes('create table app_users'));
+test('G-2 TER: addMissingRls ignora findings con otro reason', () => {
+  const sql = 'create table app_users (id uuid primary key, role text);';
+  const foreign = [{ reason: 'public-write-policy', statement: 'create policy x on y for insert;', insertAt: 5 }];
+  assert.equal(addMissingRls(sql, foreign), sql);
 });
 
-test('G-2 BIS: un comentario separado por línea en blanco de la política eliminada se queda', () => {
-  const sql =
-    'create table app_users (id uuid primary key, role text);\n' +
-    '-- Nota general del archivo, no pegada a ninguna política\n' +
-    '\n' +
-    'create policy "public delete" on app_users for delete using (true);\n';
+test('G-2 TER: removeDangerousPolicies ignora findings con reason missing-rls', () => {
+  const sql = 'create table app_users (id uuid primary key, role text);';
+  const foreign = [{ reason: 'missing-rls', statement: 'alter table app_users enable row level security;' }];
+  assert.equal(removeDangerousPolicies(sql, foreign), sql);
+});
+
+test('G-2 TER: el nombre de tabla en el finding missing-rls está sin calificar (mismo criterio que las políticas)', () => {
+  const sql = 'create table public.app_users (id uuid primary key, role text);';
   const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql }]);
-  const cleaned = removeDangerousPolicies(sql, verdict.findings);
-  assert.ok(cleaned.includes('Nota general del archivo'));
-  assert.ok(!cleaned.includes('public delete'));
+  const missingRls = verdict.findings.filter((f) => f.reason === 'missing-rls');
+  assert.equal(missingRls[0].table, 'app_users');
+  assert.equal(missingRls[0].statement, 'alter table public.app_users enable row level security;');
+});
+
+// --- El punto de inserción ------------------------------------------------
+
+test('G-2 TER: la sentencia se inserta después del CREATE TABLE y antes de cualquier política', () => {
+  const sql = `
+    create table app_users (id uuid primary key, role text);
+    create policy "authenticated read" on app_users for select to authenticated using (true);
+  `;
+  const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql }]);
+  const cleaned = applyGuard(sql, verdict.findings);
+  const createIdx = cleaned.indexOf('create table app_users');
+  const enableIdx = cleaned.indexOf('enable row level security');
+  const policyIdx = cleaned.indexOf('create policy');
+  assert.ok(createIdx < enableIdx && enableIdx < policyIdx);
 });
 
 // --- Idempotencia --------------------------------------------------------
 
-test('G-2 BIS: correr el guard dos veces sobre el mismo archivo da el mismo resultado', () => {
-  const verdict = evaluateRlsPolicies([
-    { path: 'supabase/migrations/20240101000000_app_users.sql', sql: VERTIGO_SQL },
-  ]);
-  const once = removeDangerousPolicies(VERTIGO_SQL, verdict.findings);
-  const verdictAgain = evaluateRlsPolicies([
-    { path: 'supabase/migrations/20240101000000_app_users.sql', sql: once },
-  ]);
-  const twice = removeDangerousPolicies(once, verdictAgain.findings);
+test('G-2 TER: correr el guard dos veces sobre el mismo archivo da el mismo resultado', () => {
+  const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql: FIXTURE_B_SQL }]);
+  const once = applyGuard(FIXTURE_B_SQL, verdict.findings);
+  const verdictAgain = evaluateRlsPolicies([{ path: 'x.sql', sql: once }]);
+  const twice = applyGuard(once, verdictAgain.findings);
   assert.equal(once, twice);
-  assert.equal(verdictAgain.dangerous, false);
+  assert.equal(verdictAgain.findings.filter((f) => f.reason === 'missing-rls').length, 0);
 });
 
-test('G-2 BIS: removeDangerousPolicies es idempotente sobre el MISMO finding', () => {
-  const sql =
-    'create table app_users (id uuid primary key, role text);\n' +
-    'create policy "public delete" on app_users for delete using (true);';
+test('G-2 TER: addMissingRls es idempotente sobre el MISMO finding', () => {
+  const sql = `create table app_users (id uuid primary key, role text);`;
   const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql }]);
-  const once = removeDangerousPolicies(sql, verdict.findings);
-  const twice = removeDangerousPolicies(once, verdict.findings);
+  const once = addMissingRls(sql, verdict.findings);
+  const twice = addMissingRls(once, verdict.findings);
   assert.equal(once, twice);
 });
 
-// --- El aviso lista las operaciones reales -----------------------------
+// --- Dos tablas en el mismo lote ------------------------------------------
 
-test('G-2 BIS: rlsPolicyWarnings lista las operaciones realmente eliminadas, ordenadas', () => {
-  const findings = [
-    { table: 'app_users', command: 'DELETE', reason: 'public-write-policy' },
-    { table: 'app_users', command: 'INSERT', reason: 'public-write-policy' },
-    { table: 'app_users', command: 'UPDATE', reason: 'public-write-policy' },
-  ];
+test('G-2 TER: dos tablas en el mismo lote, una con rol y otra sin — sólo la primera recibe la sentencia', () => {
+  const sql = `
+    create table app_users (id uuid primary key, role text);
+    create table productos (id uuid primary key, nombre text);
+  `;
+  const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql }]);
+  const missingRls = verdict.findings.filter((f) => f.reason === 'missing-rls');
+  assert.equal(missingRls.length, 1);
+  assert.equal(missingRls[0].table, 'app_users');
+  const cleaned = applyGuard(sql, verdict.findings);
+  assert.ok(cleaned.includes('alter table app_users enable row level security;'));
+  assert.ok(!cleaned.includes('alter table productos enable row level security;'));
+});
+
+// --- El aviso ------------------------------------------------------------
+
+test('G-2 TER: rlsPolicyWarnings, sólo falta RLS (sin políticas), advierte de la consecuencia funcional', () => {
+  const findings = [{ table: 'app_users', command: null, reason: 'missing-rls' }];
   const warnings = rlsPolicyWarnings(findings);
   assert.equal(warnings.length, 1);
-  assert.equal(
-    warnings[0],
-    'Guard de seguridad: se corrigió la migración generada. Política(s) pública(s) de ' +
-      'DELETE, INSERT, UPDATE sobre app_users (tabla con columna de rol). Eliminada(s) antes ' +
-      'de proponer la migración. La gestión de usuarios sigue por la función de servidor ' +
-      'correspondiente.'
-  );
+  assert.ok(warnings[0].includes('Row level security'));
+  assert.ok(warnings[0].includes('app_users'));
+  assert.ok(warnings[0].includes('no será legible desde el navegador'));
 });
 
-test('G-2 BIS: rlsPolicyWarnings no repite operaciones duplicadas para la misma tabla', () => {
-  const findings = [
-    { table: 'app_users', command: 'DELETE', reason: 'public-write-policy' },
-    { table: 'app_users', command: 'DELETE', reason: 'public-write-policy' },
-  ];
-  const warnings = rlsPolicyWarnings(findings);
-  assert.equal(warnings.length, 1);
-  assert.ok(warnings[0].includes('de DELETE sobre app_users'));
+test('G-2 TER: rlsPolicyBlockedTelemetry no se ve afectada por hallazgos missing-rls', () => {
+  const findings = [{ table: 'app_users', policy: null, reason: 'missing-rls' }];
+  assert.equal(rlsPolicyBlockedTelemetry(findings), '');
 });
 
-test('G-2 BIS: rlsPolicyWarnings es vacío sin hallazgos peligrosos', () => {
-  assert.deepEqual(rlsPolicyWarnings([]), []);
-  assert.deepEqual(
-    rlsPolicyWarnings([{ table: null, command: null, reason: 'unparseable' }]),
-    []
-  );
-});
+// --- Contrato intacto de BLOQUE 1-BIS ------------------------------------
 
-// --- Telemetría y set cerrado, sin cambios de contrato ---------------------
-
-test('G-2 BIS: rlsPolicyBlockedTelemetry sigue produciendo la marca ordenada y deduplicada', () => {
-  const findings = [
-    { table: 'app_users', policy: 'public delete', reason: 'public-write-policy' },
-    { table: 'app_users', policy: 'public insert', reason: 'public-write-policy' },
-  ];
-  assert.equal(
-    rlsPolicyBlockedTelemetry(findings),
-    ' [RLS_POLICY_BLOCKED:app_users:public delete,app_users:public insert]'
-  );
-});
-
-test('G-2 BIS: ROLE_COLUMN_NAMES sigue siendo el mismo set cerrado congelado', () => {
+test('G-2 TER: ROLE_COLUMN_NAMES sigue siendo el mismo set cerrado congelado', () => {
   assert.equal(Object.isFrozen(ROLE_COLUMN_NAMES), true);
   assert.deepEqual(
     [...ROLE_COLUMN_NAMES].sort(),
@@ -304,9 +321,20 @@ test('G-2 BIS: ROLE_COLUMN_NAMES sigue siendo el mismo set cerrado congelado', (
   );
 });
 
-// --- El acoplamiento con la fuente (sigue verde tras BLOQUE 1-BIS) ---------
+test('G-2 TER: una política pública de DELETE sigue eliminándose igual que antes', () => {
+  const sql = `
+    create table app_users (id uuid primary key, role text);
+    alter table app_users enable row level security;
+    create policy "public delete" on app_users for delete using (true);
+  `;
+  const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql }]);
+  const cleaned = applyGuard(sql, verdict.findings);
+  assert.ok(!cleaned.includes('public delete'));
+});
 
-test('G-2 BIS: AIOrchestrator sigue enganchando el guard y pintando el aviso en warnings', () => {
+// --- El acoplamiento con la fuente ------------------------------------------
+
+test('G-2 TER: AIOrchestrator engancha addMissingRls ANTES de removeDangerousPolicies y sigue pintando en warnings', () => {
   const source = fs.readFileSync(
     path.join(ROOT, 'src', 'services', 'AIOrchestrator.ts'),
     'utf8'
@@ -314,26 +342,22 @@ test('G-2 BIS: AIOrchestrator sigue enganchando el guard y pintando el aviso en 
 
   assert.match(
     source,
-    /import \{\s*evaluateRlsPolicies,\s*removeDangerousPolicies,\s*rlsPolicyBlockedTelemetry,\s*rlsPolicyWarnings,\s*\} from '\.\.\/utils\/rlsPolicyGuard\.js';/,
-    'el guard entra desde el módulo puro'
+    /import \{\s*evaluateRlsPolicies,\s*removeDangerousPolicies,\s*addMissingRls,\s*rlsPolicyBlockedTelemetry,\s*rlsPolicyWarnings,\s*\} from '\.\.\/utils\/rlsPolicyGuard\.js';/,
+    'el guard entra desde el módulo puro, con addMissingRls'
   );
 
   assert.match(
     source,
-    /const rlsMigrationPaths = persistedPaths\.filter\(isMigrationPath\);/,
-    'el guard evalúa los persistedPaths que son migración'
+    /const withRlsEnabled = addMissingRls\(original, pathFindings\);\s*\n\s*const cleaned = removeDangerousPolicies\(withRlsEnabled, pathFindings\);/,
+    'addMissingRls corre ANTES que removeDangerousPolicies, sobre el mismo archivo'
   );
 
   assert.match(
     source,
     /this\.notifyFileUpdate\(path, cleaned\);/,
-    'la migración limpia se reescribe por el mismo camino de persistencia'
+    'el resultado se reescribe por el mismo camino de persistencia'
   );
 
-  // El aviso tiene que pintarse por `warnings` (el campo que esta rama de
-  // éxito de verdad devuelve como `warning`), NUNCA por chatResponse — que en
-  // esta rama nunca se lee. Si alguien mueve el aviso a un canal que el
-  // return no pinta, este test se pone rojo.
   assert.match(
     source,
     /for \(const rlsWarning of rlsWarnings\) \{\s*warnings\.push\(rlsWarning\);\s*\}/,

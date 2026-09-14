@@ -8,8 +8,8 @@
 /** Closed, frozen set of column names that mark a table as role/permission-bearing. */
 export const ROLE_COLUMN_NAMES: readonly string[];
 
-/** Why a finding was raised. */
-export type RlsFindingReason = 'public-write-policy' | 'unparseable';
+/** Why a finding was raised. `'missing-rls'` is BLOQUE 1-TER. */
+export type RlsFindingReason = 'public-write-policy' | 'missing-rls' | 'unparseable';
 
 /**
  * Any RLS command this guard's parser recognizes other than `SELECT` — the
@@ -28,9 +28,12 @@ export interface RlsMigrationInput {
 }
 
 /**
- * One offending policy (or one unreadable file). `table`/`policy`/`command`/
- * `statement` are all `null` when `reason` is `'unparseable'` — nothing
- * legible was found to name.
+ * One offending policy, one table missing `ENABLE ROW LEVEL SECURITY`, or one
+ * unreadable file. `table`/`policy`/`command`/`statement` are all `null`
+ * when `reason` is `'unparseable'` — nothing legible was found to name.
+ * `policy`/`command` stay `null` and `insertAt` is set when `reason` is
+ * `'missing-rls'` — there is no policy or command to report, only where to
+ * splice the `ENABLE ROW LEVEL SECURITY` statement in `statement`.
  */
 export interface RlsFinding {
   path: string;
@@ -39,6 +42,8 @@ export interface RlsFinding {
   command: RlsDangerousCommand | null;
   statement: string | null;
   reason: RlsFindingReason;
+  /** Only set when `reason` is `'missing-rls'`: offset in that file's SQL to splice `statement` after. */
+  insertAt?: number;
 }
 
 export interface RlsVerdict {
@@ -48,8 +53,11 @@ export interface RlsVerdict {
 
 /**
  * Evaluates a batch of migrations (the same batch an intent proposes
- * together) for public-write RLS policies over role-bearing tables.
- * Fail-closed: unreadable SQL content produces a `dangerous: true` verdict.
+ * together) for TWO independent conditions over role-bearing tables:
+ * public-write RLS policies (`'public-write-policy'`, BLOQUE 1-BIS) and
+ * tables left without `ENABLE ROW LEVEL SECURITY` in the same batch
+ * (`'missing-rls'`, BLOQUE 1-TER). Fail-closed: unreadable SQL content
+ * produces a `dangerous: true` verdict.
  */
 export function evaluateRlsPolicies(migrations: Iterable<RlsMigrationInput>): RlsVerdict;
 
@@ -57,21 +65,38 @@ export function evaluateRlsPolicies(migrations: Iterable<RlsMigrationInput>): Rl
  * The SQL of one file with the given findings' offending `CREATE POLICY`
  * statements removed, along with any `--` comment block glued directly above
  * each one (no blank line in between) — collapsing at most one blank line at
- * the seam. Idempotent; findings without a `statement` are ignored.
+ * the seam. Idempotent; only acts on `reason: 'public-write-policy'` findings.
  */
 export function removeDangerousPolicies(
   sql: string,
-  findings: Iterable<Pick<RlsFinding, 'statement'>>
+  findings: Iterable<Pick<RlsFinding, 'reason' | 'statement'>>
 ): string;
 
-/** ` [RLS_POLICY_BLOCKED:table:policy,...]` suffix for forge_intent_log; '' when empty. */
+/**
+ * The SQL of one file with the given findings' `ENABLE ROW LEVEL SECURITY`
+ * statements spliced in at their `insertAt` anchor (right after the owning
+ * `CREATE TABLE` or `ALTER TABLE`, before any policy). Idempotent; only acts
+ * on `reason: 'missing-rls'` findings, applied from the highest `insertAt`
+ * down so earlier anchors in the same text stay valid.
+ */
+export function addMissingRls(
+  sql: string,
+  findings: Iterable<Pick<RlsFinding, 'reason' | 'statement' | 'insertAt'>>
+): string;
+
+/**
+ * ` [RLS_POLICY_BLOCKED:table:policy,...]` suffix for forge_intent_log; ''
+ * when empty. Only `reason: 'public-write-policy'` findings feed this mark.
+ */
 export function rlsPolicyBlockedTelemetry(
   findings: Iterable<Pick<RlsFinding, 'table' | 'policy' | 'reason'>>
 ): string;
 
 /**
- * The user-facing warning strings, one per distinct affected table, each
- * naming the actual operations removed for that table (sorted, deduplicated).
+ * The user-facing warning strings, one per distinct affected table, covering
+ * both `'public-write-policy'` (names the operations removed) and
+ * `'missing-rls'` (names that RLS was enabled and warns of the functional
+ * consequence) — combined into one message per table when both fire on it.
  */
 export function rlsPolicyWarnings(
   findings: Iterable<Pick<RlsFinding, 'table' | 'command' | 'reason'>>

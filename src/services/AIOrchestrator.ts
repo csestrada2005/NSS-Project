@@ -35,6 +35,7 @@ import {
 import {
   evaluateRlsPolicies,
   removeDangerousPolicies,
+  addMissingRls,
   rlsPolicyBlockedTelemetry,
   rlsPolicyWarnings,
 } from '../utils/rlsPolicyGuard.js';
@@ -1995,6 +1996,17 @@ export class AIOrchestrator {
       // `intent.type`, misma doctrina que C-D: la etiqueta la produce un LLM,
       // y un guard de seguridad no puede depender de que el clasificador
       // haya acertado.
+      //
+      // BLOQUE 1-TER — una SEGUNDA condición, independiente: una tabla de rol
+      // puede llegar sin `ENABLE ROW LEVEL SECURITY` y CERO políticas —
+      // ningún `CREATE POLICY` que inspeccionar, pero un agujero mayor
+      // (select/insert/update/delete públicos, sin restricción alguna). Por
+      // eso `addMissingRls` corre ANTES que `removeDangerousPolicies`: su
+      // ancla (`insertAt`) se calculó contra el SQL tal como lo evaluó
+      // `evaluateRlsPolicies`, y `removeDangerousPolicies` localiza sus
+      // sentencias por búsqueda de texto sobre el resultado —así que
+      // insertar primero nunca invalida lo que la eliminación busca después,
+      // y al revés sí invalidaría las anclas por índice.
       // ----------------------------------------------------------------
       const rlsMigrationPaths = persistedPaths.filter(isMigrationPath);
       const rlsVerdict = evaluateRlsPolicies(
@@ -2002,21 +2014,32 @@ export class AIOrchestrator {
       );
       const rlsFindingsByPath = new Map<string, typeof rlsVerdict.findings>();
       for (const finding of rlsVerdict.findings) {
-        if (finding.reason !== 'public-write-policy') continue;
+        if (finding.reason !== 'public-write-policy' && finding.reason !== 'missing-rls') continue;
         const list = rlsFindingsByPath.get(finding.path) ?? [];
         list.push(finding);
         rlsFindingsByPath.set(finding.path, list);
       }
       for (const [path, pathFindings] of rlsFindingsByPath) {
         const original = finalFiles.get(path) ?? files.get(path)!;
-        const cleaned = removeDangerousPolicies(original, pathFindings);
+        const withRlsEnabled = addMissingRls(original, pathFindings);
+        const cleaned = removeDangerousPolicies(withRlsEnabled, pathFindings);
         if (cleaned === original) continue;
         finalFiles.set(path, cleaned);
         this.notifyFileUpdate(path, cleaned);
-        console.warn(
-          '[AIOrchestrator] política RLS peligrosa eliminada de', path, ':',
-          pathFindings.map((f) => `${f.table}:${f.policy}`).join(', ')
-        );
+        const missingRls = pathFindings.filter((f) => f.reason === 'missing-rls');
+        const dangerousPolicies = pathFindings.filter((f) => f.reason === 'public-write-policy');
+        if (missingRls.length > 0) {
+          console.warn(
+            '[AIOrchestrator] RLS habilitada de oficio en', path, ':',
+            missingRls.map((f) => f.table).join(', ')
+          );
+        }
+        if (dangerousPolicies.length > 0) {
+          console.warn(
+            '[AIOrchestrator] política RLS peligrosa eliminada de', path, ':',
+            dangerousPolicies.map((f) => `${f.table}:${f.policy}`).join(', ')
+          );
+        }
       }
       const rlsPolicyBlockedMark = rlsPolicyBlockedTelemetry(rlsVerdict.findings);
       const rlsWarnings = rlsPolicyWarnings(rlsVerdict.findings);

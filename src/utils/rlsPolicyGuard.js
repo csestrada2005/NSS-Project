@@ -116,6 +116,43 @@
  * toca lo pegado a la política que elimina, nunca la cabecera del archivo ni
  * un comentario separado por una línea en blanco.
  *
+ * BLOQUE 1-TER — EXIGIR QUE RLS ESTÉ ENCENDIDA
+ * -----------------------------------------------
+ * El segundo checkpoint en vivo sobre Vertigo (087ddaf3-6236-47ae-ba72-
+ * bc96887a9691) generó una tabla `app_users` con columna `role`, CERO
+ * políticas RLS, y —lo que importa— sin
+ * `alter table public.app_users enable row level security;`. Una tabla del
+ * esquema `public` sin RLS habilitada es accesible con la clave anónima SIN
+ * NINGUNA restricción: select, insert, update y delete desde la consola del
+ * navegador. Un agujero mayor que el del primer checkpoint, y que el guard
+ * de políticas no podía ver: inspecciona políticas, y aquí no había ninguna
+ * que inspeccionar. Diagnóstico: la lista de permitidos de BLOQUE 1-BIS
+ * decide qué políticas son aceptables, pero no exige que el mecanismo esté
+ * encendido — una lista de permitidos sobre un sistema apagado no permite
+ * nada, LO PERMITE TODO.
+ *
+ * La comprobación es una SEGUNDA condición, INDEPENDIENTE de la de
+ * políticas, con la misma fuente de verdad (`roleTables`, construida por la
+ * MISMA `tablesWithRoleColumnInSql` ya existente — no se duplica ni se
+ * relaja): si el lote crea o altera una tabla con columna de rol y esa tabla
+ * no queda con `ENABLE ROW LEVEL SECURITY` en el mismo lote, el guard añade
+ * la sentencia `alter table <tabla> enable row level security;`
+ * inmediatamente después del `CREATE TABLE` correspondiente (o del último
+ * `ALTER TABLE` sobre esa tabla si no hay `CREATE` en el lote), antes de
+ * cualquier política — el orden importa, una política antes de habilitar
+ * RLS es SQL válido pero confuso de leer. Fail-closed, mismo razonamiento
+ * que el resto del módulo: ante SQL ilegible el veredicto es "falta RLS", y
+ * añadir de más sobre una tabla que ya la tenía es inocuo (la sentencia es
+ * idempotente en Postgres), mientras que añadir de menos deja una tabla de
+ * permisos abierta al mundo.
+ *
+ * QUÉ NO HACE esta comprobación, a propósito: no inventa políticas. Si la
+ * tabla queda con RLS encendida y sin ninguna política, el acceso anónimo
+ * queda CERRADO —el lado seguro—; que la pantalla de admin no pueda leer es
+ * un problema funcional VISIBLE (el aviso lo dice), no un agujero
+ * silencioso. Inventar una política de lectura sería el guard tomando
+ * decisiones de producto que no le corresponden.
+ *
  * Plain JS (no TS) para que sea importable desde `node --test`, igual que
  * migrationGate.js, migrationPath.js y planGuard.js. El tipado vive en
  * rlsPolicyGuard.d.ts.
@@ -298,6 +335,94 @@ function tablesWithRoleColumnInSql(sql) {
   return found;
 }
 
+const ENABLE_RLS_RE =
+  /\balter\s+table\s+(?:if\s+exists\s+)?("[^"]+"|[\w.]+)\s+enable\s+row\s+level\s+security\b/gi;
+
+/**
+ * Las tablas (normalizadas) que este texto SQL deja con
+ * `ENABLE ROW LEVEL SECURITY`.
+ *
+ * @param {string} sql
+ * @returns {Set<string>}
+ */
+function tablesWithRlsEnabledInSql(sql) {
+  const found = new Set();
+  ENABLE_RLS_RE.lastIndex = 0;
+  let m;
+  while ((m = ENABLE_RLS_RE.exec(sql))) found.add(normalizeIdentifier(m[1]));
+  return found;
+}
+
+/**
+ * El índice, en `sql`, donde termina una sentencia que empieza en
+ * `fromIndex` (el `;` que la cierra, o el propio `fromIndex` si el archivo
+ * no trae uno — heurística conservadora para SQL truncado).
+ *
+ * @param {string} sql
+ * @param {number} fromIndex
+ * @returns {number} posición JUSTO DESPUÉS del `;` (o de `fromIndex`).
+ */
+function statementEndAfter(sql, fromIndex) {
+  const semiIdx = sql.indexOf(';', fromIndex);
+  return semiIdx === -1 ? fromIndex : semiIdx + 1;
+}
+
+/**
+ * Punto de anclaje, por tabla, para insertar `ENABLE ROW LEVEL SECURITY`:
+ * justo después del `CREATE TABLE (...)` de cada tabla que este texto SQL
+ * declara. Si el mismo texto declara la tabla más de una vez (no debería,
+ * pero es SQL generado), gana la PRIMERA — es donde nace la tabla.
+ *
+ * NO reimplementa la identificación de "columna de rol" — eso lo decide
+ * `tablesWithRoleColumnInSql`, que ya se llama aparte con las MISMAS
+ * regexes de módulo (`CREATE_TABLE_RE`). Esto sólo añade la posición: dónde
+ * insertar, no si hace falta.
+ *
+ * @param {string} sql
+ * @returns {Map<string, { insertAt: number, tableRaw: string }>}
+ */
+function createTableAnchorsInSql(sql) {
+  const anchors = new Map();
+  CREATE_TABLE_RE.lastIndex = 0;
+  let m;
+  while ((m = CREATE_TABLE_RE.exec(sql))) {
+    const openIndex = m.index + m[0].length - 1;
+    const block = extractParenBody(sql, openIndex);
+    if (!block) continue;
+    const tableNorm = normalizeIdentifier(m[1]);
+    if (anchors.has(tableNorm)) continue;
+    anchors.set(tableNorm, {
+      insertAt: statementEndAfter(sql, block.end),
+      tableRaw: m[1].trim(),
+    });
+  }
+  return anchors;
+}
+
+/**
+ * Punto de anclaje, por tabla, para el caso sin `CREATE TABLE` en el lote:
+ * el ÚLTIMO `ALTER TABLE ... ADD COLUMN` sobre esa tabla en este texto —
+ * "último" porque una tabla preexistente puede recibir varias columnas en el
+ * mismo lote y el ancla tiene que quedar después de la que trajo la columna
+ * de rol, o de cualquier otra posterior sobre la misma tabla.
+ *
+ * @param {string} sql
+ * @returns {Map<string, { insertAt: number, tableRaw: string }>}
+ */
+function alterTableAnchorsInSql(sql) {
+  const anchors = new Map();
+  ALTER_ADD_COLUMN_RE.lastIndex = 0;
+  let m;
+  while ((m = ALTER_ADD_COLUMN_RE.exec(sql))) {
+    const tableNorm = normalizeIdentifier(m[1]);
+    anchors.set(tableNorm, {
+      insertAt: statementEndAfter(sql, m.index + m[0].length),
+      tableRaw: m[1].trim(),
+    });
+  }
+  return anchors;
+}
+
 // Heurístico a propósito: se detiene en el primer `;` tras `CREATE POLICY ...
 // ON <tabla>`, que es donde termina la sentencia en cualquier migración
 // generada por este pipeline (una expresión USING/WITH CHECK con un `;`
@@ -428,6 +553,64 @@ export function evaluateRlsPolicies(migrations) {
     }
   }
 
+  // ------------------------------------------------------------------
+  // BLOQUE 1-TER — SEGUNDA CONDICIÓN, INDEPENDIENTE: ¿la tabla de rol quedó
+  // con RLS encendida en este mismo lote? `roleTables` es la MISMA fuente de
+  // verdad que la comprobación de políticas de arriba — no se recalcula con
+  // otro criterio.
+  // ------------------------------------------------------------------
+  const rlsEnabledTables = new Set();
+  const createAnchorsByPath = new Map();
+  const alterAnchorsByPath = new Map();
+  for (const { path, sql } of readable) {
+    for (const table of tablesWithRlsEnabledInSql(sql)) rlsEnabledTables.add(table);
+    createAnchorsByPath.set(path, createTableAnchorsInSql(sql));
+    alterAnchorsByPath.set(path, alterTableAnchorsInSql(sql));
+  }
+
+  for (const table of roleTables) {
+    if (rlsEnabledTables.has(table)) continue;
+
+    // El ancla preferida es el PRIMER `CREATE TABLE` de esta tabla en el
+    // lote (en orden de archivo); si no hay ninguno, el ÚLTIMO
+    // `ALTER TABLE ... ADD COLUMN` sobre ella en todo el lote.
+    let anchor = null;
+    let anchorPath = null;
+    for (const { path } of readable) {
+      const created = createAnchorsByPath.get(path).get(table);
+      if (created) {
+        anchor = created;
+        anchorPath = path;
+        break;
+      }
+    }
+    if (!anchor) {
+      for (const { path } of readable) {
+        const altered = alterAnchorsByPath.get(path).get(table);
+        if (altered) {
+          anchor = altered;
+          anchorPath = path;
+        }
+      }
+    }
+    // No debería pasar: `roleTables` sólo contiene tablas que
+    // `tablesWithRoleColumnInSql` vio nacer o crecer vía CREATE/ALTER, que
+    // son exactamente las dos fuentes de ancla. Fail-closed igual: sin
+    // ancla no hay dónde insertar, así que no se añade nada — pero el resto
+    // del lote no se ve afectado.
+    if (!anchor) continue;
+
+    findings.push({
+      path: anchorPath,
+      table: displayIdentifier(anchor.tableRaw),
+      policy: null,
+      command: null,
+      statement: `alter table ${anchor.tableRaw} enable row level security;`,
+      insertAt: anchor.insertAt,
+      reason: 'missing-rls',
+    });
+  }
+
   return { dangerous: findings.length > 0, findings };
 }
 
@@ -505,11 +688,52 @@ export function removeDangerousPolicies(sql, findings) {
   if (typeof sql !== 'string') return sql;
   let out = sql;
   for (const finding of findings ?? []) {
-    const statement = finding?.statement;
+    if (!finding || finding.reason !== 'public-write-policy') continue;
+    const statement = finding.statement;
     if (typeof statement !== 'string' || statement.length === 0) continue;
     const idx = out.indexOf(statement);
     if (idx === -1) continue;
     out = removeStatementAndAdjacentComment(out, idx, statement.length);
+  }
+  return out;
+}
+
+/**
+ * El SQL de UN archivo con las sentencias `ENABLE ROW LEVEL SECURITY` que le
+ * faltan (`findings` de ESE mismo `path`, `reason: 'missing-rls'`)
+ * insertadas en su ancla (`insertAt`) — justo después del `CREATE TABLE` o
+ * `ALTER TABLE` correspondiente, en su propia línea, antes de cualquier
+ * política que venga a continuación.
+ *
+ * Aplica los `findings` de mayor a menor `insertAt`: insertar por el final
+ * primero deja intactas las posiciones de las anclas que aún faltan por
+ * aplicar en el mismo texto — nadie tiene que recalcular índices.
+ *
+ * Idempotente: si el `statement` exacto ya está presente en el archivo (una
+ * pasada anterior ya lo insertó, o el modelo ya lo escribió y por eso
+ * `evaluateRlsPolicies` no lo hubiera propuesto de nuevo) no se inserta una
+ * segunda vez.
+ *
+ * @param {string} sql
+ * @param {Iterable<{ reason: string, statement: string | null, insertAt: number | undefined }>} findings
+ * @returns {string}
+ */
+export function addMissingRls(sql, findings) {
+  if (typeof sql !== 'string') return sql;
+  const applicable = [];
+  for (const f of findings ?? []) {
+    if (!f || f.reason !== 'missing-rls') continue;
+    if (typeof f.statement !== 'string' || f.statement.length === 0) continue;
+    if (typeof f.insertAt !== 'number' || !Number.isFinite(f.insertAt)) continue;
+    applicable.push(f);
+  }
+  applicable.sort((a, b) => b.insertAt - a.insertAt);
+
+  let out = sql;
+  for (const f of applicable) {
+    if (out.includes(f.statement)) continue;
+    const at = Math.min(Math.max(f.insertAt, 0), out.length);
+    out = `${out.slice(0, at)}\n${f.statement}${out.slice(at)}`;
   }
   return out;
 }
@@ -540,8 +764,11 @@ export function rlsPolicyBlockedTelemetry(findings) {
 
 /**
  * Los avisos, en el texto acordado, uno por tabla distinta afectada
- * (deduplicado, en el orden en que se descubrieron). `<tabla>` y la lista de
- * operaciones son las únicas sustituciones — el resto es literal.
+ * (deduplicado, en el orden en que se descubrieron), cubriendo las DOS
+ * comprobaciones de este módulo a la vez: `reason: 'public-write-policy'`
+ * (políticas eliminadas) y `reason: 'missing-rls'` (RLS que hubo que
+ * encender, BLOQUE 1-TER). `<tabla>` y la lista de operaciones son las
+ * únicas sustituciones — el resto es literal.
  *
  * BLOQUE 1-BIS: con la lista de permitidos el guard puede eliminar varias
  * políticas de tipos distintos sobre la misma tabla en un solo intent (el
@@ -549,32 +776,62 @@ export function rlsPolicyBlockedTelemetry(findings) {
  * operaciones se eliminaron — ordenadas y deduplicadas, comparables entre
  * avisos igual que la telemetría — en vez de callar el detalle.
  *
- * Sólo `reason: 'public-write-policy'` produce aviso: un hallazgo
- * `unparseable` no tiene tabla ni comando que nombrar en esta frase.
+ * BLOQUE 1-TER: las dos comprobaciones pueden dispararse sobre la MISMA
+ * tabla en el mismo intent (sin RLS Y con una política pública de delete) —
+ * el aviso las cubre ambas en un solo mensaje por tabla, sin duplicar la
+ * estructura ("Guard de seguridad: se corrigió..."), y advierte SIEMPRE de
+ * la consecuencia funcional de encender RLS sin políticas: la tabla deja de
+ * ser legible desde el navegador. Esa advertencia no es opcional — es lo que
+ * le permite al usuario conectar "habilité RLS" con "por eso se ve vacía".
+ *
+ * Un hallazgo `unparseable` no produce aviso: no tiene tabla que nombrar.
  *
  * @param {Iterable<{ table: string | null, command: string | null, reason: string }>} findings
  * @returns {string[]}
  */
 export function rlsPolicyWarnings(findings) {
   const order = [];
-  const commandsByTable = new Map();
+  const perTable = new Map(); // table -> { ops: Set<string>, missingRls: boolean }
   for (const f of findings ?? []) {
-    if (!f || f.reason !== 'public-write-policy') continue;
-    if (typeof f.table !== 'string' || f.table.length === 0) continue;
-    if (!commandsByTable.has(f.table)) {
-      commandsByTable.set(f.table, new Set());
+    if (!f || typeof f.table !== 'string' || f.table.length === 0) continue;
+    if (f.reason !== 'public-write-policy' && f.reason !== 'missing-rls') continue;
+    if (!perTable.has(f.table)) {
+      perTable.set(f.table, { ops: new Set(), missingRls: false });
       order.push(f.table);
     }
-    if (typeof f.command === 'string' && f.command.length > 0) {
-      commandsByTable.get(f.table).add(f.command);
+    const entry = perTable.get(f.table);
+    if (f.reason === 'missing-rls') entry.missingRls = true;
+    if (f.reason === 'public-write-policy' && typeof f.command === 'string' && f.command.length > 0) {
+      entry.ops.add(f.command);
     }
   }
+
   return order.map((table) => {
-    const ops = [...commandsByTable.get(table)].sort().join(', ');
+    const { ops, missingRls } = perTable.get(table);
+    const sortedOps = [...ops].sort().join(', ');
+    const hasOps = ops.size > 0;
+
+    if (missingRls && hasOps) {
+      return (
+        'Guard de seguridad: se corrigió la migración generada. Row level security estaba ' +
+        `apagada sobre ${table} (tabla con columna de rol); la habilité, y eliminé la(s) ` +
+        `política(s) pública(s) de ${sortedOps} antes de proponer la migración. La gestión de ` +
+        'usuarios sigue por la función de servidor correspondiente. Sin políticas, la tabla no ' +
+        'será legible desde el navegador.'
+      );
+    }
+    if (missingRls) {
+      return (
+        'Guard de seguridad: se corrigió la migración generada. Row level security estaba ' +
+        `apagada sobre ${table} (tabla con columna de rol); la habilité antes de proponer la ` +
+        'migración. Sin políticas, la tabla no será legible desde el navegador — el acceso ' +
+        'sigue yendo por la función de servidor correspondiente.'
+      );
+    }
     return (
       'Guard de seguridad: se corrigió la migración generada. Política(s) pública(s) de ' +
-      `${ops} sobre ${table} (tabla con columna de rol). Eliminada(s) antes de proponer la ` +
-      'migración. La gestión de usuarios sigue por la función de servidor correspondiente.'
+      `${sortedOps} sobre ${table} (tabla con columna de rol). Eliminada(s) antes de proponer ` +
+      'la migración. La gestión de usuarios sigue por la función de servidor correspondiente.'
     );
   });
 }
