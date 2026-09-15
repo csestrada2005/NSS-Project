@@ -153,6 +153,18 @@
  * silencioso. Inventar una política de lectura sería el guard tomando
  * decisiones de producto que no le corresponden.
  *
+ * BRIEF G-3 — LA ALARMA 'unparseable' SE CONECTA
+ * -------------------------------------------------
+ * `evaluateRlsPolicies` ya devolvía, desde el primer bloque, un finding
+ * `reason: 'unparseable'` con `dangerous: true` cuando el SQL de una
+ * migración era ilegible — pero nada consumía esa señal: AIOrchestrator la
+ * descartaba, ningún sufijo de telemetría la recogía y `rlsPolicyWarnings`
+ * no producía aviso para ella. Un guard que detecta que no pudo revisar algo
+ * y se calla es el mismo patrón de fallo que este módulo entero existe para
+ * matar. `rlsUnreadableTelemetry` (marca `[RLS_UNREADABLE:...]`) y el nuevo
+ * caso en `rlsPolicyWarnings` cierran esa alarma — decisión ya tomada: se
+ * avisa y la corrida SIGUE, no se retira el botón de aprobación.
+ *
  * Plain JS (no TS) para que sea importable desde `node --test`, igual que
  * migrationGate.js, migrationPath.js y planGuard.js. El tipado vive en
  * rlsPolicyGuard.d.ts.
@@ -792,6 +804,36 @@ export function rlsEnabledTelemetry(findings) {
 }
 
 /**
+ * Sufijo de telemetría para forge_intent_log: BRIEF G-3, PIEZA 2. Antes de
+ * esto, `evaluateRlsPolicies` ya devolvía `reason: 'unparseable'` con
+ * `dangerous: true` cuando el SQL de una migración era ilegible, pero
+ * AIOrchestrator los descartaba (el `continue` que sólo procesa
+ * `'public-write-policy'` y `'missing-rls'`) y ningún sufijo los recogía —
+ * `rlsVerdict.dangerous` no se leía en ningún sitio del archivo. Esta marca
+ * es lo que deja rastro de ese caso en el log, mismo patrón exacto que
+ * `rlsEnabledTelemetry`: espacio delante, corchetes, PATHS (no tablas — un
+ * archivo ilegible no tiene tabla que nombrar) ordenados y deduplicados,
+ * cadena vacía sin hallazgos.
+ *
+ * Decisión ya tomada, no revisada aquí: esto es sólo la marca — se avisa y
+ * la corrida sigue, no se retira el botón de aprobación ni se tumba el
+ * pipeline.
+ *
+ * @param {Iterable<{ path: string | null, reason: string }>} findings
+ * @returns {string}
+ */
+export function rlsUnreadableTelemetry(findings) {
+  const paths = [];
+  for (const f of findings ?? []) {
+    if (!f || f.reason !== 'unparseable') continue;
+    if (typeof f.path !== 'string' || f.path.length === 0) continue;
+    paths.push(f.path);
+  }
+  if (paths.length === 0) return '';
+  return ` [RLS_UNREADABLE:${[...new Set(paths)].sort().join(',')}]`;
+}
+
+/**
  * Los avisos, en el texto acordado, uno por tabla distinta afectada
  * (deduplicado, en el orden en que se descubrieron), cubriendo las DOS
  * comprobaciones de este módulo a la vez: `reason: 'public-write-policy'`
@@ -813,16 +855,30 @@ export function rlsEnabledTelemetry(findings) {
  * ser legible desde el navegador. Esa advertencia no es opcional — es lo que
  * le permite al usuario conectar "habilité RLS" con "por eso se ve vacía".
  *
- * Un hallazgo `unparseable` no produce aviso: no tiene tabla que nombrar.
+ * BRIEF G-3, PIEZA 2b: `reason: 'unparseable'` SÍ produce aviso ahora — un
+ * archivo que el guard no pudo leer no es lo mismo que un archivo limpio, y
+ * antes ese silencio era indistinguible de "no había nada que corregir". No
+ * se agrupa por tabla (no hay ninguna que nombrar): un mensaje por `path`
+ * distinto, con el texto literal acordado. Decisión ya tomada, no revisada
+ * aquí: se avisa y la corrida SIGUE — no se tumba el pipeline ni se retira
+ * el botón de aprobación.
  *
- * @param {Iterable<{ table: string | null, command: string | null, reason: string }>} findings
+ * @param {Iterable<{ table: string | null, command: string | null, path: string | null, reason: string }>} findings
  * @returns {string[]}
  */
 export function rlsPolicyWarnings(findings) {
   const order = [];
   const perTable = new Map(); // table -> { ops: Set<string>, missingRls: boolean }
+  const unreadablePaths = [];
   for (const f of findings ?? []) {
-    if (!f || typeof f.table !== 'string' || f.table.length === 0) continue;
+    if (!f) continue;
+    if (f.reason === 'unparseable') {
+      if (typeof f.path === 'string' && f.path.length > 0 && !unreadablePaths.includes(f.path)) {
+        unreadablePaths.push(f.path);
+      }
+      continue;
+    }
+    if (typeof f.table !== 'string' || f.table.length === 0) continue;
     if (f.reason !== 'public-write-policy' && f.reason !== 'missing-rls') continue;
     if (!perTable.has(f.table)) {
       perTable.set(f.table, { ops: new Set(), missingRls: false });
@@ -835,7 +891,7 @@ export function rlsPolicyWarnings(findings) {
     }
   }
 
-  return order.map((table) => {
+  const tableWarnings = order.map((table) => {
     const { ops, missingRls } = perTable.get(table);
     const sortedOps = [...ops].sort().join(', ');
     const hasOps = ops.size > 0;
@@ -863,4 +919,12 @@ export function rlsPolicyWarnings(findings) {
       'la migración. La gestión de usuarios sigue por la función de servidor correspondiente.'
     );
   });
+
+  const unreadableWarnings = unreadablePaths.map(
+    (unreadablePath) =>
+      'No pude revisar la seguridad de esta migración antes de proponértela: ' +
+      `${unreadablePath}. Revísala antes de aplicarla.`
+  );
+
+  return [...tableWarnings, ...unreadableWarnings];
 }

@@ -103,11 +103,24 @@ export function rlsEnabledTelemetry(
 ): string;
 
 /**
- * The user-facing warning strings, one per distinct affected table, covering
- * both `'public-write-policy'` (names the operations removed) and
- * `'missing-rls'` (names that RLS was enabled and warns of the functional
- * consequence) — combined into one message per table when both fire on it.
+ * ` [RLS_UNREADABLE:path,...]` suffix for forge_intent_log (BRIEF G-3); ''
+ * when empty. Sorted and deduplicated by `path` (not `table` — an unreadable
+ * file has none), log-only. Only `reason: 'unparseable'` findings feed this
+ * mark; coexists with the other two marks in the same run.
+ */
+export function rlsUnreadableTelemetry(
+  findings: Iterable<Pick<RlsFinding, 'path' | 'reason'>>
+): string;
+
+/**
+ * The user-facing warning strings, covering all three reasons: distinct
+ * affected tables for `'public-write-policy'` (names the operations removed)
+ * and `'missing-rls'` (names that RLS was enabled and warns of the
+ * functional consequence) — combined into one message per table when both
+ * fire on it — plus one message per distinct unreadable `path` for
+ * `'unparseable'`, telling the user to review that migration themselves
+ * before applying it.
  */
 export function rlsPolicyWarnings(
-  findings: Iterable<Pick<RlsFinding, 'table' | 'command' | 'reason'>>
+  findings: Iterable<Pick<RlsFinding, 'table' | 'command' | 'path' | 'reason'>>
 ): string[];

@@ -1,14 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import {
   evaluateRlsPolicies,
   removeDangerousPolicies,
   addMissingRls,
   rlsPolicyBlockedTelemetry,
   rlsEnabledTelemetry,
+  rlsUnreadableTelemetry,
   rlsPolicyWarnings,
   ROLE_COLUMN_NAMES,
 } from '../src/utils/rlsPolicyGuard.js';
@@ -27,8 +25,6 @@ import {
 // La comprobación de RLS es SEGUNDA e INDEPENDIENTE de la de políticas
 // (BLOQUE 1-BIS), con la misma fuente de verdad ("tabla con columna de rol").
 // ---------------------------------------------------------------------------
-
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const applyGuard = (sql, findings) => removeDangerousPolicies(addMissingRls(sql, findings), findings);
 
@@ -349,6 +345,93 @@ test('G-2 TER: rlsEnabledTelemetry y rlsPolicyBlockedTelemetry coexisten en la m
   );
 });
 
+// ---------------------------------------------------------------------------
+// BRIEF G-3 — CONECTAR LA ALARMA 'unparseable'.
+//
+// evaluateRlsPolicies ya devolvía `reason: 'unparseable'` con
+// `dangerous: true` para un archivo ilegible, pero nada lo consumía. Estas
+// pruebas cubren rlsUnreadableTelemetry (la marca de log) y el nuevo caso
+// en rlsPolicyWarnings (el aviso al usuario) — puramente de comportamiento,
+// sin tocar AIOrchestrator.ts: el cableado de la Pieza 1 (claves
+// origen/destino) no tiene un harness de comportamiento en este repo sin
+// inventar uno nuevo, así que su verificación queda para el humano en
+// producción, tal como pide el brief.
+// ---------------------------------------------------------------------------
+
+test('G-3: rlsUnreadableTelemetry es cadena vacía sin hallazgos unparseable', () => {
+  assert.equal(rlsUnreadableTelemetry([]), '');
+  assert.equal(
+    rlsUnreadableTelemetry([{ path: 'x.sql', reason: 'missing-rls' }]),
+    ''
+  );
+});
+
+test('G-3: rlsUnreadableTelemetry produce la marca con un solo path', () => {
+  const findings = [{ path: 'supabase/migrations/x.sql', reason: 'unparseable' }];
+  assert.equal(
+    rlsUnreadableTelemetry(findings),
+    ' [RLS_UNREADABLE:supabase/migrations/x.sql]'
+  );
+});
+
+test('G-3: rlsUnreadableTelemetry ordena y deduplica varios paths', () => {
+  const findings = [
+    { path: 'supabase/migrations/b.sql', reason: 'unparseable' },
+    { path: 'supabase/migrations/a.sql', reason: 'unparseable' },
+    { path: 'supabase/migrations/a.sql', reason: 'unparseable' },
+  ];
+  assert.equal(
+    rlsUnreadableTelemetry(findings),
+    ' [RLS_UNREADABLE:supabase/migrations/a.sql,supabase/migrations/b.sql]'
+  );
+});
+
+test('G-3: rlsUnreadableTelemetry surge de un evaluateRlsPolicies real sobre SQL ilegible', () => {
+  const verdict = evaluateRlsPolicies([{ path: 'supabase/migrations/roto.sql', sql: '' }]);
+  assert.equal(verdict.dangerous, true);
+  assert.equal(
+    rlsUnreadableTelemetry(verdict.findings),
+    ' [RLS_UNREADABLE:supabase/migrations/roto.sql]'
+  );
+});
+
+test('G-3: rlsPolicyWarnings produce el texto literal acordado para un archivo ilegible', () => {
+  const findings = [{ path: 'supabase/migrations/roto.sql', reason: 'unparseable' }];
+  const warnings = rlsPolicyWarnings(findings);
+  assert.equal(warnings.length, 1);
+  assert.equal(
+    warnings[0],
+    'No pude revisar la seguridad de esta migración antes de proponértela: ' +
+      'supabase/migrations/roto.sql. Revísala antes de aplicarla.'
+  );
+});
+
+test('G-3: rlsPolicyWarnings no repite el mismo path ilegible dos veces', () => {
+  const findings = [
+    { path: 'supabase/migrations/roto.sql', reason: 'unparseable' },
+    { path: 'supabase/migrations/roto.sql', reason: 'unparseable' },
+  ];
+  assert.equal(rlsPolicyWarnings(findings).length, 1);
+});
+
+test('G-3: rlsPolicyWarnings combina un aviso de tabla y uno de archivo ilegible, sin mezclarlos', () => {
+  const findings = [
+    { table: 'app_users', command: 'DELETE', reason: 'public-write-policy' },
+    { path: 'supabase/migrations/roto.sql', reason: 'unparseable' },
+  ];
+  const warnings = rlsPolicyWarnings(findings);
+  assert.equal(warnings.length, 2);
+  assert.ok(warnings.some((w) => w.includes('app_users')));
+  assert.ok(warnings.some((w) => w.includes('roto.sql')));
+});
+
+test('G-3: evaluateRlsPolicies real produce un aviso legible para el SQL ilegible del lote', () => {
+  const verdict = evaluateRlsPolicies([{ path: 'supabase/migrations/roto.sql', sql: null }]);
+  const warnings = rlsPolicyWarnings(verdict.findings);
+  assert.equal(warnings.length, 1);
+  assert.ok(warnings[0].startsWith('No pude revisar la seguridad de esta migración'));
+});
+
 // --- Contrato intacto de BLOQUE 1-BIS ------------------------------------
 
 test('G-2 TER: ROLE_COLUMN_NAMES sigue siendo el mismo set cerrado congelado', () => {
@@ -370,47 +453,17 @@ test('G-2 TER: una política pública de DELETE sigue eliminándose igual que an
   assert.ok(!cleaned.includes('public delete'));
 });
 
-// --- El acoplamiento con la fuente ------------------------------------------
-
-test('G-2 TER: AIOrchestrator engancha addMissingRls ANTES de removeDangerousPolicies y sigue pintando en warnings', () => {
-  const source = fs.readFileSync(
-    path.join(ROOT, 'src', 'services', 'AIOrchestrator.ts'),
-    'utf8'
-  );
-
-  assert.match(
-    source,
-    /import \{\s*evaluateRlsPolicies,\s*removeDangerousPolicies,\s*addMissingRls,\s*rlsPolicyBlockedTelemetry,\s*rlsEnabledTelemetry,\s*rlsPolicyWarnings,\s*\} from '\.\.\/utils\/rlsPolicyGuard\.js';/,
-    'el guard entra desde el módulo puro, con addMissingRls y rlsEnabledTelemetry'
-  );
-
-  assert.match(
-    source,
-    /const withRlsEnabled = addMissingRls\(original, pathFindings\);\s*\n\s*const cleaned = removeDangerousPolicies\(withRlsEnabled, pathFindings\);/,
-    'addMissingRls corre ANTES que removeDangerousPolicies, sobre el mismo archivo'
-  );
-
-  assert.match(
-    source,
-    /this\.notifyFileUpdate\(path, cleaned\);/,
-    'el resultado se reescribe por el mismo camino de persistencia'
-  );
-
-  assert.match(
-    source,
-    /for \(const rlsWarning of rlsWarnings\) \{\s*warnings\.push\(rlsWarning\);\s*\}/,
-    'el aviso se empuja a warnings, el canal que el chat realmente pinta en esta rama'
-  );
-
-  assert.match(
-    source,
-    /const rlsEnabledMark = rlsEnabledTelemetry\(rlsVerdict\.findings\);/,
-    'la marca de RLS encendida se calcula junto a la de políticas bloqueadas'
-  );
-
-  assert.match(
-    source,
-    /functionDeployFailedMark \+ rlsPolicyBlockedMark \+ rlsEnabledMark,/,
-    'las dos marcas de telemetría entran al user_prompt de forge_intent_log'
-  );
-});
+// --- El acoplamiento con AIOrchestrator ------------------------------------
+//
+// BRIEF G-3 — regla dura: un test que valida por regex sobre el código
+// fuente no cuenta como evidencia. El anclaje que vivía aquí (uno por cada
+// bloque anterior) queda retirado a propósito en vez de parcheado: el
+// cableado de la Pieza 1 (dos claves — origen para leer `finalFiles`/
+// `files`, destino para `notifyFileUpdate` y para lo que ve el usuario) es
+// un comportamiento de integración de AIOrchestrator.ts que este archivo no
+// puede ejercitar sin invocar el pipeline completo (Architect → Implementer
+// → Verifier, projectId real, StudioEngine) — inventar ese harness aquí
+// sería la clase de invención que el brief pide no hacer. La verificación
+// de la Pieza 1 es de comportamiento en producción y la hace el humano,
+// como pide el brief; lo que este archivo sigue verificando en detalle es
+// el comportamiento puro de rlsPolicyGuard.js (arriba, con SQL real).

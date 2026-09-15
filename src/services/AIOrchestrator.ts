@@ -38,6 +38,7 @@ import {
   addMissingRls,
   rlsPolicyBlockedTelemetry,
   rlsEnabledTelemetry,
+  rlsUnreadableTelemetry,
   rlsPolicyWarnings,
 } from '../utils/rlsPolicyGuard.js';
 import { edgeFunctionSlug } from '../utils/edgeFunctionPath.js';
@@ -2008,10 +2009,43 @@ export class AIOrchestrator {
       // sentencias por búsqueda de texto sobre el resultado —así que
       // insertar primero nunca invalida lo que la eliminación busca después,
       // y al revés sí invalidaría las anclas por índice.
+      //
+      // G-3 — DOS CLAVES DISTINTAS: ORIGEN PARA LEER, DESTINO PARA REPORTAR.
+      //
+      // `persistedPaths` son los nombres DESPUÉS del renombrado — el loop de
+      // la línea ~1969 empuja `target`, no `path`. Pero `finalFiles`/`files`
+      // —el Verifier nunca supo del renombrado— siguen indexados por el
+      // nombre de ANTES. Buscar el SQL por `persistedPaths` es preguntar a
+      // esos mapas por una clave que nunca tuvieron: cuando hubo renombrado,
+      // `finalFiles.get(target) ?? files.get(target)` da `undefined`, el
+      // guard evalúa un lote de `sql: undefined` y no encuentra nada que
+      // inspeccionar — ni política pública, ni tabla sin RLS. Medido en
+      // vivo: 3 corridas con renombrado sin marca RLS en el log, 1 sin
+      // renombrado con la marca puesta. `rlsPolicyGuard.d.ts` tipa
+      // `sql: unknown`, así que tsc no lo señala.
+      //
+      // Mismo patrón que ya resuelve `memoryFiles` más abajo (líneas
+      // ~2098-2101): el CONTENIDO se lee con la clave ORIGEN
+      // (`migrationInputPaths` + `finalFiles`/`files`, la misma caída de
+      // siempre), y lo que se le ENSEÑA al resto del sistema —el `path` de
+      // cada `RlsFinding`, lo que se notifica, lo que se le nombra al
+      // usuario en el aviso y en el log— es la clave DESTINO
+      // (`migrationRenames.get(source) ?? source`), porque es el nombre que
+      // el usuario ve en el explorador y en el botón de aprobación. Un
+      // guard de seguridad que reporta el nombre viejo de un archivo que ya
+      // no existe con ese nombre no ayuda a nadie a encontrarlo.
       // ----------------------------------------------------------------
-      const rlsMigrationPaths = persistedPaths.filter(isMigrationPath);
+      const rlsSourceByTarget = new Map<string, string>();
+      for (const source of migrationInputPaths) {
+        const target = migrationRenames.get(source) ?? source;
+        if (!isMigrationPath(target)) continue;
+        rlsSourceByTarget.set(target, source);
+      }
       const rlsVerdict = evaluateRlsPolicies(
-        rlsMigrationPaths.map((path) => ({ path, sql: finalFiles.get(path) ?? files.get(path) }))
+        [...rlsSourceByTarget].map(([target, source]) => ({
+          path: target,
+          sql: finalFiles.get(source) ?? files.get(source),
+        }))
       );
       const rlsFindingsByPath = new Map<string, typeof rlsVerdict.findings>();
       for (const finding of rlsVerdict.findings) {
@@ -2020,30 +2054,36 @@ export class AIOrchestrator {
         list.push(finding);
         rlsFindingsByPath.set(finding.path, list);
       }
-      for (const [path, pathFindings] of rlsFindingsByPath) {
-        const original = finalFiles.get(path) ?? files.get(path)!;
+      for (const [target, pathFindings] of rlsFindingsByPath) {
+        const source = rlsSourceByTarget.get(target) ?? target;
+        const original = finalFiles.get(source) ?? files.get(source)!;
         const withRlsEnabled = addMissingRls(original, pathFindings);
         const cleaned = removeDangerousPolicies(withRlsEnabled, pathFindings);
         if (cleaned === original) continue;
-        finalFiles.set(path, cleaned);
-        this.notifyFileUpdate(path, cleaned);
+        finalFiles.set(source, cleaned);
+        this.notifyFileUpdate(target, cleaned);
         const missingRls = pathFindings.filter((f) => f.reason === 'missing-rls');
         const dangerousPolicies = pathFindings.filter((f) => f.reason === 'public-write-policy');
         if (missingRls.length > 0) {
           console.warn(
-            '[AIOrchestrator] RLS habilitada de oficio en', path, ':',
+            '[AIOrchestrator] RLS habilitada de oficio en', target, ':',
             missingRls.map((f) => f.table).join(', ')
           );
         }
         if (dangerousPolicies.length > 0) {
           console.warn(
-            '[AIOrchestrator] política RLS peligrosa eliminada de', path, ':',
+            '[AIOrchestrator] política RLS peligrosa eliminada de', target, ':',
             dangerousPolicies.map((f) => `${f.table}:${f.policy}`).join(', ')
           );
         }
       }
       const rlsPolicyBlockedMark = rlsPolicyBlockedTelemetry(rlsVerdict.findings);
       const rlsEnabledMark = rlsEnabledTelemetry(rlsVerdict.findings);
+      // G-3, PIEZA 2 — la alarma 'unparseable' ya no cae en el `continue` de
+      // arriba sin dejar rastro: la corrida SIGUE igual (decisión ya
+      // tomada, no se retira el botón de aprobación), pero ahora queda
+      // marcada en el log y avisada en el chat.
+      const rlsUnreadableMark = rlsUnreadableTelemetry(rlsVerdict.findings);
       const rlsWarnings = rlsPolicyWarnings(rlsVerdict.findings);
 
       // ----------------------------------------------------------------
@@ -2251,7 +2291,7 @@ export class AIOrchestrator {
           prompt: (hasPartial ? `${input} [PARTIAL:${partialOrders.join(',')}]` : input) +
             targetsMark + rejectedDeleteMark + restoredMark + danglingMark + ddlProposedMark +
             ddlMisplacedMark + planRepairedMark + trimmedMark + orphanCreatedMark +
-            functionDeployFailedMark + rlsPolicyBlockedMark + rlsEnabledMark,
+            functionDeployFailedMark + rlsPolicyBlockedMark + rlsEnabledMark + rlsUnreadableMark,
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,
