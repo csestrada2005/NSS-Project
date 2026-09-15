@@ -32,6 +32,15 @@ import {
   resolveMigrationTargets,
   isMigrationPath,
 } from '../utils/migrationPath.js';
+import {
+  evaluateRlsPolicies,
+  removeDangerousPolicies,
+  addMissingRls,
+  rlsPolicyBlockedTelemetry,
+  rlsEnabledTelemetry,
+  rlsUnreadableTelemetry,
+  rlsPolicyWarnings,
+} from '../utils/rlsPolicyGuard.js';
 import { edgeFunctionSlug } from '../utils/edgeFunctionPath.js';
 import {
   buildMigrationIntentParams,
@@ -1973,6 +1982,111 @@ export class AIOrchestrator {
       }
 
       // ----------------------------------------------------------------
+      // BLOQUE 1 (cirugía G-2) — GUARD DE POLÍTICAS RLS PELIGROSAS.
+      //
+      // El agujero medido en vivo: un Architect puede generar, en el mismo
+      // lote, una Edge Function con service-role para las mutaciones
+      // privilegiadas Y una migración que abre INSERT/UPDATE públicos sobre
+      // la misma tabla con columna de rol. La función queda decorativa —
+      // cualquiera con la consola del navegador se la salta con un UPDATE
+      // directo. Va AQUÍ: el SQL ya está persistido (el loop de arriba ya
+      // corrió notifyFileUpdate), así que la reacción no es un reintento al
+      // Architect —tocaría deshacer escrituras, otra cirugía— sino una
+      // reescritura determinista del archivo YA escrito, ANTES de que
+      // `memoryFiles` tome su fotografía y ANTES de que la migración se
+      // ofrezca al usuario con el botón de aprobación. No se gatea por
+      // `intent.type`, misma doctrina que C-D: la etiqueta la produce un LLM,
+      // y un guard de seguridad no puede depender de que el clasificador
+      // haya acertado.
+      //
+      // BLOQUE 1-TER — una SEGUNDA condición, independiente: una tabla de rol
+      // puede llegar sin `ENABLE ROW LEVEL SECURITY` y CERO políticas —
+      // ningún `CREATE POLICY` que inspeccionar, pero un agujero mayor
+      // (select/insert/update/delete públicos, sin restricción alguna). Por
+      // eso `addMissingRls` corre ANTES que `removeDangerousPolicies`: su
+      // ancla (`insertAt`) se calculó contra el SQL tal como lo evaluó
+      // `evaluateRlsPolicies`, y `removeDangerousPolicies` localiza sus
+      // sentencias por búsqueda de texto sobre el resultado —así que
+      // insertar primero nunca invalida lo que la eliminación busca después,
+      // y al revés sí invalidaría las anclas por índice.
+      //
+      // G-3 — DOS CLAVES DISTINTAS: ORIGEN PARA LEER, DESTINO PARA REPORTAR.
+      //
+      // `persistedPaths` son los nombres DESPUÉS del renombrado — el loop de
+      // la línea ~1969 empuja `target`, no `path`. Pero `finalFiles`/`files`
+      // —el Verifier nunca supo del renombrado— siguen indexados por el
+      // nombre de ANTES. Buscar el SQL por `persistedPaths` es preguntar a
+      // esos mapas por una clave que nunca tuvieron: cuando hubo renombrado,
+      // `finalFiles.get(target) ?? files.get(target)` da `undefined`, el
+      // guard evalúa un lote de `sql: undefined` y no encuentra nada que
+      // inspeccionar — ni política pública, ni tabla sin RLS. Medido en
+      // vivo: 3 corridas con renombrado sin marca RLS en el log, 1 sin
+      // renombrado con la marca puesta. `rlsPolicyGuard.d.ts` tipa
+      // `sql: unknown`, así que tsc no lo señala.
+      //
+      // Mismo patrón que ya resuelve `memoryFiles` más abajo (líneas
+      // ~2098-2101): el CONTENIDO se lee con la clave ORIGEN
+      // (`migrationInputPaths` + `finalFiles`/`files`, la misma caída de
+      // siempre), y lo que se le ENSEÑA al resto del sistema —el `path` de
+      // cada `RlsFinding`, lo que se notifica, lo que se le nombra al
+      // usuario en el aviso y en el log— es la clave DESTINO
+      // (`migrationRenames.get(source) ?? source`), porque es el nombre que
+      // el usuario ve en el explorador y en el botón de aprobación. Un
+      // guard de seguridad que reporta el nombre viejo de un archivo que ya
+      // no existe con ese nombre no ayuda a nadie a encontrarlo.
+      // ----------------------------------------------------------------
+      const rlsSourceByTarget = new Map<string, string>();
+      for (const source of migrationInputPaths) {
+        const target = migrationRenames.get(source) ?? source;
+        if (!isMigrationPath(target)) continue;
+        rlsSourceByTarget.set(target, source);
+      }
+      const rlsVerdict = evaluateRlsPolicies(
+        [...rlsSourceByTarget].map(([target, source]) => ({
+          path: target,
+          sql: finalFiles.get(source) ?? files.get(source),
+        }))
+      );
+      const rlsFindingsByPath = new Map<string, typeof rlsVerdict.findings>();
+      for (const finding of rlsVerdict.findings) {
+        if (finding.reason !== 'public-write-policy' && finding.reason !== 'missing-rls') continue;
+        const list = rlsFindingsByPath.get(finding.path) ?? [];
+        list.push(finding);
+        rlsFindingsByPath.set(finding.path, list);
+      }
+      for (const [target, pathFindings] of rlsFindingsByPath) {
+        const source = rlsSourceByTarget.get(target) ?? target;
+        const original = finalFiles.get(source) ?? files.get(source)!;
+        const withRlsEnabled = addMissingRls(original, pathFindings);
+        const cleaned = removeDangerousPolicies(withRlsEnabled, pathFindings);
+        if (cleaned === original) continue;
+        finalFiles.set(source, cleaned);
+        this.notifyFileUpdate(target, cleaned);
+        const missingRls = pathFindings.filter((f) => f.reason === 'missing-rls');
+        const dangerousPolicies = pathFindings.filter((f) => f.reason === 'public-write-policy');
+        if (missingRls.length > 0) {
+          console.warn(
+            '[AIOrchestrator] RLS habilitada de oficio en', target, ':',
+            missingRls.map((f) => f.table).join(', ')
+          );
+        }
+        if (dangerousPolicies.length > 0) {
+          console.warn(
+            '[AIOrchestrator] política RLS peligrosa eliminada de', target, ':',
+            dangerousPolicies.map((f) => `${f.table}:${f.policy}`).join(', ')
+          );
+        }
+      }
+      const rlsPolicyBlockedMark = rlsPolicyBlockedTelemetry(rlsVerdict.findings);
+      const rlsEnabledMark = rlsEnabledTelemetry(rlsVerdict.findings);
+      // G-3, PIEZA 2 — la alarma 'unparseable' ya no cae en el `continue` de
+      // arriba sin dejar rastro: la corrida SIGUE igual (decisión ya
+      // tomada, no se retira el botón de aprobación), pero ahora queda
+      // marcada en el log y avisada en el chat.
+      const rlsUnreadableMark = rlsUnreadableTelemetry(rlsVerdict.findings);
+      const rlsWarnings = rlsPolicyWarnings(rlsVerdict.findings);
+
+      // ----------------------------------------------------------------
       // BLOQUE 1 (A+B) — el pipeline principal (Architect → Implementer →
       // Verifier) no tenía NINGÚN gancho de deploy: una Edge Function
       // generada aquí se escribía en forge_files y ahí moría, nunca llegaba a
@@ -2177,7 +2291,7 @@ export class AIOrchestrator {
           prompt: (hasPartial ? `${input} [PARTIAL:${partialOrders.join(',')}]` : input) +
             targetsMark + rejectedDeleteMark + restoredMark + danglingMark + ddlProposedMark +
             ddlMisplacedMark + planRepairedMark + trimmedMark + orphanCreatedMark +
-            functionDeployFailedMark,
+            functionDeployFailedMark + rlsPolicyBlockedMark + rlsEnabledMark + rlsUnreadableMark,
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,
@@ -2261,6 +2375,14 @@ export class AIOrchestrator {
           `${misplacedSql.join(', ')} está fuera de supabase/migrations/, así que no puedo ` +
           `ofrecerte aplicarla desde el chat. Pídeme que la vuelva a crear y la escribiré en su sitio.`
         );
+      }
+      // BLOQUE 1 (cirugía G-2) — el aviso NO es opcional: un guard que actúa
+      // sin rastro visible es el mismo patrón de fallo que esta cirugía viene
+      // a matar. `warning` es el campo que esta rama de éxito de verdad pinta
+      // en el chat (ver rlsPolicyGuard.test.js, el test que ancla esto contra
+      // la fuente).
+      for (const rlsWarning of rlsWarnings) {
+        warnings.push(rlsWarning);
       }
       if (hasPartial) {
         const total = steps.length;
