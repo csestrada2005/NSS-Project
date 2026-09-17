@@ -15,21 +15,17 @@ El monorepo también contiene Nebu Studio (CRM, asistente Novy vía `/api/chat`)
 - Idioma: español.
 
 ## Protocolo de sesión — "1 sesión = 1 cirugía completa"
-1. **Fase 0** (antes de tocar nada): `git fetch`, `git rev-parse HEAD`, `git log -1`, y comparar con el hash de `/api/health` en producción. Si no coinciden, STOP y reportar.
-2. **Brief escrito** antes de ejecutar cualquier bloque. Paso cero de todo brief: `git merge-base --is-ancestor <hash> HEAD && echo BASE_OK`.
-3. **Diseño en frío** en Plan Mode. No se edita código hasta que Samuel apruebe el plan.
-4. **Mundos pre-registrados** antes de cada ejecución, incluidos los mundos de fallo. Deben reflejar el estado REAL de los fixtures (con sus residuos conocidos), no uno idealizado.
-5. **Bloques atómicos**: un bloque/PR a la vez, re-verificación antes de abrir el siguiente.
-6. **STOP ante cualquier mundo inesperado.** Sin remediación en caliente, sin hotfixes. Devolver el control.
-7. **Evidencia cruda antes de interpretación.** Mostrar la salida literal del terminal y SEPARADA de tu lectura de ella.
-8. Si la evidencia contradice la premisa del brief, reencuadra la sesión sin pedir permiso, y dilo explícitamente.
-9. **Cierre**: actualizar `docs/QUEUE.md`, declarar qué evidencia se borró en la higiene, y dejar un resumen de cierre.
+1. **Diseño en frío** en Plan Mode, si no estas en Plan Mode al iniciar una sesión no actues. No se edita código hasta que Samuel apruebe el plan.
+2. **Mundos pre-registrados** antes de cada ejecución, incluidos los mundos de fallo. Deben reflejar el estado REAL de los fixtures (con sus residuos conocidos), no uno idealizado.
+3. **Bloques atómicos**: un bloque/PR a la vez, re-verificación antes de abrir el siguiente.
+4. **CHECKS MANUALES**: una vez hecho modificaciones en el código y estemos listos para checar los mundos pre-registrados detente, hago checks en el software deployed con los cambios que hagas y comparamos mundos pre-registrados y lo que en verdad paso. 
+5. **STOP ante cualquier mundo inesperado.** Sin remediación en caliente, sin hotfixes. Devolver el control.
+6. **Evidencia cruda antes de interpretación.** Mostrar la salida literal del terminal y SEPARADA de tu lectura de ella.
+7. Si la evidencia contradice la premisa del brief, reencuadra la sesión sin pedir permiso, y dilo explícitamente.
+8. **Cierre**: actualizar `docs/QUEUE.md`, declarar qué evidencia se borró en la higiene, y dejar un resumen de cierre.
 
 ## Límites duros
-- **Git es dominio exclusivo de Samuel**: merges, deploys y ramas los hace él. Puedes commitear en la rama de trabajo; la barrera real es que Samuel lea el diff antes del merge.
-- Verificación de diffs: desde referencias frescas (`git fetch` antes). `git diff --stat` contra un `origin/main` viejo ya dio falsos positivos.
 - **DDL destructivo**: exige frase de confirmación tecleada por Samuel. El SQL no se muestra hasta que llegue la frase.
-- `projectId` declarado y confirmado (visible en la URL) antes de cualquier checkpoint en vivo en la UI de Wyrd.
 - Cada query declara explícitamente contra qué base de datos corre (DB principal de Wyrd vs Supabase del fixture).
 - Antes de consultar una tabla no verificada en la sesión: `information_schema.columns`.
 - Dyad: `src/pro` es licencia FSL, **NO LEER**. El resto es Apache 2.0.
@@ -50,22 +46,16 @@ El monorepo también contiene Nebu Studio (CRM, asistente Novy vía `/api/chat`)
 - Harnesses: `scripts/compilerPerfHarness.mjs`, `scripts/classifierHarness.mjs` (aislado, sin créditos ni DB)
 - Si `node_modules/@esbuild/` está vacío: `npm install` de nuevo.
 
-## Graphify — cuándo sí y cuándo no
-- SÍ (acreditado): ubicación de archivos, imports, contención de módulos.
-- NO: call sites de despacho dinámico (`getInstance().method()`) ni menciones en strings/prompts → usar `grep`.
-- Todo lo que salga del grafo se confirma con `view` antes de entrar en un checkpoint. El grafo apunta, el archivo confirma.
-- Si el grafo puede estar viejo (commits desde el último rebuild), trátalo como pista, no como evidencia.
-
 ## Tablas clave (DB principal)
 `forge_files`, `forge_intent_log`, `forge_project_memory`, `forge_projects`, `forge_chat_messages`, `forge_snapshots`, `forge_credit_wallets`, `forge_credit_transactions`. Función `deduct_credits` (sólo service_role).
 `forge_intent_log` no tiene DDL en el repo: su forma vive sólo en la DB.
 
 ## graphify
 
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+Este proyecto cuenta con un grafo de conocimiento en `graphify-out/` que incluye nodos principales (*god nodes*), estructura de comunidades y relaciones entre archivos.
 
-Rules:
-- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
-- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
-- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+Reglas:
+- Para consultas sobre el código, primero ejecuta `graphify query "<pregunta>"` cuando exista el archivo `graphify-out/graph.json`. Utiliza `graphify path "<A>" "<B>"` para analizar relaciones y `graphify explain "<concepto>"` para conceptos específicos. Estos comandos devuelven un subgrafo acotado, generalmente mucho más manejable que `GRAPH_REPORT.md` o la salida bruta de `grep`.
+- Si existe `graphify-out/wiki/index.md`, úsalo para la navegación general en lugar de explorar el código fuente directamente.
+- Consulta `graphify-out/GRAPH_REPORT.md` únicamente para una revisión arquitectónica general o cuando los comandos `query`, `path` o `explain` no proporcionen suficiente contexto.
+- Tras modificar el código, ejecuta `graphify update .` para mantener el grafo actualizado (basado únicamente en el AST, sin coste de API).
