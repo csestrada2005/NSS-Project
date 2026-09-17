@@ -1664,55 +1664,55 @@
   "supabase/migrations/20240101000000_create_meta_connections.sql": {
     "mtime": 1789301702.1936736,
     "seen": 1789628930.7648184,
-    "ast_hash": "",
+    "ast_hash": "a0339a2ece3b98106f4cf83d8549b4cb",
     "semantic_hash": ""
   },
   "supabase/migrations/20240102000000_create_forge_tables.sql": {
     "mtime": 1789301702.1936736,
     "seen": 1789628930.7648222,
-    "ast_hash": "",
+    "ast_hash": "f93886be286e0c5cd92f61d8b0fb1bce",
     "semantic_hash": ""
   },
   "supabase/migrations/20240103000000_forge_secrets.sql": {
     "mtime": 1789301702.1936736,
     "seen": 1789628930.7648249,
-    "ast_hash": "",
+    "ast_hash": "149ac37808f562dd84d3ededf5067a3d",
     "semantic_hash": ""
   },
   "supabase/migrations/20240104000000_forge_analytics.sql": {
     "mtime": 1789301702.1936736,
     "seen": 1789628930.764828,
-    "ast_hash": "",
+    "ast_hash": "ad26a25a2d7096e2d61418990bacbb04",
     "semantic_hash": ""
   },
   "supabase/migrations/20240105000000_strip_data_oid_from_forge_files.sql": {
     "mtime": 1789301702.1936736,
     "seen": 1789628930.7648304,
-    "ast_hash": "",
+    "ast_hash": "834acc57ff825cb979e548dc3c29c00e",
     "semantic_hash": ""
   },
   "supabase/migrations/20240106000000_forge_snapshots_retention_30.sql": {
     "mtime": 1789301702.1936736,
     "seen": 1789628930.7648327,
-    "ast_hash": "",
+    "ast_hash": "a2968a4fb70241bb0361837761251a36",
     "semantic_hash": ""
   },
   "supabase/migrations/20240107000000_normalize_brand_var_color_syntax_in_forge_files.sql": {
     "mtime": 1789301702.1936736,
     "seen": 1789628930.7648351,
-    "ast_hash": "",
+    "ast_hash": "a2c1aee2b0611b89d838abf8ff802095",
     "semantic_hash": ""
   },
   "supabase/migrations/20240108000000_credits_server_side_deduction.sql": {
     "mtime": 1789301702.1946735,
     "seen": 1789628930.7648377,
-    "ast_hash": "",
+    "ast_hash": "ad0287a98c5392c225c227f98ae925d5",
     "semantic_hash": ""
   },
   "supabase/migrations/20240109000000_deduct_credits_allow_partial.sql": {
     "mtime": 1789301702.1946735,
     "seen": 1789628930.76484,
-    "ast_hash": "",
+    "ast_hash": "b6f2e98016b506ccd09e3447f2ca86aa",
     "semantic_hash": ""
   },
   ".claude/CLAUDE.md": {
