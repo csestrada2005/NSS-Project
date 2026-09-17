@@ -1,0 +1,1 @@
+{"nodes": [{"id": "$graphify-root$_supabase_migrations_20240107000000_normalize_brand_var_color_syntax_in_forge_files_sql", "label": "20240107000000_normalize_brand_var_color_syntax_in_forge_files.sql", "file_type": "code", "source_file": "supabase/migrations/20240107000000_normalize_brand_var_color_syntax_in_forge_files.sql", "source_location": null}], "edges": []}

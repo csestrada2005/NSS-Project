@@ -132,19 +132,22 @@
  * nada, LO PERMITE TODO.
  *
  * La comprobación es una SEGUNDA condición, INDEPENDIENTE de la de
- * políticas, con la misma fuente de verdad (`roleTables`, construida por la
- * MISMA `tablesWithRoleColumnInSql` ya existente — no se duplica ni se
- * relaja): si el lote crea o altera una tabla con columna de rol y esa tabla
- * no queda con `ENABLE ROW LEVEL SECURITY` en el mismo lote, el guard añade
- * la sentencia `alter table <tabla> enable row level security;`
- * inmediatamente después del `CREATE TABLE` correspondiente (o del último
- * `ALTER TABLE` sobre esa tabla si no hay `CREATE` en el lote), antes de
- * cualquier política — el orden importa, una política antes de habilitar
- * RLS es SQL válido pero confuso de leer. Fail-closed, mismo razonamiento
- * que el resto del módulo: ante SQL ilegible el veredicto es "falta RLS", y
- * añadir de más sobre una tabla que ya la tenía es inocuo (la sentencia es
- * idempotente en Postgres), mientras que añadir de menos deja una tabla de
- * permisos abierta al mundo.
+ * políticas. Originalmente compartía la misma fuente de verdad que la
+ * comprobación de políticas (`roleTables`, "tabla con columna de rol") —
+ * desde G-5 (ver más abajo) YA NO: dispara para cualquier tabla que el lote
+ * CREA, tenga o no columna de rol; `roleTables` sigue intacta y sigue
+ * alimentando SÓLO la comprobación de políticas. Si el lote crea o altera
+ * una tabla que corresponda y esa tabla no queda con
+ * `ENABLE ROW LEVEL SECURITY` en el mismo lote, el guard añade la sentencia
+ * `alter table <tabla> enable row level security;` inmediatamente después
+ * del `CREATE TABLE` correspondiente (o del último `ALTER TABLE` sobre esa
+ * tabla si no hay `CREATE` en el lote — ese respaldo por ALTER sigue
+ * reservado a tablas de rol, ver G-5), antes de cualquier política — el
+ * orden importa, una política antes de habilitar RLS es SQL válido pero
+ * confuso de leer. Fail-closed, mismo razonamiento que el resto del módulo:
+ * ante SQL ilegible el veredicto es "falta RLS", y añadir de más sobre una
+ * tabla que ya la tenía es inocuo (la sentencia es idempotente en
+ * Postgres), mientras que añadir de menos deja una tabla abierta al mundo.
  *
  * QUÉ NO HACE esta comprobación, a propósito: no inventa políticas. Si la
  * tabla queda con RLS encendida y sin ninguna política, el acceso anónimo
@@ -164,6 +167,39 @@
  * matar. `rlsUnreadableTelemetry` (marca `[RLS_UNREADABLE:...]`) y el nuevo
  * caso en `rlsPolicyWarnings` cierran esa alarma — decisión ya tomada: se
  * avisa y la corrida SIGUE, no se retira el botón de aprobación.
+ *
+ * G-5 — BLOQUE 1-TER YA NO SE LIMITA A TABLAS DE ROL (QUEUE ítem 0)
+ * ---------------------------------------------------------------------
+ * Diagnóstico en vivo sobre Vertigo (087ddaf3-6236-47ae-ba72-bc96887a9691),
+ * corrida `control_cd_g4`: `create table public.control_cd_g4 (id serial
+ * primary key, note text);` — CERO columnas de rol, CERO `enable row level
+ * security`, CERO políticas. El guard no dijo nada, y estaba en lo correcto
+ * SEGÚN su alcance de entonces: `roleTables` sólo contenía tablas con una
+ * columna del set cerrado, y esta no tenía ninguna. El resultado medido: una
+ * tabla del esquema `public` completamente abierta —select/insert/update/
+ * delete con la clave anónima— sin que nada lo avisara, sólo porque no era
+ * una tabla de "permisos".
+ *
+ * Decisión (sesión de diagnóstico, ítem 0 de QUEUE.md): la condición de
+ * BLOQUE 1-TER dispara ahora para CUALQUIER tabla que este lote crea con
+ * `CREATE TABLE`, tenga o no columna de rol — `tablesRequiringRls` es la
+ * unión de `roleTables` (sin cambios, sigue alimentando la comprobación de
+ * políticas de arriba) y de toda tabla con ancla de `CREATE TABLE` en el
+ * lote. La comprobación de POLÍTICAS PÚBLICAS PELIGROSAS (BLOQUE 1-BIS) NO
+ * se toca — sigue limitada a `roleTables`: un insert público sin auth sobre
+ * una tabla sin columna de rol (un formulario de reseñas, de contacto, de
+ * leads) es una decisión de producto legítima del usuario final, no un
+ * agujero de escalación de privilegios, y este guard no la reescribe solo.
+ *
+ * Deliberadamente NO se amplía a `ALTER TABLE ... ADD COLUMN`: una tabla
+ * PREEXISTENTE que sólo recibe una columna nueva en este lote puede llevar
+ * RLS encendida desde una migración anterior fuera de este lote —el guard
+ * no tiene visibilidad de eso—, así que tratar ese ALTER como "falta RLS"
+ * dispararía sobre el caso más común (ampliar una tabla ya protegida), no
+ * sobre el agujero real (una tabla nueva que nace sin ningún candado). El
+ * ALTER como ancla de inserción se mantiene intacto para su uso original:
+ * una tabla de rol preexistente que amplía con una columna de rol y no trae
+ * `CREATE TABLE` en el lote.
  *
  * Plain JS (no TS) para que sea importable desde `node --test`, igual que
  * migrationGate.js, migrationPath.js y planGuard.js. El tipado vive en
@@ -574,13 +610,22 @@ export function evaluateRlsPolicies(migrations) {
   const rlsEnabledTables = new Set();
   const createAnchorsByPath = new Map();
   const alterAnchorsByPath = new Map();
+  // G-5 — toda tabla que este lote CREA, no sólo las de rol (ver cabecera
+  // del módulo). Sólo CREATE TABLE alimenta este set; ALTER TABLE ... ADD
+  // COLUMN sigue siendo, exclusivamente, ancla de respaldo para tablas de
+  // rol preexistentes — ver por qué en la cabecera.
+  const createdTables = new Set();
   for (const { path, sql } of readable) {
     for (const table of tablesWithRlsEnabledInSql(sql)) rlsEnabledTables.add(table);
-    createAnchorsByPath.set(path, createTableAnchorsInSql(sql));
+    const createAnchors = createTableAnchorsInSql(sql);
+    createAnchorsByPath.set(path, createAnchors);
     alterAnchorsByPath.set(path, alterTableAnchorsInSql(sql));
+    for (const table of createAnchors.keys()) createdTables.add(table);
   }
 
-  for (const table of roleTables) {
+  const tablesRequiringRls = new Set([...roleTables, ...createdTables]);
+
+  for (const table of tablesRequiringRls) {
     if (rlsEnabledTables.has(table)) continue;
 
     // El ancla preferida es el PRIMER `CREATE TABLE` de esta tabla en el
@@ -620,6 +665,11 @@ export function evaluateRlsPolicies(migrations) {
       statement: `alter table ${anchor.tableRaw} enable row level security;`,
       insertAt: anchor.insertAt,
       reason: 'missing-rls',
+      // G-5 — de qué comprobación viene el finding: decide la redacción del
+      // aviso (`rlsPolicyWarnings`). Una tabla de rol sin RLS sigue
+      // mencionando la función de servidor como vía de gestión de usuarios;
+      // una tabla cualquiera (control_cd_g4) no tiene esa vía que nombrar.
+      roleTable: roleTables.has(table),
     });
   }
 
@@ -863,12 +913,18 @@ export function rlsUnreadableTelemetry(findings) {
  * aquí: se avisa y la corrida SIGUE — no se tumba el pipeline ni se retira
  * el botón de aprobación.
  *
- * @param {Iterable<{ table: string | null, command: string | null, path: string | null, reason: string }>} findings
+ * G-5: un `missing-rls` puede venir ahora de una tabla SIN columna de rol
+ * (ver cabecera del módulo). El texto lo distingue por `f.roleTable`: una
+ * tabla de rol sigue nombrando la función de servidor como vía de gestión
+ * de usuarios (sigue siendo cierto para ella); una tabla cualquiera no
+ * tiene esa vía que inventar, así que su aviso no la menciona.
+ *
+ * @param {Iterable<{ table: string | null, command: string | null, path: string | null, reason: string, roleTable?: boolean }>} findings
  * @returns {string[]}
  */
 export function rlsPolicyWarnings(findings) {
   const order = [];
-  const perTable = new Map(); // table -> { ops: Set<string>, missingRls: boolean }
+  const perTable = new Map(); // table -> { ops: Set<string>, missingRls: boolean, roleTable: boolean }
   const unreadablePaths = [];
   for (const f of findings ?? []) {
     if (!f) continue;
@@ -881,18 +937,25 @@ export function rlsPolicyWarnings(findings) {
     if (typeof f.table !== 'string' || f.table.length === 0) continue;
     if (f.reason !== 'public-write-policy' && f.reason !== 'missing-rls') continue;
     if (!perTable.has(f.table)) {
-      perTable.set(f.table, { ops: new Set(), missingRls: false });
+      perTable.set(f.table, { ops: new Set(), missingRls: false, roleTable: false });
       order.push(f.table);
     }
     const entry = perTable.get(f.table);
-    if (f.reason === 'missing-rls') entry.missingRls = true;
+    // G-5 — `public-write-policy` sólo dispara sobre tablas de rol (sin
+    // cambios): su sola presencia ya basta para marcar la tabla como tal.
+    // `missing-rls` trae su propio `roleTable` (puede ser cualquiera ahora).
+    if (f.reason === 'public-write-policy') entry.roleTable = true;
+    if (f.reason === 'missing-rls') {
+      entry.missingRls = true;
+      if (f.roleTable) entry.roleTable = true;
+    }
     if (f.reason === 'public-write-policy' && typeof f.command === 'string' && f.command.length > 0) {
       entry.ops.add(f.command);
     }
   }
 
   const tableWarnings = order.map((table) => {
-    const { ops, missingRls } = perTable.get(table);
+    const { ops, missingRls, roleTable } = perTable.get(table);
     const sortedOps = [...ops].sort().join(', ');
     const hasOps = ops.size > 0;
 
@@ -905,12 +968,21 @@ export function rlsPolicyWarnings(findings) {
         'será legible desde el navegador.'
       );
     }
-    if (missingRls) {
+    if (missingRls && roleTable) {
       return (
         'Guard de seguridad: se corrigió la migración generada. Row level security estaba ' +
         `apagada sobre ${table} (tabla con columna de rol); la habilité antes de proponer la ` +
         'migración. Sin políticas, la tabla no será legible desde el navegador — el acceso ' +
         'sigue yendo por la función de servidor correspondiente.'
+      );
+    }
+    if (missingRls) {
+      // G-5 — tabla sin columna de rol: no hay función de servidor que
+      // nombrar, así que el aviso no la inventa.
+      return (
+        'Guard de seguridad: se corrigió la migración generada. Row level security estaba ' +
+        `apagada sobre ${table}; la habilité antes de proponer la migración. Sin políticas, la ` +
+        'tabla no será legible desde el navegador hasta que definas quién puede acceder a ella.'
       );
     }
     return (
