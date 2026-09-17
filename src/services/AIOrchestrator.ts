@@ -2098,6 +2098,23 @@ export class AIOrchestrator {
       // idempotente (mismo slug sobreescribe), a diferencia del DDL, donde un
       // DROP destruye datos irrecuperables y por eso existe el gate humano de
       // [DDL_PROPOSED:...] + botón.
+      //
+      // BOMBA LATENTE: `contentOf` (abajo) resuelve por `finalFiles.get(p) ??
+      // files.get(p)` con `p` YA renombrado (viene de `persistedPaths`, post
+      // migrationRenames). Hoy es inocuo porque sólo se renombran `.sql`
+      // (migrationRenames sólo tiene entradas de migraciones) y una Edge
+      // Function nunca pasa por ahí, así que su `p` es siempre la clave
+      // original bajo la que vive en `finalFiles`/`files`. Si algún día se
+      // renombran también Edge Functions (mismo patrón que las migraciones,
+      // por colisión de slug o de directorio), `contentOf(p)` con el nombre
+      // NUEVO devolverá `undefined` — el mapa sigue indexado por el nombre
+      // VIEJO — y el `if (code == null) continue` de deployGeneratedFunctions
+      // (línea ~1024) saltará esa función EN SILENCIO: no despliega
+      // `undefined`, pero tampoco avisa, ni la cuenta como fallo. La
+      // reparación sería resolver `contentOf` por `migrationRenames` (o el
+      // mapa de renombrados que corresponda) igual que ya hace `memoryFiles`
+      // más abajo (~2137-2141): leer con la clave de ORIGEN, reportar con la
+      // de DESTINO.
       // ----------------------------------------------------------------
       const { failed: functionDeployFailures } = await this.deployGeneratedFunctions(
         persistedPaths,
@@ -2141,29 +2158,47 @@ export class AIOrchestrator {
       for (const from of migrationRenames.keys()) memoryFiles.delete(from);
 
       // ----------------------------------------------------------------
-      // PIEZA A — gate de propuesta. Un intent 'database_change' que dejó al
-      // menos una migración escrita NO ha tocado la base de datos: la
-      // generación jamás ejecuta DDL. Antes, ese intent cerraba en 'success'
-      // con el archivo persistido y nada distinguía "la tabla existe" de "hay
-      // un .sql esperando a que alguien lo apruebe". La marca es ese rastro, y
-      // es lo único que este intent produce respecto de la base.
+      // PIEZA A — gate de propuesta. CUALQUIER intent que dejó al menos una
+      // migración escrita NO ha tocado la base de datos: la generación jamás
+      // ejecuta DDL. Antes, sólo un 'database_change' calculaba esta marca —
+      // pero la etiqueta la produce un LLM, y un modify_existing o
+      // new_feature cuyo plan también escribe bajo supabase/migrations/
+      // cerraba en 'success' con el archivo persistido y nada distinguía "la
+      // tabla existe" de "hay un .sql esperando a que alguien lo apruebe".
+      // El log quedaba mudo mientras el CHAT sí mostraba el botón de
+      // aprobación (ddlProposedMark en ChatInterface.tsx / StudioEngine.tsx,
+      // calculado sobre result.modifiedFiles sin este gate) — el gate no
+      // evitaba falsos positivos, sólo apagaba verdaderos.
+      // Ahora el log calcula exactamente lo mismo, con la misma lista
+      // (persistedPaths filtrados por isMigrationPath), que la marca del chat.
       // Mismo mecanismo que restoredMark / danglingMark: sufijo concatenado a
       // user_prompt, sin columnas nuevas ni valores de enum nuevos.
       // ----------------------------------------------------------------
-      const ddlProposedMark = intent.type === 'database_change'
-        ? ddlProposedTelemetry(persistedPaths.filter(isMigrationPath))
-        : '';
+      const ddlProposedMark = ddlProposedTelemetry(persistedPaths.filter(isMigrationPath));
 
       // ----------------------------------------------------------------
       // CIRUGÍA 2.2 — GUARDA DE LA NORMALIZACIÓN.
       //
-      // Si tras colocar los .sql queda alguno fuera del prefijo, sólo puede ser
-      // uno que YA existía ahí (los nuevos los recoloca resolveMigrationTargets;
-      // los preexistentes no se mueven porque moverlos es borrar y recrear a
-      // espaldas del usuario). Ese archivo es invisible para el botón de
-      // aprobación y para el contexto de schema, y ANTES no lo decía nadie:
-      // se escribía, el intent cerraba en 'success' y la cadena moría callada.
-      // Ahora deja rastro en el log y aviso en el chat.
+      // RED DE SEGURIDAD INACTIVA (G-4). La premisa de arriba —"los
+      // preexistentes no se mueven"— es FALSA desde C-D': resolveMigrationTargets
+      // ahora recibe `normalizeDir: intent.type === 'database_change' ||
+      // touchesMigrations(migrationInputPaths)`, un OR por contenido, y con
+      // normalizeDir activo mueve TODO `.sql` fuera del prefijo, preexistentes
+      // incluidos (ver 'un .sql PREEXISTENTE fuera de sitio SÍ se recupera' en
+      // migrationDirNormalization.test.js). Con normalizeDir inactivo,
+      // touchesMigrations dio false sobre migrationInputPaths, lo que significa
+      // que ese lote no traía ningún `.sql` que colocar — misplacedMigrations
+      // corre sobre un persistedPaths sin ningún candidato.
+      // En ambas ramas `misplacedSql` sale vacío: esta guarda no puede disparar
+      // HOY. Se deja en el código (y este comentario documenta por qué está
+      // inerte, no por qué es innecesaria) porque deja de estarlo el día que:
+      //   (a) algo empuje a `persistedPaths` un `.sql` fuera del bucle de
+      //       migrationInputPaths (sin pasar por resolveMigrationTargets), o
+      //   (b) resolveMigrationTargets deje de mover los preexistentes
+      //       (revertir C-D', o acotar su OR sólo a los `.sql` nuevos).
+      // Si eso ocurre, el archivo vuelve a ser invisible para el botón de
+      // aprobación y para el contexto de schema, y esta guarda vuelve a tener
+      // algo que reportar: deja rastro en el log y aviso en el chat.
       // ----------------------------------------------------------------
       const misplacedSql = intent.type === 'database_change'
         ? misplacedMigrations(persistedPaths)
