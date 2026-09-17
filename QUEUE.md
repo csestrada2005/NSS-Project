@@ -9,7 +9,7 @@ Re-verificar con Fase 0 antes de confiar en cualquier hash de este archivo.
 
 ---
 
-## 0. CERRADO — Guard RLS "no actuó" tras G-4: REENCUADRADO, no era regresión de G-3 (2026-09-17)
+## 0. CERRADO Y CONFIRMADO EN PRODUCCIÓN — Guard RLS "no actuó" tras G-4: REENCUADRADO, no era regresión de G-3 (2026-09-17)
 
 **Diagnóstico (evidencia cruda: `forge_intent_log` + `forge_files`, DB principal de Wyrd, corridas
 `control_cd_g4` y `customer_reviews` sobre Vertigo):** las dos corridas tienen `outcome=success` y
@@ -38,16 +38,22 @@ sigue siendo una decisión de producto válida del usuario final, no algo que el
 `ALTER TABLE ... ADD COLUMN` (una tabla preexistente puede tener RLS de una migración fuera del lote,
 invisible para el guard). `server/rlsPolicyGuard.test.js`: 6 tests nuevos (dos son regresión con el SQL
 real de `control_cd_g4`/`customer_reviews`), 4 actualizados para el nuevo alcance. `node --test
-"server/*.test.js"` (605), `npx vitest run` (41) y `npx tsc -b --force` en verde. Sin commitear — pendiente
-de que Samuel lo pida explícitamente.
+"server/*.test.js"` (605), `npx vitest run` (41) y `npx tsc -b --force` en verde. Commiteado en main
+(`1e37705`); branch de checkpoint `claude/g5-rls-guard-checkpoint`, PR #325.
 
 **Pendiente, no de esta sesión:** ampliar también a políticas públicas sobre tablas SIN columna de rol
 (la opción que Samuel dejó para después, con mockup — bucket 5). `customer_reviews` con su insert público
 sigue sin ningún aviso; es una decisión de UX pendiente, no un bug.
 
-**CHECK MANUAL pendiente (siguiente sesión o antes de cerrar ésta):** desplegar y reproducir contra
-Vertigo una tabla nueva sin columna de rol y sin RLS — confirmar en `forge_intent_log` que ahora aparece
-`[RLS_ENABLED:<tabla>]` y que el SQL persistido trae la sentencia añadida.
+**CHECK MANUAL — CONFIRMADO (2026-09-18):** Samuel reprodujo contra Vertigo una tabla nueva sin columna de
+rol y sin RLS (`rls_check_g5`, columnas `id, note`). Evidencia cruda: el aviso mostrado en el chat es
+literalmente el texto nuevo de G-5 para tablas sin rol ("Row level security estaba apagada sobre
+rls_check_g5; la habilité antes de proponer la migración..." — sin "(tabla con columna de rol)" ni
+"función de servidor", que sólo aparecen para tablas de rol), y el SQL persistido trae
+`alter table public.rls_check_g5 enable row level security;` justo después del `CREATE TABLE`. No se
+verificó por separado el literal `[RLS_ENABLED:rls_check_g5]` en `forge_intent_log` (mismo hallazgo que
+produce el aviso, así que la marca debería estar, pero queda sin confirmar dato-a-dato si alguna vez hay
+duda sobre esta corrida puntual).
 
 ---
 
