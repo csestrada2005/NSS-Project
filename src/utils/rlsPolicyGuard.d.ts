@@ -44,6 +44,14 @@ export interface RlsFinding {
   reason: RlsFindingReason;
   /** Only set when `reason` is `'missing-rls'`: offset in that file's SQL to splice `statement` after. */
   insertAt?: number;
+  /**
+   * Only set when `reason` is `'missing-rls'` (G-5): whether this table also
+   * has a role/permission column. `'missing-rls'` fires for any `CREATE
+   * TABLE` in the batch since G-5, not just role-bearing ones — this flag is
+   * what `rlsPolicyWarnings` reads to decide whether the warning can name the
+   * server-function escape hatch (only true for role tables).
+   */
+  roleTable?: boolean;
 }
 
 export interface RlsVerdict {
@@ -53,11 +61,14 @@ export interface RlsVerdict {
 
 /**
  * Evaluates a batch of migrations (the same batch an intent proposes
- * together) for TWO independent conditions over role-bearing tables:
- * public-write RLS policies (`'public-write-policy'`, BLOQUE 1-BIS) and
- * tables left without `ENABLE ROW LEVEL SECURITY` in the same batch
- * (`'missing-rls'`, BLOQUE 1-TER). Fail-closed: unreadable SQL content
- * produces a `dangerous: true` verdict.
+ * together) for TWO independent conditions: public-write RLS policies over
+ * role-bearing tables (`'public-write-policy'`, BLOQUE 1-BIS, unchanged —
+ * still scoped to tables with a role/permission column) and tables left
+ * without `ENABLE ROW LEVEL SECURITY` in the same batch (`'missing-rls'`,
+ * BLOQUE 1-TER). Since G-5, `'missing-rls'` fires for ANY table this batch
+ * creates with `CREATE TABLE`, not just role-bearing ones — see `RlsFinding.
+ * roleTable`. Fail-closed: unreadable SQL content produces a `dangerous:
+ * true` verdict.
  */
 export function evaluateRlsPolicies(migrations: Iterable<RlsMigrationInput>): RlsVerdict;
 
@@ -119,8 +130,10 @@ export function rlsUnreadableTelemetry(
  * functional consequence) — combined into one message per table when both
  * fire on it — plus one message per distinct unreadable `path` for
  * `'unparseable'`, telling the user to review that migration themselves
- * before applying it.
+ * before applying it. Since G-5, a `'missing-rls'` finding's `roleTable`
+ * flag decides whether the message can mention the server-function escape
+ * hatch (only for role tables) or stays generic (any other table).
  */
 export function rlsPolicyWarnings(
-  findings: Iterable<Pick<RlsFinding, 'table' | 'command' | 'path' | 'reason'>>
+  findings: Iterable<Pick<RlsFinding, 'table' | 'command' | 'path' | 'reason' | 'roleTable'>>
 ): string[];

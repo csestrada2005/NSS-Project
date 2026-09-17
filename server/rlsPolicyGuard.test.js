@@ -147,14 +147,100 @@ test('G-2 TER: CREATE TABLE con columna de rol, CON enable RLS, queda intacta', 
   assert.equal(applyGuard(sql, verdict.findings), sql);
 });
 
-test('G-2 TER: CREATE TABLE sin columna de rol, sin enable RLS, queda intacta', () => {
+test('G-5: CREATE TABLE sin columna de rol, sin enable RLS, AHORA recibe la sentencia (antes quedaba intacta)', () => {
   const sql = `
     create table productos (id uuid primary key, nombre text);
   `;
   const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql }]);
   const missingRls = verdict.findings.filter((f) => f.reason === 'missing-rls');
-  assert.equal(missingRls.length, 0);
+  assert.equal(missingRls.length, 1);
+  assert.equal(missingRls[0].table, 'productos');
+  assert.equal(missingRls[0].roleTable, false, 'productos no es tabla de rol');
+  const cleaned = applyGuard(sql, verdict.findings);
+  assert.ok(cleaned.includes('alter table productos enable row level security;'));
+});
+
+test('G-5: el aviso de una tabla sin rol no menciona "columna de rol" ni la función de servidor', () => {
+  const sql = `create table productos (id uuid primary key, nombre text);`;
+  const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql }]);
+  const warnings = rlsPolicyWarnings(verdict.findings);
+  assert.equal(warnings.length, 1);
+  assert.ok(warnings[0].includes('productos'));
+  assert.ok(warnings[0].includes('no será legible desde el navegador'));
+  assert.ok(!warnings[0].includes('columna de rol'), 'productos no tiene columna de rol');
+  assert.ok(!warnings[0].includes('función de servidor'), 'no hay función de servidor que nombrar');
+});
+
+test('G-5: ALTER TABLE ... ADD COLUMN sobre una tabla SIN columna de rol y SIN CREATE TABLE en el lote no dispara nada (sólo CREATE amplía el alcance)', () => {
+  const sql = `
+    alter table productos add column descripcion text;
+  `;
+  const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql }]);
+  const missingRls = verdict.findings.filter((f) => f.reason === 'missing-rls');
+  assert.equal(
+    missingRls.length,
+    0,
+    'una tabla preexistente que sólo recibe una columna puede ya tener RLS de una migración anterior fuera de este lote'
+  );
   assert.equal(applyGuard(sql, verdict.findings), sql);
+});
+
+test('G-5, regresión en vivo (QUEUE ítem 0): control_cd_g4, sin columna de rol y sin RLS, ya no queda invisible para el guard', () => {
+  // SQL real persistido en la corrida `control_cd_g4` sobre Vertigo
+  // (087ddaf3-6236-47ae-ba72-bc96887a9691) que motivó esta cirugía: cero
+  // columnas de rol, cero RLS, cero políticas — antes de G-5 el guard no
+  // decía nada.
+  const sql = `create table if not exists public.control_cd_g4 (
+  id serial primary key,
+  note text
+);
+
+comment on table public.control_cd_g4 is 'wyrd:read=public';`;
+  const verdict = evaluateRlsPolicies([{ path: 'supabase/migrations/x_create_control_cd_g4.sql', sql }]);
+  const missingRls = verdict.findings.filter((f) => f.reason === 'missing-rls');
+  assert.equal(missingRls.length, 1);
+  assert.equal(missingRls[0].table, 'control_cd_g4');
+  assert.equal(missingRls[0].roleTable, false);
+  const cleaned = applyGuard(sql, verdict.findings);
+  assert.ok(cleaned.includes('alter table public.control_cd_g4 enable row level security;'));
+});
+
+test('G-5, regresión en vivo (QUEUE ítem 0): customer_reviews, insert público sin columna de rol, sigue SIN tocarse (decisión de producto, no bug)', () => {
+  // SQL real persistido en la corrida `customer_reviews`: RLS ya está
+  // encendida y trae un insert público deliberado (un formulario de
+  // reseñas). Sin columna de rol, así que la comprobación de políticas
+  // (BLOQUE 1-BIS, sin cambios en G-5) no debe tocarlo.
+  const sql = `create table if not exists public.customer_reviews (
+  id         serial primary key,
+  name       text not null,
+  rating     integer not null check (rating >= 1 and rating <= 5),
+  comment    text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.customer_reviews enable row level security;
+
+create policy "Anyone can insert reviews"
+  on public.customer_reviews
+  for insert
+  with check (true);
+
+create policy "Public can read reviews"
+  on public.customer_reviews
+  for select
+  using (true);`;
+  const verdict = evaluateRlsPolicies([{ path: 'supabase/migrations/x_create_customer_reviews.sql', sql }]);
+  assert.equal(
+    verdict.findings.filter((f) => f.reason === 'missing-rls').length,
+    0,
+    'RLS ya estaba encendida'
+  );
+  assert.equal(
+    verdict.findings.filter((f) => f.reason === 'public-write-policy').length,
+    0,
+    'customer_reviews no es tabla de rol: el insert público es una decisión de producto válida'
+  );
+  assert.equal(applyGuard(sql, verdict.findings), sql, 'el SQL no se toca');
 });
 
 test('G-2 TER: ALTER TABLE que añade columna de rol a tabla existente, sin enable RLS en el lote, se añade', () => {
@@ -194,21 +280,41 @@ test('G-2 TER: tabla con rol sin RLS Y con política pública de delete — se d
 
 // --- El anclaje (reutilizado sin relajar) -----------------------------
 
-test('G-2 TER: una tabla llamada roles_de_juego, sin columna de rol, queda intacta', () => {
+// G-5: estas dos pruebas fijan RLS ya encendida a propósito — su objeto es
+// el precedente de coincidencia de nombre (tabla/columna que PARECE "role"
+// sin serlo), no el requisito de RLS. Desde G-5 cualquier CREATE TABLE sin
+// RLS recibe la sentencia (ver los tests de arriba), así que sin esta RLS ya
+// puesta ambas dejarían de probar lo que dicen probar.
+
+test('G-2 TER: una tabla llamada roles_de_juego, sin columna de rol, no se trata como tabla de rol para políticas', () => {
   const sql = `
     create table roles_de_juego (id uuid primary key, puntuacion integer);
+    alter table roles_de_juego enable row level security;
+    create policy "public insert" on roles_de_juego for insert with check (true);
   `;
   const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql }]);
-  assert.equal(verdict.findings.filter((f) => f.reason === 'missing-rls').length, 0);
+  assert.equal(verdict.findings.filter((f) => f.reason === 'missing-rls').length, 0, 'RLS ya estaba encendida');
+  assert.equal(
+    verdict.findings.filter((f) => f.reason === 'public-write-policy').length,
+    0,
+    'roles_de_juego no tiene columna de rol pese al nombre de la tabla'
+  );
   assert.equal(applyGuard(sql, verdict.findings), sql);
 });
 
-test('G-2 TER: una columna llamada control queda intacta (precedente C2-3)', () => {
+test('G-2 TER: una columna llamada control no se trata como columna de rol (precedente C2-3)', () => {
   const sql = `
     create table configuraciones (id uuid primary key, control text);
+    alter table configuraciones enable row level security;
+    create policy "public insert" on configuraciones for insert with check (true);
   `;
   const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql }]);
-  assert.equal(verdict.findings.filter((f) => f.reason === 'missing-rls').length, 0);
+  assert.equal(verdict.findings.filter((f) => f.reason === 'missing-rls').length, 0, 'RLS ya estaba encendida');
+  assert.equal(
+    verdict.findings.filter((f) => f.reason === 'public-write-policy').length,
+    0,
+    'la columna "control" no es "role" (C2-3)'
+  );
   assert.equal(applyGuard(sql, verdict.findings), sql);
 });
 
@@ -278,18 +384,20 @@ test('G-2 TER: addMissingRls es idempotente sobre el MISMO finding', () => {
 
 // --- Dos tablas en el mismo lote ------------------------------------------
 
-test('G-2 TER: dos tablas en el mismo lote, una con rol y otra sin — sólo la primera recibe la sentencia', () => {
+test('G-5: dos tablas en el mismo lote, una con rol y otra sin — AMBAS reciben la sentencia (antes sólo la de rol)', () => {
   const sql = `
     create table app_users (id uuid primary key, role text);
     create table productos (id uuid primary key, nombre text);
   `;
   const verdict = evaluateRlsPolicies([{ path: 'x.sql', sql }]);
   const missingRls = verdict.findings.filter((f) => f.reason === 'missing-rls');
-  assert.equal(missingRls.length, 1);
-  assert.equal(missingRls[0].table, 'app_users');
+  assert.equal(missingRls.length, 2);
+  const byTable = new Map(missingRls.map((f) => [f.table, f]));
+  assert.equal(byTable.get('app_users').roleTable, true);
+  assert.equal(byTable.get('productos').roleTable, false);
   const cleaned = applyGuard(sql, verdict.findings);
   assert.ok(cleaned.includes('alter table app_users enable row level security;'));
-  assert.ok(!cleaned.includes('alter table productos enable row level security;'));
+  assert.ok(cleaned.includes('alter table productos enable row level security;'));
 });
 
 // --- El aviso ------------------------------------------------------------
