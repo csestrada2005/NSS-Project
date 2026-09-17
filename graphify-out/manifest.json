@@ -1660,5 +1660,161 @@
     "seen": 1789628890.500497,
     "ast_hash": "3f29e3b2b9f0cd0ef8fb2140f824d62a",
     "semantic_hash": "3f29e3b2b9f0cd0ef8fb2140f824d62a"
+  },
+  "supabase/migrations/20240101000000_create_meta_connections.sql": {
+    "mtime": 1789301702.1936736,
+    "seen": 1789628930.7648184,
+    "ast_hash": "a0339a2ece3b98106f4cf83d8549b4cb",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/20240102000000_create_forge_tables.sql": {
+    "mtime": 1789301702.1936736,
+    "seen": 1789628930.7648222,
+    "ast_hash": "f93886be286e0c5cd92f61d8b0fb1bce",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/20240103000000_forge_secrets.sql": {
+    "mtime": 1789301702.1936736,
+    "seen": 1789628930.7648249,
+    "ast_hash": "149ac37808f562dd84d3ededf5067a3d",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/20240104000000_forge_analytics.sql": {
+    "mtime": 1789301702.1936736,
+    "seen": 1789628930.764828,
+    "ast_hash": "ad26a25a2d7096e2d61418990bacbb04",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/20240105000000_strip_data_oid_from_forge_files.sql": {
+    "mtime": 1789301702.1936736,
+    "seen": 1789628930.7648304,
+    "ast_hash": "834acc57ff825cb979e548dc3c29c00e",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/20240106000000_forge_snapshots_retention_30.sql": {
+    "mtime": 1789301702.1936736,
+    "seen": 1789628930.7648327,
+    "ast_hash": "a2968a4fb70241bb0361837761251a36",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/20240107000000_normalize_brand_var_color_syntax_in_forge_files.sql": {
+    "mtime": 1789301702.1936736,
+    "seen": 1789628930.7648351,
+    "ast_hash": "a2c1aee2b0611b89d838abf8ff802095",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/20240108000000_credits_server_side_deduction.sql": {
+    "mtime": 1789301702.1946735,
+    "seen": 1789628930.7648377,
+    "ast_hash": "ad0287a98c5392c225c227f98ae925d5",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/20240109000000_deduct_credits_allow_partial.sql": {
+    "mtime": 1789301702.1946735,
+    "seen": 1789628930.76484,
+    "ast_hash": "b6f2e98016b506ccd09e3447f2ca86aa",
+    "semantic_hash": ""
+  },
+  ".claude/CLAUDE.md": {
+    "mtime": 1789301702.1326737,
+    "seen": 1789628930.7648573,
+    "ast_hash": "9b31786b637be3c13978bec4c2330752",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/SKILL.md": {
+    "mtime": 1789628855.0772576,
+    "seen": 1789628930.7648597,
+    "ast_hash": "1656a8a8e4a05bbe69f32cd15de81e87",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/references/add-watch.md": {
+    "mtime": 1789628842.407258,
+    "seen": 1789628930.764862,
+    "ast_hash": "d59d027fe449f06aa03905a01184e779",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/references/exports.md": {
+    "mtime": 1789628842.407258,
+    "seen": 1789628930.7648642,
+    "ast_hash": "9da2a2152e60a22f07f05fed5158f287",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/references/extraction-spec.md": {
+    "mtime": 1789628842.407258,
+    "seen": 1789628930.7648666,
+    "ast_hash": "42fef56a01698118f7fd722acdadea34",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/references/github-and-merge.md": {
+    "mtime": 1789628842.407258,
+    "seen": 1789628930.764869,
+    "ast_hash": "cde13df085e4c492aeb7ba298a996d0d",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/references/hooks.md": {
+    "mtime": 1789628842.408258,
+    "seen": 1789628930.7648711,
+    "ast_hash": "3f545db6ce646650bb9de588f5512a27",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/references/query.md": {
+    "mtime": 1789628842.408258,
+    "seen": 1789628930.7648735,
+    "ast_hash": "3c46f8ad006874260614ed8657d02307",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/references/transcribe.md": {
+    "mtime": 1789628842.408258,
+    "seen": 1789628930.7648754,
+    "ast_hash": "67b6a5fa6c0974e18f60db9f8932fbd8",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/references/update.md": {
+    "mtime": 1789628842.408258,
+    "seen": 1789628930.7648778,
+    "ast_hash": "9378bd03d56baaf78bd738ab3848f142",
+    "semantic_hash": ""
+  },
+  "CLAUDE.md": {
+    "mtime": 1789628855.0782576,
+    "seen": 1789628930.7648802,
+    "ast_hash": "21fba93c359b97b0a235ae68f3f1b17b",
+    "semantic_hash": ""
+  },
+  "QUEUE.md": {
+    "mtime": 1789627726.6213012,
+    "seen": 1789628930.7648823,
+    "ast_hash": "a1a6d7d435591b8cc0a37ab2fab5585a",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1789301702.1346736,
+    "seen": 1789628930.7648847,
+    "ast_hash": "c276bb46e43f36c3caccc3875b9e7580",
+    "semantic_hash": ""
+  },
+  "index.html": {
+    "mtime": 1789301702.1516736,
+    "seen": 1789628930.764887,
+    "ast_hash": "cfdd34c6e92bc0831350700cff4531f6",
+    "semantic_hash": ""
+  },
+  "public/logo.png": {
+    "mtime": 1789301702.1536736,
+    "seen": 1789628930.7648892,
+    "ast_hash": "8310a654906c1eabcd2e3b68c90eea7c",
+    "semantic_hash": ""
+  },
+  "public/wyrd-logo.png": {
+    "mtime": 1789301702.1636736,
+    "seen": 1789628930.7648916,
+    "ast_hash": "b80c893d614ca1483ce6ff9adcd892f3",
+    "semantic_hash": ""
+  },
+  "src/assets/react.svg": {
+    "mtime": 1789301702.1696737,
+    "seen": 1789628930.764894,
+    "ast_hash": "f0402b67b6ce880f65666bb49e841696",
+    "semantic_hash": ""
   }
 }
