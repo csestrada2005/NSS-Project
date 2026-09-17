@@ -17,8 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "graphify hook-guard search",
-            "timeout": 10
+            "command": "/usr/local/py-utils/bin/graphify hook-guard search"
           }
         ]
       },
@@ -27,8 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "graphify hook-guard read",
-            "timeout": 10
+            "command": "/usr/local/py-utils/bin/graphify hook-guard read"
           }
         ]
       }
