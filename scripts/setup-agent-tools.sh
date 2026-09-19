@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
 set -e
 
-# Caveman — skill (rule file) + proxy CLI
+# Caveman — CLI
 if ! command -v caveman >/dev/null 2>&1; then
   echo "Instalando Caveman CLI..."
   npm install -g @caveman-ai/cli
 fi
+
+# Caveman — skill (rule file, no lanza nada)
 if [ ! -d "$HOME/.claude/skills/caveman" ]; then
   echo "Instalando skill de Caveman..."
   npx -y skills add JuliusBrussee/caveman -g --yes
 fi
-caveman claude >/dev/null 2>&1 || true   # activa el wrap del proxy, idempotente
+
+# Caveman — hook de compresión persistente (NO usar "caveman claude", eso LANZA el agente)
+caveman hooks install claude || true
 
 # UI/UX Pro Max
 if ! command -v uipro >/dev/null 2>&1; then
