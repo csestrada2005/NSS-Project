@@ -75,6 +75,53 @@ export interface DesignBrief {
   facts?: SiteFacts;
 }
 
+/**
+ * Onboarding de proyecto (bucket 5, ítem 2, mockup D) — hints opcionales del
+ * usuario que deben ganarle a lo que el modelo hubiera elegido solo.
+ * `tone` es inherentemente difuso (no hay un valor "correcto" a verificar),
+ * así que sólo se pliega como instrucción en el prompt. El color SÍ tiene un
+ * valor correcto — el que el usuario picó — así que se aplica de forma
+ * determinista después de la llamada al modelo (applyPaletteHints), nunca
+ * confiando en que el modelo lo haya respetado al pie de la letra.
+ */
+export interface DesignHints {
+  /** Vibe elegido en el wizard (p. ej. "Luxury"). Sólo se sugiere al modelo. */
+  tone?: string;
+  /**
+   * Paleta completa de 5 vars tomada tal cual de una fila real de la tabla
+   * `colors` (DB principal de Wyrd) — modo "Sugerido por el prompt". Gana
+   * sobre `pinnedPrimaryHsl` si ambos llegan (no debería pasar desde la UI).
+   */
+  pinnedPalette?: BrandColor[];
+  /**
+   * Un solo HSL fijado a mano — modo "Rueda de color". Sólo se conoce
+   * --brand-primary; el resto de la paleta lo sigue decidiendo el modelo,
+   * mismo prompt de siempre más una restricción dura sobre ese único valor.
+   */
+  pinnedPrimaryHsl?: string;
+}
+
+/**
+ * Aplica los hints de color de forma determinista sobre un brief ya
+ * validado — nunca antes: no hay nada que corregir si el modelo falló, y
+ * `generate()` ya devuelve null en ese caso. Pura y exportada para
+ * testearla sin red (DesignBriefService.test.ts).
+ */
+export function applyPaletteHints(brief: DesignBrief, hints?: DesignHints): DesignBrief {
+  if (!hints) return brief;
+  if (hints.pinnedPalette && hints.pinnedPalette.length === REQUIRED_BRAND_VARS.length) {
+    return { ...brief, palette: hints.pinnedPalette };
+  }
+  if (hints.pinnedPrimaryHsl) {
+    const pinned = hints.pinnedPrimaryHsl;
+    return {
+      ...brief,
+      palette: brief.palette.map((c) => (c.var === '--brand-primary' ? { ...c, hsl: pinned } : c)),
+    };
+  }
+  return brief;
+}
+
 /** One verified image from the Unsplash-backed pool (server /api/images/search). */
 export interface PoolImage {
   url: string;
@@ -282,12 +329,22 @@ export class DesignBriefService {
    * Ask the model for a design brief coherent with the user's prompt domain.
    * Returns null on any failure — the caller must fall back to no brief.
    */
-  static async generate(prompt: string): Promise<DesignBrief | null> {
+  static async generate(prompt: string, hints?: DesignHints): Promise<DesignBrief | null> {
+    const pinnedPrimaryLine = hints?.pinnedPrimaryHsl
+      ? `\nThe --brand-primary color is ALREADY DECIDED by the user and MUST be ` +
+        `exactly "${hints.pinnedPrimaryHsl}" (raw HSL channels) — build the rest ` +
+        `of the palette coherently around it, but never change this one value.`
+      : '';
+    const toneLine = hints?.tone
+      ? `\nThe user picked a "${hints.tone}" vibe for this project — the tone ` +
+        `and design_direction MUST reflect that explicitly.`
+      : '';
+
     const system =
       'You are a brand and design director. Given a short product description, ' +
       'produce a concise, opinionated design brief coherent with the product\'s ' +
       'domain. Respond with ONLY a raw JSON object (no markdown, no code fences, ' +
-      'no prose) with EXACTLY this shape:\n' +
+      `no prose) with EXACTLY this shape:${pinnedPrimaryLine}${toneLine}\n` +
       '{\n' +
       '  "brand_name": string,   // coherent with the domain of the user prompt\n' +
       '  "tagline": string,\n' +
@@ -340,11 +397,12 @@ export class DesignBriefService {
       if (!text) return null;
 
       const parsed = JSON.parse(this.sanitizeJson(this.extractJsonObject(text)));
-      const brief = this.validate(parsed);
+      let brief = this.validate(parsed);
       if (!brief) {
         console.warn('[DesignBriefService] Brief JSON failed validation, skipping.');
         return null;
       }
+      brief = applyPaletteHints(brief, hints);
       // Fallback: guarantee at least one search keyword for the image pool.
       if (brief.imagery_keywords.length === 0) {
         brief.imagery_keywords = [this.deriveFallbackKeyword(prompt)];
@@ -807,9 +865,10 @@ export class DesignBriefService {
    */
   static async scaffold(
     prompt: string,
-    files: Map<string, string>
+    files: Map<string, string>,
+    hints?: DesignHints
   ): Promise<Map<string, string> | null> {
-    const brief = await this.generate(prompt);
+    const brief = await this.generate(prompt, hints);
 
     // Fallback: the brief failed but the single-source contract must still hold.
     // Write a placeholder src/data/site.ts and neutral SEO, then continue —

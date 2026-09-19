@@ -158,9 +158,9 @@ const ForgeDashboard = () => {
       {showNewProjectModal && (
         <NewProjectModal
           onClose={() => setShowNewProjectModal(false)}
-          onCreated={(projectId, _, initialPrompt) => {
+          onCreated={(projectId, _, initialPrompt, designHints) => {
             setShowNewProjectModal(false);
-            navigate(`/studio/${projectId}`, { state: { initialPrompt } });
+            navigate(`/studio/${projectId}`, { state: { initialPrompt, designHints } });
           }}
         />
       )}

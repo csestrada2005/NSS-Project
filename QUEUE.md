@@ -364,8 +364,76 @@ Mundos pre-registrados:
 - **Falla real (si aparece, SÍ es bug):** cualquier llamada a `api.supabase.com` visible desde el
   navegador, cualquier secreto visible en Network/consola, o una pantalla rota/500 sin manejar.
 
-### 5.2 Siguiente — Variantes de diseño + preguntas interactivas al iniciar proyecto
-Sin empezar. Se abre después de confirmar el check manual de 5.1.
+### 5.2 HECHO (pendiente CHECK MANUAL) — Onboarding de proyecto: tono + color (mockup D, 2026-09-19)
+
+**Diseño acordado con Samuel, con mockup delante** (canvas: https://claude.ai/artifact/6tNr4u1GXf8JUfTckjhwZF,
+4 opciones A/B/C/D — D es la elegida). Contexto de Samuel que cambió el diseño original: la mayoría de
+proyectos de Nebu vienen de un brief que el equipo ya analizó, así que el color no siempre debe
+"inventarlo" la IA — a veces ya se sabe. `NewProjectModal` pasa de 2 a 3 pasos: nombre → descripción (igual
+que antes) → tono + color.
+
+**Tono:** pills de selección rápida (Playful/Professional/Luxury/Minimal/Bold) — se pliega como
+instrucción al modelo, nunca se fuerza (es difuso, no hay un valor "correcto" que verificar).
+
+**Color, dos modos:**
+- **🎨 Color wheel** — el usuario pica un hex a mano (para cuando el brief de Nebu ya trae el color de
+  marca del cliente). Se fija SÓLO `--brand-primary`; el resto de la paleta lo sigue decidiendo el modelo,
+  con una restricción dura en el prompt sobre ese único valor.
+- **✨ Suggested for you** — matchea la descripción contra las tablas REALES `products`/`colors` de la DB
+  PRINCIPAL de Wyrd (Samuel las confirmó: ahí vive el espejo del skill ui-ux-pro-max — `colors`, `products`,
+  `styles`, `typography`, `ui_reasoning`; las tres últimas quedan para 5.3/futuro). Al elegir una paleta
+  sugerida, los 5 colores se aplican EXACTOS — el modelo nunca los reinterpreta.
+
+**Nota de higiene:** el primer intento de esta pieza vendorizaba una copia de `colors.csv` del skill
+`ui-ux-pro-max` dentro del repo — Samuel corrigió que esos datos YA viven en la DB principal de Wyrd
+(`colors`/`products`/etc.) y deben salir de ahí, no de una copia. El archivo vendorizado se borró antes de
+llegar a commit, no quedó rastro.
+
+**Hecho:**
+- `src/utils/colorPaletteSuggest.js` + `.d.ts` — `suggestPalettes(prompt, productRows, colorRows, limit)`,
+  scoring puro y determinista por palabra clave contra `products.keywords` + bonus por `product_type`
+  literal en el prompt, unido con `colors` por `product_type` exacto. No hace red — recibe las filas ya
+  cargadas. Columnas de `colors` verificadas contra `information_schema.columns` (las pegó Samuel), NO
+  adivinadas: `product_type, primary_color, on_primary, secondary_color, on_secondary, accent, on_accent,
+  background, foreground, card, card_foreground, muted, muted_foreground, border, destructive,
+  on_destructive, ring, notes` — este módulo sólo usa el subconjunto que el brief necesita.
+- `src/utils/colorConversion.js` + `.d.ts` — `hexToHslString(hex)`, hex → "H S% L%" sin wrapper (el formato
+  exacto que `DesignBrief.palette` espera).
+- `src/services/DesignBriefService.ts` — nuevo tipo exportado `DesignHints` (`tone?`, `pinnedPalette?`,
+  `pinnedPrimaryHsl?`) y función pura exportada `applyPaletteHints(brief, hints)`: aplica el override DE
+  FORMA DETERMINISTA sobre el brief ya validado — nunca confía en que el modelo respetó la instrucción al
+  pie de la letra (misma doctrina que el resto de guards de esta familia: detectar/forzar, no sólo pedir en
+  texto). `generate(prompt, hints?)` y `scaffold(prompt, files, hints?)` ahora aceptan el hint opcional.
+- `src/components/forge/NewProjectModal.tsx`: 3 pasos. `toPinnedPalette()` exportado y testeado — mapea las
+  6 columnas de `colors` a las 5 vars de `DesignBrief` en el orden exacto de `REQUIRED_BRAND_VARS`.
+- `onCreated` ahora manda `designHints` por `navigate(..., { state: { initialPrompt, designHints } })`
+  (`ForgeDashboard.tsx`) → `StudioEngine.tsx` lo lee de `location.state` y lo pasa a `applyDesignBrief` →
+  `DesignBriefService.scaffold`. Sin cambios de esquema en `forge_projects` — el hint sólo importa para el
+  scaffold inicial, mismo mecanismo ya usado para `initialPrompt`.
+- Tests nuevos: `server/colorPaletteSuggest.test.js` (7), `server/colorConversion.test.js` (5),
+  `DesignBriefService.test.ts` (+5, `applyPaletteHints`), `NewProjectModal.test.ts` (2, `toPinnedPalette`).
+  `node --test "server/*.test.js"` → 653/653 verdes (641 previos + 12). `npx vitest run` → 48/48 (41 + 7).
+  `npx tsc -b --force` → 0 errores. `graphify update .` corrido.
+
+**CHECK MANUAL — PENDIENTE.** Cómo reproducirlo (necesita `sesión-5` desplegada o el dev server local con
+credenciales reales de la DB principal — este sandbox no las tiene):
+1. Crear un proyecto nuevo. Confirmar que ahora son 3 pasos ("Step 1/2/3 of 3"), no 2.
+2. En el paso 3: elegir un tono, dejar "✨ Suggested for you" activo — con una descripción tipo "a coffee
+   subscription service" deben aparecer paletas reales (nombres tipo "Coffee Shop", no inventados) con sus
+   colores reales de la tabla `colors`.
+3. Cambiar a "🎨 Color wheel", picar un preset o escribir un hex, confirmar que el swatch de vista previa
+   cambia.
+4. Publicar el proyecto y revisar `DESIGN.md`/`src/index.css` generados: si elegiste una paleta sugerida,
+   los 5 `--brand-*` deben ser EXACTAMENTE la conversión HSL de esos hex (no otros inventados por el
+   modelo). Si usaste la rueda, sólo `--brand-primary` debe ser exacto; el resto puede variar.
+
+Mundos pre-registrados:
+- **Esperado:** wizard de 3 pasos, paletas sugeridas reales (nunca vacías salvo prompt genuinamente sin
+  match), color elegido respetado EXACTO en el proyecto generado.
+- **Residuo conocido, no bug:** si el prompt no matchea ningún `product_type`/`keyword`, "Suggested for
+  you" muestra "No close match found" y el usuario cae a la rueda — comportamiento esperado, no un fallo.
+- **Falla real (si aparece, SÍ es bug):** paletas inventadas/genéricas en vez de filas reales de `colors`,
+  o el color elegido por el usuario NO aparece exacto en el `--brand-*` del proyecto generado.
 
 ### 5.3 Cierre de sesión — Rediseño cosmético completo
 Sin empezar.
