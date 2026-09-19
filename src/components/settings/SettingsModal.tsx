@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { motion } from 'framer-motion';
 import { X, Lock, Github, Rocket, Database, Globe, Mail, BarChart3 } from 'lucide-react';
+import { modalBackdropMotion, modalPanelMotion } from '@/components/ui/modalMotion';
 import { DeployManager } from '../deploy/DeployManager';
 import { gitHubService } from '../../services/GitHubService';
 import type { FileSystemTree } from '@webcontainer/api';
@@ -92,8 +94,14 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-gray-900 border border-gray-800 rounded-xl shadow-2xl w-full max-w-4xl p-6 flex flex-col max-h-[90vh]">
+    <motion.div
+      {...modalBackdropMotion}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+    >
+      <motion.div
+        {...modalPanelMotion}
+        className="bg-gray-900 border border-gray-800 rounded-xl shadow-2xl w-full max-w-4xl p-6 flex flex-col max-h-[90vh]"
+      >
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-white">Settings</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
@@ -248,7 +256,7 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
             Close
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

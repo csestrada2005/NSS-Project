@@ -24,7 +24,9 @@
  */
 
 import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 import { AlertTriangle, Loader2, X } from 'lucide-react';
+import { modalBackdropMotion, modalPanelMotion } from '@/components/ui/modalMotion';
 import type { DestructiveFinding } from '@/utils/ddlGuard.js';
 import {
   DROP,
@@ -104,12 +106,16 @@ export function MigrationApplyModal({
 
   return (
     <>
-      <div
+      <motion.div
+        {...modalBackdropMotion}
         className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md"
         onClick={() => { if (!isApplying) onCancel(); }}
       />
       <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-4">
-        <div className="bg-card border border-border rounded-2xl w-full max-w-lg shadow-2xl pointer-events-auto flex flex-col max-h-[90vh]">
+        <motion.div
+          {...modalPanelMotion}
+          className="bg-card border border-border rounded-2xl w-full max-w-lg shadow-2xl pointer-events-auto flex flex-col max-h-[90vh]"
+        >
           <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
             <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
               {isDestructive && <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />}
@@ -213,7 +219,7 @@ export function MigrationApplyModal({
               </button>
             )}
           </div>
-        </div>
+        </motion.div>
       </div>
     </>
   );

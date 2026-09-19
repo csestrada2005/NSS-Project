@@ -450,8 +450,68 @@ Mundos pre-registrados:
 - **Falla real (si aparece, SÍ es bug):** paletas inventadas/genéricas en vez de filas reales de `colors`,
   o el color elegido por el usuario NO aparece exacto en el `--brand-*` del proyecto generado.
 
-### 5.3 Cierre de sesión — Rediseño cosmético completo
-Sin empezar.
+### 5.3 EN PROGRESO (bloque 1 de N, pendiente CHECK MANUAL) — Rediseño cosmético completo (2026-09-19)
+
+**Alcance confirmado con Samuel:** toda la plataforma Wyrd Forge (Nebu Studio queda fuera — separación
+arquitectónica de `CLAUDE.md`, no se tocó ninguna pantalla de Nebu aunque varias comparten el patrón
+`fixed inset-0`). Dirección: usar el skill UI/UX Pro Max. Además del estilo/paleta, Samuel pidió
+explícitamente modales y animaciones — "que se sienta como una experiencia".
+
+**Hallazgo del skill, con matiz:** el agregador `--design-system` del skill no dio un resultado usable en
+dos búsquedas distintas (mismo patrón "Horizontal Scroll Journey" — pensado para landing pages, no un
+builder — y mismo estilo "Vibrant & Block-based" — bold/playful, "Best For: startups, gaming,
+entretenimiento", no encaja con una herramienta profesional; el markdown que devuelve además tiene un bug
+real, imprime filas crudas del CSV sin formatear). Buscando directo en el dominio `style` sí salió un match
+bueno: **"Dark Mode (OLED)"** (fondo negro/gris muy oscuro, alto contraste, "Best For: coding platforms",
+WCAG AAA). Typography confirmó **Inter** dos veces ("dashboards, admin panels, enterprise apps").
+
+**Buena noticia:** revisando `src/index.css`, la base de Wyrd YA está alineada con esa recomendación —
+`--background: 0 0% 5%` (casi OLED), Inter ya importado y usado como fuente del body, `--primary: 355 78%
+56%` (el rojo/crimson de marca, que se conserva — no se reemplaza por nada del skill). Cero cambios de
+fondo necesarios ahí; el trabajo real está en la capa de interacción, que sí estaba plana.
+
+**Hecho — capa de modales/animación:**
+- `src/components/ui/modalMotion.ts` (nuevo) — valores compartidos de framer-motion (`modalBackdropMotion`,
+  `modalPanelMotion`) para que todos los modales entren con el mismo fundido + pop, en vez de aparecer de
+  golpe. Alcance deliberado: sólo animación de ENTRADA — animar la salida necesitaría `AnimatePresence` en
+  cada componente padre que monta/desmonta el modal condicionalmente, un cambio de estructura mucho mayor
+  que se queda para después (ver Pendiente). `framer-motion` ya era dependencia del proyecto (usada en
+  RoleSelectionPage/SetupPage/Login) — no se agregó nada nuevo.
+- Aplicado a los 5 modales centrados reales de Wyrd Forge: `NewProjectModal`, `SettingsModal`,
+  `ShareProjectModal`, `MigrationApplyModal` (el de confirmación de DDL destructivo — SÓLO se tocó el
+  wrapper visual, cero cambios a la lógica de la frase de confirmación), `CommandModal` (este último
+  centraba con `transform` de Tailwind — se separó en un div de posicionamiento estático + un
+  `motion.div` interno para la animación, para no pisar el `translate(-50%,-50%)` con el transform que
+  escribe framer-motion).
+- `HistoryDrawer.tsx`: el panel YA tenía slide animado (`transition-transform`, siempre montado, toggle por
+  `isOpen`) — sólo el backdrop aparecía de golpe. Se cambió a siempre-montado + `transition-opacity`, mismo
+  patrón que el panel, en vez de agregar framer-motion donde ya había una solución CSS que funcionaba.
+- Limpieza de higiene encontrada de paso: `NewProjectModal.tsx` (código de esta misma sesión, ítem 5.2)
+  tenía dos emojis como iconos de pestaña (🎨/✨) — el propio checklist del skill lo marca como anti-patrón
+  ("No emoji icons — use SVG"). Cambiados a `Palette`/`Sparkles` de lucide-react.
+- `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 653/653 (sin cambios, nada de esto
+  toca al servidor). `npx vitest run` → 48/48 (sin cambios). `graphify update .` corrido.
+
+**Pendiente (sigue en esta sesión, por bloques):** el resto de "toda la plataforma" — `ForgeDashboard`
+(cards, hover states), la barra superior/chrome de `StudioEngine`, y una pasada del checklist de calidad
+del skill (cursor-pointer, contraste, espaciado) sobre esas pantallas. No se ha tocado nada de eso todavía
+— este bloque cerró sólo la capa de modales/animación.
+
+**CHECK MANUAL — PENDIENTE.** Cómo reproducirlo (dev server local o `sesión-5` desplegada):
+1. Abrir "New Project" — el modal debe entrar con un fundido + pop suave, no aparecer de golpe.
+2. Abrir Settings, Share, History (el ícono de historial) — mismo fundido en cada uno; History además debe
+   seguir deslizando desde la derecha como antes.
+3. Si hay una migración destructiva pendiente para probar, confirmar que `MigrationApplyModal` anima igual
+   Y que la frase de confirmación sigue exigiéndose exactamente igual que antes (esto NO debía cambiar).
+4. Abrir el Command Palette (⌘K o como se dispare) — debe seguir centrado en pantalla, ahora con el mismo
+   fundido, sin saltar de posición ni aparecer descentrado.
+
+Mundos pre-registrados:
+- **Esperado:** los 5 modales + el drawer de historial entran con el mismo fundido/pop consistente: nada
+  de saltos, nada descentrado, ninguna lógica de confirmación/contenido cambiada.
+- **Falla real (si aparece, SÍ es bug):** `CommandModal` aparece descentrado o con doble transform
+  (síntoma de que el `translate(-50%,-50%)` de Tailwind chocó con el transform de framer-motion), o
+  `MigrationApplyModal` deja aplicar sin pedir la frase de confirmación en el caso destructivo.
 
 ### Resto del bucket (sin tocar esta sesión)
 - RAG de UI/UX: PatternRetriever da `direct: 0 | vector: 0`. Primera pregunta: ¿pasa igual en producción?

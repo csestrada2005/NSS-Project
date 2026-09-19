@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
-import { X, Loader2 } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { X, Loader2, Palette, Sparkles } from 'lucide-react';
 import { SupabaseService } from '@/services/SupabaseService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { suggestPalettes, type SuggestedPalette } from '@/utils/colorPaletteSuggest.js';
 import { hexToHslString } from '@/utils/colorConversion.js';
 import type { DesignHints, BrandColor } from '@/services/DesignBriefService';
+import { modalBackdropMotion, modalPanelMotion } from '@/components/ui/modalMotion';
 
 interface NewProjectModalProps {
   onClose: () => void;
@@ -140,8 +142,14 @@ export default function NewProjectModal({ onClose, onCreated }: NewProjectModalP
     }`;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-      <div className="bg-zinc-800 border border-zinc-700 rounded-2xl shadow-2xl w-full max-w-lg p-6 flex flex-col gap-5">
+    <motion.div
+      {...modalBackdropMotion}
+      className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+    >
+      <motion.div
+        {...modalPanelMotion}
+        className="bg-zinc-800 border border-zinc-700 rounded-2xl shadow-2xl w-full max-w-lg p-6 flex flex-col gap-5"
+      >
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -227,15 +235,19 @@ export default function NewProjectModal({ onClose, onCreated }: NewProjectModalP
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-foreground">Color</span>
                 <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
-                  <button type="button" className={tabClass(colorMode === 'wheel')} onClick={() => setColorMode('wheel')}>
-                    🎨 Color wheel
+                  <button
+                    type="button"
+                    className={`${tabClass(colorMode === 'wheel')} inline-flex items-center gap-1.5`}
+                    onClick={() => setColorMode('wheel')}
+                  >
+                    <Palette size={12} /> Color wheel
                   </button>
                   <button
                     type="button"
-                    className={tabClass(colorMode === 'suggested')}
+                    className={`${tabClass(colorMode === 'suggested')} inline-flex items-center gap-1.5`}
                     onClick={() => setColorMode('suggested')}
                   >
-                    ✨ Suggested for you
+                    <Sparkles size={12} /> Suggested for you
                   </button>
                 </div>
               </div>
@@ -334,7 +346,7 @@ export default function NewProjectModal({ onClose, onCreated }: NewProjectModalP
             </div>
           </>
         )}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

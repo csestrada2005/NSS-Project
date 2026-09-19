@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import { X, Search, UserPlus, Loader2, ChevronDown } from 'lucide-react';
 import { SupabaseService } from '@/services/SupabaseService';
 import { CollaboratorService, type Collaborator } from '@/services/CollaboratorService';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { modalBackdropMotion, modalPanelMotion } from '@/components/ui/modalMotion';
 
 interface SearchResult {
   id: string;
@@ -157,12 +159,16 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
 
   return (
     <>
-      <div
+      <motion.div
+        {...modalBackdropMotion}
         className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md"
         onClick={onClose}
       />
       <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-4">
-        <div className="bg-card border border-border rounded-2xl w-full max-w-lg shadow-2xl pointer-events-auto flex flex-col max-h-[90vh]">
+        <motion.div
+          {...modalPanelMotion}
+          className="bg-card border border-border rounded-2xl w-full max-w-lg shadow-2xl pointer-events-auto flex flex-col max-h-[90vh]"
+        >
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
             <h2 className="text-base font-semibold text-foreground">Share Project</h2>
@@ -349,7 +355,7 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
               {pendingInvites.length > 0 && ` (${pendingInvites.length})`}
             </button>
           </div>
-        </div>
+        </motion.div>
       </div>
     </>
   );
