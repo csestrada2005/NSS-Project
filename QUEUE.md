@@ -364,7 +364,22 @@ Mundos pre-registrados:
 - **Falla real (si aparece, SÍ es bug):** cualquier llamada a `api.supabase.com` visible desde el
   navegador, cualquier secreto visible en Network/consola, o una pantalla rota/500 sin manejar.
 
-### 5.2 HECHO (pendiente CHECK MANUAL) — Onboarding de proyecto: tono + color (mockup D, 2026-09-19)
+### 5.2 HECHO Y CONFIRMADO — Onboarding de proyecto: tono + color (mockup D, 2026-09-19)
+
+**CHECK MANUAL — CONFIRMADO.** Evidencia cruda (Samuel, "Sale perfecto"), prompt "A landing page for a
+landing page of cryptocurrency", modo "✨ Suggested for you":
+> Link-in-Bio Page Builder — Brand blue + creator purple
+> Fintech/Crypto — Gold trust + purple tech
+> Calculator & Unit Converter — Operation orange on dark
+
+Lectura: las 3 son filas REALES de `colors` (ninguna inventada) — el mundo esperado se cumple, sin
+residuos de seguridad ni de datos fabricados. Nota de calidad, NO un bug (no estaba en los mundos
+pre-registrados, la agrego aquí para no perderla): "Fintech/Crypto" es el match semánticamente más obvio
+para un prompt de criptomoneda y salió 2º de 3, no 1º — el scoring por keywords sin peso por especificidad
+puede dejar que un término genérico compartido (p. ej. "page", repetido dos veces en este prompt) acumule
+más puntos que un término específico como "crypto". No bloquea nada (las tres opciones son razonables y el
+usuario elige a mano), pero queda anotado por si en algún momento vale la pena afinar el peso del scoring
+en `suggestPalettes` (src/utils/colorPaletteSuggest.js).
 
 **Diseño acordado con Samuel, con mockup delante** (canvas: https://claude.ai/artifact/6tNr4u1GXf8JUfTckjhwZF,
 4 opciones A/B/C/D — D es la elegida). Contexto de Samuel que cambió el diseño original: la mayoría de
