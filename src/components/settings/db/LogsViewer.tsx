@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Loader2 } from 'lucide-react';
 import { SupabaseService } from '@/services/SupabaseService';
 
@@ -10,66 +10,42 @@ interface LogLine {
   message: string;
 }
 
-const SAMPLE_LOGS: Record<LogSource, LogLine[]> = {
-  postgres: [
-    { timestamp: new Date().toISOString(), level: 'INFO', message: 'Database ready. Add SUPABASE_SERVICE_ROLE_KEY to secrets to view live logs.' },
-  ],
-  auth: [
-    { timestamp: new Date().toISOString(), level: 'INFO', message: 'Auth service ready. Add SUPABASE_SERVICE_ROLE_KEY to secrets to view live logs.' },
-  ],
-  'edge-functions': [
-    { timestamp: new Date().toISOString(), level: 'INFO', message: 'Edge Functions ready. Add SUPABASE_SERVICE_ROLE_KEY to secrets to view live logs.' },
-  ],
-};
+interface LogsViewerProps {
+  projectId?: string | null;
+}
 
-export function LogsViewer() {
+export function LogsViewer({ projectId }: LogsViewerProps) {
   const [source, setSource] = useState<LogSource>('postgres');
   const [logs, setLogs] = useState<LogLine[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? '';
-  const projectRef = supabaseUrl.replace('https://', '').replace('.supabase.co', '');
-
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
+    if (!projectId) return;
     setIsLoading(true);
-    try {
-      const supabase = SupabaseService.getInstance().client;
-      const { data: secrets } = await supabase
-        .from('forge_secrets')
-        .select('key, value')
-        .eq('key', 'SUPABASE_SERVICE_ROLE_KEY');
-      const serviceKey = secrets?.[0]?.value;
-
-      if (serviceKey && projectRef) {
-        const res = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/logs?source=${source}`, {
-          headers: { Authorization: `Bearer ${serviceKey}` }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const rows: LogLine[] = (data?.result ?? []).map((r: any) => ({
-            timestamp: r.timestamp ?? new Date().toISOString(),
-            level: r.level?.toUpperCase() ?? 'INFO',
-            message: r.event_message ?? r.message ?? JSON.stringify(r),
-          }));
-          setLogs(rows);
-          return;
-        }
-      }
-
-      setLogs(SAMPLE_LOGS[source]);
-    } catch {
-      setLogs(SAMPLE_LOGS[source]);
-    } finally {
-      setIsLoading(false);
+    const result = await SupabaseService.getInstance().getProjectLogs(projectId, source);
+    if (result.ok) {
+      setLogs(
+        result.logs.map((r) => ({
+          timestamp: r.timestamp ?? new Date().toISOString(),
+          level: 'INFO',
+          message: r.event_message ?? JSON.stringify(r),
+        }))
+      );
+      setError(null);
+    } else {
+      setLogs([]);
+      setError(result.reason);
     }
-  };
+    setIsLoading(false);
+  }, [projectId, source]);
 
   useEffect(() => {
     fetchLogs();
-  }, [source]);
+  }, [fetchLogs]);
 
   useEffect(() => {
     if (autoRefresh) {
@@ -78,13 +54,17 @@ export function LogsViewer() {
       if (intervalRef.current) clearInterval(intervalRef.current);
     }
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [autoRefresh, source]);
+  }, [autoRefresh, fetchLogs]);
 
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
   const LEVEL_COLORS = { INFO: 'text-blue-400', WARN: 'text-amber-400', ERROR: 'text-red-400' };
+
+  if (!projectId) {
+    return <div className="text-center text-zinc-500 text-sm py-8">Save your project first to view logs.</div>;
+  }
 
   return (
     <div className="space-y-3">
@@ -134,8 +114,11 @@ export function LogsViewer() {
             <span className="text-zinc-300 break-all">{log.message}</span>
           </div>
         ))}
-        {logs.length === 0 && !isLoading && (
+        {logs.length === 0 && !isLoading && !error && (
           <span className="text-zinc-600">No logs available</span>
+        )}
+        {error && !isLoading && (
+          <span className="text-amber-400">{error}</span>
         )}
         <div ref={logsEndRef} />
       </div>

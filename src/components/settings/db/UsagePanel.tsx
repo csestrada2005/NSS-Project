@@ -1,69 +1,66 @@
 import { useState, useEffect } from 'react';
-import { HardDrive, Archive, Zap, Wifi, Loader2 } from 'lucide-react';
+import { Database, Zap, Radio, HardDrive, Loader2 } from 'lucide-react';
 import { SupabaseService } from '@/services/SupabaseService';
 
-interface UsageData {
-  dbSizeMb: number | null;
-  storageMb: number | null;
-  functionInvocations: number | null;
-  bandwidthGb: number | null;
+interface UsagePanelProps {
+  projectId?: string | null;
 }
 
-export function UsagePanel() {
-  const [usage, setUsage] = useState<UsageData>({ dbSizeMb: null, storageMb: null, functionInvocations: null, bandwidthGb: null });
+/**
+ * El panel original mostraba "Database Size" / "Storage Used" / "Bandwidth"
+ * leyendo campos (db_size_bytes, storage_size_bytes, bandwidth_bytes) que no
+ * existen en ningún endpoint documentado de la Management API de Supabase —
+ * nunca fueron reales. Lo único documentado y verificado
+ * (GET /v1/projects/{ref}/analytics/endpoints/usage.api-counts) es un
+ * conteo de requests por servicio; este panel muestra eso.
+ */
+export function UsagePanel({ projectId }: UsagePanelProps) {
+  const [snapshot, setSnapshot] = useState<{
+    total_rest_requests: number;
+    total_auth_requests: number;
+    total_storage_requests: number;
+    total_realtime_requests: number;
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [fromApi, setFromApi] = useState(false);
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? '';
-  const projectRef = supabaseUrl.replace('https://', '').replace('.supabase.co', '');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!projectId) {
+      setIsLoading(false);
+      return;
+    }
     const load = async () => {
       setIsLoading(true);
-      try {
-        const supabase = SupabaseService.getInstance().client;
-        const { data: secrets } = await supabase
-          .from('forge_secrets')
-          .select('key, value')
-          .eq('key', 'SUPABASE_SERVICE_ROLE_KEY');
-        const serviceKey = secrets?.[0]?.value;
-
-        if (serviceKey && projectRef) {
-          const res = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/usage`, {
-            headers: { Authorization: `Bearer ${serviceKey}` }
-          });
-          if (res.ok) {
-            const data = await res.json();
-            setUsage({
-              dbSizeMb: data?.db_size_bytes ? Math.round(data.db_size_bytes / 1024 / 1024) : null,
-              storageMb: data?.storage_size_bytes ? Math.round(data.storage_size_bytes / 1024 / 1024) : null,
-              functionInvocations: data?.function_invocations ?? null,
-              bandwidthGb: data?.bandwidth_bytes ? Math.round(data.bandwidth_bytes / 1024 / 1024 / 1024 * 10) / 10 : null,
-            });
-            setFromApi(true);
-          }
-        }
-      } catch {
-        // silently use placeholder
-      } finally {
-        setIsLoading(false);
+      const result = await SupabaseService.getInstance().getProjectUsage(projectId);
+      if (result.ok) {
+        const latest = result.snapshots[result.snapshots.length - 1] ?? null;
+        setSnapshot(latest);
+        setError(latest ? null : 'No usage data available yet');
+      } else {
+        setSnapshot(null);
+        setError(result.reason);
       }
+      setIsLoading(false);
     };
     load();
-  }, []);
+  }, [projectId]);
 
   const kpis = [
-    { label: 'Database Size', value: usage.dbSizeMb !== null ? `${usage.dbSizeMb} MB` : '--', icon: <HardDrive size={18} className="text-zinc-400" /> },
-    { label: 'Storage Used', value: usage.storageMb !== null ? `${usage.storageMb} MB` : '--', icon: <Archive size={18} className="text-zinc-400" /> },
-    { label: 'Fn Invocations', value: usage.functionInvocations !== null ? usage.functionInvocations.toLocaleString() : '--', icon: <Zap size={18} className="text-zinc-400" /> },
-    { label: 'Bandwidth', value: usage.bandwidthGb !== null ? `${usage.bandwidthGb} GB` : '--', icon: <Wifi size={18} className="text-zinc-400" /> },
+    { label: 'REST Requests', value: snapshot?.total_rest_requests, icon: <Database size={18} className="text-zinc-400" /> },
+    { label: 'Auth Requests', value: snapshot?.total_auth_requests, icon: <Zap size={18} className="text-zinc-400" /> },
+    { label: 'Storage Requests', value: snapshot?.total_storage_requests, icon: <HardDrive size={18} className="text-zinc-400" /> },
+    { label: 'Realtime Requests', value: snapshot?.total_realtime_requests, icon: <Radio size={18} className="text-zinc-400" /> },
   ];
+
+  if (!projectId) {
+    return <div className="text-center text-zinc-500 text-sm py-8">Save your project first to view usage.</div>;
+  }
 
   return (
     <div className="space-y-4">
-      {!fromApi && !isLoading && (
+      {error && !isLoading && (
         <div className="bg-amber-900/20 border border-amber-700/40 rounded-xl p-3 text-sm text-amber-300">
-          Add <code className="font-mono bg-amber-900/30 px-1 rounded">SUPABASE_SERVICE_ROLE_KEY</code> to secrets to view live usage data.
+          {error}
         </div>
       )}
       <div className="grid grid-cols-2 gap-4">
@@ -76,7 +73,9 @@ export function UsagePanel() {
             {isLoading ? (
               <Loader2 size={16} className="animate-spin text-zinc-500" />
             ) : (
-              <p className="text-2xl font-bold text-zinc-200">{kpi.value}</p>
+              <p className="text-2xl font-bold text-zinc-200">
+                {kpi.value !== undefined && kpi.value !== null ? kpi.value.toLocaleString() : '--'}
+              </p>
             )}
           </div>
         ))}

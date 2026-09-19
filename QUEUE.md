@@ -277,10 +277,86 @@ Mundos pre-registrados:
   lo hacía.
 
 ## 5. BUCKET Producto y UX
-Una sola sesión de decisión, con mockup delante. Incluye:
-- Panel Cloud: 5 paneles desmontados + remontar EdgeFunctionsPanel apuntando a `edgeFunctionPath.js`.
-- Variantes de diseño + preguntas interactivas al iniciar proyecto.
-- Rediseño cosmético completo.
+Una sola sesión de decisión, con mockup delante. Orden acordado con Samuel (2026-09-19): 1 (Panel Cloud) →
+2 (variantes de diseño) → 3 (rediseño cosmético). El resto de la lista se queda en el bucket para después.
+
+### 5.1 HECHO (pendiente CHECK MANUAL) — Panel Cloud, alcance A completo (2026-09-19)
+
+**El agujero real, más grande de lo que decía la cola:** de los 5 paneles desmontados
+(`DatabaseOverview`, `EdgeFunctionsPanel`, `LogsViewer`, `UsagePanel`, `UsersManager`, todos en
+`src/components/settings/db/`), tres — `EdgeFunctionsPanel`, `LogsViewer`, `UsagePanel` — tenían el MISMO
+bug de seguridad: sacaban `SUPABASE_SERVICE_ROLE_KEY` de `forge_secrets` (sin filtrar por `project_id`) y
+la usaban DIRECTO desde el navegador como `Authorization: Bearer` contra `api.supabase.com` — una llave de
+servicio viva, expuesta a cualquiera con DevTools abierto. Encima el `ref` del proyecto se calculaba mal
+(`VITE_SUPABASE_URL`, el env var de LA PLATAFORMA, no `forge_projects.supabase_project_ref`) y la llave era
+la EQUIVOCADA de fondo: la Management API pide un token de cuenta (`SUPABASE_MANAGEMENT_TOKEN`), nunca una
+`service_role key` de proyecto. `UsagePanel` además mostraba cifras (`db_size_bytes`, `storage_size_bytes`,
+`bandwidth_bytes`) que nunca existieron en ningún endpoint documentado — inventadas por quien construyó el
+panel originalmente, nunca verificadas. Casi seguro la razón real por la que los 3 estaban desmontados.
+
+**Decisión con Samuel:** arreglar los tres de verdad (opción A), no sólo mover `EdgeFunctionsPanel` al
+endpoint seguro que ya existía y dejar Logs/Usage desmontados (opción B, más barata).
+
+**Hecho:**
+- `server/projectManagementApi.js` (nuevo) — lectura server-mediada de la Management API, usando
+  `SUPABASE_MANAGEMENT_TOKEN` (nunca una service_role key) y `forge_projects.supabase_project_ref` (nunca
+  `VITE_SUPABASE_URL`). Tres funciones de red (listar edge functions, logs, uso) + validación pura
+  testeable (`validateProjectRefRequest`, `validateLogsRequest`, `isValidLogSource`, `buildLogsSql`).
+  Endpoints verificados contra doc oficial de Supabase (no adivinados): `GET /v1/projects/{ref}/functions`,
+  `GET /v1/projects/{ref}/analytics/endpoints/logs?sql=...` (tablas reales: `postgres_logs`, `auth_logs`,
+  `function_edge_logs`), `GET /v1/projects/{ref}/analytics/endpoints/usage.api-counts` (conteo de requests
+  por servicio — lo único de "uso" que la Management API documenta realmente; NO hay endpoint JSON de
+  tamaño de DB/storage/bandwidth, sólo un scrape Prometheus sin nombres de métrica confirmados, así que
+  `UsagePanel` se ajustó a mostrar conteos de requests reales en vez de cifras fabricadas).
+- `server.js`: 3 rutas nuevas (`GET /api/projects/:projectId/edge-functions`, `/logs`, `/usage`), mismo
+  patrón que el deploy de edge functions (`requireProjectOwnership`, 503 si falta
+  `SUPABASE_MANAGEMENT_TOKEN`, 409 `NO_PROJECT_DB` si falta el ref, nunca un default).
+- `src/services/SupabaseService.ts`: `listEdgeFunctions`, `getProjectLogs`, `getProjectUsage` — mismo
+  contrato tipado que `deployEdgeFunction` (nunca lanza, nunca expone una llave al caller).
+- `EdgeFunctionsPanel.tsx` reescrito: detección local vía `edgeFunctionPath.js`
+  (`isEdgeFunctionEntrypoint`/`edgeFunctionSlug`, ya no un walk manual duplicado) sobre `files` (el mapa
+  plano que `SettingsModal` ya tenía), estado remoto vía el endpoint seguro, deploy vía
+  `SupabaseService.deployEdgeFunction` (que YA estaba bien hecho — el panel simplemente lo llamaba con
+  `projectId`/`code` vacíos).
+- `LogsViewer.tsx` y `UsagePanel.tsx`: misma UI, fuente de datos movida al servidor.
+- `SettingsModal.tsx`: los 5 paneles montados como sub-tabs de "Database" (Overview, Schema, SQL, Secrets,
+  Edge Functions, Logs, Usage, Users — 8 en total).
+- `server/projectManagementApi.test.js`: 8 tests nuevos, sólo sobre las partes puras (mismo criterio que
+  `edgeFunctionDeploy.test.js`: la parte de red no se testea con `node --test`, se verifica en el check
+  manual). `node --test "server/*.test.js"` → 641/641 verdes (633 previos + 8). `npx vitest run` → 41/41.
+  `npx tsc -b --force` → 0 errores. `graphify update .` corrido.
+
+**CHECK MANUAL — PENDIENTE.** Cómo reproducirlo, contra un proyecto con `supabase_project_ref` real
+(Vertigo sirve):
+1. Abre Settings → Database. Deben aparecer 8 sub-tabs.
+2. Overview y Users deben cargar igual que ya cargaban en el Hub del proyecto (sin cambios ahí).
+3. Edge Functions: si el proyecto tiene algo en `supabase/functions/`, debe listarlo con su estado real
+   (ACTIVE si ya está desplegado) y un botón Deploy funcional.
+4. Logs: cambia entre las tres pestañas (Postgres/Auth/Edge Fn) — debe traer líneas reales o
+   "No logs available", nunca los mensajes de placeholder de antes.
+5. Usage: debe mostrar 4 KPIs de conteo de requests (REST/Auth/Storage/Realtime), no vacíos si el proyecto
+   ha tenido tráfico reciente.
+6. Con DevTools → Network abierto durante los pasos 3-5: NINGUNA llamada debe ir a `api.supabase.com`
+   directo desde el navegador, y ningún valor de `SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_MANAGEMENT_TOKEN`
+   debe aparecer en ninguna request ni en la consola. Todo debe pasar por `/api/projects/:projectId/...`
+   (mismo origen que Wyrd).
+
+Mundos pre-registrados:
+- **Esperado:** los 8 sub-tabs cargan, Edge Functions/Logs/Usage muestran datos reales o un aviso claro de
+  degradación (nunca placeholders inventados), y CERO llamadas/secretos expuestos en Network/consola.
+- **Residuo conocido, no bug:** si `SUPABASE_MANAGEMENT_TOKEN` no está configurado en producción, las tres
+  pestañas nuevas muestran su aviso de "no configurado" (503) — mismo prerequisito que ya limita el deploy
+  real de edge functions, no una regresión de este cambio.
+- **Falla real (si aparece, SÍ es bug):** cualquier llamada a `api.supabase.com` visible desde el
+  navegador, cualquier secreto visible en Network/consola, o una pantalla rota/500 sin manejar.
+
+### 5.2 Siguiente — Variantes de diseño + preguntas interactivas al iniciar proyecto
+Sin empezar. Se abre después de confirmar el check manual de 5.1.
+
+### 5.3 Cierre de sesión — Rediseño cosmético completo
+Sin empezar.
+
+### Resto del bucket (sin tocar esta sesión)
 - RAG de UI/UX: PatternRetriever da `direct: 0 | vector: 0`. Primera pregunta: ¿pasa igual en producción?
 - Catálogo de componentes, con auditoría de licencia por componente.
 - B-restos: transparencia de plan en generación inicial, persistencia del bloque de plan al recargar (incluye el aviso que no persiste, de G-4), espaciado.

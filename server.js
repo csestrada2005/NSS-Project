@@ -14,6 +14,13 @@ import { createIntentAccumulator } from './server/intentAccumulator.js';
 import { bootstrapProject } from './server/bootstrapProject.js';
 import { deployEdgeFunctionViaManagement, validateEdgeFunctionDeployRequest } from './server/edgeFunctionDeploy.js';
 import { applyProductionSupabaseClient } from './src/utils/deploySupabaseClient.js';
+import {
+  validateProjectRefRequest,
+  validateLogsRequest,
+  fetchProjectEdgeFunctionsList,
+  fetchProjectLogs,
+  fetchProjectUsage,
+} from './server/projectManagementApi.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1865,6 +1872,109 @@ app.post('/api/projects/:projectId/edge-functions/deploy', async (req, res) => {
     console.error(`[EdgeFunctionDeploy] [FUNCTION_DEPLOY_FAILED:${slug}]`, err.message);
     const status = err.status && err.status < 500 ? err.status : 502;
     return res.status(status).json({ error: 'Edge function deploy failed', code: 'DEPLOY_FAILED', slug });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Panel Cloud (bucket 5, ítem 1) — lectura server-mediada de la Management API
+// de Supabase para el proyecto GENERADO, nunca el principal. Reemplaza la
+// única implementación previa de EdgeFunctionsPanel/LogsViewer/UsagePanel,
+// que sacaba SUPABASE_SERVICE_ROLE_KEY de forge_secrets al navegador y la
+// usaba ahí mismo como Authorization: Bearer contra api.supabase.com — dos
+// fallas (llave de servicio expuesta al cliente, Y era la llave equivocada:
+// la Management API pide SUPABASE_MANAGEMENT_TOKEN, no una service_role
+// key). Ver server/projectManagementApi.js para el detalle completo.
+// ---------------------------------------------------------------------------
+
+app.get('/api/projects/:projectId/edge-functions', async (req, res) => {
+  const { projectId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Database not configured' });
+  if (!SUPABASE_MANAGEMENT_TOKEN) {
+    return res.status(503).json({ error: 'Edge function deploy not configured' });
+  }
+
+  const { data: project } = await supabaseAdmin
+    .from('forge_projects')
+    .select('supabase_project_ref')
+    .eq('id', projectId)
+    .single();
+
+  const ref = project?.supabase_project_ref;
+  const decision = validateProjectRefRequest({ projectRef: ref });
+  if (!decision.ok) {
+    return res.status(decision.status).json({ error: decision.error, code: decision.code });
+  }
+
+  try {
+    const functions = await fetchProjectEdgeFunctionsList(ref, SUPABASE_MANAGEMENT_TOKEN);
+    return res.json({ functions });
+  } catch (err) {
+    console.error(`[ProjectManagementApi] [FUNCTIONS_LIST_FAILED:${projectId}]`, err.message);
+    const status = err.status && err.status < 500 ? err.status : 502;
+    return res.status(status).json({ error: 'Failed to list edge functions', code: 'LIST_FAILED' });
+  }
+});
+
+app.get('/api/projects/:projectId/logs', async (req, res) => {
+  const { projectId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Database not configured' });
+  if (!SUPABASE_MANAGEMENT_TOKEN) {
+    return res.status(503).json({ error: 'Edge function deploy not configured' });
+  }
+
+  const { source } = req.query;
+
+  const { data: project } = await supabaseAdmin
+    .from('forge_projects')
+    .select('supabase_project_ref')
+    .eq('id', projectId)
+    .single();
+
+  const ref = project?.supabase_project_ref;
+  const decision = validateLogsRequest({ projectRef: ref, source });
+  if (!decision.ok) {
+    return res.status(decision.status).json({ error: decision.error, code: decision.code });
+  }
+
+  try {
+    const logs = await fetchProjectLogs(ref, SUPABASE_MANAGEMENT_TOKEN, source);
+    return res.json(logs);
+  } catch (err) {
+    console.error(`[ProjectManagementApi] [LOGS_FETCH_FAILED:${projectId}]`, err.message);
+    const status = err.status && err.status < 500 ? err.status : 502;
+    return res.status(status).json({ error: 'Failed to fetch logs', code: 'LOGS_FAILED' });
+  }
+});
+
+app.get('/api/projects/:projectId/usage', async (req, res) => {
+  const { projectId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Database not configured' });
+  if (!SUPABASE_MANAGEMENT_TOKEN) {
+    return res.status(503).json({ error: 'Edge function deploy not configured' });
+  }
+
+  const { data: project } = await supabaseAdmin
+    .from('forge_projects')
+    .select('supabase_project_ref')
+    .eq('id', projectId)
+    .single();
+
+  const ref = project?.supabase_project_ref;
+  const decision = validateProjectRefRequest({ projectRef: ref });
+  if (!decision.ok) {
+    return res.status(decision.status).json({ error: decision.error, code: decision.code });
+  }
+
+  try {
+    const usage = await fetchProjectUsage(ref, SUPABASE_MANAGEMENT_TOKEN);
+    return res.json(usage);
+  } catch (err) {
+    console.error(`[ProjectManagementApi] [USAGE_FETCH_FAILED:${projectId}]`, err.message);
+    const status = err.status && err.status < 500 ? err.status : 502;
+    return res.status(status).json({ error: 'Failed to fetch usage', code: 'USAGE_FAILED' });
   }
 });
 

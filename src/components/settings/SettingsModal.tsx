@@ -6,6 +6,11 @@ import type { FileSystemTree } from '@webcontainer/api';
 import { SchemaViewer } from './db/SchemaViewer';
 import { SQLEditor } from './db/SQLEditor';
 import { SecretsPanel } from './db/SecretsPanel';
+import { DatabaseOverview } from './db/DatabaseOverview';
+import { EdgeFunctionsPanel } from './db/EdgeFunctionsPanel';
+import { LogsViewer } from './db/LogsViewer';
+import { UsagePanel } from './db/UsagePanel';
+import { UsersManager } from './db/UsersManager';
 import { TrafficCharts } from './analytics/TrafficCharts';
 import { LighthousePanel } from './analytics/LighthousePanel';
 import { TopPagesTable } from './analytics/TopPagesTable';
@@ -20,12 +25,21 @@ interface SettingsModalProps {
 }
 
 type MainTab = 'secrets' | 'github' | 'deploy' | 'domains' | 'database' | 'email' | 'analytics';
-type DbSubTab = 'schema' | 'sql' | 'secrets';
+type DbSubTab = 'overview' | 'schema' | 'sql' | 'secrets' | 'edge-functions' | 'logs' | 'usage' | 'users';
 
+// Panel Cloud (bucket 5, ítem 1): overview/edge-functions/logs/usage/users
+// existían como componentes hechos pero nunca montados aquí. edge-functions/
+// logs/usage estaban además rotos (exponían SUPABASE_SERVICE_ROLE_KEY al
+// navegador) — arreglado en server/projectManagementApi.js antes de montarlos.
 const DB_SUB_TABS: { id: DbSubTab; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
   { id: 'schema', label: 'Schema' },
   { id: 'sql', label: 'SQL' },
   { id: 'secrets', label: 'Secrets' },
+  { id: 'edge-functions', label: 'Edge Functions' },
+  { id: 'logs', label: 'Logs' },
+  { id: 'usage', label: 'Usage' },
+  { id: 'users', label: 'Users' },
 ];
 
 export function SettingsModal({ onClose, fileTree, files, projectId: propProjectId }: SettingsModalProps) {
@@ -216,9 +230,14 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
               </div>
 
               <div>
+                {dbSubTab === 'overview' && <DatabaseOverview projectId={projectId} />}
                 {dbSubTab === 'schema' && <SchemaViewer projectId={projectId} />}
                 {dbSubTab === 'sql' && <SQLEditor projectId={projectId} />}
                 {dbSubTab === 'secrets' && <SecretsPanel projectId={projectId} />}
+                {dbSubTab === 'edge-functions' && <EdgeFunctionsPanel projectId={projectId} files={files} />}
+                {dbSubTab === 'logs' && <LogsViewer projectId={projectId} />}
+                {dbSubTab === 'usage' && <UsagePanel projectId={projectId} />}
+                {dbSubTab === 'users' && <UsersManager />}
               </div>
             </div>
           )}
