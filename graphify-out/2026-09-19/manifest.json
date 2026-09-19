@@ -228,10 +228,10 @@
     "semantic_hash": "1e1499980c4c2db2bb1e08cb058c7337"
   },
   "src/components/CommandModal.tsx": {
-    "mtime": 1789817570.3332953,
-    "seen": 1789821096.093922,
-    "ast_hash": "8bb61974b0d986512ca4f4cd58065072",
-    "semantic_hash": "8bb61974b0d986512ca4f4cd58065072"
+    "mtime": 1789827080.2075045,
+    "seen": 1789827243.8331301,
+    "ast_hash": "75fe842b5a04954ceb20f4a17bf9c48f",
+    "semantic_hash": ""
   },
   "src/components/ElementEditPopover.tsx": {
     "mtime": 1789817570.3332953,
@@ -252,10 +252,10 @@
     "semantic_hash": "43cb147d490c535b186f1b646e44f99d"
   },
   "src/components/HistoryDrawer.tsx": {
-    "mtime": 1789817570.3332953,
-    "seen": 1789821096.0939326,
-    "ast_hash": "8cecdeeec97d1ac53602ffd0cb6908c4",
-    "semantic_hash": "8cecdeeec97d1ac53602ffd0cb6908c4"
+    "mtime": 1789827096.8505049,
+    "seen": 1789827243.8335345,
+    "ast_hash": "440e818bb9a5e0a56eba755a9d6d2079",
+    "semantic_hash": ""
   },
   "src/components/InspectorPanel.tsx": {
     "mtime": 1789817570.3332953,
@@ -324,16 +324,16 @@
     "semantic_hash": "939e298bd49c6baaa9a0da5787b0ccdd"
   },
   "src/components/forge/NewProjectModal.tsx": {
-    "mtime": 1789824321.6304438,
-    "seen": 1789824440.3257768,
-    "ast_hash": "a27dc015da82c962e886a97503fce1cb",
+    "mtime": 1789827174.3855066,
+    "seen": 1789827243.8340948,
+    "ast_hash": "88b0f27d53b633dfec3c8fb007d8f801",
     "semantic_hash": ""
   },
   "src/components/forge/ShareProjectModal.tsx": {
-    "mtime": 1789817570.3352952,
-    "seen": 1789821096.0940027,
-    "ast_hash": "3805439b47b6397f87702ed0fdeae1f2",
-    "semantic_hash": "3805439b47b6397f87702ed0fdeae1f2"
+    "mtime": 1789827022.7765033,
+    "seen": 1789827243.8340964,
+    "ast_hash": "301c8b9d589b2528db121d9447608d67",
+    "semantic_hash": ""
   },
   "src/components/settings/AIHistoryPanel.tsx": {
     "mtime": 1789817570.3352952,
@@ -354,9 +354,9 @@
     "semantic_hash": "97e89f9165f98b1f2c8e338721d4d1f3"
   },
   "src/components/settings/SettingsModal.tsx": {
-    "mtime": 1789820999.9773707,
-    "seen": 1789821096.094014,
-    "ast_hash": "8730924246239e4dec00e2154f439011",
+    "mtime": 1789827006.293503,
+    "seen": 1789827243.8342042,
+    "ast_hash": "d65e8d594d38b9efeaf513a69be2e919",
     "semantic_hash": ""
   },
   "src/components/settings/analytics/LighthousePanel.tsx": {
@@ -1428,10 +1428,10 @@
     "semantic_hash": "d3accf8e826c27dfc96bad85e8407bbc"
   },
   "src/components/forge/MigrationApplyModal.tsx": {
-    "mtime": 1789817570.3352952,
-    "seen": 1789821096.093997,
-    "ast_hash": "755257f98bb144947d8094fff9bcde22",
-    "semantic_hash": "755257f98bb144947d8094fff9bcde22"
+    "mtime": 1789827048.3875039,
+    "seen": 1789827243.8340566,
+    "ast_hash": "ebfbe14bc3dfe7892e15f1875674db17",
+    "semantic_hash": ""
   },
   "src/data.json": {
     "mtime": 1789817570.3382952,
@@ -1776,9 +1776,9 @@
     "semantic_hash": ""
   },
   "QUEUE.md": {
-    "mtime": 1789822258.3313985,
-    "seen": 1789824440.3345108,
-    "ast_hash": "09b1496e5042a4233d8ab2c45e708978",
+    "mtime": 1789825536.6544707,
+    "seen": 1789827243.8408954,
+    "ast_hash": "1781e58719a581bce7ba3030cf3006c4",
     "semantic_hash": ""
   },
   "README.md": {
@@ -1941,6 +1941,12 @@
     "mtime": 1789824118.7154393,
     "seen": 1789824440.331975,
     "ast_hash": "b5a3e81d7eef1a17135c6c828f0bd3b5",
+    "semantic_hash": ""
+  },
+  "src/components/ui/modalMotion.ts": {
+    "mtime": 1789826951.1845016,
+    "seen": 1789827243.8349538,
+    "ast_hash": "60446b353923de5d597cfb98c07fc80f",
     "semantic_hash": ""
   }
 }
