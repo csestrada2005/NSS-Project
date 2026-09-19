@@ -1,36 +1,36 @@
 # Graph Report - NSS-Project  (2026-09-19)
 
 ## Corpus Check
-- 300 files · ~463,502 words
+- 308 files · ~476,418 words
 - Verdict: corpus is large enough that graph structure adds value.
-- Unclassified: 9 file(s) not represented in the graph (top: (none) 5, .css 3, .graphify-bak 1)
+- Unclassified: 33 file(s) not represented in the graph (top: .csv 24, (none) 5, .css 3)
 
 ## Summary
-- 4173 nodes · 10241 edges · 199 communities (129 shown, 70 thin omitted)
-- Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 376 edges (avg confidence: 0.85)
+- 4295 nodes · 10387 edges · 277 communities (147 shown, 130 thin omitted)
+- Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 385 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `f85a4d83`
+- Built from commit: `50d2f350`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - react-dom.development.js
 - tailwindcss.js
-- AppSidebar.tsx
+- ClientProjectPage.tsx
 - mergeLanes
-- ref_node_assert_strict
-- StudioEngine
+- ref_node_assert
+- ProjectMemoryService
 - diffHydratedProperties
 - react-router.development.js
 - completeWork
 - has
-- every
-- remove
+- split
+- decl
 - package.json
 - push
-- t
+- e
 - tailwindcss-browser.js
 - error
 - describeNativeComponentFrame
@@ -43,7 +43,7 @@
 - dependencies
 - planGate.test.js
 - supabaseData.ts
-- StudioEngine.tsx
+- Terminal.tsx
 - beginWork
 - popHydrationState
 - push
@@ -52,13 +52,13 @@
 - ChildReconciler
 - migrationDirNormalization.test.js
 - PreviewOverlay.tsx
-- ChatInterface.tsx
+- UI/UX Pro Max - Design Intelligence
 - react.development.js
 - devDependencies
 - commitRootImpl
 - updateDehydratedSuspenseComponent
 - projectDBService
-- DDLApprovalButton.tsx
+- ref_services_migrationrunner
 - server.js
 - lucide-react
 - DesignBriefService
@@ -66,30 +66,30 @@
 - ddlProposalState.js
 - planGuard.test.js
 - rlsPolicyGuard.js
-- wo
+- O
 - SupabaseService
 - MigrationRunner.ts
-- nl
-- get
-- replace
-- Verifier.ts
+- c
+- has
+- clone
+- .fixBatch
 - PropertyPanel.tsx
-- uo
+- ye
 - compilerOptions
 - importGraph.js
 - q
 - compilerOptions
 - classifierHarness.mjs
-- @webcontainer/api
+- remove
 - platformService
 - resolveDispatcher
-- QUEUE.md — Cola de Wyrd Forge
+- uo
 - ddlGuard.js
 - templates.ts
 - ast.ts
 - captureCommitPhaseError
 - types.ts
-- StaffFinance.tsx
+- ref_components
 - error
 - handleTimeout
 - DealsPage.tsx
@@ -101,79 +101,105 @@
 - 🔴 Ares Project
 - add
 - Forecast.tsx
-- AuthContext.tsx
+- react
 - danglingRefs.js
 - components.json
-- e
+- co
 - Performance.tsx
 - What You Must Do When Invoked
-- At
+- replace
 - graphify reference: add a URL and watch a folder
 - scripts
 - checkKeyStringCoercion
 - CLAUDE.md — Wyrd Forge (NSS-Project)
 - graphify reference: commit hook and native CLAUDE.md integration
-- laneRouting.js
+- noMemoryFallbackNeedsServer.test.js
 - /graphify
 - MetricsPage.tsx
 - AdminDashboard.tsx
-- ddlProposedGate.e2e.test.ts
+- ChatInterface.tsx
 - describeUnknownElementTypeFrameInDEV
 - FileExplorer.tsx
 - graphify reference: incremental update and cluster-only
 - graphify reference: GitHub clone and cross-repo merge
-- BrowserCompiler.ts
+- StudioEngine.tsx
 - createIntentAccumulator
 - useProjectFiles.ts
-- forge_snapshots
-- ref_lib_utils
+- sync
+- ref_lib
 - graphify reference: transcribe video and audio
 - table.tsx
-- graphify
+- compiler.js
 - migrationContentGate.test.js
 - bootstrapProject.test.js
 - extraction-spec.md
-- analyticsService.ts
+- core.py
 - NOT_TARGETED_STILL_IMPORTED
-- metaAdsService.ts
+- DesignSystemGenerator
 - MAX_CHARS_PER_BATCH
 - MAX_FILES_PER_BATCH
 - PROMPT_ROW_EXCLUDED_PREFIXES
 - PROMPT_ROW_LIMIT
 - SOURCE_EXTENSIONS
-- context.ts
+- clientCodeGuard.js
 - ProjectHubPage.tsx
 - MODULE_EXTENSIONS
 - _set
 - ClientDashboard.tsx
-- meta_connections
-- deduct_credits
+- design_system.py
+- data/index.ts
 - rlsPolicyGuard.d.ts
 - embed-patterns.ts
-- deduct_credits
-- forge_credit_transactions
+- U
+- ge
 - applyEdits.js
-- contextService
+- jsxOrdinal.js
+- yo
+- BM25
 - ddlProposalState.d.ts
 - codegraph
+- search.py
 - button.tsx
+- Pagination.test.tsx
+- unsplash.test.js
+- LighthousePanel.tsx
 - danglingRefs.d.ts
 - ddlGuard.d.ts
 - migrationIntent.d.ts
 - Component
 - pt
+- DevDashboard.tsx
+- generate_design_system
+- graphify reference: query, path, explain
+- edgeFunctionPath.test.js
+- LanguageContext.tsx
+- clientCodeGuard.d.ts
+- Herramientas del agente
+- Step 3 - Extract entities and relationships
+- setup-agent-tools.sh
 - applyEdits.d.ts
 - ddlVerdict.d.ts
 - groupCompileErrors.d.ts
 - importGraph.d.ts
 - tsconfig.json
+- ref_components_admin_userapprovalpanel
+- ref_components_appsidebar
+- ref_components_emptystate
+- ref_components_forge_creditbalance
+- ref_components_forge_newprojectmodal
+- ref_components_forge_shareprojectmodal
+- ref_components_pagination
 - jsxOrdinal.d.ts
 - laneRouting.d.ts
 - planGuard.d.ts
 - planTrim.d.ts
 - previewClient.ts
 - schemaContext.ts
-- ref_https_esm_sh_supabase_supabase_js_2
+- ref_https
+- ref_components_settings_aihistorypanel
+- ref_components_settings_analytics_lighthousepanel
+- ref_components_settings_analytics_toppagestable
+- ref_components_settings_analytics_trafficcharts
 - DELETE_WITHOUT_WHERE
 - DROP
 - DROP_COLUMN
@@ -203,8 +229,62 @@
 - PROTECTED_TRIM_PATHS
 - TRIM_MAX_STEPS
 - ROLE_COLUMN_NAMES
+- ref_components_settings_db_databaseoverview
+- ref_components_settings_db_schemaviewer
+- ref_components_settings_db_sqleditor
+- ref_components_settings_db_usersmanager
+- ref_components_settings_domainspanel
+- ref_components_settings_emailpanel
+- ref_components_topbar
+- ref_components_ui_badge
+- ref_components_ui_button
+- ref_components_ui_card
+- ref_components_ui_input
 - commitPlacement
-- react
+- ref_components_ui_label
+- ref_components_ui_switch
+- ref_components_ui_table
+- ref_components_ui_tabs
+- ref_contexts_authcontext
+- ref_contexts_languagecontext
+- ref_contexts_viewmodecontext
+- ref_dns_promises
+- ref_dotenv_config
+- ref_eslint_config
+- ref_services
+- ref_hooks_usenotifications
+- ref_hooks_usepagination
+- ref_hooks_useprojectaccess
+- ref_https_deno_land_std_0_168_0_http_server_ts
+- ref_https_esm_sh_supabase_supabase_js_2
+- ref_lib_utils
+- ref_node_assert_strict
+- ref_pages_dashboard_admindashboard
+- ref_pages_dashboard_clientdashboard
+- ref_pages_dashboard_devdashboard
+- ref_pages_pendingapprovalpage
+- ref_pages_roleselectionpage
+- ref_pages_setuppage
+- ref_react_dom_client
+- ref_services_aiorchestrator
+- ref_services_architect
+- ref_services_collaboratorservice
+- ref_services_data_analyticsservice
+- ref_services_data_metaadsservice
+- ref_services_data_supabasedata
+- ref_services_notificationservice
+- ref_services_platformservice
+- ref_services_projectdbservice
+- ref_services_projectmemoryservice
+- ref_services_supabaseservice
+- ref_testing_library_jest_dom_vitest
+- ref_utils_ddlguard_js
+- ref_utils_ddlproposalstate
+- ref_utils_ddlproposalstate_js
+- ref_vitest_config
+- ref_xterm_xterm_css_xterm_css
+- ref_xyflow_react_dist_style_css
+- CREDENTIAL_IDENTIFIER_NAMES
 
 ## God Nodes (most connected - your core abstractions)
 1. `error()` - 118 edges
@@ -214,26 +294,26 @@
 5. `lucide-react` - 66 edges
 6. `replace()` - 56 edges
 7. `has()` - 51 edges
-8. `AIOrchestrator` - 43 edges
-9. `uo()` - 43 edges
+8. `uo()` - 43 edges
+9. `AIOrchestrator` - 43 edges
 10. `remove()` - 42 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `3. HECHO (pendiente CHECK MANUAL) — Guard de código bajo `src/` (G-6, 2026-09-19)` --references--> `delete()`  [INFERRED]
+  QUEUE.md → public/vendor/tailwindcss.js
 - `Step 2 - Detect files` --references--> `document()`  [INFERRED]
   .claude/skills/graphify/SKILL.md → public/vendor/tailwindcss.js
-- `0. CERRADO Y CONFIRMADO EN PRODUCCIÓN — Guard RLS "no actuó" tras G-4: REENCUADRADO, no era regresión de G-3 (2026-09-17)` --references--> `rlsPolicyWarnings()`  [INFERRED]
+- `3. HECHO (pendiente CHECK MANUAL) — Guard de código bajo `src/` (G-6, 2026-09-19)` --references--> `insert()`  [INFERRED]
+  QUEUE.md → public/vendor/tailwindcss.js
+- `3. HECHO (pendiente CHECK MANUAL) — Guard de código bajo `src/` (G-6, 2026-09-19)` --references--> `tablesWithRoleColumnInSql()`  [INFERRED]
   QUEUE.md → src/utils/rlsPolicyGuard.js
-- `buildNoMemoryIntent()` --calls--> `promptNeedsServer()`  [EXTRACTED]
-  server/noMemoryFallbackNeedsServer.test.js → src/utils/serverLogicSignals.js
-- `orchestratorBridge()` --calls--> `resolveMigrationTargets()`  [EXTRACTED]
-  server/projectMemoryMigrationPaths.test.js → src/utils/migrationPath.js
-- `gateActive()` --calls--> `touchesMigrations()`  [EXTRACTED]
-  server/migrationContentGate.test.js → src/utils/migrationGate.js
+- `3. HECHO (pendiente CHECK MANUAL) — Guard de código bajo `src/` (G-6, 2026-09-19)` --references--> `evaluateRlsPolicies()`  [INFERRED]
+  QUEUE.md → src/utils/rlsPolicyGuard.js
 
 ## Import Cycles
 - None detected.
 
-## Communities (199 total, 70 thin omitted)
+## Communities (277 total, 130 thin omitted)
 
 ### Community 0 - "react-dom.development.js"
 Cohesion: 0.01
@@ -241,23 +321,19 @@ Nodes (228): addEventBubbleListener(), addEventBubbleListenerWithPassiveFlag(), 
 
 ### Community 1 - "tailwindcss.js"
 Cohesion: 0.02
-Nodes (104): Aa(), Ap(), applyVariantOffset(), async(), av(), ba(), be(), blueGray() (+96 more)
+Nodes (91): Aa(), Ap(), applyVariantOffset(), av(), ba(), be(), blueGray(), Bs() (+83 more)
 
-### Community 2 - "AppSidebar.tsx"
+### Community 2 - "ClientProjectPage.tsx"
 Cohesion: 0.08
-Nodes (17): ref_components_admin_userapprovalpanel, date-fns, ref_hooks_usenotifications, ref_services_notificationservice, AppSidebarProps, NavItem, navItems, Page (+9 more)
+Nodes (22): date-fns, ref_hooks, AppSidebar(), AppSidebarProps, NavItem, navItems, Page, ROLE_LABELS (+14 more)
 
 ### Community 3 - "mergeLanes"
 Cohesion: 0.06
 Nodes (63): addFiberToLanesMap(), attemptContinuousHydration$1(), attemptHydrationAtCurrentPriority$1(), attemptSynchronousHydration$1(), batchedUpdates$1(), captureCommitPhaseErrorOnRoot(), checkForNestedUpdates(), checkIfSnapshotChanged() (+55 more)
 
-### Community 4 - "ref_node_assert_strict"
-Cohesion: 0.04
-Nodes (48): esbuild, ref_node_assert_strict, ref_node_fs, ref_node_path, ref_node_test, ref_node_url, asHaikuJson(), asHaikuText() (+40 more)
-
-### Community 5 - "StudioEngine"
-Cohesion: 0.23
-Nodes (5): formatSnapshotDate(), parseOid(), StudioEngine(), truncateLabel(), ProjectMemoryService
+### Community 4 - "ref_node_assert"
+Cohesion: 0.05
+Nodes (39): esbuild, ref_node_assert, ref_node_fs, ref_node_path, ref_node_test, ref_node_url, asHaikuJson(), asHaikuText() (+31 more)
 
 ### Community 6 - "diffHydratedProperties"
 Cohesion: 0.06
@@ -275,13 +351,13 @@ Nodes (62): bubbleProperties(), commitUpdate(), completeDehydratedSuspenseBounda
 Cohesion: 0.04
 Nodes (76): attachPingListener(), attachRetryListener(), attachSuspenseRetryListeners(), checkClassInstance(), enqueueCapturedUpdate(), errorHydratingContainer(), findChildHostInstancesForFiberShallowly(), findHostInstancesForFiberShallowly() (+68 more)
 
-### Community 10 - "every"
-Cohesion: 0.09
-Nodes (38): ab(), ae(), As(), Bu(), Cb(), cf(), Db(), Eb() (+30 more)
+### Community 10 - "split"
+Cohesion: 0.07
+Nodes (49): ab(), applyParallelOffset(), bm(), br(), Bu(), C4(), Cb(), cf() (+41 more)
 
-### Community 11 - "remove"
-Cohesion: 0.05
-Nodes (61): after(), atrule(), beforeAfter(), block(), body(), calcBefore(), check(), cleanBrackets() (+53 more)
+### Community 11 - "decl"
+Cohesion: 0.07
+Nodes (43): atrule(), beforeAfter(), block(), body(), calcBefore(), check(), cleanBrackets(), comment() (+35 more)
 
 ### Community 12 - "package.json"
 Cohesion: 0.05
@@ -291,13 +367,13 @@ Nodes (39): name, private, type, version, autoprefixer, @babel/generator, @babel
 Cohesion: 0.03
 Nodes (90): accumulateEnterLeaveListenersForEvent(), accumulateEnterLeaveTwoPhaseListeners(), accumulateOrCreateContinuousQueuedReplayableEvent(), accumulateSinglePhaseListeners(), accumulateTwoPhaseListeners(), assertIsMounted(), attemptExplicitHydrationTarget(), attemptSynchronousHydration() (+82 more)
 
-### Community 14 - "t"
-Cohesion: 0.07
-Nodes (65): o(), u(), Ah(), ai(), append(), applyParallelOffset(), Bi(), bo() (+57 more)
+### Community 14 - "e"
+Cohesion: 0.09
+Nodes (43): Bi(), bo(), Cu(), d(), Df(), e(), f2(), fh() (+35 more)
 
 ### Community 15 - "tailwindcss-browser.js"
 Cohesion: 0.07
-Nodes (54): compoundsWith(), constructor(), dl(), Dn(), dr(), end(), error(), et() (+46 more)
+Nodes (45): ar(), At(), Bn(), compare(), compound(), constructor(), dl(), Dn() (+37 more)
 
 ### Community 16 - "error"
 Cohesion: 0.06
@@ -313,11 +389,11 @@ Nodes (36): createBrowserRouter(), createHashRouter(), createSearchParams(), Def
 
 ### Community 19 - "AIOrchestrator.ts"
 Cohesion: 0.06
-Nodes (40): isEditableSrcPath(), KNOWN_DEP_VERSIONS, LLMResponse, ModifiedFile, NODE_BUILTINS, OrchestratorResult, packageNameFromSpecifier(), Architect (+32 more)
+Nodes (40): classify(), getPageImportFiles(), isEditableSrcPath(), KNOWN_DEP_VERSIONS, LLMResponse, ModifiedFile, NODE_BUILTINS, packageNameFromSpecifier() (+32 more)
 
 ### Community 20 - ".parseUserCommand"
-Cohesion: 0.12
-Nodes (6): AIOrchestrator, generateBlueprintFromFiles(), getPageImportFiles(), selectRelevantFiles(), trackAICall(), isAbortError()
+Cohesion: 0.13
+Nodes (7): AIOrchestrator, generateBlueprintFromFiles(), selectRelevantFiles(), trackAICall(), Intent, isAbortError(), clientSecretTelemetry()
 
 ### Community 21 - "updateWorkInProgressHook"
 Cohesion: 0.06
@@ -325,11 +401,11 @@ Nodes (45): areHookInputsEqual(), basicStateReducer(), createFunctionComponentUp
 
 ### Community 22 - "has"
 Cohesion: 0.05
-Nodes (72): _3(), a3(), Af(), al(), arbitraryProperty(), _b(), B3(), before() (+64 more)
+Nodes (72): a3(), Af(), ao(), arbitraryProperty(), _b(), B3(), create(), delete() (+64 more)
 
 ### Community 23 - ".getInstance"
-Cohesion: 0.13
-Nodes (5): ChatPersistenceService, CollaboratorService, DesignContextService, NotificationService, PatternRetriever
+Cohesion: 0.15
+Nodes (6): ShareProjectModal(), useNotifications(), CollaboratorService, CreditService, NotificationService, PatternRetriever
 
 ### Community 24 - "dependencies"
 Cohesion: 0.05
@@ -343,9 +419,9 @@ Nodes (7): first(), deleteStep(), step(), GATED_ACTION, isDeleteStep(), planReje
 Cohesion: 0.05
 Nodes (3): DealWithContact, PaymentWithProject, ProjectWithClient
 
-### Community 27 - "StudioEngine.tsx"
-Cohesion: 0.09
-Nodes (22): jszip, react-resizable-panels, @xterm/addon-fit, @xterm/xterm, ref_xterm_xterm_css_xterm_css, CommandBubble(), CommandBubbleProps, CommandModal() (+14 more)
+### Community 27 - "Terminal.tsx"
+Cohesion: 0.40
+Nodes (4): @xterm/addon-fit, @xterm/xterm, Terminal, TerminalRef
 
 ### Community 28 - "beginWork"
 Cohesion: 0.06
@@ -356,16 +432,16 @@ Cohesion: 0.09
 Nodes (32): createFiberFromHostInstanceForDeletion(), deleteHydratableInstance(), didNotFindHydratableInstance(), didNotFindHydratableInstanceWithinContainer(), didNotFindHydratableInstanceWithinSuspenseInstance(), didNotFindHydratableTextInstance(), didNotFindHydratableTextInstanceWithinContainer(), didNotFindHydratableTextInstanceWithinSuspenseInstance() (+24 more)
 
 ### Community 30 - "push"
-Cohesion: 0.10
-Nodes (32): cloneDiv(), colorStops(), content(), css(), e3(), Fr(), getAsyncError(), getIterator() (+24 more)
+Cohesion: 0.12
+Nodes (22): cloneDiv(), colorStops(), content(), css(), d3(), Gh(), h3(), ha() (+14 more)
 
 ### Community 31 - "compilerPerfHarness.mjs"
-Cohesion: 0.06
-Nodes (54): @babel/parser, @babel/traverse, ref_fs, ref_node_os, ALIAS, ALIAS_EXTRA_SOLO_HARNESS, bytesLabel(), checkIconsPresent() (+46 more)
+Cohesion: 0.10
+Nodes (35): ref_node_os, ALIAS, ALIAS_EXTRA_SOLO_HARNESS, bytesLabel(), checkIconsPresent(), entryCandidates, errorsLabel(), esmShResolverPluginInstrumented (+27 more)
 
 ### Community 32 - "SettingsModal.tsx"
 Cohesion: 0.05
-Nodes (41): @monaco-editor/react, ref_services_platformservice, ref_services_projectdbservice, CWV, LighthousePanel(), LighthousePanelProps, scoreColor(), ScoreGauge() (+33 more)
+Nodes (39): @monaco-editor/react, @octokit/rest, DeployManager(), DeployManagerProps, DeployStage, STAGE_MESSAGES, PageStat, TopPagesTable() (+31 more)
 
 ### Community 33 - "ChildReconciler"
 Cohesion: 0.14
@@ -379,9 +455,9 @@ Nodes (24): NOW, orchestrate(), persistedPaths(), ROOT, T, count(), NOW, orchest
 Cohesion: 0.21
 Nodes (10): react-moveable, ElementEditPopover(), ElementEditPopoverProps, DEFAULT_LAYOUT_CONTEXT, ElementInfo, getTranslateFromClass(), PreviewOverlay(), PreviewOverlayProps (+2 more)
 
-### Community 36 - "ChatInterface.tsx"
-Cohesion: 0.23
-Nodes (12): react-markdown, getPlainEnglish(), isLastDone(), isLastError(), ProgressLine, actionVerb(), BuildProgress(), ChatInterface() (+4 more)
+### Community 36 - "UI/UX Pro Max - Design Intelligence"
+Cohesion: 0.05
+Nodes (41): 1. Accessibility (CRITICAL), 2. Touch & Interaction (CRITICAL), 3. Performance (HIGH), 4. Layout & Responsive (HIGH), 5. Typography & Color (MEDIUM), 6. Animation (MEDIUM), 7. Style Selection (MEDIUM), 8. Charts & Data (LOW) (+33 more)
 
 ### Community 37 - "react.development.js"
 Cohesion: 0.08
@@ -400,28 +476,24 @@ Cohesion: 0.10
 Nodes (26): addSubtreeSuspenseContext(), createCapturedValue(), createFiberFromOffscreen(), getRemainingWorkInPrimaryTree(), getSuspendedCache(), getSuspenseInstanceFallbackErrorDetails(), isSuspenseInstanceFallback(), laneToLanes() (+18 more)
 
 ### Community 41 - "projectDBService"
-Cohesion: 0.19
-Nodes (8): graphify, For /graphify explain, For /graphify path, graphify reference: query, path, explain, Step 0 — Constrained query expansion (REQUIRED before traversal), Step 1 — Traversal, Interpreter guard for subcommands, projectDBService
-
-### Community 42 - "DDLApprovalButton.tsx"
-Cohesion: 0.20
-Nodes (11): ref_services_migrationrunner, ref_utils_ddlguard_js, ref_utils_ddlproposalstate_js, DDLApprovalButton(), fileName(), Props, fileName(), FlaggedStatement (+3 more)
+Cohesion: 0.39
+Nodes (3): graphify, Interpreter guard for subcommands, projectDBService
 
 ### Community 43 - "server.js"
-Cohesion: 0.05
-Nodes (40): messages(), value(), @anthropic-ai/sdk, ref_crypto, ref_dns_promises, ref_dotenv_config, express, stripe (+32 more)
+Cohesion: 0.07
+Nodes (30): messages(), @anthropic-ai/sdk, ref_crypto, ref_dns, express, stripe, ref_url, app (+22 more)
 
 ### Community 44 - "lucide-react"
-Cohesion: 0.04
-Nodes (49): ref_components_appsidebar, ref_components_forge_creditbalance, ref_components_forge_newprojectmodal, ref_components_forge_shareprojectmodal, ref_components_topbar, ref_contexts_authcontext, ref_contexts_viewmodecontext, framer-motion (+41 more)
+Cohesion: 0.06
+Nodes (39): ref_contexts, lucide-react, ref_pages, react-router-dom, App(), Login(), ProtectedRoute(), navItems (+31 more)
 
 ### Community 45 - "DesignBriefService"
 Cohesion: 0.09
 Nodes (11): parseFontsFromDesignMd(), reinjectBrandBriefIfDropped(), BrandColor, DesignBrief, DesignBriefService, PoolImage, REQUIRED_BRAND_VARS, SiteFacts (+3 more)
 
 ### Community 46 - "A4"
-Cohesion: 0.15
-Nodes (18): A4(), bb(), C4(), E4(), hr(), jb(), k4(), Lu() (+10 more)
+Cohesion: 0.17
+Nodes (16): A4(), bb(), E4(), hr(), jb(), k4(), Lu(), Mb() (+8 more)
 
 ### Community 47 - "ddlProposalState.js"
 Cohesion: 0.15
@@ -432,44 +504,44 @@ Cohesion: 0.15
 Nodes (22): completePlan(), step(), orders(), paths(), section(), step(), buildPlanRepairNote(), INITIAL_BUILD_REQUIRED_PATHS (+14 more)
 
 ### Community 49 - "rlsPolicyGuard.js"
-Cohesion: 0.14
-Nodes (28): 0. CERRADO Y CONFIRMADO EN PRODUCCIÓN — Guard RLS "no actuó" tras G-4: REENCUADRADO, no era regresión de G-3 (2026-09-17), applyGuard(), addMissingRls(), ALLOWED_PUBLIC_COMMANDS, alterTableAnchorsInSql(), createTableAnchorsInSql(), displayIdentifier(), evaluateRlsPolicies() (+20 more)
+Cohesion: 0.15
+Nodes (27): applyGuard(), addMissingRls(), ALLOWED_PUBLIC_COMMANDS, alterTableAnchorsInSql(), createTableAnchorsInSql(), displayIdentifier(), evaluateRlsPolicies(), extractParenBody() (+19 more)
 
-### Community 50 - "wo"
-Cohesion: 0.13
-Nodes (30): addKeyframes(), Be(), Bi(), bo(), Cn(), compare(), compound(), Do() (+22 more)
+### Community 50 - "O"
+Cohesion: 0.18
+Nodes (17): addKeyframes(), Be(), bo(), F(), Fn(), fromAst(), getKeyframes(), go() (+9 more)
 
 ### Community 51 - "SupabaseService"
-Cohesion: 0.12
-Nodes (13): @supabase/supabase-js, SUPABASE_ANON_KEY, SUPABASE_URL, USE_MOCK_DATA, PersistedChatMessage, Collaborator, InviteEntry, CreateNotificationParams (+5 more)
+Cohesion: 0.06
+Nodes (20): @supabase/supabase-js, PersistedChatMessage, Collaborator, InviteEntry, AnalyticsConnection, GADailyRow, MetaConnection, MetaDailyRow (+12 more)
 
 ### Community 52 - "MigrationRunner.ts"
 Cohesion: 0.15
 Nodes (21): BASE, SRC, asColumns(), columnKey(), describeError(), MigrationOutcome, MigrationResult, MigrationRunner (+13 more)
 
-### Community 53 - "nl"
-Cohesion: 0.11
-Nodes (25): ao(), Aw(), Di(), Dw(), Ew(), G3(), il(), Iw() (+17 more)
+### Community 53 - "c"
+Cohesion: 0.09
+Nodes (31): Aw(), comma(), Di(), Dw(), eh(), Ew(), ff(), G3() (+23 more)
 
-### Community 54 - "get"
-Cohesion: 0.12
-Nodes (34): add(), Br(), Ci(), f(), clearNamespace(), entries(), Fo(), get() (+26 more)
+### Community 54 - "has"
+Cohesion: 0.17
+Nodes (22): add(), Br(), Ci(), f(), clearNamespace(), getCompletions(), getOptions(), Gt() (+14 more)
 
-### Community 55 - "replace"
-Cohesion: 0.05
-Nodes (72): addToError(), Bn(), br(), clone(), cloneAfter(), Dn(), dr(), each() (+64 more)
-
-### Community 56 - "Verifier.ts"
+### Community 55 - "clone"
 Cohesion: 0.10
-Nodes (28): batchFor(), EXPORT_MISMATCH, filesAfterPlan(), originalFiles(), RESOLVE_ERRORS, err(), CompileErrorDetail, HAIKU_REPAIR_CLASSES (+20 more)
+Nodes (40): Bn(), clone(), cloneAfter(), co(), each(), eo(), Fn(), FS() (+32 more)
+
+### Community 56 - ".fixBatch"
+Cohesion: 0.12
+Nodes (16): warnings(), 0. CERRADO Y CONFIRMADO EN PRODUCCIÓN — Guard RLS "no actuó" tras G-4: REENCUADRADO, no era regresión de G-3 (2026-09-17), 1. HECHO — G-3 (2026-09-15), 2. HECHO — G-4 (2026-09-17), 3. HECHO (pendiente CHECK MANUAL) — Guard de código bajo `src/` (G-6, 2026-09-19), 4. Hueco conceptual RLS ↔ Edge Function, 5. BUCKET Producto y UX, 6. BUCKET Calidad del modelo (+8 more)
 
 ### Community 57 - "PropertyPanel.tsx"
 Cohesion: 0.11
 Nodes (19): BRAND_VAR_ORDER, BrandVar, FONT_SIZES, FONT_WEIGHTS, hasToken(), isAlign(), isFontSize(), isFontWeight() (+11 more)
 
-### Community 58 - "uo"
-Cohesion: 0.16
-Nodes (26): ao(), Ce(), dt(), Ee(), G(), It(), J(), Jt() (+18 more)
+### Community 58 - "ye"
+Cohesion: 0.17
+Nodes (16): ao(), Cn(), dt(), G(), It(), J(), Me(), pe() (+8 more)
 
 ### Community 59 - "compilerOptions"
 Cohesion: 0.08
@@ -480,8 +552,8 @@ Cohesion: 0.11
 Nodes (24): runDeleteSteps(), asMap(), DeleteVerdict, DeleteVerdictInput, deleteVerdict(), deletionTargetsTelemetry(), expandDeletionTargets(), NOT_TARGETED_STILL_IMPORTED (+16 more)
 
 ### Community 61 - "q"
-Cohesion: 0.14
-Nodes (21): ae(), l(), Bt(), Ei(), En(), ft(), hi(), l() (+13 more)
+Cohesion: 0.18
+Nodes (18): ae(), l(), Bt(), Ei(), En(), ft(), hi(), l() (+10 more)
 
 ### Community 62 - "compilerOptions"
 Cohesion: 0.10
@@ -489,47 +561,43 @@ Nodes (19): compilerOptions, allowImportingTsExtensions, erasableSyntaxOnly, lib
 
 ### Community 63 - "classifierHarness.mjs"
 Cohesion: 0.12
-Nodes (20): CHAT_HISTORY, classifyOutcome(), DELAY_MS, ENTRY_TS, HERE, loadClassifier(), main(), majorityOf() (+12 more)
+Nodes (21): CHAT_HISTORY, classifyOutcome(), DELAY_MS, ENTRY_TS, HERE, loadClassifier(), main(), majorityOf() (+13 more)
 
-### Community 64 - "@webcontainer/api"
-Cohesion: 0.17
-Nodes (9): @octokit/rest, @webcontainer/api, HistoryDrawer(), HistoryDrawerProps, RestoreMeta, Snapshot, TRIGGER_COLORS, TRIGGER_LABELS (+1 more)
-
-### Community 65 - "platformService"
+### Community 64 - "remove"
 Cohesion: 0.11
-Nodes (10): DeployManager(), DeployManagerProps, DeployStage, STAGE_MESSAGES, CreditBalance(), useAuth(), DISPLAY_DIVISOR, formatCredits() (+2 more)
+Nodes (34): _3(), ae(), after(), al(), append(), As(), before(), error() (+26 more)
 
 ### Community 66 - "resolveDispatcher"
 Cohesion: 0.13
 Nodes (15): resolveDispatcher(), useCallback(), useDebugValue(), useDeferredValue(), useEffect(), useId(), useImperativeHandle(), useInsertionEffect() (+7 more)
 
-### Community 67 - "QUEUE.md — Cola de Wyrd Forge"
+### Community 67 - "uo"
 Cohesion: 0.18
-Nodes (10): 1. HECHO — G-3 (2026-09-15), 2. HECHO — G-4 (2026-09-17), 3. Guard de código bajo `src/`, 4. Hueco conceptual RLS ↔ Edge Function, 5. BUCKET Producto y UX, 6. BUCKET Calidad del modelo, APARCADO hasta después de lanzar, Decisión de arquitectura permanente (+2 more)
+Nodes (32): Do(), functional(), get(), jn(), jo(), le(), M(), mo() (+24 more)
 
 ### Community 68 - "ddlGuard.js"
 Cohesion: 0.21
 Nodes (18): kinds(), targets(), DELETE_WITHOUT_WHERE, destructiveTargets(), DROP, DROP_COLUMN, findDestructiveDDL(), isDestructiveDDL() (+10 more)
 
 ### Community 69 - "templates.ts"
-Cohesion: 0.14
+Cohesion: 0.13
 Nodes (14): commonFiles, commonSrc, TEMPLATES, MOTION_DIR, SEO_FILE, bridgeTokens(), COLOR_PROPS, file() (+6 more)
 
 ### Community 70 - "ast.ts"
-Cohesion: 0.10
-Nodes (23): @babel/standalone, @xyflow/react, ref_xyflow_react_dist_style_css, StateGraph(), StateGraphProps, InspectorPanel(), InspectorPanelProps, PropertyPanelProps (+15 more)
+Cohesion: 0.16
+Nodes (15): @xyflow/react, StateGraph(), StateGraphProps, InspectorPanel(), InspectorPanelProps, PropertyPanelProps, analyzeDependencyGraph(), classNamesForLayout() (+7 more)
 
 ### Community 71 - "captureCommitPhaseError"
 Cohesion: 0.04
 Nodes (88): captureCommitPhaseError(), clearContainer(), clearSuspenseBoundary(), clearSuspenseBoundaryFromContainer(), commitAttachRef(), commitBeforeMutationEffects_complete(), commitBeforeMutationEffectsOnFiber(), commitDeletionEffects() (+80 more)
 
 ### Community 72 - "types.ts"
-Cohesion: 0.13
-Nodes (14): src_data, fetchItems(), fetchProfile(), AdminKPIs, Contact, DashboardKPIs, DataInterface, Deal (+6 more)
+Cohesion: 0.20
+Nodes (9): AdminKPIs, Contact, DashboardKPIs, DataInterface, Deal, DealStatus, Payment, Project (+1 more)
 
-### Community 73 - "StaffFinance.tsx"
-Cohesion: 0.04
-Nodes (69): ref_components_emptystate, ref_components_pagination, ref_components_ui_badge, ref_components_ui_button, ref_components_ui_input, ref_components_ui_table, ref_contexts_languagecontext, ref_hooks_usepagination (+61 more)
+### Community 73 - "ref_components"
+Cohesion: 0.06
+Nodes (44): ref_components, ref_types, ClientContactView(), labels, typeBadgeClass, ContactDetailPanel(), ContactDetailPanelProps, labels (+36 more)
 
 ### Community 74 - "error"
 Cohesion: 0.21
@@ -548,8 +616,8 @@ Cohesion: 0.24
 Nodes (8): PatternInjector, InjectionPattern, PATTERN_DATA, PATTERN_REGISTRY, PATTERN_SUMMARY, formatPattern(), resolvePatterns(), ResolverResult
 
 ### Community 78 - "constructor"
-Cohesion: 0.20
-Nodes (12): Ar(), constructor(), createTokenizer(), ia(), mapResolve(), pl(), positionBy(), positionInside() (+4 more)
+Cohesion: 0.09
+Nodes (26): Ar(), constructor(), createTokenizer(), fk(), ia(), jn(), mapResolve(), otherPrefixes() (+18 more)
 
 ### Community 79 - "graphify reference: extra exports and benchmark"
 Cohesion: 0.22
@@ -557,7 +625,7 @@ Nodes (8): graphify reference: extra exports and benchmark, Step 6b - Wiki (only
 
 ### Community 80 - "sonner"
 Cohesion: 0.09
-Nodes (19): ref_components_ui_card, ref_components_ui_label, ref_components_ui_switch, ref_components_ui_tabs, ref_services_collaboratorservice, sonner, getInitials(), PendingProfile (+11 more)
+Nodes (15): framer-motion, sonner, getInitials(), PendingProfile, ROLE_BADGE, UserApprovalPanel(), UserApprovalPanelProps, PendingInvite (+7 more)
 
 ### Community 81 - "getComponentNameFromType"
 Cohesion: 0.22
@@ -569,39 +637,39 @@ Nodes (8): 📦 Architecture, 🔴 Ares Project, 🛠 Features, 🧠 Intelligenc
 
 ### Community 83 - "add"
 Cohesion: 0.07
-Nodes (48): add(), already(), checkForWarning(), cleanFromUnprefixed(), cleanOtherPrefixes(), cloneBefore(), contain3d(), convert() (+40 more)
+Nodes (44): add(), o(), u(), Ah(), ai(), already(), c(), checkForWarning() (+36 more)
 
 ### Community 84 - "Forecast.tsx"
 Cohesion: 0.14
 Nodes (13): Deal, fmtCurrency(), fmtDate(), Forecast(), ForecastData, labels, MONTH_NAMES_EN, MONTH_NAMES_ES (+5 more)
 
-### Community 85 - "AuthContext.tsx"
-Cohesion: 0.15
-Nodes (13): ref_react_dom_client, App(), AuthContext, AuthContextType, AuthProvider(), clearProfileCache(), readProfileCache(), writeProfileCache() (+5 more)
+### Community 85 - "react"
+Cohesion: 0.08
+Nodes (19): react, EmptyStateProps, CreditBalance(), AuthContext, AuthContextType, AuthProvider(), clearProfileCache(), readProfileCache() (+11 more)
 
 ### Community 86 - "danglingRefs.js"
-Cohesion: 0.14
-Nodes (21): APP_HALF_UNWIRED, APP_UNWIRED, asMap(), blankOut(), boundNames(), danglingImportOf(), danglingRefsTelemetry(), exportedSymbols() (+13 more)
+Cohesion: 0.08
+Nodes (41): APP_HALF_UNWIRED, APP_UNWIRED, batchFor(), EXPORT_MISMATCH, filesAfterPlan(), originalFiles(), RESOLVE_ERRORS, asMap() (+33 more)
 
 ### Community 87 - "components.json"
 Cohesion: 0.14
 Nodes (13): aliases, components, utils, rsc, $schema, style, tailwind, baseColor (+5 more)
 
-### Community 88 - "e"
-Cohesion: 0.13
-Nodes (29): An(), co(), #e(), functional(), Je(), jo(), keysInNamespaces(), le() (+21 more)
+### Community 88 - "co"
+Cohesion: 0.14
+Nodes (18): An(), co(), #e(), entries(), Fo(), Gn(), keysInNamespaces(), lo() (+10 more)
 
 ### Community 89 - "Performance.tsx"
 Cohesion: 0.19
 Nodes (11): defaultDateRange(), fmtDate(), labels, Milestone, milestoneBadgeClass, milestoneBadgeLabel, NpsRow, npsScoreBadgeClass() (+3 more)
 
 ### Community 90 - "What You Must Do When Invoked"
-Cohesion: 0.12
-Nodes (16): Part A - Structural extraction for code files, Part B - Semantic extraction (parallel subagents), Part C - Merge AST + semantic into final extraction, Step 0 - GitHub repos and multi-path merge (only if a URL or several paths), Step 1 - Ensure graphify is installed, Step 2.5 - Video and audio (only if video files detected), Step 2 - Detect files, Step 3 - Extract entities and relationships (+8 more)
-
-### Community 91 - "At"
 Cohesion: 0.18
-Nodes (11): ar(), At(), Bn(), Eo(), Hn(), ke(), lr(), markUsedVariable() (+3 more)
+Nodes (11): Step 0 - GitHub repos and multi-path merge (only if a URL or several paths), Step 1 - Ensure graphify is installed, Step 2.5 - Video and audio (only if video files detected), Step 2 - Detect files, Step 4.5 - Graph health check (read-only integrity gate), Step 4 - Build graph, cluster, analyze, generate outputs, Step 5 - Label communities, Step 6 - Generate Obsidian vault (opt-in) + HTML (+3 more)
+
+### Community 91 - "replace"
+Cohesion: 0.12
+Nodes (22): addToError(), Dn(), dr(), et(), GS(), mt(), negative(), rawBeforeClose() (+14 more)
 
 ### Community 92 - "graphify reference: add a URL and watch a folder"
 Cohesion: 0.50
@@ -623,9 +691,9 @@ Nodes (8): CLAUDE.md — Wyrd Forge (NSS-Project), Comandos, Fixtures, Límites 
 Cohesion: 0.50
 Nodes (3): For git commit hook, For native CLAUDE.md integration, graphify reference: commit hook and native CLAUDE.md integration
 
-### Community 97 - "laneRouting.js"
-Cohesion: 0.38
-Nodes (9): canEnterFastLane(), hasNoRequiredPatterns(), hasOutOfUniverseWork(), isPlanLaneOnly(), isSelectableSrcFile(), isSimpleEditIntent(), PLAN_LANE_ONLY_TYPES, promptMentionsEdgeFunction() (+1 more)
+### Community 97 - "noMemoryFallbackNeedsServer.test.js"
+Cohesion: 0.17
+Nodes (17): intent(), buildNoMemoryIntent(), ORCHESTRATOR_SRC, SRC_DIR, canEnterFastLane(), hasNoRequiredPatterns(), hasOutOfUniverseWork(), isPlanLaneOnly() (+9 more)
 
 ### Community 98 - "/graphify"
 Cohesion: 0.22
@@ -633,15 +701,15 @@ Nodes (8): For /graphify add and --watch, For /graphify query, For the commit ho
 
 ### Community 99 - "MetricsPage.tsx"
 Cohesion: 0.08
-Nodes (31): recharts, ref_services_data_analyticsservice, ref_services_data_metaadsservice, AnalyticsRow, formatDate(), TrafficCharts(), TrafficChartsProps, AIReports() (+23 more)
+Nodes (29): recharts, AnalyticsRow, formatDate(), TrafficCharts(), TrafficChartsProps, AIReports(), fmtDate(), labels (+21 more)
 
 ### Community 100 - "AdminDashboard.tsx"
 Cohesion: 0.20
 Nodes (10): AdminDashboard(), CreditStats, DEFAULT_KPIS, ForgeStats, formatCurrency(), PlatformUsage, PlatformUsageRow, ROLE_LABELS (+2 more)
 
-### Community 101 - "ddlProposedGate.e2e.test.ts"
-Cohesion: 0.08
-Nodes (32): el(), ref_services_aiorchestrator, ref_services_architect, ref_testing_library_jest_dom_vitest, @testing-library/react, @testing-library/user-event, ref_utils_ddlproposalstate, vitest (+24 more)
+### Community 101 - "ChatInterface.tsx"
+Cohesion: 0.06
+Nodes (46): el(), react-markdown, ref_utils, vitest, getPlainEnglish(), isLastDone(), isLastError(), ProgressLine (+38 more)
 
 ### Community 102 - "describeUnknownElementTypeFrameInDEV"
 Cohesion: 0.24
@@ -655,9 +723,9 @@ Nodes (7): buildTree(), FileExplorer(), FileExplorerProps, TreeNode, TreeNodePro
 Cohesion: 0.50
 Nodes (3): For --cluster-only, For --update (incremental re-extraction), graphify reference: incremental update and cluster-only
 
-### Community 106 - "BrowserCompiler.ts"
-Cohesion: 0.16
-Nodes (18): backoffMs(), CompileDecision, CompileOptions, CompilePayload, compileRequest(), CompileResult, CompileVerdict, compileWithMeta() (+10 more)
+### Community 106 - "StudioEngine.tsx"
+Cohesion: 0.05
+Nodes (53): @webcontainer/api, CommandModal(), CommandModalProps, TabType, HistoryDrawer(), HistoryDrawerProps, RestoreMeta, Snapshot (+45 more)
 
 ### Community 107 - "createIntentAccumulator"
 Cohesion: 0.36
@@ -667,17 +735,21 @@ Nodes (5): createIntentAccumulator(), accumulate(), close(), get(), toNonNegInt(
 Cohesion: 0.39
 Nodes (5): persistContent(), useProjectFiles(), UseProjectFilesReturn, normalizeBrandVars(), stripDataOid()
 
-### Community 109 - "forge_snapshots"
-Cohesion: 0.16
-Nodes (14): cap_forge_snapshots, cap_forge_snapshots(), cap_snapshots_trigger, forge_projects, forge_snapshots, forge_snapshots_project_created_idx, forge_snapshots_project_id_idx, profiles (+6 more)
+### Community 109 - "sync"
+Cohesion: 0.17
+Nodes (20): async(), catch(), finally(), Fr(), getAsyncError(), getIterator(), getProxyProcessor(), handleError() (+12 more)
 
-### Community 110 - "ref_lib_utils"
+### Community 110 - "ref_lib"
 Cohesion: 0.10
-Nodes (16): ref_lib_utils, @radix-ui/react-progress, @radix-ui/react-switch, @radix-ui/react-tabs, Card, CardContent, CardDescription, CardFooter (+8 more)
+Nodes (16): ref_lib, @radix-ui/react-progress, @radix-ui/react-switch, @radix-ui/react-tabs, Card, CardContent, CardDescription, CardFooter (+8 more)
 
 ### Community 112 - "table.tsx"
 Cohesion: 0.22
 Nodes (8): Table, TableBody, TableCaption, TableCell, TableFooter, TableHead, TableHeader, TableRow
+
+### Community 113 - "compiler.js"
+Cohesion: 0.14
+Nodes (19): @babel/parser, @babel/traverse, ref_fs, ALIAS, ALLOWED_DEPS, buildLucideExportMap(), compileFiles(), escapeHtml() (+11 more)
 
 ### Community 114 - "migrationContentGate.test.js"
 Cohesion: 0.43
@@ -687,13 +759,21 @@ Nodes (6): gateActive(), ROOT, MIGRATIONS_SEGMENT, normalizePath(), touchesMigra
 Cohesion: 0.39
 Nodes (5): bootstrapProject(), EXEC_SQL_DDL, RLS_TRIGGER_DDL, sendManagementQuery(), NORMALIZE_LINE
 
-### Community 125 - "context.ts"
-Cohesion: 0.36
-Nodes (7): fileSystemTreeToMap(), flattenFileTree(), flattenFileTreeRecursive(), flattenTreeToMap(), generateBlueprintRecursive(), generateProjectBlueprint(), mapToFileSystemTree()
+### Community 117 - "core.py"
+Cohesion: 0.15
+Nodes (16): detect_domain(), _load_csv(), Load CSV and return list of dicts, Core search function using BM25, Auto-detect the most relevant domain from query, Main search function with auto-domain detection, Search stack-specific guidelines, UI/UX Pro Max Core - BM25 search engine for UI/UX style guides (+8 more)
+
+### Community 119 - "DesignSystemGenerator"
+Cohesion: 0.16
+Nodes (9): DesignSystemGenerator, Select best matching result based on priority keywords., Extract results list from search result dict., Generate complete design system recommendation., Generates design system recommendations from aggregated searches., Load reasoning rules from CSV., Execute searches across multiple domains., Find matching reasoning rule for a category. (+1 more)
+
+### Community 125 - "clientCodeGuard.js"
+Cohesion: 0.23
+Nodes (13): ROLE_TABLES, clientCodeWarnings(), clientRoleWriteTelemetry(), CREDENTIAL_IDENTIFIER_NAMES, CREDENTIAL_WORD_LISTS, DANGEROUS_METHODS, evaluateClientCode(), findClientRoleWrites() (+5 more)
 
 ### Community 126 - "ProjectHubPage.tsx"
-Cohesion: 0.12
-Nodes (16): ref_components_settings_aihistorypanel, ref_components_settings_analytics_lighthousepanel, ref_components_settings_analytics_toppagestable, ref_components_settings_analytics_trafficcharts, ref_components_settings_db_databaseoverview, ref_components_settings_db_schemaviewer, ref_components_settings_db_sqleditor, ref_components_settings_db_usersmanager (+8 more)
+Cohesion: 0.33
+Nodes (6): DB_SUB_TABS, ForgeProject, formatDate(), HUB_TABS, HubTab, ProjectHubPage()
 
 ### Community 128 - "_set"
 Cohesion: 0.29
@@ -703,29 +783,69 @@ Nodes (7): _emitEvictions(), _entriesAscending(), _moveToRecent(), resize(), _se
 Cohesion: 0.33
 Nodes (6): ClientDashboard(), formatCurrency(), PAYMENT_STATUS_COLORS, PAYMENT_STATUS_LABELS, STATUS_COLORS, STATUS_LABELS
 
-### Community 130 - "meta_connections"
-Cohesion: 0.67
-Nodes (3): meta_connections, meta_connections_user_id_idx, profiles
+### Community 130 - "design_system.py"
+Cohesion: 0.19
+Nodes (13): _detect_page_type(), format_master_md(), format_page_override_md(), _generate_intelligent_overrides(), persist_design_system(), Detect page type from context and search results., Design System Generator - Aggregates search results and applies reasoning to…, Persist design system to design-system/<project>/ folder using Master +… (+5 more)
+
+### Community 131 - "data/index.ts"
+Cohesion: 0.19
+Nodes (8): SUPABASE_ANON_KEY, SUPABASE_URL, USE_MOCK_DATA, src_data, fetchItems(), fetchProfile(), Item, Profile
 
 ### Community 132 - "rlsPolicyGuard.d.ts"
 Cohesion: 0.33
 Nodes (5): RlsDangerousCommand, RlsFinding, RlsFindingReason, RlsMigrationInput, RlsVerdict
 
 ### Community 133 - "embed-patterns.ts"
-Cohesion: 0.14
-Nodes (13): dotenv, ref_path, @tailwindcss/vite, vite, @vitejs/plugin-react, ref_vitest_config, generateEmbedding(), main() (+5 more)
+Cohesion: 0.15
+Nodes (12): dotenv, ref_path, @tailwindcss/vite, vite, @vitejs/plugin-react, generateEmbedding(), main(), sleep() (+4 more)
+
+### Community 134 - "U"
+Cohesion: 0.22
+Nodes (11): Bi(), Ce(), Ee(), ii(), no(), Nt(), rn(), tl() (+3 more)
+
+### Community 135 - "ge"
+Cohesion: 0.22
+Nodes (11): dr(), ge(), f(), h(), he(), li(), mi(), mr() (+3 more)
 
 ### Community 136 - "applyEdits.js"
 Cohesion: 0.57
 Nodes (5): block(), applyEditsFromResponse(), applySearchReplace(), countOccurrences(), parseSearchReplaceBlocks()
 
+### Community 137 - "jsxOrdinal.js"
+Cohesion: 0.22
+Nodes (7): @babel/standalone, instrumentSource(), updateJSXProp(), BABEL_OPTS, CONFLICT_PREFIXES, updateCodeByOrdinal(), updateJSXPropByOrdinal()
+
+### Community 138 - "yo"
+Cohesion: 0.27
+Nodes (10): compoundsWith(), kind(), Qr(), qt(), ut(), yo(), f(), h() (+2 more)
+
+### Community 139 - "BM25"
+Cohesion: 0.28
+Nodes (5): BM25, Lowercase, split, remove punctuation, filter short words, Build BM25 index from documents, Score all documents against query, BM25 ranking algorithm for text search
+
 ### Community 140 - "ddlProposalState.d.ts"
 Cohesion: 0.40
 Nodes (4): DdlProposal, ProposalOutcome, ProposalSourceMessage, ProposalState
 
+### Community 142 - "search.py"
+Cohesion: 0.25
+Nodes (7): argparse, format_output(), UI/UX Pro Max Search - BM25 search engine for UI/UX style guides Usage: python…, Format results for Claude consumption (token-optimized), io, json, sys
+
 ### Community 143 - "button.tsx"
 Cohesion: 0.18
 Nodes (11): class-variance-authority, @radix-ui/react-label, @radix-ui/react-slot, Badge(), BadgeProps, badgeVariants, Button, ButtonProps (+3 more)
+
+### Community 144 - "Pagination.test.tsx"
+Cohesion: 0.29
+Nodes (5): @testing-library/jest-dom, @testing-library/react, @testing-library/user-event, Pagination(), PaginationProps
+
+### Community 145 - "unsplash.test.js"
+Cohesion: 0.39
+Nodes (4): searchOneKeyword(), searchUnsplash(), triggerUnsplashDownloads(), withUtmParams()
+
+### Community 146 - "LighthousePanel.tsx"
+Cohesion: 0.29
+Nodes (6): CWV, LighthousePanel(), LighthousePanelProps, scoreColor(), ScoreGauge(), Scores
 
 ### Community 147 - "danglingRefs.d.ts"
 Cohesion: 0.50
@@ -739,37 +859,69 @@ Nodes (3): DestructiveFinding, DestructiveKind, SqlStatement
 Cohesion: 0.50
 Nodes (3): IntentLogResult, MigrationIntentInput, MigrationIntentParams
 
-### Community 180 - "ref_https_esm_sh_supabase_supabase_js_2"
+### Community 152 - "DevDashboard.tsx"
+Cohesion: 0.32
+Nodes (7): DEFAULT_KPIS, DevDashboard(), ForgeProject, formatCurrency(), relativeTime(), STATUS_COLORS, STATUS_LABELS
+
+### Community 153 - "generate_design_system"
+Cohesion: 0.29
+Nodes (6): format_ascii_box(), format_markdown(), generate_design_system(), Format design system as ASCII box with emojis (MCP-style)., Format design system as markdown., Main entry point for design system generation. Args: query: Search query (e.g.,…
+
+### Community 154 - "graphify reference: query, path, explain"
+Cohesion: 0.33
+Nodes (5): For /graphify explain, For /graphify path, graphify reference: query, path, explain, Step 0 — Constrained query expansion (REQUIRED before traversal), Step 1 — Traversal
+
+### Community 155 - "edgeFunctionPath.test.js"
+Cohesion: 0.73
+Nodes (4): EDGE_FUNCTIONS_DIR, edgeFunctionSlug(), isEdgeFunctionEntrypoint(), isValidEdgeFunctionSlug()
+
+### Community 156 - "LanguageContext.tsx"
+Cohesion: 0.33
+Nodes (3): Language, LanguageContext, LanguageContextType
+
+### Community 157 - "clientCodeGuard.d.ts"
+Cohesion: 0.40
+Nodes (4): ClientCodeFileInput, ClientCodeFinding, ClientCodeFindingReason, ClientCodeVerdict
+
+### Community 158 - "Herramientas del agente"
+Cohesion: 0.50
+Nodes (4): Caveman, CodeGraph, Herramientas del agente, UI/UX Pro Max
+
+### Community 159 - "Step 3 - Extract entities and relationships"
+Cohesion: 0.50
+Nodes (4): Part A - Structural extraction for code files, Part B - Semantic extraction (parallel subagents), Part C - Merge AST + semantic into final extraction, Step 3 - Extract entities and relationships
+
+### Community 180 - "ref_https"
 Cohesion: 0.20
-Nodes (6): ref_https_deno_land_std_0_168_0_http_server_ts, ref_https_esm_sh_supabase_supabase_js_2, corsHeaders, corsHeaders, CORS, CORS
+Nodes (5): ref_https, corsHeaders, corsHeaders, CORS, CORS
 
 ### Community 232 - "commitPlacement"
 Cohesion: 0.21
 Nodes (13): appendChild(), appendChildToContainer(), appendInitialChild(), commitPlacement(), commitReconciliationEffects(), getHostParentFiber(), getHostSibling(), insertBefore() (+5 more)
 
-### Community 243 - "react"
-Cohesion: 0.06
-Nodes (23): react, ref_services_supabaseservice, DatabaseOverviewProps, KPI, EdgeFunction, EdgeFunctionsPanel(), EdgeFunctionsPanelProps, getLocalFunctions() (+15 more)
+### Community 243 - "ref_services"
+Cohesion: 0.07
+Nodes (24): ref_services, NewProjectModal(), NewProjectModalProps, DatabaseOverview(), DatabaseOverviewProps, KPI, EdgeFunction, EdgeFunctionsPanel() (+16 more)
 
 ## Knowledge Gaps
-- **696 isolated node(s):** `CodeGraph`, `codegraph`, `EmptyStateProps`, `TopbarProps`, `CreditStats` (+691 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 1203 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **70 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **737 isolated node(s):** `codegraph`, `$schema`, `style`, `rsc`, `tsx` (+732 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 1290 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **130 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `value()` connect `server.js` to `react-dom.development.js`, `tailwindcss.js`, `add`?**
-  _High betweenness centrality (0.241) - this node is a cross-community bridge._
-- **Why does `@supabase/supabase-js` connect `SupabaseService` to `AuthContext.tsx`, `server.js`, `package.json`, `embed-patterns.ts`?**
-  _High betweenness centrality (0.122) - this node is a cross-community bridge._
-- **Why does `react` connect `react` to `ClientDashboard.tsx`, `AppSidebar.tsx`, `package.json`, `button.tsx`, `StudioEngine.tsx`, `SettingsModal.tsx`, `PreviewOverlay.tsx`, `ChatInterface.tsx`, `DDLApprovalButton.tsx`, `lucide-react`, `PropertyPanel.tsx`, `@webcontainer/api`, `platformService`, `ast.ts`, `StaffFinance.tsx`, `DealsPage.tsx`, `sonner`, `Forecast.tsx`, `AuthContext.tsx`, `Performance.tsx`, `MetricsPage.tsx`, `AdminDashboard.tsx`, `FileExplorer.tsx`, `useProjectFiles.ts`, `ref_lib_utils`, `table.tsx`, `ProjectHubPage.tsx`?**
-  _High betweenness centrality (0.089) - this node is a cross-community bridge._
+- **Why does `value()` connect `add` to `react-dom.development.js`, `tailwindcss.js`, `server.js`?**
+  _High betweenness centrality (0.232) - this node is a cross-community bridge._
+- **Why does `@supabase/supabase-js` connect `SupabaseService` to `react`, `server.js`, `package.json`, `embed-patterns.ts`?**
+  _High betweenness centrality (0.083) - this node is a cross-community bridge._
+- **Why does `react` connect `react` to `ClientDashboard.tsx`, `ClientProjectPage.tsx`, `package.json`, `button.tsx`, `LighthousePanel.tsx`, `DevDashboard.tsx`, `Terminal.tsx`, `LanguageContext.tsx`, `SettingsModal.tsx`, `PreviewOverlay.tsx`, `lucide-react`, `PropertyPanel.tsx`, `ast.ts`, `ref_components`, `DealsPage.tsx`, `sonner`, `Forecast.tsx`, `Performance.tsx`, `MetricsPage.tsx`, `AdminDashboard.tsx`, `ChatInterface.tsx`, `FileExplorer.tsx`, `StudioEngine.tsx`, `useProjectFiles.ts`, `ref_lib`, `table.tsx`, `ref_services`, `ProjectHubPage.tsx`?**
+  _High betweenness centrality (0.079) - this node is a cross-community bridge._
 - **Are the 6 inferred relationships involving `add()` (e.g. with `u()` and `p()`) actually correct?**
   _`add()` has 6 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `CodeGraph`, `codegraph`, `EmptyStateProps` to the rest of the system?**
-  _696 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **What connects `codegraph`, `$schema`, `style` to the rest of the system?**
+  _737 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `react-dom.development.js` be split into smaller, more focused modules?**
   _Cohesion score 0.010263007432818754 - nodes in this community are weakly interconnected._
 - **Should `tailwindcss.js` be split into smaller, more focused modules?**
-  _Cohesion score 0.018944961620120857 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.020396270396270396 - nodes in this community are weakly interconnected._

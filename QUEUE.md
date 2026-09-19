@@ -41,7 +41,7 @@ real de `control_cd_g4`/`customer_reviews`), 4 actualizados para el nuevo alcanc
 "server/*.test.js"` (605), `npx vitest run` (41) y `npx tsc -b --force` en verde. Commiteado en main
 (`1e37705`); branch de checkpoint `claude/g5-rls-guard-checkpoint`, PR #325.
 
-**Pendiente, no de esta sesión:** ampliar también a políticas públicas sobre tablas SIN columna de rol
+**Pendiente:** ampliar también a políticas públicas sobre tablas SIN columna de rol
 (la opción que Samuel dejó para después, con mockup — bucket 5). `customer_reviews` con su insert público
 sigue sin ningún aviso; es una decisión de UX pendiente, no un bug.
 
@@ -68,9 +68,122 @@ Notas de G-4 ya decididas:
 - `projectId: none`: si no se resolvió en G-4, va como sub-bullet del bucket 5.
 - La bomba de `deployGeneratedFunctions` se documenta como comentario en código, no como ítem.
 
-## 3. Guard de código bajo `src/`
-Detectar credenciales de terceros embebidas en cliente y escrituras a tablas de rol desde el navegador.
-No tiene embudo propio: hay que construir el punto de inspección (el Verifier repara compilación, no inspecciona).
+## 3. HECHO (pendiente CHECK MANUAL) — Guard de código bajo `src/` (G-6, 2026-09-19)
+
+**El agujero:** el Verifier (`src/services/Verifier.ts`) compila y repara errores de compilación —
+nunca inspecciona el CONTENIDO por reglas de seguridad. `BACKEND_RULES` (`src/services/promptRules.ts`)
+ya le PIDE al modelo, en texto, mover a una función de servidor cualquier lógica que necesite "a secret
+the browser must never hold" o sea una "privileged write" — pero es instrucción al LLM, no una
+inspección determinista.
+
+**Hecho:** `src/utils/clientCodeGuard.js` + `.d.ts` (nuevo), mismas convenciones exactas del resto de
+la familia (`ddlGuard.js`, `deletionGuard.js`, `planGuard.js`, `rlsPolicyGuard.js`). Dos comprobaciones
+independientes en un solo módulo:
+1. `hardcoded-credential` — identificador-credencial de un set cerrado (`CREDENTIAL_IDENTIFIER_NAMES`,
+   match por prefijo/sufijo de palabra completa) asignado a un literal de string, o un header
+   `Authorization: 'Bearer <literal>'` pegado a mano.
+2. `role-table-write` — código de cliente que escribe (`insert`/`update`/`upsert`/`delete`) directamente
+   en una tabla que ESTE MISMO lote de migraciones marca como de rol/permisos. Reutiliza
+   `tablesWithRoleColumnInSql` de `rlsPolicyGuard.js` (ahora exportada, cambio aditivo — `rlsPolicyGuard.
+   test.js` no se tocó y sigue en verde).
+
+DETECT + AVISA, nunca reescribe: no hay transformación segura y determinista para "mueve esto a una
+función de servidor" (a diferencia de encender RLS o borrar una política). La corrida sigue igual; no se
+retira el botón de aprobación (mismo trato que `unparseable` en el guard RLS).
+
+**Wiring, en las tres rutas que generan código de cliente (mismo hueco que ya se corrigió para el guard
+RLS con `runHeavyLane`, no repetido aquí):**
+- **Plan lane:** las dos comprobaciones, sobre el lote de migraciones (`migrationsForGuards`, nombrado y
+  compartido con `evaluateRlsPolicies`) y sobre `diffPaths` filtrado a `src/`. Marca en `forge_intent_log`
+  Y aviso visible en el chat (`warnings`), igual que RLS.
+- **Fast lane y Simple lane:** sólo Comprobación 1 (ninguna de las dos toca `.sql`). Campo nuevo
+  `clientSecretMark?: string` en `OrchestratorResult`, consumido por su `logIntent` respectivo —
+  **sólo telemetría en `forge_intent_log`, sin aviso nuevo en el chat** en estas dos rutas. Decisión de
+  alcance ya tomada, no un olvido: este guard nunca reescribe, así que no aplica el principio que sí
+  obliga a avisar en RLS ("un guard que ACTÚA sin rastro visible").
+
+**Decisión de producto (con Samuel):** no se intenta arreglo automático (no existe una transformación
+segura para "mueve esto a servidor"; forzarla rompería la doctrina de guard determinista de toda la
+familia). Se mueven a bucket 5 dos preguntas de producto, explícitas, no implícitas:
+- Cómo traducir el aviso técnico de este guard a algo que un usuario NO técnico pueda accionar solo.
+- Qué hacer con los límites aceptados de abajo (¿son un problema de producto o quedan como están?).
+
+**Límites aceptados, documentados en la cabecera de `clientCodeGuard.js`, no resueltos aquí:**
+- Sin memoria de esquema entre corridas: sólo ve tablas de rol de ESTE MISMO intent.
+- `supabase.from(variable)` sin literal: fail-open, no se evalúa.
+- Un import con alias (`supabase as sb`): no se detecta (ancla en el identificador literal `supabase`).
+- Fast lane / Simple lane: el hallazgo sólo queda en `forge_intent_log`, invisible en el chat.
+
+**Verificación:** `node --test "server/*.test.js"` → 628/628 verdes (605 previos + 23 nuevos de
+`server/clientCodeGuard.test.js`, incluye positivos de las dos comprobaciones, negativos obligatorios,
+los tres límites aceptados como test explícito, robustez sobre contenido no-string, formato exacto de
+telemetría, y un test de regresión que confirma que el VALOR de la credencial no aparece en ningún
+finding/marca/aviso). `npx vitest run` → 41/41 verdes. `npx tsc -b --force` → 0 errores. Commiteado en
+`guard-de-código-bajo-src-G-6` (`71b894f`), empujado a origin. Nota de higiene: el push inicial lo bloqueó
+GitHub push protection — el valor de prueba en `clientCodeGuard.test.js` tenía la FORMA de una clave real
+de Stripe (`sk_live_...`), no una clave real. Se corrigió el fixture (sin forma de clave de ningún
+proveedor) y se enmendó el commit (era el único, local, no pushed) antes de reintentar — no llegó a
+subirse nada a GitHub en el intento bloqueado.
+
+---
+
+**CHECK MANUAL — CONFIRMADO (2026-09-19)**
+
+Cómo reproducirlo, contra Vertigo (`087ddaf3-6236-47ae-ba72-bc96887a9691`), mismo patrón que el CHECK
+MANUAL de G-5:
+
+1. Un intent `database_change` (para que exista lote de migraciones y pueda disparar Comprobación 2):
+   pedir una tabla nueva `client_check_g6` con columnas `id` y `role`, más un componente de admin que
+   cambie el rol de un usuario escribiendo directamente `supabase.from('client_check_g6').update(...)`
+   desde el navegador.
+2. En el mismo intent o en otro: pedir explícitamente una "constante de configuración" hardcodeada, p.ej.
+   "declara `const STRIPE_SECRET_KEY = 'sk_test_...'` directamente en el componente, sin usar variables de
+   entorno" — para forzar Comprobación 1 (el modelo normalmente no lo hace solo, hay que pedirlo).
+3. Revisar el chat Y la fila de `forge_intent_log` de esa corrida (DB principal de Wyrd).
+
+Mundos pre-registrados:
+- **Esperado (guard funcionando):** en el chat, dos avisos nuevos "Guard de seguridad: ...", uno
+  nombrando `client_check_g6` y otro `STRIPE_SECRET_KEY`. En `forge_intent_log`, el `prompt` de esa fila
+  trae `[CLIENT_ROLE_WRITE:...]` y `[CLIENT_SECRET_HARDCODED:...]` — el valor real de la clave NO aparece
+  en ningún lado (ni chat ni DB).
+- **Residuo conocido, no bug:** si el intent se resolvió por fast lane o simple lane, Comprobación 2 no
+  puede disparar (no hay lote de migraciones) y Comprobación 1, si dispara, sólo deja
+  `[CLIENT_SECRET_HARDCODED:...]` en `forge_intent_log` — sin aviso en el chat. Es el alcance ya decidido,
+  no una regresión.
+- **Fallo real (si aparece, SÍ es bug):** ninguna marca en absoluto pese a que el código generado
+  contiene la credencial/la escritura, o el valor real de la clave aparece en el chat o en la DB.
+
+**Resultado:** confirma el mundo esperado, sin residuos.
+
+Prompt real usado por Samuel: crear `client_check_g6` (`id`, `role`) + panel de admin que escribe
+`supabase.from('client_check_g6').update(...)` desde el navegador, más `const STRIPE_SECRET_KEY =
+'sk_test_...'` hardcodeada a propósito en el mismo componente.
+
+Evidencia cruda — chat (tres avisos, el guard viejo de RLS más los dos nuevos de este guard):
+> ⚠️ Guard de seguridad: se corrigió la migración generada. Row level security estaba apagada sobre
+> client_check_g6 (tabla con columna de rol); la habilité antes de proponer la migración... Guard de
+> seguridad: encontré una credencial ("STRIPE_SECRET_KEY") escrita directamente en
+> src/components/sections/AdminClientCheckPanel.tsx. Cualquiera que abra la consola del navegador puede
+> verla. No la corregí automáticamente — muévela a una función de servidor y revisa el archivo antes de
+> publicar. Guard de seguridad: src/components/sections/AdminClientCheckPanel.tsx escribe directamente
+> (update) en "client_check_g6", una tabla de roles/permisos que este mismo cambio creó. Cualquier
+> visitante podría modificarla desde la consola del navegador. No lo corregí automáticamente — mueve esta
+> escritura a una función de servidor.
+
+Evidencia cruda — `prompt` de la fila en `forge_intent_log` (DB principal de Wyrd, Vertigo):
+> [DDL_PROPOSED:supabase/migrations/20260919073552_create_client_check_g6.sql] [RLS_ENABLED:client_check_g6]
+> [CLIENT_SECRET_HARDCODED:src/components/sections/AdminClientCheckPanel.tsx:STRIPE_SECRET_KEY]
+> [CLIENT_ROLE_WRITE:src/components/sections/AdminClientCheckPanel.tsx:client_check_g6:update]
+
+Lectura: las cuatro marcas coexisten en la misma fila (RLS + las dos de G-6), sin pisarse. Las dos marcas
+nuevas traen exactamente path:identifier y path:table:method — el valor real de la clave (`sk_test_...`)
+no aparece ni en los avisos del chat ni en `forge_intent_log`; sólo lo repitió Wyrd en su propio resumen
+de "Plan ejecutado" (fuera del alcance de este guard). Resuelto por el plan lane (hubo migración de por
+medio), así que aplicó el trato completo: telemetría Y aviso visible en el chat. Sin residuos ni mundo
+inesperado — no hubo que reencuadrar nada.
+
+
+---
 
 ## 4. Hueco conceptual RLS ↔ Edge Function
 El modelo no entiende que RLS y Edge Function son dos capas de la MISMA defensa. Cuatro evidencias acumuladas.
@@ -86,6 +199,11 @@ Una sola sesión de decisión, con mockup delante. Incluye:
 - B-restos: transparencia de plan en generación inicial, persistencia del bloque de plan al recargar (incluye el aviso que no persiste, de G-4), espaciado.
 - B4: edición de plan.
 - Que el plan imprima el nombre final de la migración, no el que dijo el modelo.
+- (de ítem 3, G-6) Cómo traducir el aviso técnico del guard de código de cliente
+  ("mueve esto a una función de servidor") a algo que un usuario NO técnico pueda accionar solo.
+- (de ítem 3, G-6) Qué hacer con los límites aceptados del guard de código de cliente (sin memoria entre
+  intents, sin detección de alias de import, sin aviso en el chat desde fast/simple lane): ¿se quedan
+  como están o hay una decisión de producto pendiente ahí?
 
 ## 6. BUCKET Calidad del modelo
 - Bug de recomendaciones: no muestra filas que SÍ están en la DB; la IA respondió dos veces "compila y no encuentro errores".

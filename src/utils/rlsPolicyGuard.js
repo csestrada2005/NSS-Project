@@ -362,7 +362,7 @@ const ALTER_ADD_COLUMN_RE =
  * @param {string} sql
  * @returns {Set<string>}
  */
-function tablesWithRoleColumnInSql(sql) {
+export function tablesWithRoleColumnInSql(sql) {
   const found = new Set();
 
   CREATE_TABLE_RE.lastIndex = 0;
