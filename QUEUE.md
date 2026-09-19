@@ -118,12 +118,16 @@ familia). Se mueven a bucket 5 dos preguntas de producto, explícitas, no implí
 `server/clientCodeGuard.test.js`, incluye positivos de las dos comprobaciones, negativos obligatorios,
 los tres límites aceptados como test explícito, robustez sobre contenido no-string, formato exacto de
 telemetría, y un test de regresión que confirma que el VALOR de la credencial no aparece en ningún
-finding/marca/aviso). `npx vitest run` → 41/41 verdes. `npx tsc -b --force` → 0 errores. Sin commitear
-todavía (pendiente de que Samuel lo pida explícitamente).
+finding/marca/aviso). `npx vitest run` → 41/41 verdes. `npx tsc -b --force` → 0 errores. Commiteado en
+`guard-de-código-bajo-src-G-6` (`71b894f`), empujado a origin. Nota de higiene: el push inicial lo bloqueó
+GitHub push protection — el valor de prueba en `clientCodeGuard.test.js` tenía la FORMA de una clave real
+de Stripe (`sk_live_...`), no una clave real. Se corrigió el fixture (sin forma de clave de ningún
+proveedor) y se enmendó el commit (era el único, local, no pushed) antes de reintentar — no llegó a
+subirse nada a GitHub en el intento bloqueado.
 
 ---
 
-**CHECK MANUAL — PENDIENTE (requiere deploy, no se hizo en esta sesión)**
+**CHECK MANUAL — CONFIRMADO (2026-09-19)**
 
 Cómo reproducirlo, contra Vertigo (`087ddaf3-6236-47ae-ba72-bc96887a9691`), mismo patrón que el CHECK
 MANUAL de G-5:
@@ -149,7 +153,34 @@ Mundos pre-registrados:
 - **Fallo real (si aparece, SÍ es bug):** ninguna marca en absoluto pese a que el código generado
   contiene la credencial/la escritura, o el valor real de la clave aparece en el chat o en la DB.
 
-**Resultado (Samuel lo añade aquí manualmente tras el deploy):**
+**Resultado:** confirma el mundo esperado, sin residuos.
+
+Prompt real usado por Samuel: crear `client_check_g6` (`id`, `role`) + panel de admin que escribe
+`supabase.from('client_check_g6').update(...)` desde el navegador, más `const STRIPE_SECRET_KEY =
+'sk_test_...'` hardcodeada a propósito en el mismo componente.
+
+Evidencia cruda — chat (tres avisos, el guard viejo de RLS más los dos nuevos de este guard):
+> ⚠️ Guard de seguridad: se corrigió la migración generada. Row level security estaba apagada sobre
+> client_check_g6 (tabla con columna de rol); la habilité antes de proponer la migración... Guard de
+> seguridad: encontré una credencial ("STRIPE_SECRET_KEY") escrita directamente en
+> src/components/sections/AdminClientCheckPanel.tsx. Cualquiera que abra la consola del navegador puede
+> verla. No la corregí automáticamente — muévela a una función de servidor y revisa el archivo antes de
+> publicar. Guard de seguridad: src/components/sections/AdminClientCheckPanel.tsx escribe directamente
+> (update) en "client_check_g6", una tabla de roles/permisos que este mismo cambio creó. Cualquier
+> visitante podría modificarla desde la consola del navegador. No lo corregí automáticamente — mueve esta
+> escritura a una función de servidor.
+
+Evidencia cruda — `prompt` de la fila en `forge_intent_log` (DB principal de Wyrd, Vertigo):
+> [DDL_PROPOSED:supabase/migrations/20260919073552_create_client_check_g6.sql] [RLS_ENABLED:client_check_g6]
+> [CLIENT_SECRET_HARDCODED:src/components/sections/AdminClientCheckPanel.tsx:STRIPE_SECRET_KEY]
+> [CLIENT_ROLE_WRITE:src/components/sections/AdminClientCheckPanel.tsx:client_check_g6:update]
+
+Lectura: las cuatro marcas coexisten en la misma fila (RLS + las dos de G-6), sin pisarse. Las dos marcas
+nuevas traen exactamente path:identifier y path:table:method — el valor real de la clave (`sk_test_...`)
+no aparece ni en los avisos del chat ni en `forge_intent_log`; sólo lo repitió Wyrd en su propio resumen
+de "Plan ejecutado" (fuera del alcance de este guard). Resuelto por el plan lane (hubo migración de por
+medio), así que aplicó el trato completo: telemetría Y aviso visible en el chat. Sin residuos ni mundo
+inesperado — no hubo que reencuadrar nada.
 
 
 ---
