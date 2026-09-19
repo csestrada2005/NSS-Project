@@ -13,6 +13,7 @@ import { computeCreditsFromTokens } from './server/credits.js';
 import { createIntentAccumulator } from './server/intentAccumulator.js';
 import { bootstrapProject } from './server/bootstrapProject.js';
 import { deployEdgeFunctionViaManagement, validateEdgeFunctionDeployRequest } from './server/edgeFunctionDeploy.js';
+import { applyProductionSupabaseClient } from './src/utils/deploySupabaseClient.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1292,8 +1293,14 @@ app.post('/api/deploy/:projectId', async (req, res) => {
   }
 
   try {
+    // G-7 Bloque 1: el dominio publicado no es el iframe sandbox del builder
+    // (StudioEngine.tsx) — no hace falta el cliente Supabase modo-preview
+    // (persistSession/autoRefreshToken en false) que sí es obligatorio ahí.
+    // Ver src/utils/deploySupabaseClient.js para el porqué completo.
+    const deployFiles = applyProductionSupabaseClient(files);
+
     // Build Vercel file list with base64 encoding
-    const vercelFiles = Object.entries(files).map(([filePath, content]) => ({
+    const vercelFiles = Object.entries(deployFiles).map(([filePath, content]) => ({
       file: filePath,
       data: Buffer.from(content).toString('base64'),
       encoding: 'base64',

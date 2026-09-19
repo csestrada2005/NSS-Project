@@ -185,9 +185,96 @@ inesperado — no hubo que reencuadrar nada.
 
 ---
 
-## 4. Hueco conceptual RLS ↔ Edge Function
-El modelo no entiende que RLS y Edge Function son dos capas de la MISMA defensa. Cuatro evidencias acumuladas.
-Es material de BACKEND_RULES / Architect, no un módulo nuevo.
+## 4. BLOQUEADO (falta VERCEL_TOKEN) — Hueco conceptual RLS ↔ Edge Function (G-7, 2026-09-19)
+
+**Resumen para quien llegue después:** Bloque 1 (plomería de deploy) HECHO y commiteado, verificación
+automática en verde, SIN check manual porque publicar no está configurado en producción. **Bloque 2
+(las reglas nuevas de BACKEND_RULES) NO SE HA EMPEZADO — cero código escrito todavía.** No tocar Bloque 2
+hasta confirmar el check manual del Bloque 1 con un deploy real.
+
+**Evidencias acumuladas (las cuatro + una quinta con síntoma visible en pantalla):**
+1. El modelo escribió literal "Adds RLS policies for public insert and update so the flows work without
+   auth sessions" — abrió la tabla para que la Edge Function funcionara sin sesión.
+2. Cabecera generada: "without requiring authenticated sessions (sandboxed preview environment)" — misma
+   lógica, justificada con el entorno de preview.
+3. Dos corridas con secreto compartido codificado dentro de la Edge Function en vez de JWT contra JWKS.
+   Referencia buena: Comedor_Feedback, `admin-users/index.ts` (205 líneas, ver debajo).
+4. Mismo prompt literal en Vertigo, tres salidas distintas entre corridas: v2 con políticas públicas, v3
+   sin RLS, v4 sin RLS y con FK a `auth.users`.
+5. (G-3, 2026-09-15, migración `20260915035315` sobre `app_users`) el modelo puso
+   `comment on table ... is 'wyrd:read=public'` Y ADEMÁS escribió `fetchUsers()` leyendo directo desde el
+   navegador, teniendo ya `manage-users` en el plan. Única con síntoma visible en pantalla (lista vacía).
+
+**Diagnóstico (verificado contra el código, no sólo teoría):** el modelo no tiene ninguna forma honesta de
+verificar identidad en lo que construye — ni en el preview NI, esto es lo nuevo, en el sitio ya publicado.
+`src/templates.ts` (bloque `lib/supabase.ts`, ~L300-331) vendorea el MISMO cliente Supabase
+(`persistSession: false`, `autoRefreshToken: false`, `lock` no-op) para preview y para producción — no hay
+ningún swap al publicar. Esas tres banderas son obligatorias en el preview (iframe del builder sin
+`allow-same-origin`, ver `StudioEngine.tsx` — origen opaco, `localStorage`/`navigator.locks` tiran
+SecurityError) pero NO tienen ninguna razón de ser en el sitio publicado (dominio real, sin esa pared).
+Confirmado que el dominio real sí soporta sesión normal: `ClientProjectPage.tsx` ya embebe el
+`deployment_url` con `sandbox="allow-scripts allow-same-origin"`. `/api/deploy/:projectId` en `server.js`
+manda a Vercel exactamente los `files` que llegan del cliente (`DeployManager.tsx` → `PlatformService.
+deployProject`), sin transformar nada — único punto de publicación real (Cloudflare sólo hace DNS sobre el
+`deployment_url` ya existente, Bloque "Phase 4" de `server.js`).
+
+**Decisión de producto (con Samuel):** NO tocar el sandbox del builder (pared de seguridad deliberada,
+aislar código no confiable generado por IA — bajarla para poder probar login en el editor no vale el
+riesgo). Sí cerrar la plomería para que el sitio PUBLICADO tenga sesión real. El ciclo completo
+(login + Edge Function verificando JWT contra JWKS, patrón `admin-users/index.ts`) sólo se prueba una vez
+hecho el deploy — nunca dentro del editor. Ver ítem 7: esto debe quedar explícito en el tutorial de uso.
+
+**Plan, dos bloques atómicos:**
+- **Bloque 1 (plomería, sin tocar el modelo):** en `/api/deploy/:projectId`, reemplazar el contenido de
+  `src/lib/supabase.ts` por una versión con sesión real (sin las tres banderas de modo preview) justo
+  antes de mandar los `files` a Vercel. El builder no se toca. Verificación: test de servidor +
+  CHECK MANUAL publicando un proyecto de prueba.
+- **Bloque 2 (BACKEND_RULES):** cuando el pedido necesita identidad real, el modelo genera login real
+  (`supabase.auth`, ya no prohibido para este caso puntual) + Edge Function con el patrón JWT/JWKS de
+  Comedor_Feedback + la tabla de por medio se queda SIEMPRE privada (nunca política pública) + aviso
+  explícito en el chat de que ese login no funciona dentro del editor. Requisito adicional (de Samuel,
+  ver ítem 7): la página/sección de admin debe seguir siendo 100% navegable en el preview — el modelo
+  NUNCA debe ocultar el render completo detrás de `if (!session) return null`; sólo la acción privilegiada
+  puntual falla con aviso claro al probarla en el editor. CHECK MANUAL contra Vertigo, mismo patrón que
+  G-5/G-6.
+
+**Estado:** BLOQUEADO (2026-09-19) — reencuadrado a mitad de sesión, evidencia contradijo la premisa.
+Bloque 1 HECHO en código pero SIN CHECK MANUAL posible: al intentar publicar, Samuel recibió
+literalmente "Deployment service not configured" — el 503 que `server.js` devuelve cuando falta
+`VERCEL_TOKEN` en el entorno. No es un bug de este cambio: publicar nunca se terminó de configurar en
+producción (prerequisito ausente, no código roto). Esto bloquea a la vez el check manual del Bloque 1 Y
+todo el Bloque 2 (que depende de que "una vez publicado" sea un estado real y comprobable — hoy no lo es).
+
+**Desbloqueo:** configurar `VERCEL_TOKEN` (cuenta de Vercel real) en las variables de entorno de
+producción (Render). Es decisión/acción de Samuel, no de esta sesión. Hasta que exista un deploy real que
+revisar, este ítem se queda parado exactamente aquí — no seguir a Bloque 2 sin el check manual del
+Bloque 1 confirmado.
+
+**Bloque 1 — hecho:** `src/utils/deploySupabaseClient.js` + `.d.ts` (nuevo) — `applyProductionSupabaseClient(files)`
+reemplaza el contenido de `src/lib/supabase.ts` por la versión sin las tres banderas de modo preview,
+sólo cuando esa ruta ya está presente en `files` (deja sin tocar un proyecto sin DB). Función pura, no muta
+la entrada. Conectada en `server.js`, endpoint `/api/deploy/:projectId`, justo antes de construir
+`vercelFiles` — el builder/preview no se toca, sólo el paquete que sale hacia Vercel.
+`server/deploySupabaseClient.test.js`: 5 tests nuevos (swap correcto, ausencia verificada de las tres
+banderas en el código de producción, no-mutación, proyecto sin DB pasa intacto, null/undefined no
+revientan). `node --test "server/*.test.js"` → 633/633 verdes (628 previos + 5). `npx vitest run` → 41/41.
+`npx tsc -b --force` → 0 errores.
+
+**CHECK MANUAL — PENDIENTE.** Cómo reproducirlo:
+1. Publica (botón Deploy) cualquier proyecto fixture con Supabase provisionado — Vertigo
+   (`087ddaf3-6236-47ae-ba72-bc96887a9691`) sirve, no hace falta que tenga login.
+2. Contra el bundle JS servido por la URL de Vercel resultante (DevTools → Network/Sources, o
+   `curl`/`grep` sobre el JS compilado), busca el string `persistSession`.
+3. Verifica en paralelo que el preview DENTRO del builder sigue cargando normal (sin SecurityError en
+   consola) — el swap no debe alcanzar ahí bajo ninguna circunstancia.
+
+Mundos pre-registrados:
+- **Esperado (plomería funcionando):** el bundle publicado en Vercel NO contiene `persistSession` en
+  ningún lado relacionado al cliente Supabase (la config de producción no la fija — usa el default de
+  supabase-js). El preview del builder sigue exactamente igual que antes de este cambio.
+- **Falla real (si aparece, SÍ es bug):** `persistSession` (o `autoRefreshToken`/el `lock` no-op) sigue
+  apareciendo en el bundle publicado, o el preview del builder se rompe/tira SecurityError donde antes no
+  lo hacía.
 
 ## 5. BUCKET Producto y UX
 Una sola sesión de decisión, con mockup delante. Incluye:
@@ -212,6 +299,24 @@ Una sola sesión de decisión, con mockup delante. Incluye:
 - Precisión de atribución de imágenes.
 
 ---
+
+## 7. Tutorial para desarrolladores — uso correcto de Wyrd
+
+Falta un tutorial, en idioma llano (no jerga), dirigido a quien usa Wyrd para construir su app: qué hacer,
+qué NO hacer, cómo funciona el software en general. Dos requisitos ya decididos con Samuel (2026-09-19),
+no opcionales, nacidos del diseño del ítem 4:
+
+- Debe decir EXPLÍCITAMENTE que cualquier flujo que dependa de identidad real (login, panel de admin) sólo
+  se puede probar una vez hecho el DEPLOY — nunca dentro del editor/preview. Ligado al guard de identidad
+  del ítem 4 (login real + Edge Function con JWT/JWKS); revisar esa sección para el estado del guard antes
+  de escribir esta parte del tutorial.
+- Requisito de producto, no sólo de documentación: aunque ese flujo puntual no sirva en el preview, TODO
+  LO DEMÁS del panel/sección debe seguir siendo navegable y usable ahí. Ejemplo real: si el sistema
+  completo es esencialmente un panel de admin (caso Comedor), en el preview se debe poder recorrer y
+  probar TODO salvo el chequeo de identidad en sí — nunca la sección entera en blanco o inalcanzable por
+  culpa del login. Esto también es una regla para el modelo (ítem 4, Bloque 2), no sólo para el tutorial.
+
+Pendiente: escribir el tutorial (sesión de producto, bucket 5, con mockup) una vez cerrado el ítem 4.
 
 ## APARCADO hasta después de lanzar
 - **A+**: quitar el botón de aprobación cuando el guard no pudo inspeccionar. Aparcado: `unparseable` no tiene causa conocida tras G-3; sólo verificable con SQL fabricado a mano (choca con medir por comportamiento).
