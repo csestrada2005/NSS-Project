@@ -1236,10 +1236,10 @@
     "semantic_hash": "1b0233950d9b29ea97aa4a3f7b3ce004"
   },
   ".claude/settings.json": {
-    "mtime": 1789628855.0792575,
-    "seen": 1789628890.5000644,
-    "ast_hash": "86b14883ce51eb0f0ec7c98e0221b935",
-    "semantic_hash": "86b14883ce51eb0f0ec7c98e0221b935"
+    "mtime": 1789793804.523546,
+    "seen": 1789794922.7672424,
+    "ast_hash": "343240623419c87591f2ecc81b2837b3",
+    "semantic_hash": ""
   },
   "scripts/classifierHarness.mjs": {
     "mtime": 1789304685.2277274,
@@ -1716,9 +1716,9 @@
     "semantic_hash": ""
   },
   ".claude/CLAUDE.md": {
-    "mtime": 1789301702.1326737,
-    "seen": 1789628930.7648573,
-    "ast_hash": "9b31786b637be3c13978bec4c2330752",
+    "mtime": 1789793804.5245461,
+    "seen": 1789794922.7677135,
+    "ast_hash": "5e9e4da1211d2f2c007257c86d76e731",
     "semantic_hash": ""
   },
   ".claude/skills/graphify/SKILL.md": {
@@ -1815,6 +1815,12 @@
     "mtime": 1789301702.1696737,
     "seen": 1789628930.764894,
     "ast_hash": "f0402b67b6ce880f65666bb49e841696",
+    "semantic_hash": ""
+  },
+  ".mcp.json": {
+    "mtime": 1789793804.520546,
+    "seen": 1789794922.7672486,
+    "ast_hash": "f99d3636940c5c5943660b46e32da027",
     "semantic_hash": ""
   }
 }
