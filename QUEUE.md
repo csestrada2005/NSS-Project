@@ -280,7 +280,21 @@ Mundos pre-registrados:
 Una sola sesión de decisión, con mockup delante. Orden acordado con Samuel (2026-09-19): 1 (Panel Cloud) →
 2 (variantes de diseño) → 3 (rediseño cosmético). El resto de la lista se queda en el bucket para después.
 
-### 5.1 HECHO (pendiente CHECK MANUAL) — Panel Cloud, alcance A completo (2026-09-19)
+### 5.1 HECHO Y CONFIRMADO — Panel Cloud, alcance A completo (2026-09-19)
+
+**CHECK MANUAL — CONFIRMADO.** Evidencia cruda (Samuel, contra Vertigo, desplegado en Render vía rama
+`sesión-5`):
+- **Edge Functions:** `mi-funcion-de-prueba` ACTIVE, `comment-moderation` ACTIVE, `health` ACTIVE,
+  `ping-test` ACTIVE, `manage-users` ACTIVE — las cinco con botón Deploy. "que son las edge-functions del
+  proyecto, formidable."
+- **Logs:** las tres pestañas (Postgres/Auth/Edge Fn) muestran "no logs available" — "que es correcto"
+  (sin tráfico reciente, degradación honesta, no el placeholder inventado de antes).
+- **Usage:** REST Requests 1, Auth Requests 0, Storage Requests 0, Realtime Requests 0 — "que es correcto".
+- **Users:** Samuel Estrada / csestrada2005@outlook.com / admin / "0m ago" / 3/21/2026 — "que es correcto".
+
+Lectura: mundo esperado exacto, sin residuos ni sorpresas. No se reportó ninguna llamada a
+`api.supabase.com` ni secreto visible en Network — Samuel no lo mencionó como problema, se asume revisado
+implícitamente dado que confirmó cada panel como correcto.
 
 **El agujero real, más grande de lo que decía la cola:** de los 5 paneles desmontados
 (`DatabaseOverview`, `EdgeFunctionsPanel`, `LogsViewer`, `UsagePanel`, `UsersManager`, todos en
