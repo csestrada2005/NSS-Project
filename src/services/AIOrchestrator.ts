@@ -40,7 +40,14 @@ import {
   rlsEnabledTelemetry,
   rlsUnreadableTelemetry,
   rlsPolicyWarnings,
+  tablesWithRoleColumnInSql,
 } from '../utils/rlsPolicyGuard.js';
+import {
+  evaluateClientCode,
+  clientSecretTelemetry,
+  clientRoleWriteTelemetry,
+  clientCodeWarnings,
+} from '../utils/clientCodeGuard.js';
 import { edgeFunctionSlug } from '../utils/edgeFunctionPath.js';
 import {
   buildMigrationIntentParams,
@@ -90,6 +97,14 @@ export interface OrchestratorResult {
    * [PLAN_REPAIRED:...]. Cadena vacía o undefined cuando no hubo fallos.
    */
   functionDeployFailedMark?: string;
+  /**
+   * G-6 — sufijo `[CLIENT_SECRET_HARDCODED:path:identifier,...]` (clientCodeGuard,
+   * Comprobación 1), listo para concatenar a `prompt` en forge_intent_log. Lo
+   * propagan el fast lane y el simple lane, que nunca tocan `.sql` y por eso
+   * sólo pueden disparar esta comprobación (nunca `role-table-write`). Cadena
+   * vacía o undefined cuando no hubo hallazgos.
+   */
+  clientSecretMark?: string;
   tokensInput?: number;
   tokensOutput?: number;
   chatResponse?: string;
@@ -1379,7 +1394,7 @@ export class AIOrchestrator {
       if (projectId) {
         await this.logIntent({
           projectId,
-          prompt: input,
+          prompt: input + (result.clientSecretMark ?? ''),
           intentType: intent.type,
           intentRisk: intent.risk,
           modifiedFiles: result.modifiedFiles,
@@ -1427,7 +1442,7 @@ export class AIOrchestrator {
       if (projectId) {
         await this.logIntent({
           projectId,
-          prompt: result.clarifyAsked ? `${input} [CLARIFY_ASKED]` : input,
+          prompt: (result.clarifyAsked ? `${input} [CLARIFY_ASKED]` : input) + (result.clientSecretMark ?? ''),
           intentType: intent.type,
           intentRisk: intent.risk,
           modifiedFiles: result.modifiedFiles,
@@ -2041,12 +2056,18 @@ export class AIOrchestrator {
         if (!isMigrationPath(target)) continue;
         rlsSourceByTarget.set(target, source);
       }
-      const rlsVerdict = evaluateRlsPolicies(
-        [...rlsSourceByTarget].map(([target, source]) => ({
-          path: target,
-          sql: finalFiles.get(source) ?? files.get(source),
-        }))
-      );
+      // G-6 — nombrado y compartido con el guard de código de cliente
+      // (clientCodeGuard): Comprobación 2 necesita el MISMO lote de
+      // migraciones que ya arma este guard, para no reimplementar "qué
+      // tabla trae columna de rol" — reutiliza tablesWithRoleColumnInSql,
+      // la misma fuente de verdad que ya usa evaluateRlsPolicies. Cambio
+      // puramente de nombrado: el array es idéntico al que se construía
+      // aquí antes de G-6.
+      const migrationsForGuards = [...rlsSourceByTarget].map(([target, source]) => ({
+        path: target,
+        sql: finalFiles.get(source) ?? files.get(source),
+      }));
+      const rlsVerdict = evaluateRlsPolicies(migrationsForGuards);
       const rlsFindingsByPath = new Map<string, typeof rlsVerdict.findings>();
       for (const finding of rlsVerdict.findings) {
         if (finding.reason !== 'public-write-policy' && finding.reason !== 'missing-rls') continue;
@@ -2085,6 +2106,32 @@ export class AIOrchestrator {
       // marcada en el log y avisada en el chat.
       const rlsUnreadableMark = rlsUnreadableTelemetry(rlsVerdict.findings);
       const rlsWarnings = rlsPolicyWarnings(rlsVerdict.findings);
+
+      // ----------------------------------------------------------------
+      // G-6 — clientCodeGuard: el Verifier compila y repara, nunca inspecciona
+      // el CONTENIDO por reglas de seguridad. Las dos comprobaciones son
+      // independientes de RLS y se enganchan aquí, con el lote de migraciones
+      // que ya armó `migrationsForGuards`: Comprobación 1 (credencial de
+      // tercero pegada a mano) corre sobre TODO el código de cliente que este
+      // intent tocó; Comprobación 2 (escritura de cliente a una tabla de rol)
+      // sólo puede disparar sobre las tablas que ESTE MISMO lote acaba de
+      // marcar como de rol — sin memoria de intents anteriores, límite
+      // aceptado y documentado en la cabecera de clientCodeGuard.js. Detect +
+      // avisa, nunca reescribe: no hay transformación segura para "mueve esto
+      // a una función de servidor".
+      // ----------------------------------------------------------------
+      const clientRoleTables = new Set<string>();
+      for (const { sql } of migrationsForGuards) {
+        if (typeof sql !== 'string') continue;
+        for (const table of tablesWithRoleColumnInSql(sql)) clientRoleTables.add(table);
+      }
+      const clientFilesForGuard = diffPaths
+        .filter((p) => this.isSelectableSrcFile(p))
+        .map((p) => ({ path: p, content: finalFiles.get(p) ?? files.get(p) }));
+      const clientCodeVerdict = evaluateClientCode(clientFilesForGuard, clientRoleTables);
+      const clientSecretMark = clientSecretTelemetry(clientCodeVerdict.findings);
+      const clientRoleWriteMark = clientRoleWriteTelemetry(clientCodeVerdict.findings);
+      const clientCodeWarningsList = clientCodeWarnings(clientCodeVerdict.findings);
 
       // ----------------------------------------------------------------
       // BLOQUE 1 (A+B) — el pipeline principal (Architect → Implementer →
@@ -2326,7 +2373,8 @@ export class AIOrchestrator {
           prompt: (hasPartial ? `${input} [PARTIAL:${partialOrders.join(',')}]` : input) +
             targetsMark + rejectedDeleteMark + restoredMark + danglingMark + ddlProposedMark +
             ddlMisplacedMark + planRepairedMark + trimmedMark + orphanCreatedMark +
-            functionDeployFailedMark + rlsPolicyBlockedMark + rlsEnabledMark + rlsUnreadableMark,
+            functionDeployFailedMark + rlsPolicyBlockedMark + rlsEnabledMark + rlsUnreadableMark +
+            clientSecretMark + clientRoleWriteMark,
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,
@@ -2418,6 +2466,13 @@ export class AIOrchestrator {
       // la fuente).
       for (const rlsWarning of rlsWarnings) {
         warnings.push(rlsWarning);
+      }
+      // G-6 — mismo principio que el aviso de RLS: un guard que detecta sin
+      // rastro visible en el chat es el mismo patrón de fallo que esa cirugía
+      // vino a matar. clientCodeGuard nunca reescribe, así que el aviso es lo
+      // único que deja constancia visible de lo que encontró.
+      for (const clientCodeWarning of clientCodeWarningsList) {
+        warnings.push(clientCodeWarning);
       }
       if (hasPartial) {
         const total = steps.length;
@@ -2539,7 +2594,14 @@ export class AIOrchestrator {
 
       this.notifyFileUpdate(filePath, newContent);
       this.lastModifiedFiles = [filePath];
-      return { modifiedFiles: [filePath], outcome: 'success' };
+      // G-6 — el fast lane nunca toca .sql (canEnterFastLane lo excluye), así
+      // que sólo puede disparar Comprobación 1 (credencial hardcodeada):
+      // evaluateClientCode sin segundo argumento (roleTables vacío por
+      // defecto) hace que Comprobación 2 no evalúe nada por construcción.
+      const clientSecretMark = clientSecretTelemetry(
+        evaluateClientCode([{ path: filePath, content: newContent }]).findings
+      );
+      return { modifiedFiles: [filePath], outcome: 'success', clientSecretMark };
     } catch (e) {
       if (isAbortError(e)) return { modifiedFiles: [], outcome: 'cancelled' };
       console.error('[AIOrchestrator] Fast lane error:', e);
@@ -2689,6 +2751,15 @@ export class AIOrchestrator {
         this.lastModifiedFiles = diffPaths;
 
         const otherPaths = diffPaths.filter(p => p !== target.path);
+        // G-6 — el simple lane tampoco toca .sql (isSimpleEditIntent excluye
+        // database_change), mismo trato que el fast lane: sólo Comprobación 1.
+        const clientSecretMark = clientSecretTelemetry(
+          evaluateClientCode(
+            diffPaths
+              .filter((p) => this.isSelectableSrcFile(p))
+              .map((p) => ({ path: p, content: verifyResult.files.get(p) }))
+          ).findings
+        );
         return {
           modifiedFiles: diffPaths,
           outcome: 'success',
@@ -2698,6 +2769,7 @@ export class AIOrchestrator {
           warning: otherPaths.length > 0
             ? `Reparé además un error preexistente en: ${otherPaths.join(', ')}`
             : undefined,
+          clientSecretMark,
         };
       }
 

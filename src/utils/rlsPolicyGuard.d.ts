@@ -8,6 +8,16 @@
 /** Closed, frozen set of column names that mark a table as role/permission-bearing. */
 export const ROLE_COLUMN_NAMES: readonly string[];
 
+/**
+ * The (normalized) tables this SQL declares with a role/permission column,
+ * via `CREATE TABLE (...)` or `ALTER TABLE ... ADD COLUMN`. Exported (G-6,
+ * clientCodeGuard) so the client-code guard can reuse the same "role table"
+ * source of truth against the same migration batch instead of
+ * reimplementing this detection — purely additive, no behavior change to
+ * this module's own exports.
+ */
+export function tablesWithRoleColumnInSql(sql: string): Set<string>;
+
 /** Why a finding was raised. `'missing-rls'` is BLOQUE 1-TER. */
 export type RlsFindingReason = 'public-write-policy' | 'missing-rls' | 'unparseable';
 
