@@ -21,6 +21,7 @@ const EASE: Transition['ease'] = [0.16, 1, 0.3, 1];
 export const modalBackdropMotion = {
   initial: { opacity: 0 },
   animate: { opacity: 1 },
+  exit: { opacity: 0 },
   transition: { duration: 0.15, ease: EASE },
 };
 
@@ -28,4 +29,16 @@ export const modalPanelMotion = {
   initial: { opacity: 0, scale: 0.97, y: 8 },
   animate: { opacity: 1, scale: 1, y: 0 },
   transition: { duration: 0.18, ease: EASE },
+};
+
+/**
+ * CommandModal (Chat/Visual/Code/Navigate) — Samuel pidió explícitamente que
+ * salga desde abajo, casi tan grande como el preview, con salida animada
+ * (AnimatePresence) en vez de sólo entrada como el resto de los modales.
+ */
+export const bottomSheetMotion = {
+  initial: { opacity: 0, y: '100%' },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: '100%' },
+  transition: { duration: 0.25, ease: EASE },
 };

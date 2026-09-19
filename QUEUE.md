@@ -492,10 +492,78 @@ fondo necesarios ahí; el trabajo real está en la capa de interacción, que sí
 - `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 653/653 (sin cambios, nada de esto
   toca al servidor). `npx vitest run` → 48/48 (sin cambios). `graphify update .` corrido.
 
-**Pendiente (sigue en esta sesión, por bloques):** el resto de "toda la plataforma" — `ForgeDashboard`
-(cards, hover states), la barra superior/chrome de `StudioEngine`, y una pasada del checklist de calidad
-del skill (cursor-pointer, contraste, espaciado) sobre esas pantallas. No se ha tocado nada de eso todavía
-— este bloque cerró sólo la capa de modales/animación.
+**Bloque 2 (2026-09-19, tarde) — Magic UI + CommandModal como bottom sheet:**
+
+Samuel pidió reestructurar el editor tipo Lovable: navbar superior con iconos para preview/modo
+visual/navegador (dropdown de páginas)/un solo botón de viewport (desktop-tablet-móvil)/Código/Settings/
+Chat — y que Chat sea "lo más mágico", usando https://github.com/magicuidesign/magicui
+(`skills/magic-ui` del propio repo confirma que es instalable vía `npx shadcn@latest add @magicui/<slug>`,
+pero `components.json` de este repo sigue apuntando a `tailwind.config.js` (v3) aunque el proyecto ya está
+en Tailwind v4 sin ese archivo — correr el CLI contra esa config a medio migrar era el riesgo real, así
+que se optó por traer el código fuente directo del repo (`gh api`) en vez de correr el instalador).
+
+**Hecho — los 8 componentes que pidió Samuel, vendorizados y verificados:**
+`src/components/magicui/{animated-list,border-beam,code-comparison,number-ticker,progressive-blur,
+shimmer-button,text-animate,typing-animation}.tsx`. Dos ajustes necesarios sobre el código tal cual viene
+del repo (ninguno cambia su comportamiento visual):
+- Todos importaban de `"motion/react"` (el nuevo nombre del paquete que usa el sitio de Magic UI) — el
+  proyecto tiene `framer-motion` (mismo API), así que se reescribió el import en los 5 archivos que lo
+  traían.
+- `code-comparison.tsx` usaba `next-themes` (`useTheme()`) para elegir tema claro/oscuro — Wyrd Forge (la
+  plataforma) es siempre oscura, sin ese paquete ni toggle de tema, así que se fijó a `darkTheme` directo,
+  se quitó el import y el prop `lightTheme` quedó sin desestructurar (sigue en la interfaz por si algún
+  caller lo manda). Este componente también necesitó instalar `shiki` + `@shikijs/transformers` (reales,
+  no estaban en `package.json`) para el resaltado de sintaxis del diff antes/después.
+- `npx tsc -b --force` → 0 errores con los 8 ya integrados.
+
+**Hecho — CommandModal como bottom sheet, con salida animada (pedido explícito de Samuel a media sesión):**
+antes sólo tenía animación de ENTRADA (mismo `modalPanelMotion` que el resto), centrado, `max-w-[900px]
+h-[75vh]`. Ahora: `bottomSheetMotion` (nuevo, en `modalMotion.ts`) — entra desde abajo
+(`y: '100%' → 0`) y SALE igual (`AnimatePresence` envolviendo el `{isCommandModalOpen && <CommandModal
+.../>}` en `StudioEngine.tsx`, algo que ningún otro modal de esta sesión necesitó todavía). Tamaño:
+`inset-x-4 bottom-4 h-[88vh]` — casi todo el alto de pantalla, como pidió ("casi tan grande como el
+preview"). `modalBackdropMotion` ganó un `exit` (aditivo, no afecta a los 5 modales que ya lo usaban sin
+`AnimatePresence` — ese prop simplemente no se usa ahí).
+- `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 653/653 (sin tocar servidor).
+  `npx vitest run` → 48/48. `graphify update .` corrido.
+
+**DISEÑADO PERO NO CONSTRUIDO — el resto del pedido de Samuel, para retomar tal cual (se fue del teclado a
+media sesión, contenedor con riesgo de cerrarse — esto quedó documentado en vez de improvisado a ciegas):**
+
+Investigué la pantalla ANTES de tocarla (StudioEngine.tsx, ~2000 líneas) — ya existe bastante plomería que
+hay que REUSAR, no reconstruir:
+- Toggle Interacción/Visual: ya existe (`editMode`, botones en el overlay flotante actual).
+- Viewport desktop/tablet/móvil: ya existe pero como 3 botones separados
+  (`viewportMode`/`handleViewportChange`, líneas ~2071-2091) — Samuel pide UN solo botón que cicle entre
+  los tres, no tres botones.
+- Code/Settings: ya son botones que abren `CommandModal`/`SettingsModal` — pero HOY como overlays
+  flotantes sobre el preview, no como "el preview desaparece y se ve todo el código" (in-place, tipo VS
+  Code simplificado) que pidió Samuel.
+- Chat/Visual/Code/Navigate: YA es un sistema de tabs — pero vive DENTRO de `CommandModal` (hay que
+  abrirlo primero), no promovido a la navbar persistente que describe Samuel.
+- El overlay actual (`absolute top-4 left-1/2 -translate-x-1/2`, línea ~2057) es una píldora flotante
+  SOBRE el preview, no una navbar acoplada arriba con los colores de marca, que es lo que pidió.
+
+**Lo que falta construir, mismo bloque, cuando se retome:**
+1. Navbar superior persistente (no flotante) con los colores de marca, reemplazando la píldora actual.
+2. Un solo botón de viewport que cicle desktop→tablet→móvil (reemplaza los 3 botones separados).
+3. Dropdown tipo "navegador" con las páginas del proyecto (NUEVO — no existe nada parecido hoy).
+4. Botón "Código": el preview desaparece, se ve `CodePanel` a pantalla completa in-place (no floating).
+5. Botón "Settings": mismo trato que Código, pero mostrando el contenido de `SettingsModal` in-place.
+6. Botón "Chat": mismo trato, con el `ChatInterface` existente potenciado con los 8 componentes de Magic
+   UI ya vendorizados — ideas concretas sin decidir todavía: `border-beam` alrededor de la respuesta activa
+   de la IA, `animated-list` para la entrada de mensajes nuevos, `text-animate`/`typing-animation` para el
+   streaming de la respuesta, `number-ticker` para créditos/tokens si se muestra un contador,
+   `shimmer-button` para el botón de enviar, `progressive-blur` en los bordes de scroll,
+   `code-comparison` para diffs de código que la IA proponga (ya no es "genérico", ahora tiene una razón
+   de ser real).
+7. Contenedor visual del preview en sí (Samuel: "el preview... dentro de un contenedor visual") — no
+   quedó del todo claro si es un marco tipo dispositivo (como ya existe parcialmente para tablet/móvil,
+   líneas ~2129-2144) o algo más tipo "chrome de navegador" — mejor confirmarlo con Samuel antes de
+   construirlo, no adivinarlo.
+
+**Pendiente, bucket 5 ítem 3 en general (sin tocar):** `ForgeDashboard` (cards, hover states) y una
+pasada del checklist de calidad del skill (cursor-pointer, contraste, espaciado) sobre esas pantallas.
 
 **CHECK MANUAL — PENDIENTE.** Cómo reproducirlo (dev server local o `sesión-5` desplegada):
 1. Abrir "New Project" — el modal debe entrar con un fundido + pop suave, no aparecer de golpe.

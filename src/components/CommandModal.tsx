@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { X, MessageSquare, MousePointer2, Edit3, Code, Map } from "lucide-react";
-import { modalBackdropMotion, modalPanelMotion } from "@/components/ui/modalMotion";
+import { modalBackdropMotion, bottomSheetMotion } from "@/components/ui/modalMotion";
 
 type TabType = "chat" | "visual" | "code" | "navigate";
 
@@ -22,9 +22,9 @@ export const CommandModal = ({ onClose, visualEditMode, onToggleVisualEdit, chil
         className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="fixed z-[70] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-[900px] h-[75vh] max-h-[700px]">
+      <div className="fixed z-[70] inset-x-4 bottom-4 h-[88vh] max-h-[920px]">
       <motion.div
-        {...modalPanelMotion}
+        {...bottomSheetMotion}
         className="h-full rounded-2xl border border-border flex flex-col bg-card shadow-2xl overflow-hidden"
       >
         {/* Header Tabs */}

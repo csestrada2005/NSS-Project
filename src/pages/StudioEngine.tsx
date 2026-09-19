@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import { Panel, Group } from 'react-resizable-panels';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -2281,6 +2282,7 @@ export function StudioEngine() {
           />
         )}
 
+        <AnimatePresence>
         {isCommandModalOpen && (
           <CommandModal
             onClose={() => setIsCommandModalOpen(false)}
@@ -2342,6 +2344,7 @@ export function StudioEngine() {
             </div>
           </CommandModal>
         )}
+        </AnimatePresence>
 
         {showSettings && <SettingsModal onClose={() => setShowSettings(false)} fileTree={fileTree} files={files} projectId={projectId ?? null} />}
         {showGraph && <StateGraph fileTree={fileTree} onClose={() => setShowGraph(false)} />}
