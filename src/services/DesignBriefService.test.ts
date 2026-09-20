@@ -1,5 +1,60 @@
 import { describe, it, expect } from 'vitest';
-import { DesignBriefService, type PoolImage } from './DesignBriefService';
+import { DesignBriefService, applyPaletteHints, type PoolImage, type DesignBrief } from './DesignBriefService';
+
+const BASE_BRIEF: DesignBrief = {
+  brand_name: 'Ember & Co.',
+  tagline: 'Coffee, slower.',
+  tone: 'warm, unhurried',
+  design_direction: 'soft-organic',
+  palette: [
+    { var: '--brand-bg', hsl: '0 0% 100%' },
+    { var: '--brand-fg', hsl: '0 0% 10%' },
+    { var: '--brand-primary', hsl: '30 40% 40%' },
+    { var: '--brand-accent', hsl: '40 90% 55%' },
+    { var: '--brand-muted', hsl: '30 20% 90%' },
+  ],
+  fonts: { heading: 'Fraunces', body: 'Inter' },
+  imagery: 'warm, natural light',
+  imagery_keywords: ['coffee beans'],
+};
+
+describe('DesignBriefService.applyPaletteHints (onboarding, bucket 5 ítem 2, mockup D)', () => {
+  it('sin hints, devuelve el brief sin tocar', () => {
+    expect(applyPaletteHints(BASE_BRIEF)).toEqual(BASE_BRIEF);
+  });
+
+  it('modo "Sugerido por el prompt": pinnedPalette reemplaza la paleta ENTERA del modelo', () => {
+    const pinned = [
+      { var: '--brand-bg', hsl: '43 96% 92%' },
+      { var: '--brand-fg', hsl: '22 100% 14%' },
+      { var: '--brand-primary', hsl: '22 78% 26%' },
+      { var: '--brand-accent', hsl: '45 96% 60%' },
+      { var: '--brand-muted', hsl: '45 90% 80%' },
+    ];
+    const result = applyPaletteHints(BASE_BRIEF, { pinnedPalette: pinned });
+    expect(result.palette).toEqual(pinned);
+    // el resto del brief (copy, fuentes, facts) sigue siendo el del modelo
+    expect(result.brand_name).toBe(BASE_BRIEF.brand_name);
+  });
+
+  it('modo "Rueda de color": pinnedPrimaryHsl sólo fuerza --brand-primary, el resto queda igual', () => {
+    const result = applyPaletteHints(BASE_BRIEF, { pinnedPrimaryHsl: '355 78% 56%' });
+    expect(result.palette.find((c) => c.var === '--brand-primary')?.hsl).toBe('355 78% 56%');
+    expect(result.palette.find((c) => c.var === '--brand-bg')?.hsl).toBe('0 0% 100%');
+    expect(result.palette.find((c) => c.var === '--brand-accent')?.hsl).toBe('40 90% 55%');
+  });
+
+  it('pinnedPalette gana sobre pinnedPrimaryHsl si ambos llegan a la vez', () => {
+    const pinned = BASE_BRIEF.palette.map((c) => ({ ...c, hsl: '1 1% 1%' }));
+    const result = applyPaletteHints(BASE_BRIEF, { pinnedPalette: pinned, pinnedPrimaryHsl: '2 2% 2%' });
+    expect(result.palette).toEqual(pinned);
+  });
+
+  it('un pinnedPalette con menos de 5 entradas se ignora (forma inválida, nunca se aplica a medias)', () => {
+    const result = applyPaletteHints(BASE_BRIEF, { pinnedPalette: [{ var: '--brand-bg', hsl: '1 1% 1%' }] });
+    expect(result.palette).toEqual(BASE_BRIEF.palette);
+  });
+});
 
 describe('DesignBriefService.appendImagePool', () => {
   it('emits three columns: URL, Description, Credit', () => {

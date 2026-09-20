@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import { X, Search, UserPlus, Loader2, ChevronDown } from 'lucide-react';
 import { SupabaseService } from '@/services/SupabaseService';
 import { CollaboratorService, type Collaborator } from '@/services/CollaboratorService';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { modalBackdropMotion, modalPanelMotion } from '@/components/ui/modalMotion';
 
 interface SearchResult {
   id: string;
@@ -50,10 +52,10 @@ function Avatar({ name, avatarUrl, size = 8 }: { name: string | null; avatarUrl?
 }
 
 const ROLE_BADGE: Record<string, string> = {
-  admin: 'bg-red-500/10 text-red-400',
-  dev: 'bg-blue-500/10 text-blue-400',
-  vendedor: 'bg-purple-500/10 text-purple-400',
-  cliente: 'bg-emerald-500/10 text-emerald-400',
+  admin: 'bg-red-100 text-red-700',
+  dev: 'bg-blue-100 text-blue-700',
+  vendedor: 'bg-purple-100 text-purple-700',
+  cliente: 'bg-emerald-100 text-emerald-700',
 };
 
 export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
@@ -157,12 +159,16 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
 
   return (
     <>
-      <div
+      <motion.div
+        {...modalBackdropMotion}
         className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md"
         onClick={onClose}
       />
       <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-4">
-        <div className="bg-card border border-border rounded-2xl w-full max-w-lg shadow-2xl pointer-events-auto flex flex-col max-h-[90vh]">
+        <motion.div
+          {...modalPanelMotion}
+          className="nebu-modal bg-card border border-border rounded-2xl w-full max-w-lg shadow-2xl pointer-events-auto flex flex-col max-h-[90vh]"
+        >
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
             <h2 className="text-base font-semibold text-foreground">Share Project</h2>
@@ -199,8 +205,8 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
                         <span
                           className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
                             c.status === 'pending'
-                              ? 'bg-amber-500/10 text-amber-400'
-                              : 'bg-emerald-500/10 text-emerald-400'
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-emerald-100 text-emerald-700'
                           }`}
                         >
                           {c.status}
@@ -221,7 +227,7 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
                         </div>
                         <button
                           onClick={() => handleRevokeCollaborator(c.id)}
-                          className="text-xs text-red-400 hover:text-red-300 transition-colors px-2 py-1 rounded-lg hover:bg-red-400/10"
+                          className="text-xs text-red-600 hover:text-red-700 transition-colors px-2 py-1 rounded-lg hover:bg-red-100"
                         >
                           Revoke
                         </button>
@@ -349,7 +355,7 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
               {pendingInvites.length > 0 && ` (${pendingInvites.length})`}
             </button>
           </div>
-        </div>
+        </motion.div>
       </div>
     </>
   );

@@ -280,7 +280,21 @@ Mundos pre-registrados:
 Una sola sesión de decisión, con mockup delante. Orden acordado con Samuel (2026-09-19): 1 (Panel Cloud) →
 2 (variantes de diseño) → 3 (rediseño cosmético). El resto de la lista se queda en el bucket para después.
 
-### 5.1 HECHO (pendiente CHECK MANUAL) — Panel Cloud, alcance A completo (2026-09-19)
+### 5.1 HECHO Y CONFIRMADO — Panel Cloud, alcance A completo (2026-09-19)
+
+**CHECK MANUAL — CONFIRMADO.** Evidencia cruda (Samuel, contra Vertigo, desplegado en Render vía rama
+`sesión-5`):
+- **Edge Functions:** `mi-funcion-de-prueba` ACTIVE, `comment-moderation` ACTIVE, `health` ACTIVE,
+  `ping-test` ACTIVE, `manage-users` ACTIVE — las cinco con botón Deploy. "que son las edge-functions del
+  proyecto, formidable."
+- **Logs:** las tres pestañas (Postgres/Auth/Edge Fn) muestran "no logs available" — "que es correcto"
+  (sin tráfico reciente, degradación honesta, no el placeholder inventado de antes).
+- **Usage:** REST Requests 1, Auth Requests 0, Storage Requests 0, Realtime Requests 0 — "que es correcto".
+- **Users:** Samuel Estrada / csestrada2005@outlook.com / admin / "0m ago" / 3/21/2026 — "que es correcto".
+
+Lectura: mundo esperado exacto, sin residuos ni sorpresas. No se reportó ninguna llamada a
+`api.supabase.com` ni secreto visible en Network — Samuel no lo mencionó como problema, se asume revisado
+implícitamente dado que confirmó cada panel como correcto.
 
 **El agujero real, más grande de lo que decía la cola:** de los 5 paneles desmontados
 (`DatabaseOverview`, `EdgeFunctionsPanel`, `LogsViewer`, `UsagePanel`, `UsersManager`, todos en
@@ -350,11 +364,380 @@ Mundos pre-registrados:
 - **Falla real (si aparece, SÍ es bug):** cualquier llamada a `api.supabase.com` visible desde el
   navegador, cualquier secreto visible en Network/consola, o una pantalla rota/500 sin manejar.
 
-### 5.2 Siguiente — Variantes de diseño + preguntas interactivas al iniciar proyecto
-Sin empezar. Se abre después de confirmar el check manual de 5.1.
+### 5.2 HECHO Y CONFIRMADO — Onboarding de proyecto: tono + color (mockup D, 2026-09-19)
 
-### 5.3 Cierre de sesión — Rediseño cosmético completo
-Sin empezar.
+**CHECK MANUAL — CONFIRMADO.** Evidencia cruda (Samuel, "Sale perfecto"), prompt "A landing page for a
+landing page of cryptocurrency", modo "✨ Suggested for you":
+> Link-in-Bio Page Builder — Brand blue + creator purple
+> Fintech/Crypto — Gold trust + purple tech
+> Calculator & Unit Converter — Operation orange on dark
+
+Lectura: las 3 son filas REALES de `colors` (ninguna inventada) — el mundo esperado se cumple, sin
+residuos de seguridad ni de datos fabricados. Nota de calidad, NO un bug (no estaba en los mundos
+pre-registrados, la agrego aquí para no perderla): "Fintech/Crypto" es el match semánticamente más obvio
+para un prompt de criptomoneda y salió 2º de 3, no 1º — el scoring por keywords sin peso por especificidad
+puede dejar que un término genérico compartido (p. ej. "page", repetido dos veces en este prompt) acumule
+más puntos que un término específico como "crypto". No bloquea nada (las tres opciones son razonables y el
+usuario elige a mano), pero queda anotado por si en algún momento vale la pena afinar el peso del scoring
+en `suggestPalettes` (src/utils/colorPaletteSuggest.js).
+
+**Diseño acordado con Samuel, con mockup delante** (canvas: https://claude.ai/artifact/6tNr4u1GXf8JUfTckjhwZF,
+4 opciones A/B/C/D — D es la elegida). Contexto de Samuel que cambió el diseño original: la mayoría de
+proyectos de Nebu vienen de un brief que el equipo ya analizó, así que el color no siempre debe
+"inventarlo" la IA — a veces ya se sabe. `NewProjectModal` pasa de 2 a 3 pasos: nombre → descripción (igual
+que antes) → tono + color.
+
+**Tono:** pills de selección rápida (Playful/Professional/Luxury/Minimal/Bold) — se pliega como
+instrucción al modelo, nunca se fuerza (es difuso, no hay un valor "correcto" que verificar).
+
+**Color, dos modos:**
+- **🎨 Color wheel** — el usuario pica un hex a mano (para cuando el brief de Nebu ya trae el color de
+  marca del cliente). Se fija SÓLO `--brand-primary`; el resto de la paleta lo sigue decidiendo el modelo,
+  con una restricción dura en el prompt sobre ese único valor.
+- **✨ Suggested for you** — matchea la descripción contra las tablas REALES `products`/`colors` de la DB
+  PRINCIPAL de Wyrd (Samuel las confirmó: ahí vive el espejo del skill ui-ux-pro-max — `colors`, `products`,
+  `styles`, `typography`, `ui_reasoning`; las tres últimas quedan para 5.3/futuro). Al elegir una paleta
+  sugerida, los 5 colores se aplican EXACTOS — el modelo nunca los reinterpreta.
+
+**Nota de higiene:** el primer intento de esta pieza vendorizaba una copia de `colors.csv` del skill
+`ui-ux-pro-max` dentro del repo — Samuel corrigió que esos datos YA viven en la DB principal de Wyrd
+(`colors`/`products`/etc.) y deben salir de ahí, no de una copia. El archivo vendorizado se borró antes de
+llegar a commit, no quedó rastro.
+
+**Hecho:**
+- `src/utils/colorPaletteSuggest.js` + `.d.ts` — `suggestPalettes(prompt, productRows, colorRows, limit)`,
+  scoring puro y determinista por palabra clave contra `products.keywords` + bonus por `product_type`
+  literal en el prompt, unido con `colors` por `product_type` exacto. No hace red — recibe las filas ya
+  cargadas. Columnas de `colors` verificadas contra `information_schema.columns` (las pegó Samuel), NO
+  adivinadas: `product_type, primary_color, on_primary, secondary_color, on_secondary, accent, on_accent,
+  background, foreground, card, card_foreground, muted, muted_foreground, border, destructive,
+  on_destructive, ring, notes` — este módulo sólo usa el subconjunto que el brief necesita.
+- `src/utils/colorConversion.js` + `.d.ts` — `hexToHslString(hex)`, hex → "H S% L%" sin wrapper (el formato
+  exacto que `DesignBrief.palette` espera).
+- `src/services/DesignBriefService.ts` — nuevo tipo exportado `DesignHints` (`tone?`, `pinnedPalette?`,
+  `pinnedPrimaryHsl?`) y función pura exportada `applyPaletteHints(brief, hints)`: aplica el override DE
+  FORMA DETERMINISTA sobre el brief ya validado — nunca confía en que el modelo respetó la instrucción al
+  pie de la letra (misma doctrina que el resto de guards de esta familia: detectar/forzar, no sólo pedir en
+  texto). `generate(prompt, hints?)` y `scaffold(prompt, files, hints?)` ahora aceptan el hint opcional.
+- `src/components/forge/NewProjectModal.tsx`: 3 pasos. `toPinnedPalette()` exportado y testeado — mapea las
+  6 columnas de `colors` a las 5 vars de `DesignBrief` en el orden exacto de `REQUIRED_BRAND_VARS`.
+- `onCreated` ahora manda `designHints` por `navigate(..., { state: { initialPrompt, designHints } })`
+  (`ForgeDashboard.tsx`) → `StudioEngine.tsx` lo lee de `location.state` y lo pasa a `applyDesignBrief` →
+  `DesignBriefService.scaffold`. Sin cambios de esquema en `forge_projects` — el hint sólo importa para el
+  scaffold inicial, mismo mecanismo ya usado para `initialPrompt`.
+- Tests nuevos: `server/colorPaletteSuggest.test.js` (7), `server/colorConversion.test.js` (5),
+  `DesignBriefService.test.ts` (+5, `applyPaletteHints`), `NewProjectModal.test.ts` (2, `toPinnedPalette`).
+  `node --test "server/*.test.js"` → 653/653 verdes (641 previos + 12). `npx vitest run` → 48/48 (41 + 7).
+  `npx tsc -b --force` → 0 errores. `graphify update .` corrido.
+
+**CHECK MANUAL — PENDIENTE.** Cómo reproducirlo (necesita `sesión-5` desplegada o el dev server local con
+credenciales reales de la DB principal — este sandbox no las tiene):
+1. Crear un proyecto nuevo. Confirmar que ahora son 3 pasos ("Step 1/2/3 of 3"), no 2.
+2. En el paso 3: elegir un tono, dejar "✨ Suggested for you" activo — con una descripción tipo "a coffee
+   subscription service" deben aparecer paletas reales (nombres tipo "Coffee Shop", no inventados) con sus
+   colores reales de la tabla `colors`.
+3. Cambiar a "🎨 Color wheel", picar un preset o escribir un hex, confirmar que el swatch de vista previa
+   cambia.
+4. Publicar el proyecto y revisar `DESIGN.md`/`src/index.css` generados: si elegiste una paleta sugerida,
+   los 5 `--brand-*` deben ser EXACTAMENTE la conversión HSL de esos hex (no otros inventados por el
+   modelo). Si usaste la rueda, sólo `--brand-primary` debe ser exacto; el resto puede variar.
+
+Mundos pre-registrados:
+- **Esperado:** wizard de 3 pasos, paletas sugeridas reales (nunca vacías salvo prompt genuinamente sin
+  match), color elegido respetado EXACTO en el proyecto generado.
+- **Residuo conocido, no bug:** si el prompt no matchea ningún `product_type`/`keyword`, "Suggested for
+  you" muestra "No close match found" y el usuario cae a la rueda — comportamiento esperado, no un fallo.
+- **Falla real (si aparece, SÍ es bug):** paletas inventadas/genéricas en vez de filas reales de `colors`,
+  o el color elegido por el usuario NO aparece exacto en el `--brand-*` del proyecto generado.
+
+### 5.3 EN PROGRESO (bloque 1 de N, pendiente CHECK MANUAL) — Rediseño cosmético completo (2026-09-19)
+
+**Alcance confirmado con Samuel:** toda la plataforma Wyrd Forge (Nebu Studio queda fuera — separación
+arquitectónica de `CLAUDE.md`, no se tocó ninguna pantalla de Nebu aunque varias comparten el patrón
+`fixed inset-0`). Dirección: usar el skill UI/UX Pro Max. Además del estilo/paleta, Samuel pidió
+explícitamente modales y animaciones — "que se sienta como una experiencia".
+
+**Hallazgo del skill, con matiz:** el agregador `--design-system` del skill no dio un resultado usable en
+dos búsquedas distintas (mismo patrón "Horizontal Scroll Journey" — pensado para landing pages, no un
+builder — y mismo estilo "Vibrant & Block-based" — bold/playful, "Best For: startups, gaming,
+entretenimiento", no encaja con una herramienta profesional; el markdown que devuelve además tiene un bug
+real, imprime filas crudas del CSV sin formatear). Buscando directo en el dominio `style` sí salió un match
+bueno: **"Dark Mode (OLED)"** (fondo negro/gris muy oscuro, alto contraste, "Best For: coding platforms",
+WCAG AAA). Typography confirmó **Inter** dos veces ("dashboards, admin panels, enterprise apps").
+
+**Buena noticia:** revisando `src/index.css`, la base de Wyrd YA está alineada con esa recomendación —
+`--background: 0 0% 5%` (casi OLED), Inter ya importado y usado como fuente del body, `--primary: 355 78%
+56%` (el rojo/crimson de marca, que se conserva — no se reemplaza por nada del skill). Cero cambios de
+fondo necesarios ahí; el trabajo real está en la capa de interacción, que sí estaba plana.
+
+**Hecho — capa de modales/animación:**
+- `src/components/ui/modalMotion.ts` (nuevo) — valores compartidos de framer-motion (`modalBackdropMotion`,
+  `modalPanelMotion`) para que todos los modales entren con el mismo fundido + pop, en vez de aparecer de
+  golpe. Alcance deliberado: sólo animación de ENTRADA — animar la salida necesitaría `AnimatePresence` en
+  cada componente padre que monta/desmonta el modal condicionalmente, un cambio de estructura mucho mayor
+  que se queda para después (ver Pendiente). `framer-motion` ya era dependencia del proyecto (usada en
+  RoleSelectionPage/SetupPage/Login) — no se agregó nada nuevo.
+- Aplicado a los 5 modales centrados reales de Wyrd Forge: `NewProjectModal`, `SettingsModal`,
+  `ShareProjectModal`, `MigrationApplyModal` (el de confirmación de DDL destructivo — SÓLO se tocó el
+  wrapper visual, cero cambios a la lógica de la frase de confirmación), `CommandModal` (este último
+  centraba con `transform` de Tailwind — se separó en un div de posicionamiento estático + un
+  `motion.div` interno para la animación, para no pisar el `translate(-50%,-50%)` con el transform que
+  escribe framer-motion).
+- `HistoryDrawer.tsx`: el panel YA tenía slide animado (`transition-transform`, siempre montado, toggle por
+  `isOpen`) — sólo el backdrop aparecía de golpe. Se cambió a siempre-montado + `transition-opacity`, mismo
+  patrón que el panel, en vez de agregar framer-motion donde ya había una solución CSS que funcionaba.
+- Limpieza de higiene encontrada de paso: `NewProjectModal.tsx` (código de esta misma sesión, ítem 5.2)
+  tenía dos emojis como iconos de pestaña (🎨/✨) — el propio checklist del skill lo marca como anti-patrón
+  ("No emoji icons — use SVG"). Cambiados a `Palette`/`Sparkles` de lucide-react.
+- `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 653/653 (sin cambios, nada de esto
+  toca al servidor). `npx vitest run` → 48/48 (sin cambios). `graphify update .` corrido.
+
+**Bloque 2 (2026-09-19, tarde) — Magic UI + CommandModal como bottom sheet:**
+
+Samuel pidió reestructurar el editor tipo Lovable: navbar superior con iconos para preview/modo
+visual/navegador (dropdown de páginas)/un solo botón de viewport (desktop-tablet-móvil)/Código/Settings/
+Chat — y que Chat sea "lo más mágico", usando https://github.com/magicuidesign/magicui
+(`skills/magic-ui` del propio repo confirma que es instalable vía `npx shadcn@latest add @magicui/<slug>`,
+pero `components.json` de este repo sigue apuntando a `tailwind.config.js` (v3) aunque el proyecto ya está
+en Tailwind v4 sin ese archivo — correr el CLI contra esa config a medio migrar era el riesgo real, así
+que se optó por traer el código fuente directo del repo (`gh api`) en vez de correr el instalador).
+
+**Hecho — los 8 componentes que pidió Samuel, vendorizados y verificados:**
+`src/components/magicui/{animated-list,border-beam,code-comparison,number-ticker,progressive-blur,
+shimmer-button,text-animate,typing-animation}.tsx`. Dos ajustes necesarios sobre el código tal cual viene
+del repo (ninguno cambia su comportamiento visual):
+- Todos importaban de `"motion/react"` (el nuevo nombre del paquete que usa el sitio de Magic UI) — el
+  proyecto tiene `framer-motion` (mismo API), así que se reescribió el import en los 5 archivos que lo
+  traían.
+- `code-comparison.tsx` usaba `next-themes` (`useTheme()`) para elegir tema claro/oscuro — Wyrd Forge (la
+  plataforma) es siempre oscura, sin ese paquete ni toggle de tema, así que se fijó a `darkTheme` directo,
+  se quitó el import y el prop `lightTheme` quedó sin desestructurar (sigue en la interfaz por si algún
+  caller lo manda). Este componente también necesitó instalar `shiki` + `@shikijs/transformers` (reales,
+  no estaban en `package.json`) para el resaltado de sintaxis del diff antes/después.
+- `npx tsc -b --force` → 0 errores con los 8 ya integrados.
+
+**Hecho — CommandModal como bottom sheet, con salida animada (pedido explícito de Samuel a media sesión):**
+antes sólo tenía animación de ENTRADA (mismo `modalPanelMotion` que el resto), centrado, `max-w-[900px]
+h-[75vh]`. Ahora: `bottomSheetMotion` (nuevo, en `modalMotion.ts`) — entra desde abajo
+(`y: '100%' → 0`) y SALE igual (`AnimatePresence` envolviendo el `{isCommandModalOpen && <CommandModal
+.../>}` en `StudioEngine.tsx`, algo que ningún otro modal de esta sesión necesitó todavía). Tamaño:
+`inset-x-4 bottom-4 h-[88vh]` — casi todo el alto de pantalla, como pidió ("casi tan grande como el
+preview"). `modalBackdropMotion` ganó un `exit` (aditivo, no afecta a los 5 modales que ya lo usaban sin
+`AnimatePresence` — ese prop simplemente no se usa ahí).
+- `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 653/653 (sin tocar servidor).
+  `npx vitest run` → 48/48. `graphify update .` corrido.
+
+**DISEÑADO PERO NO CONSTRUIDO — el resto del pedido de Samuel, para retomar tal cual (se fue del teclado a
+media sesión, contenedor con riesgo de cerrarse — esto quedó documentado en vez de improvisado a ciegas):**
+
+Investigué la pantalla ANTES de tocarla (StudioEngine.tsx, ~2000 líneas) — ya existe bastante plomería que
+hay que REUSAR, no reconstruir:
+- Toggle Interacción/Visual: ya existe (`editMode`, botones en el overlay flotante actual).
+- Viewport desktop/tablet/móvil: ya existe pero como 3 botones separados
+  (`viewportMode`/`handleViewportChange`, líneas ~2071-2091) — Samuel pide UN solo botón que cicle entre
+  los tres, no tres botones.
+- Code/Settings: ya son botones que abren `CommandModal`/`SettingsModal` — pero HOY como overlays
+  flotantes sobre el preview, no como "el preview desaparece y se ve todo el código" (in-place, tipo VS
+  Code simplificado) que pidió Samuel.
+- Chat/Visual/Code/Navigate: YA es un sistema de tabs — pero vive DENTRO de `CommandModal` (hay que
+  abrirlo primero), no promovido a la navbar persistente que describe Samuel.
+- El overlay actual (`absolute top-4 left-1/2 -translate-x-1/2`, línea ~2057) es una píldora flotante
+  SOBRE el preview, no una navbar acoplada arriba con los colores de marca, que es lo que pidió.
+
+**Lo que falta construir, mismo bloque, cuando se retome:**
+1. Navbar superior persistente (no flotante) con los colores de marca, reemplazando la píldora actual.
+2. Un solo botón de viewport que cicle desktop→tablet→móvil (reemplaza los 3 botones separados).
+3. Dropdown tipo "navegador" con las páginas del proyecto (NUEVO — no existe nada parecido hoy).
+4. Botón "Código": el preview desaparece, se ve `CodePanel` a pantalla completa in-place (no floating).
+5. Botón "Settings": mismo trato que Código, pero mostrando el contenido de `SettingsModal` in-place.
+6. Botón "Chat": mismo trato, con el `ChatInterface` existente potenciado con los 8 componentes de Magic
+   UI ya vendorizados — ideas concretas sin decidir todavía: `border-beam` alrededor de la respuesta activa
+   de la IA, `animated-list` para la entrada de mensajes nuevos, `text-animate`/`typing-animation` para el
+   streaming de la respuesta, `number-ticker` para créditos/tokens si se muestra un contador,
+   `shimmer-button` para el botón de enviar, `progressive-blur` en los bordes de scroll,
+   `code-comparison` para diffs de código que la IA proponga (ya no es "genérico", ahora tiene una razón
+   de ser real).
+7. Contenedor visual del preview en sí (Samuel: "el preview... dentro de un contenedor visual") — no
+   quedó del todo claro si es un marco tipo dispositivo (como ya existe parcialmente para tablet/móvil,
+   líneas ~2129-2144) o algo más tipo "chrome de navegador" — mejor confirmarlo con Samuel antes de
+   construirlo, no adivinarlo.
+
+**Pendiente, bucket 5 ítem 3 en general (sin tocar):** `ForgeDashboard` (cards, hover states) y una
+pasada del checklist de calidad del skill (cursor-pointer, contraste, espaciado) sobre esas pantallas.
+
+**Bloque 3 (2026-09-20) — salida animada en los 5 modales + Command Palette que crece + hallazgo de raíz
+(bug de Tailwind v4, no sólo cosmético) + paleta Nebu:**
+
+Pedido de Samuel, 4 partes: (a) fade-out en los 5 modales, no sólo entrada; (b) todo más lento, entrada Y
+salida; (c) Command Palette nace chico desde abajo y crece hasta llenar pantalla, no sólo desliza; (d) fondo
+negro sólido en el modal de chat, en las 4 pestañas, con la MISMA lógica de (e) paleta Nebu en todos los
+modales.
+
+**Hecho (a+b+c) — `src/components/ui/modalMotion.ts`:** `modalPanelMotion` ganó `exit` (antes sólo tenía
+entrada). Duraciones de `modalBackdropMotion`/`modalPanelMotion` subieron de 0.15/0.18s a 0.32s;
+`bottomSheetMotion` de 0.25s a 0.45s y ahora anima también `scale` (0.55→1, `transformOrigin: 'bottom
+center'`) además de `y`, para el efecto "nace chico y crece". `AnimatePresence` envuelto en los 4 puntos de
+montaje condicional que faltaban (cada modal se monta/desmonta con `{cond && <Modal/>}` en su padre, mismo
+patrón que ya tenía `CommandModal` en `StudioEngine.tsx`): `NewProjectModal`/`ShareProjectModal` en
+`ForgeDashboard.tsx`, `SettingsModal`/`ShareProjectModal` en `StudioEngine.tsx`, `MigrationApplyModal` en
+`DDLApprovalButton.tsx` — sólo el envoltorio visual, cero cambios a la lógica de cada uno (en particular,
+`MigrationApplyModal` sigue exigiendo la frase de confirmación exacta igual que siempre).
+
+**Hallazgo de raíz, mientras investigaba (d) "por qué el chat no es negro sino como transparente":**
+compilé el proyecto (`npx vite build`) y miré el CSS real que sale al navegador — `bg-card`,
+`border-border`, `bg-muted`, `bg-accent`, `bg-destructive`, `bg-secondary`, `text-muted-foreground` (28-42
+archivos cada una, `border-border` 40 archivos) no generaban NINGÚN CSS en TODA la plataforma. Causa: el
+bloque `@theme` de `src/index.css` (Tailwind v4, líneas 4-10) sólo registraba 4 tokens
+(`primary`/`primary-foreground`/`background`/`foreground`); el resto de los nombres semánticos vivían sólo
+en el `:root` viejo estilo shadcn v3 (líneas 13-52), que Tailwind v4 no lee para fabricar clases. No era "un
+gris poco negro" como asumí en el plan original — el panel del chat literalmente no tenía fondo, se veía lo
+que hubiera detrás. **Reencuadrado con Samuel en caliente, evidencia mostrada cruda antes de la lectura**;
+decisión: arreglar de raíz, no parchar sólo los 6 modales.
+
+**Hecho (raíz) — `src/index.css`:** 13 tokens nuevos en `@theme` (`--color-card`, `-card-foreground`,
+`-secondary`, `-secondary-foreground`, `-muted`, `-muted-foreground`, `-accent`, `-accent-foreground`,
+`-destructive`, `-destructive-foreground`, `-border`, `-input`, `-ring`), valor literal copiado del `:root`
+correspondiente — puramente aditivo, nada se quitó ni se cambió de valor. `popover`/`sidebar-*` quedaron
+fuera a propósito: verificado por grep que ningún componente los usa, agregarlos sería un token sin dueño.
+Verificado con build real (no de memoria): antes → `.bg-card{...}` ausente del CSS compilado; después →
+`.bg-card{background-color:var(--color-card)}` presente, mismo patrón confirmado para las 9 clases.
+`npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 653/653. `npx vitest run` → 48/48
+(ninguno de los tests existentes cubre generación de CSS de Tailwind — la verificación de esto fue el build
+real, no la batería automática).
+
+**Hecho (d+e) — paleta Nebu en los 6 modales, vía una sola clase de ámbito:** en vez de tocar cada
+ocurrencia de color en cada archivo, nueva regla `.nebu-modal` en `index.css` (sin `@layer`, a propósito —
+mismo truco que las reglas de `select`/scrollbar que ya vivían ahí sin capa — para ganarle a `@layer theme`
+por origen, no por especificidad; verificado en el CSS compilado que la regla queda fuera de cualquier
+`@layer`). Sobrescribe `--color-background/-card/-card-foreground/-foreground/-muted/-muted-foreground/
+-secondary/-secondary-foreground/-accent/-accent-foreground/-border/-input` a los valores `--nebu-*` que ya
+existían en `index.css` sin que ningún componente los usara. El rojo de marca (`--color-primary`/
+`-destructive`) NO se toca. Clase `nebu-modal` añadida al panel de `NewProjectModal`, `SettingsModal`,
+`ShareProjectModal`, `MigrationApplyModal` y `CommandModal` — en este último, puesta en el panel exterior
+para que herede a las 4 pestañas (Chat/Visual/Code/Navigate) sin tocar `ChatInterface.tsx`/`CodePanel.tsx`/
+etc. (esos componentes se reusan fuera de `CommandModal` — recolorearlos por dentro habría filtrado Nebu a
+contextos donde no se pidió). De paso, `SettingsModal.tsx` (30+ colores `gray-*`/`zinc-*` sueltos, nunca
+conectados al sistema de diseño) y `NewProjectModal.tsx` (1 línea) migraron a los tokens semánticos
+(`bg-card`, `border-border`, `bg-muted`, `text-muted-foreground`, etc.) — necesario para que la paleta Nebu
+les llegue igual que a los otros 4 modales, que ya los usaban.
+`npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 653/653. `npx vitest run` → 48/48.
+`graphify update .` corrido.
+
+**Bloque 4 (2026-09-20, mismo día) — brandbook OFICIAL de Nebu Studio reemplaza los valores adivinados del
+Bloque 3:** Samuel mandó el brandbook real (rojo `#D62828`, negro profundo `#0D0D0D`, carbón `#1A1A1A`,
+gris claro `#E8E8E8`, crema `#F5F0EB`, proporción 60% crema/blanco – 30% negro/carbón – 10% rojo,
+tipografía Outfit/Inter, principios de minimalismo). Los valores `--nebu-*` que usé en el Bloque 3 (rojo
+`#E54D5B`, negro `#0a0a0f`, etc.) NO eran los oficiales — alguien los había puesto de antes, adivinando.
+
+**Dos decisiones de alcance, confirmadas con Samuel antes de tocar código:**
+- La proporción 60/30/10 (dominada por claro) aplica SÓLO a superficies de marca (los 4 modales
+  administrativos + dashboard + onboarding), NO al área de trabajo del editor (Command Palette:
+  Chat/Visual/Código/Navegar), que se queda oscura — es el lienzo de trabajo, no una superficie de marca.
+  Deshecho el `nebu-modal` que el Bloque 3 le había puesto a `CommandModal.tsx`.
+- Alcance de hoy: sólo Wyrd Forge. Nebu Studio (CRM/Novy) queda fuera, es su propia sesión.
+
+**Hecho — `.nebu-modal` reescrita con los valores oficiales, misma mecánica del Bloque 3 (una sola clase de
+ámbito, sin `@layer`, sobrescribe `--color-*`):** fondo/tarjeta blanco `#FFFFFF` + crema `#F5F0EB`, texto
+negro profundo `#0D0D0D`, botones/CTA rojo `#D62828` con texto blanco, bordes y superficies secundarias gris
+claro `#E8E8E8`. `--color-destructive` (la alarma roja de "esto borra datos para siempre" en
+`MigrationApplyModal`) NO se tocó a propósito — usar el mismo rojo ahí que en un botón normal le quitaría la
+señal de peligro a la única confirmación irreversible de la plataforma.
+
+**Hecho — migración de colores sueltos que el override no alcanzaba (literales, no tokens):** encontrado
+DURANTE la implementación, no antes — varios `text-white` en `SettingsModal.tsx` (título, botones, inputs)
+que se habrían vuelto invisibles sobre el nuevo fondo claro → migrados a `text-foreground`. El bloque de
+alerta de DDL destructivo en `MigrationApplyModal.tsx` (la pieza de seguridad más delicada de toda la
+plataforma) usaba rosa/rojo claro sobre fondo casi negro, ilegible sobre fondo claro → recoloreado a
+rojo oscuro sobre fondo rojo pálido, alto contraste, sin tocar la lógica de confirmación. `ShareProjectModal.
+tsx` (badges de rol admin/dev/vendedor/cliente, píldora pending/accepted, botón "Revoke") y el banner de
+error de `ForgeDashboard.tsx` tenían el mismo patrón (colores claros pensados para fondo oscuro) → todos
+recoloreados a sus equivalentes de alto contraste sobre claro.
+
+**Hecho — tipografía:** `--font-display` pasó de "Archivo Black" a "Outfit" (Google Fonts, mismo mecanismo
+que Inter). Blast radius confirmado por grep antes de tocar: sólo las 4 pantallas de onboarding
+(`Login.tsx`, `RoleSelectionPage.tsx`, `SetupPage.tsx`, `PendingApprovalPage.tsx`) usan la clase
+`font-display` hoy — cambia solo, sin tocar esos 4 archivos. Inter se queda para todo el cuerpo de texto.
+No se reconstruyó la escala tipográfica completa H1/H2/H3 del brandbook (fuera de alcance de hoy).
+
+**Confirmado como ya cumplido, sin trabajo pendiente:** iconografía monocromática (lucide-react ya renderiza
+en un solo color por diseño) y "cero plantillas genéricas" (la UI ya es a medida, no viene de Canva/
+plantillas). No son tareas, son verificaciones.
+
+`npx tsc -b --force`: 0 errores. `node --test "server/*.test.js"`: 653/653. `npx vitest run`: 48/48.
+Verificado con build real (`npx vite build`) que `.nebu-modal` y `--font-display: "Outfit"` compilan
+correctamente antes de dar el bloque por bueno.
+
+**PENDIENTE PARA DESPUÉS — anotado, no resuelto hoy (dos residuos del mismo tamaño, mismo motivo: son
+pantallas/paneles construidos con colores fijos en vez del sistema de tokens, así que el truco de
+`.nebu-modal` no les llega):**
+1. **Onboarding (Login, selección de rol, setup, pendiente de aprobación):** 4 pantallas hechas a mano con
+   colores fijos (`bg-[#0A0A0A]`, `text-[#E60000]`, gradientes de opacidad de blanco para la jerarquía de
+   texto — 8 a 13 apariciones por archivo), con una animación de "pincel de tinta" para el texto "NEBU
+   STUDIO", cuadrícula de fondo y viñeteado, todo diseñado para verse sobre negro. Convertirlas a
+   claro/crema es rediseñar el efecto (hoy: texto blanco fantasma revelándose sobre negro; en claro sería
+   al revés) más el rojo exacto (`#E60000` actual no es siquiera el `#D62828` oficial) — no es un cambio de
+   paleta, es diseño nuevo. Necesita su propia sesión con mockup delante.
+2. **Contenido de 8 sub-pestañas de Database + Domains + Email + Deploy, dentro de `SettingsModal`:** el
+   MARCO del modal (fondo, título, las 7 pestañas principales) ya quedó con la marca correcta — es el
+   CONTENIDO de esas pestañas específicas el que tiene 224 clases de color oscuras sueltas repartidas en 11
+   archivos (`SecretsPanel` 26, `SchemaViewer` 16, `SQLEditor` 20, `DatabaseOverview` 16,
+   `EdgeFunctionsPanel` 14, `LogsViewer` 13, `UsagePanel` 10, `UsersManager` 19, `DomainsPanel` 22,
+   `EmailPanel` 54, `DeployManager` 14) — se van a ver oscuras flotando dentro del modal claro. Encontrado
+   mientras se hacía este bloque, no antes; no se tocó ninguno de los 11 archivos hoy.
+
+**CHECK MANUAL — PENDIENTE.** Cómo reproducirlo (dev server local o `sesión-5` desplegada):
+1. Abre y cierra, uno por uno: New Project, Settings, Share, History. Cada uno debe entrar Y salir con un
+   fundido/pop notorio (más lento que antes), ahora con fondo claro/crema, texto negro, acentos rojos.
+2. Si hay una migración destructiva pendiente: `MigrationApplyModal` debe verse clara con el bloque de
+   alerta en rojo oscuro sobre rosa pálido bien legible, y debe seguir pidiendo la frase de confirmación
+   exacta antes de dejar aplicar (esto NO debía cambiar).
+3. Abre el Command Palette: debe seguir OSCURO como antes de este bloque (no debe verse afectado por el
+   cambio de marca) — nace chico desde abajo y crece hasta ocupar casi toda la pantalla.
+4. Abre Settings → pestaña Secrets (la que abre por default) y Database → Schema (default): el MARCO
+   (fondo, título, pestañas) debe verse claro/marca; el CONTENIDO de esas pestañas puede verse oscuro
+   todavía (residuo conocido, anotado arriba, no es sorpresa).
+5. En el dashboard (lista de proyectos): fondo claro/crema, tarjetas blancas, acentos rojos en hover/CTA.
+6. El Command Palette y el editor detrás de los modales deben verse EXACTAMENTE igual que antes de este
+   bloque — el brandbook es sólo para las superficies de marca.
+
+Mundos pre-registrados:
+- **Esperado:** los 4 modales administrativos + dashboard se ven claros/crema con acentos rojos oficiales
+  (`#D62828`) y texto negro (`#0D0D0D`); el Command Palette y el editor siguen oscuros sin cambios; la
+  alerta de migración destructiva se lee claro y sigue pidiendo la frase.
+- **Residuo conocido, no bug:** el contenido de Database/Domains/Email/Deploy dentro de Settings se ve
+  oscuro (anotado arriba, su propio bloque futuro); el onboarding sigue con su diseño oscuro anterior
+  (anotado arriba, su propio bloque futuro).
+- **Falla real (si aparece, SÍ es bug):** algún modal se ve sin fondo/transparente, texto negro sobre fondo
+  oscuro o texto claro sobre fondo claro en CUALQUIER parte del marco de los 4 modales o el dashboard
+  (harían el texto ilegible), el Command Palette cambió de apariencia sin que se le tocara nada, o
+  `MigrationApplyModal` deja aplicar sin pedir la frase.
+
+**REENCUADRE (2026-09-20, antes de correr el check):** el mundo pre-registrado original (abajo, ya
+corregido) describía `CommandModal` como "sigue centrado en pantalla" — eso era cierto para el Bloque 1,
+pero el Bloque 2 (ya commiteado, `972ab79`) lo cambió deliberadamente a bottom sheet
+(`inset-x-4 bottom-4 h-[88vh]`, entra desde abajo, y ahora también SALE animado vía `AnimatePresence` en
+`StudioEngine.tsx`). Verificado leyendo `CommandModal.tsx` y `StudioEngine.tsx` antes de escribir esto, no
+de memoria. El paso 4 y la falla-real de abajo quedan corregidos para reflejar el estado real del código;
+el resto del check (pasos 1-3, los otros 4 modales) no cambió.
+
+**CHECK MANUAL — PENDIENTE.** Cómo reproducirlo (dev server local o `sesión-5` desplegada):
+1. Abrir "New Project" — el modal debe entrar con un fundido + pop suave, no aparecer de golpe.
+2. Abrir Settings, Share, History (el ícono de historial) — mismo fundido en cada uno; History además debe
+   seguir deslizando desde la derecha como antes.
+3. Si hay una migración destructiva pendiente para probar, confirmar que `MigrationApplyModal` anima igual
+   Y que la frase de confirmación sigue exigiéndose exactamente igual que antes (esto NO debía cambiar).
+4. Abrir el Command Palette (botón "Código" o como se dispare) — debe entrar como panel deslizante desde
+   ABAJO, ocupando casi toda la altura de pantalla (no centrado, no un cuadro chico). Cerrarlo: debe
+   deslizarse de vuelta hacia abajo y desvanecerse (salida animada), no desaparecer de golpe.
+
+Mundos pre-registrados:
+- **Esperado:** los 5 modales + el drawer de historial entran con el mismo fundido/pop consistente (New
+  Project, Settings, Share, MigrationApplyModal, History); `CommandModal` entra Y sale como bottom sheet
+  animado, ocupando casi toda la pantalla. Ninguna lógica de confirmación/contenido cambiada.
+- **Falla real (si aparece, SÍ es bug):** `CommandModal` aparece centrado o como cuadro chico (señal de que
+  quedó código viejo sin actualizar), no anima al cerrarse (aparece/desaparece de golpe pese al
+  `AnimatePresence`), o `MigrationApplyModal` deja aplicar sin pedir la frase de confirmación en el caso
+  destructivo.
 
 ### Resto del bucket (sin tocar esta sesión)
 - RAG de UI/UX: PatternRetriever da `direct: 0 | vector: 0`. Primera pregunta: ¿pasa igual en producción?

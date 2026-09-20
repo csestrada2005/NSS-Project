@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import { Panel, Group } from 'react-resizable-panels';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -55,7 +56,7 @@ import { CommandModal } from '../components/CommandModal';
 import { HistoryDrawer } from '../components/HistoryDrawer';
 import { ProjectMemoryService } from '../services/ProjectMemoryService';
 import { ChatPersistenceService } from '../services/ChatPersistenceService';
-import { DesignBriefService } from '../services/DesignBriefService';
+import { DesignBriefService, type DesignHints } from '../services/DesignBriefService';
 import CreditBalance from '../components/forge/CreditBalance';
 import { ShareProjectModal } from '../components/forge/ShareProjectModal';
 import { CodePanel } from '../components/studio/CodePanel';
@@ -204,6 +205,9 @@ export function StudioEngine() {
 
   // Initial prompt from ForgeDashboard navigate state (Phase 4 Fix 4)
   const initialPrompt = (location.state as any)?.initialPrompt as string | undefined;
+  // Onboarding tone/color hints (bucket 5, ítem 2, mockup D) — sólo presentes
+  // cuando el proyecto se creó desde el wizard de 3 pasos con initialPrompt.
+  const designHints = (location.state as any)?.designHints as DesignHints | undefined;
   const hasProcessedInitialPrompt = useRef(false);
   const isAutoLoadingTemplate = useRef(false);
 
@@ -763,7 +767,7 @@ export function StudioEngine() {
           // persist DESIGN.md + brand CSS vars + Google Fonts BEFORE the first
           // generation, so every lane sees the brief. Best-effort — a null result
           // (API/JSON failure) leaves the scaffold untouched.
-          const briefFiles = await applyDesignBrief(promptToRun, loadedFiles);
+          const briefFiles = await applyDesignBrief(promptToRun, loadedFiles, designHints);
           // Sin gate, igual que la rama de arriba y por el mismo motivo.
           result = await handleSendMessage(promptToRun, undefined, undefined, undefined, briefFiles, false);
         }
@@ -1188,10 +1192,11 @@ export function StudioEngine() {
   // -------------------------------------------------------------------------
   const applyDesignBrief = async (
     prompt: string,
-    templateFiles: Map<string, string>
+    templateFiles: Map<string, string>,
+    hints?: DesignHints
   ): Promise<Map<string, string>> => {
     try {
-      const briefFiles = await DesignBriefService.scaffold(prompt, templateFiles);
+      const briefFiles = await DesignBriefService.scaffold(prompt, templateFiles, hints);
       if (!briefFiles || briefFiles.size === 0) return templateFiles;
 
       const merged = new Map(templateFiles);
@@ -2277,6 +2282,7 @@ export function StudioEngine() {
           />
         )}
 
+        <AnimatePresence>
         {isCommandModalOpen && (
           <CommandModal
             onClose={() => setIsCommandModalOpen(false)}
@@ -2338,16 +2344,21 @@ export function StudioEngine() {
             </div>
           </CommandModal>
         )}
+        </AnimatePresence>
 
-        {showSettings && <SettingsModal onClose={() => setShowSettings(false)} fileTree={fileTree} files={files} projectId={projectId ?? null} />}
+        <AnimatePresence>
+          {showSettings && <SettingsModal onClose={() => setShowSettings(false)} fileTree={fileTree} files={files} projectId={projectId ?? null} />}
+        </AnimatePresence>
         {showGraph && <StateGraph fileTree={fileTree} onClose={() => setShowGraph(false)} />}
-        {showShareModal && projectId && (
-          <ShareProjectModal
-            projectId={projectId}
-            projectName={currentProjectName}
-            onClose={() => setShowShareModal(false)}
-          />
-        )}
+        <AnimatePresence>
+          {showShareModal && projectId && (
+            <ShareProjectModal
+              projectId={projectId}
+              projectName={currentProjectName}
+              onClose={() => setShowShareModal(false)}
+            />
+          )}
+        </AnimatePresence>
 
         <HistoryDrawer
           projectId={projectId ?? null}

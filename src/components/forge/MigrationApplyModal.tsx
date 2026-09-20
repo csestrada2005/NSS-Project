@@ -24,7 +24,9 @@
  */
 
 import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 import { AlertTriangle, Loader2, X } from 'lucide-react';
+import { modalBackdropMotion, modalPanelMotion } from '@/components/ui/modalMotion';
 import type { DestructiveFinding } from '@/utils/ddlGuard.js';
 import {
   DROP,
@@ -104,15 +106,19 @@ export function MigrationApplyModal({
 
   return (
     <>
-      <div
+      <motion.div
+        {...modalBackdropMotion}
         className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md"
         onClick={() => { if (!isApplying) onCancel(); }}
       />
       <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-4">
-        <div className="bg-card border border-border rounded-2xl w-full max-w-lg shadow-2xl pointer-events-auto flex flex-col max-h-[90vh]">
+        <motion.div
+          {...modalPanelMotion}
+          className="nebu-modal bg-card border border-border rounded-2xl w-full max-w-lg shadow-2xl pointer-events-auto flex flex-col max-h-[90vh]"
+        >
           <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
             <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
-              {isDestructive && <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />}
+              {isDestructive && <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />}
               {isDestructive ? 'Esta migración destruye datos' : 'Aplicar migración'}
             </h2>
             <button
@@ -139,18 +145,18 @@ export function MigrationApplyModal({
             </div>
 
             {isDestructive && (
-              <div className="rounded-lg border border-red-500/40 bg-red-900/20 p-3 space-y-2">
-                <p className="text-xs font-semibold text-red-300">
+              <div className="rounded-lg border border-red-300 bg-red-50 p-3 space-y-2">
+                <p className="text-xs font-semibold text-red-800">
                   {flagged.length === 1
                     ? 'Una sentencia destruye datos existentes:'
                     : `${flagged.length} sentencias destruyen datos existentes:`}
                 </p>
                 {flagged.map(({ path, finding }, index) => (
                   <div key={`${path}:${finding.line}:${index}`} className="space-y-0.5">
-                    <div className="text-[10px] uppercase tracking-wide text-red-400/80">
+                    <div className="text-[10px] uppercase tracking-wide text-red-700/80">
                       {fileName(path)}:{finding.line} — {KIND_LABEL[finding.kind] ?? finding.kind}
                     </div>
-                    <pre className="text-[11px] text-red-100 bg-black/40 rounded p-2 overflow-x-auto whitespace-pre-wrap">
+                    <pre className="text-[11px] text-red-900 bg-white border border-red-200 rounded p-2 overflow-x-auto whitespace-pre-wrap">
                       {finding.statement}
                     </pre>
                   </div>
@@ -159,7 +165,7 @@ export function MigrationApplyModal({
             )}
 
             {unnameable && (
-              <p className="text-xs text-red-300">
+              <p className="text-xs text-red-700">
                 No puedo identificar con seguridad el objeto que esta migración destruye, así que no
                 ofrezco confirmarla desde aquí. Revísala y aplícala a mano.
               </p>
@@ -213,7 +219,7 @@ export function MigrationApplyModal({
               </button>
             )}
           </div>
-        </div>
+        </motion.div>
       </div>
     </>
   );

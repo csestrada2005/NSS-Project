@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { AnimatePresence } from "framer-motion";
 import { Layers, Flame, Plus, Search, Trash2, Loader2, LayoutDashboard, Share2, ChevronLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { SupabaseService } from "@/services/SupabaseService";
@@ -127,13 +128,13 @@ const ForgeDashboard = () => {
 
   if (error) {
     return (
-      <div className="flex flex-col h-screen bg-background items-center justify-center p-6">
-        <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-xl px-5 py-4 text-sm max-w-md w-full text-center">
+      <div className="nebu-modal flex flex-col h-screen bg-background items-center justify-center p-6">
+        <div className="bg-red-100 border border-red-300 text-red-800 rounded-xl px-5 py-4 text-sm max-w-md w-full text-center">
           <p className="font-semibold mb-1">Failed to load projects</p>
           <p>{error}</p>
           <Button
             variant="outline"
-            className="mt-4 border-red-700 hover:bg-red-900/40 text-red-300"
+            className="mt-4 border-red-300 hover:bg-red-100 text-red-800"
             onClick={() => {
               setError(null);
               loadProjects();
@@ -147,23 +148,27 @@ const ForgeDashboard = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-background">
-      {shareProject && (
-        <ShareProjectModal
-          projectId={shareProject.id}
-          projectName={shareProject.name}
-          onClose={() => setShareProject(null)}
-        />
-      )}
-      {showNewProjectModal && (
-        <NewProjectModal
-          onClose={() => setShowNewProjectModal(false)}
-          onCreated={(projectId, _, initialPrompt) => {
-            setShowNewProjectModal(false);
-            navigate(`/studio/${projectId}`, { state: { initialPrompt } });
-          }}
-        />
-      )}
+    <div className="nebu-modal flex flex-col h-screen bg-background">
+      <AnimatePresence>
+        {shareProject && (
+          <ShareProjectModal
+            projectId={shareProject.id}
+            projectName={shareProject.name}
+            onClose={() => setShareProject(null)}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showNewProjectModal && (
+          <NewProjectModal
+            onClose={() => setShowNewProjectModal(false)}
+            onCreated={(projectId, _, initialPrompt, designHints) => {
+              setShowNewProjectModal(false);
+              navigate(`/studio/${projectId}`, { state: { initialPrompt, designHints } });
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Top header bar */}
       <header className="h-14 border-b border-border bg-background flex items-center justify-between px-6 shrink-0">

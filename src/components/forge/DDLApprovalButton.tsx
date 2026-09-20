@@ -36,6 +36,7 @@
  */
 
 import { useState, type ReactNode } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -381,22 +382,24 @@ export function DDLApprovalButton({
         </div>
       )}
 
-      {phase !== 'idle' && phase !== 'reading' && pending && (
-        <MigrationApplyModal
-          paths={proposal.paths}
-          flagged={pending.flagged}
-          targets={pending.targets}
-          isApplying={phase === 'applying'}
-          onCancel={() => {
-            // Cancelar no deja rastro: ni base, ni chat, ni estado. La
-            // propuesta sigue siendo la ejecutable.
-            if (phase === 'applying') return;
-            setPending(null);
-            setPhase('idle');
-          }}
-          onConfirm={handleConfirm}
-        />
-      )}
+      <AnimatePresence>
+        {phase !== 'idle' && phase !== 'reading' && pending && (
+          <MigrationApplyModal
+            paths={proposal.paths}
+            flagged={pending.flagged}
+            targets={pending.targets}
+            isApplying={phase === 'applying'}
+            onCancel={() => {
+              // Cancelar no deja rastro: ni base, ni chat, ni estado. La
+              // propuesta sigue siendo la ejecutable.
+              if (phase === 'applying') return;
+              setPending(null);
+              setPhase('idle');
+            }}
+            onConfirm={handleConfirm}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -222,13 +222,13 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
 
   return (
     <>
-      {/* Backdrop */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 bg-black/80 z-[79]"
-          onClick={onClose}
-        />
-      )}
+      {/* Backdrop — siempre montado y con fundido igual que el panel (abajo),
+          en vez de aparecer/desaparecer de golpe con el montaje condicional
+          que tenía antes. */}
+      <div
+        className={`fixed inset-0 bg-black/80 z-[79] transition-opacity duration-300 ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+        onClick={onClose}
+      />
 
       {/* Drawer */}
       <div

@@ -1,12 +1,36 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-display: "Archivo Black", sans-serif;
+  /* Brandbook oficial Nebu Studio (2026-09-20): Outfit para títulos/display,
+     Inter se queda para cuerpo de texto (ya era así). */
+  --font-display: "Outfit", sans-serif;
   --color-primary: hsl(0 100% 48%);
   --color-primary-foreground: hsl(0 0% 100%);
   --color-background: hsl(0 0% 4%);
   --color-foreground: hsl(0 0% 98%);
+
+  /*
+   * Tokens que faltaban desde la migración a Tailwind v4: sin ellos, clases
+   * como bg-card/border-border/bg-muted/text-muted-foreground/bg-destructive
+   * no generaban NINGÚN CSS (v4 sólo fabrica utilidades de color desde el
+   * namespace --color-*, no desde los --nombre sueltos de :root de abajo).
+   * Valores tomados literal de los mismos :root de abajo, sin inventar nada
+   * nuevo — puramente aditivo, 2026-09-20.
+   */
+  --color-card: hsl(0 0% 8%);
+  --color-card-foreground: hsl(0 0% 95%);
+  --color-secondary: hsl(240 10% 10%);
+  --color-secondary-foreground: hsl(0 0% 90%);
+  --color-muted: hsl(240 6% 10%);
+  --color-muted-foreground: hsl(240 5% 50%);
+  --color-accent: hsl(240 10% 12%);
+  --color-accent-foreground: hsl(0 0% 95%);
+  --color-destructive: hsl(0 84% 60%);
+  --color-destructive-foreground: hsl(0 0% 100%);
+  --color-border: hsl(240 6% 14%);
+  --color-input: hsl(240 6% 14%);
+  --color-ring: hsl(355 78% 56%);
 }
 
 @layer base {
@@ -87,6 +111,44 @@ button, [role="button"], a { cursor: pointer; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground)); }
+
+/*
+ * Brandbook oficial Nebu Studio (2026-09-20) para las "superficies de marca"
+ * de Wyrd Forge: los 4 modales administrativos (New Project, Settings,
+ * Share, confirmación de migración) y el dashboard. El área de TRABAJO
+ * (Command Palette: Chat/Visual/Código/Navegar) se queda oscura a propósito
+ * — es el lienzo donde se programa, no una superficie de marca — por eso NO
+ * tiene esta clase.
+ *
+ * Sobrescribe el namespace --color-* (el que Tailwind v4 lee para fabricar
+ * bg-card/border-border/bg-muted/etc., ver @theme arriba) SÓLO dentro de
+ * .nebu-modal y sus descendientes — regla sin @layer, a propósito, para que
+ * gane sobre @layer theme (mismo truco que select/scrollbar de arriba).
+ *
+ * Proporción del brandbook: 60% crema/blanco (background/card), 30%
+ * negro/carbón (texto, sólo como color, no como fondo dominante aquí), 10%
+ * rojo (--color-primary, único acento). --color-destructive NO se toca a
+ * propósito: es la alarma de "esto borra datos para siempre" en la
+ * confirmación de migración destructiva, y usar el mismo rojo para eso y
+ * para un botón normal le quitaría la señal de peligro.
+ */
+.nebu-modal {
+  --color-background: #F5F0EB;         /* crema */
+  --color-card: #FFFFFF;               /* blanco */
+  --color-card-foreground: #0D0D0D;    /* negro profundo */
+  --color-foreground: #0D0D0D;
+  --color-muted: #F5F0EB;              /* crema */
+  --color-muted-foreground: #5C5C5C;   /* gris intermedio: el brandbook no da un tono de texto secundario, derivado para mantener contraste AA sobre blanco/crema */
+  --color-secondary: #E8E8E8;          /* gris claro */
+  --color-secondary-foreground: #0D0D0D;
+  --color-accent: #E8E8E8;             /* gris claro (hover) */
+  --color-accent-foreground: #0D0D0D;
+  --color-border: #E8E8E8;             /* gris claro: "líneas y divisores" */
+  --color-input: #E8E8E8;
+  --color-primary: #D62828;            /* rojo primario oficial */
+  --color-primary-foreground: #FFFFFF;
+  --color-ring: #D62828;
+}
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }

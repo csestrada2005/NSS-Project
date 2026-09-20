@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { motion } from 'framer-motion';
 import { X, Lock, Github, Rocket, Database, Globe, Mail, BarChart3 } from 'lucide-react';
+import { modalBackdropMotion, modalPanelMotion } from '@/components/ui/modalMotion';
 import { DeployManager } from '../deploy/DeployManager';
 import { gitHubService } from '../../services/GitHubService';
 import type { FileSystemTree } from '@webcontainer/api';
@@ -84,7 +86,7 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
   const TAB_BUTTON = (id: MainTab, label: string, Icon: React.ComponentType<any>) => (
     <button
       onClick={() => setActiveTab(id)}
-      className={`px-3 py-2 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 ${activeTab === id ? 'bg-gray-800 text-white border-b-2 border-primary' : 'text-gray-400 hover:text-white hover:bg-gray-800/50'}`}
+      className={`px-3 py-2 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 ${activeTab === id ? 'bg-accent text-foreground border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'}`}
     >
       <Icon size={15} />
       {label}
@@ -92,17 +94,23 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-gray-900 border border-gray-800 rounded-xl shadow-2xl w-full max-w-4xl p-6 flex flex-col max-h-[90vh]">
+    <motion.div
+      {...modalBackdropMotion}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+    >
+      <motion.div
+        {...modalPanelMotion}
+        className="nebu-modal bg-card border border-border rounded-xl shadow-2xl w-full max-w-4xl p-6 flex flex-col max-h-[90vh]"
+      >
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-white">Settings</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+          <h2 className="text-xl font-bold text-foreground">Settings</h2>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
             <X size={20} />
           </button>
         </div>
 
         {/* Main tabs */}
-        <div className="flex gap-1 mb-6 border-b border-gray-800 pb-1 overflow-x-auto">
+        <div className="flex gap-1 mb-6 border-b border-border pb-1 overflow-x-auto">
           {TAB_BUTTON('secrets', 'Secrets', Lock)}
           {TAB_BUTTON('github', 'GitHub', Github)}
           {TAB_BUTTON('deploy', 'Deploy', Rocket)}
@@ -121,38 +129,38 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
           {/* GitHub tab */}
           {activeTab === 'github' && (
             <div className="space-y-6">
-              <div className="bg-gray-950/50 rounded-lg p-4 border border-gray-800">
-                <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
-                  <Github className="text-white" size={20} />
+              <div className="bg-background/50 rounded-lg p-4 border border-border">
+                <h3 className="text-lg font-semibold text-foreground mb-2 flex items-center gap-2">
+                  <Github className="text-foreground" size={20} />
                   Push to GitHub
                 </h3>
-                <p className="text-sm text-gray-400 mb-4">
+                <p className="text-sm text-muted-foreground mb-4">
                   Commit and push your changes directly to a GitHub repository.
                   Requires <code>GITHUB_TOKEN</code> in secrets.
                 </p>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Repository (username/repo)</label>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">Repository (username/repo)</label>
                     <input type="text" placeholder="e.g. jules/my-app" value={repoName} onChange={(e) => setRepoName(e.target.value)}
-                      className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none" />
+                      className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none" />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Branch</label>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">Branch</label>
                     <input type="text" placeholder="main" value={branch} onChange={(e) => setBranch(e.target.value)}
-                      className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none" />
+                      className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none" />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Commit Message</label>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">Commit Message</label>
                     <input type="text" value={commitMessage} onChange={(e) => setCommitMessage(e.target.value)}
-                      className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none" />
+                      className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none" />
                   </div>
                   <button onClick={handleGitHubPush} disabled={isPushing || !repoName || !branch}
-                    className="w-full py-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 border border-gray-700">
+                    className="w-full py-2 bg-secondary hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed text-foreground rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 border border-border">
                     {isPushing ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" /> : <Github size={16} />}
                     {isPushing ? 'Pushing...' : 'Push Changes'}
                   </button>
                   {pushStatus && (
-                    <div className={`p-3 rounded border text-sm ${pushStatus.success ? 'bg-green-900/20 border-green-800 text-green-400' : 'bg-red-900/20 border-red-800 text-red-400'}`}>
+                    <div className={`p-3 rounded border text-sm ${pushStatus.success ? 'bg-green-100 border-green-300 text-green-800' : 'bg-red-100 border-red-300 text-red-800'}`}>
                       {pushStatus.message}
                     </div>
                   )}
@@ -181,19 +189,19 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
             <div className="space-y-6">
               <div className="flex items-center gap-3 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <label className="text-xs text-zinc-500">From</label>
+                  <label className="text-xs text-muted-foreground">From</label>
                   <input type="date" value={dateRange.start} onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                    className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200 focus:outline-none" />
+                    className="bg-muted border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none" />
                 </div>
                 <div className="flex items-center gap-2">
-                  <label className="text-xs text-zinc-500">To</label>
+                  <label className="text-xs text-muted-foreground">To</label>
                   <input type="date" value={dateRange.end} onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                    className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200 focus:outline-none" />
+                    className="bg-muted border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none" />
                 </div>
                 <div className="flex gap-1">
                   {[7, 30, 90].map(d => (
                     <button key={d} onClick={() => setQuickRange(d)}
-                      className="px-2 py-1 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 rounded transition-colors">
+                      className="px-2 py-1 text-xs bg-muted hover:bg-accent border border-border text-muted-foreground rounded transition-colors">
                       {d}D
                     </button>
                   ))}
@@ -202,11 +210,11 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
               <TrafficCharts projectId={projectId} dateRange={dateRange} />
               <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                 <div className="lg:col-span-3">
-                  <h3 className="text-sm font-medium text-zinc-300 mb-3">Performance Audit</h3>
+                  <h3 className="text-sm font-medium text-muted-foreground mb-3">Performance Audit</h3>
                   <LighthousePanel projectId={projectId} />
                 </div>
                 <div className="lg:col-span-2">
-                  <h3 className="text-sm font-medium text-zinc-300 mb-3">Top Pages & Speed</h3>
+                  <h3 className="text-sm font-medium text-muted-foreground mb-3">Top Pages & Speed</h3>
                   <TopPagesTable projectId={projectId} dateRange={dateRange} />
                 </div>
               </div>
@@ -217,12 +225,12 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
           {activeTab === 'database' && (
             <div>
               {/* Sub-tab bar */}
-              <div className="flex gap-1 border-b border-zinc-700 mb-4 overflow-x-auto pb-px">
+              <div className="flex gap-1 border-b border-border mb-4 overflow-x-auto pb-px">
                 {DB_SUB_TABS.map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => setDbSubTab(tab.id)}
-                    className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${dbSubTab === tab.id ? 'border-primary text-white' : 'border-transparent text-zinc-400 hover:text-zinc-200'}`}
+                    className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${dbSubTab === tab.id ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
                   >
                     {tab.label}
                   </button>
@@ -243,12 +251,12 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
           )}
         </div>
 
-        <div className="flex justify-end gap-3 pt-4 border-t border-gray-800 mt-4">
-          <button onClick={onClose} className="px-4 py-2 text-gray-400 hover:text-white text-sm font-medium transition-colors">
+        <div className="flex justify-end gap-3 pt-4 border-t border-border mt-4">
+          <button onClick={onClose} className="px-4 py-2 text-muted-foreground hover:text-foreground text-sm font-medium transition-colors">
             Close
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
