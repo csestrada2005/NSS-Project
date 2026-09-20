@@ -1,6 +1,7 @@
 import * as esbuild from 'esbuild';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 import * as babelParser from '@babel/parser';
 import _traverse from '@babel/traverse';
 
@@ -374,22 +375,31 @@ function virtualFilesPlugin(files, oidMap) {
   };
 }
 
+// Resuelve una ruta relativa a este archivo a una ruta de filesystem nativa,
+// portable entre Windows y Linux. `new URL(rel, import.meta.url).pathname` NO
+// sirve en Windows: da "/C:/Users/..." (con la barra inicial antes de la letra
+// de unidad), y ese string pasado directo a fs/path hace que Windows le
+// anteponga la unidad actual otra vez → "C:\C:\Users\...\" (ENOENT). En Linux
+// nunca se manifestaba porque no hay letras de unidad. fileURLToPath es la
+// conversión correcta en ambos sistemas.
+const localModule = (relPath) => fileURLToPath(new URL(relPath, import.meta.url));
+
 // Alias map de esbuild: redirige los bare imports a las builds locales (preview)
 // para garantizar una sola instancia de React/router en todo el bundle.
 const ALIAS = {
-  'react': new URL('../node_modules/react-preview/cjs/react.development.js', import.meta.url).pathname,
-  'react-dom': new URL('../node_modules/react-dom-preview/cjs/react-dom.development.js', import.meta.url).pathname,
-  'react-dom/client': new URL('../node_modules/react-dom-preview/cjs/react-dom.development.js', import.meta.url).pathname,
-  'react/jsx-runtime': new URL('../node_modules/react-preview/cjs/react-jsx-runtime.development.js', import.meta.url).pathname,
-  'scheduler': new URL('../node_modules/react-dom-preview/node_modules/scheduler/cjs/scheduler.development.js', import.meta.url).pathname,
-  'react-router-dom-preview': new URL('../node_modules/react-router-dom-preview/dist/react-router-dom.development.js', import.meta.url).pathname,
-  'react-router': new URL('../node_modules/react-router-dom-preview/node_modules/react-router/dist/react-router.development.js', import.meta.url).pathname,
-  '@remix-run/router': new URL('../node_modules/@remix-run/router/dist/router.cjs.js', import.meta.url).pathname,
+  'react': localModule('../node_modules/react-preview/cjs/react.development.js'),
+  'react-dom': localModule('../node_modules/react-dom-preview/cjs/react-dom.development.js'),
+  'react-dom/client': localModule('../node_modules/react-dom-preview/cjs/react-dom.development.js'),
+  'react/jsx-runtime': localModule('../node_modules/react-preview/cjs/react-jsx-runtime.development.js'),
+  'scheduler': localModule('../node_modules/react-dom-preview/node_modules/scheduler/cjs/scheduler.development.js'),
+  'react-router-dom-preview': localModule('../node_modules/react-router-dom-preview/dist/react-router-dom.development.js'),
+  'react-router': localModule('../node_modules/react-router-dom-preview/node_modules/react-router/dist/react-router.development.js'),
+  '@remix-run/router': localModule('../node_modules/@remix-run/router/dist/router.cjs.js'),
   // Builds ESM locales para los helpers de UI que el runtime context promete
   // "locally bundled". Con el entry ESM, esbuild hace tree-shaking y solo
   // empaqueta los iconos/utilidades importados; nunca usar cjs/umd aquí (metería
   // la librería entera de iconos en cada bundle del preview).
-  'lucide-react': new URL('../node_modules/lucide-react/dist/esm/lucide-react.js', import.meta.url).pathname,
+  'lucide-react': localModule('../node_modules/lucide-react/dist/esm/lucide-react.js'),
   // framer-motion vendorizado igual que lucide-react: entry ESM local para que
   // esbuild tree-shakee y no caiga al fallback CDN de esm.sh en cada compilación.
   // Su barrel ESM reexporta desde ./components/**, ./render/** (archivos internos
@@ -397,11 +407,11 @@ const ALIAS = {
   // 'motion-dom'/'motion-utils' (su cierre de runtime), que también se aliasean a
   // sus entries ESM para que todo el paquete se resuelva localmente. 'react' y
   // 'react/jsx-runtime' que importa internamente ya los cubre el alias local.
-  'framer-motion': new URL('../node_modules/framer-motion/dist/es/index.mjs', import.meta.url).pathname,
-  'motion-dom': new URL('../node_modules/motion-dom/dist/es/index.mjs', import.meta.url).pathname,
-  'motion-utils': new URL('../node_modules/motion-utils/dist/es/index.mjs', import.meta.url).pathname,
-  'clsx': new URL('../node_modules/clsx/dist/clsx.mjs', import.meta.url).pathname,
-  'tailwind-merge': new URL('../node_modules/tailwind-merge/dist/bundle-mjs.mjs', import.meta.url).pathname,
+  'framer-motion': localModule('../node_modules/framer-motion/dist/es/index.mjs'),
+  'motion-dom': localModule('../node_modules/motion-dom/dist/es/index.mjs'),
+  'motion-utils': localModule('../node_modules/motion-utils/dist/es/index.mjs'),
+  'clsx': localModule('../node_modules/clsx/dist/clsx.mjs'),
+  'tailwind-merge': localModule('../node_modules/tailwind-merge/dist/bundle-mjs.mjs'),
   // Cliente Supabase del preview. Su entry ESM reexporta, por bare specifier,
   // los 5 sub-paquetes de abajo — cada uno vendorizado a su propio entry ESM
   // (campo "module" de su package.json, verificado en node_modules; ninguno
@@ -411,16 +421,16 @@ const ALIAS = {
   // que citan nombres de paquete sin ser imports reales). tslib (vía auth-js
   // y functions-js) e iceberg-js (vía storage-js) también están vendorizados
   // más abajo, a sus propios entries ESM.
-  '@supabase/supabase-js': new URL('../node_modules/@supabase/supabase-js/dist/index.mjs', import.meta.url).pathname,
-  '@supabase/auth-js': new URL('../node_modules/@supabase/auth-js/dist/module/index.js', import.meta.url).pathname,
-  '@supabase/postgrest-js': new URL('../node_modules/@supabase/postgrest-js/dist/index.mjs', import.meta.url).pathname,
-  '@supabase/realtime-js': new URL('../node_modules/@supabase/realtime-js/dist/module/index.js', import.meta.url).pathname,
-  '@supabase/storage-js': new URL('../node_modules/@supabase/storage-js/dist/index.mjs', import.meta.url).pathname,
-  '@supabase/functions-js': new URL('../node_modules/@supabase/functions-js/dist/module/index.js', import.meta.url).pathname,
+  '@supabase/supabase-js': localModule('../node_modules/@supabase/supabase-js/dist/index.mjs'),
+  '@supabase/auth-js': localModule('../node_modules/@supabase/auth-js/dist/module/index.js'),
+  '@supabase/postgrest-js': localModule('../node_modules/@supabase/postgrest-js/dist/index.mjs'),
+  '@supabase/realtime-js': localModule('../node_modules/@supabase/realtime-js/dist/module/index.js'),
+  '@supabase/storage-js': localModule('../node_modules/@supabase/storage-js/dist/index.mjs'),
+  '@supabase/functions-js': localModule('../node_modules/@supabase/functions-js/dist/module/index.js'),
   // tslib/package.json → exports['.'].module = './tslib.es6.mjs'
   // iceberg-js/package.json → exports['.'].import = './dist/index.mjs'
-  'tslib': new URL('../node_modules/tslib/tslib.es6.mjs', import.meta.url).pathname,
-  'iceberg-js': new URL('../node_modules/iceberg-js/dist/index.mjs', import.meta.url).pathname
+  'tslib': localModule('../node_modules/tslib/tslib.es6.mjs'),
+  'iceberg-js': localModule('../node_modules/iceberg-js/dist/index.mjs')
 };
 
 // Base URL del CDN, configurable vía env para tests / mirrors
@@ -563,7 +573,7 @@ function esmShResolverPlugin() {
 // ningún onResolve para 'lucide-react' y esbuild cae al ALIAS actual (barrel
 // completo), exactamente como si el plugin no estuviera.
 // ---------------------------------------------------------------------------
-const LUCIDE_ICONS_DIR = new URL('../node_modules/lucide-react/dist/esm/icons/', import.meta.url).pathname;
+const LUCIDE_ICONS_DIR = localModule('../node_modules/lucide-react/dist/esm/icons/');
 const LUCIDE_BARREL_PATH = ALIAS['lucide-react'];
 const LUCIDE_BABEL_PARSE_OPTS = { sourceType: 'module', plugins: ['jsx', 'typescript'], errorRecovery: false };
 
