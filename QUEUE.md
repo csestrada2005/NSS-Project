@@ -739,6 +739,112 @@ Mundos pre-registrados:
   `AnimatePresence`), o `MigrationApplyModal` deja aplicar sin pedir la frase de confirmación en el caso
   destructivo.
 
+**Bloque 5 (2026-09-20, mismo día) — REVERSIÓN del crema/blanco a negro, recuadros rojos, ámbar para la
+alerta destructiva, azul eliminado (G-5.3 sigue abierto, este es el bloque más reciente):**
+
+Samuel probó el Bloque 4 en caliente y reportó que el contraste entre los 4 modales/dashboard (crema/
+blanco, brandbook oficial) y el Command Palette (siempre oscuro) se sentía "muy rudo". Decisión explícita
+de Samuel: **eliminar el crema/blanco aunque esté en el brandbook oficial** — unificar toda la plataforma
+a oscuro, con el rojo como único acento de marca. Reencuadre aceptado sin objeción (el usuario final manda
+sobre el documento del brandbook).
+
+**Hecho — `src/index.css`, `.nebu-modal`:** los 4 modales administrativos + dashboard pasan de
+crema/blanco a negro profundo `#0D0D0D` / carbón `#1A1A1A`, texto gris claro `#E8E8E8`. El rojo oficial
+`#D62828` NO cambia. Verificado con build real (`npx vite build`): `F5F0EB` ya no aparece en ningún lado
+del CSS compilado; `.nebu-modal` trae los valores oscuros nuevos.
+
+**Hecho — alerta de migración destructiva (`MigrationApplyModal.tsx`), de rojo a ámbar:** como el rojo
+ahora se usa también en recuadros normales (ver abajo), se reserva ámbar para la única alerta realmente
+grave de la plataforma, para que se siga notando que es distinta. **La lógica de la frase de confirmación
+tecleada NO se tocó en absoluto** — sólo clases de color.
+
+**Hecho — recuadros a rojo con texto negro (contraste ~4.2:1, aceptable para texto grande/semibold; el
+propio Samuel pidió "letras negras" explícitamente), en los "recuadros" tipo tarjeta-resumen — NO en
+listas/tablas de datos completas (schema browser, editor SQL, lista de edge functions: pintarlas enteras
+de rojo las habría hecho ilegibles a escala; sólo se les quitó el azul si lo tenían):**
+- `SecretsPanel.tsx`: "Platform Services" y "Project secrets" (los dos que Samuel nombró explícitamente).
+- `EmailPanel.tsx`: "Sending Domain", editor de templates, "Test Send".
+- `DomainsPanel.tsx`: "Connect a custom domain" y el recuadro de instrucciones DNS manuales.
+- `LighthousePanel.tsx` (Analytics): los 2 gauges + Core Web Vitals. Nota: `scoreColor()` tenía rojo para
+  "puntaje malo" — sobre fondo rojo se volvía ilegible (rojo sobre rojo), así que "malo" pasa a negro.
+- `DatabaseOverview.tsx`: tarjeta de Conexión + las 3 tarjetas KPI (Tables/Active Users/Snapshots).
+- `UsagePanel.tsx`: las 4 tarjetas KPI (REST/Auth/Storage/Realtime Requests).
+- `DeployManager.tsx` (tab Deploy): la tarjeta "Deploy to Vercel" completa — de paso perdió el morado
+  (`purple-*`) que no es color de marca, y el gris frío (`gray-900/800`, mismo problema que el ítem
+  siguiente) que tenía sin relación con el resto de la plataforma (que usa `zinc-*`/tokens).
+
+**Hecho — azul eliminado de toda la plataforma (no sólo lo que Samuel señaló, se hizo un barrido
+completo tras encontrar la causa):**
+- `FileExplorer.tsx` (el recuadro de archivos dentro del modal de Código — esto fue lo que Samuel señaló
+  literalmente: "el fondo es azul por alguna razón"): la causa real no era ningún azul puesto a propósito
+  — es que este archivo, solo, seguía usando la paleta `gray-*` de Tailwind (que tiene un matiz frío/
+  azulado, p. ej. `gray-900` = `#111827`) en vez de `zinc-*`/tokens como el resto de la plataforma. Migrado
+  a los tokens del sistema (`bg-background`, `border-border`, `text-muted-foreground`, `bg-accent`), y el
+  ícono de carpeta de `red-400` a `text-primary` (rojo de marca). De paso, foco visible explícito en el
+  botón de "+" (antes sin `focus:outline-none` propio, quedaba a merced del foco azul por defecto del
+  navegador).
+- Todos los `focus:border-blue-500`/`focus:ring-blue-500` sueltos en los archivos de arriba (Secrets,
+  Email, Domains, Analytics, Schema, Users) → `focus:border-primary` o negro (dentro de los recuadros ya
+  rojos).
+- `SecretsPanel.tsx`: nombre de secreto guardado, de `text-blue-400` a `text-foreground`.
+- `EmailPanel.tsx`: link "New template", de `text-blue-400` a `text-primary`.
+- `DomainsPanel.tsx`: ícono y código CNAME del recuadro de instrucciones, ya cubiertos por el punto de
+  arriba (recuadro completo a rojo/negro).
+- `LogsViewer.tsx`: nivel de log "INFO" tenía `text-blue-400` (semántico: Info/Warn/Error) → `text-zinc-400`
+  (neutral; Warn sigue ámbar, Error sigue rojo).
+- `ShareProjectModal.tsx`: el rol "dev" en las insignias de colaboradores era `bg-blue-100 text-blue-700`
+  — literal, no token, pensado para el fondo claro del Bloque 4. Con el modal de vuelta a oscuro esa
+  insignia además se habría visto como un parche pastel roto, así que se recolorearon las 4 insignias de
+  rol (admin/dev/vendedor/cliente) a su equivalente translúcido de fondo oscuro y "dev" pasó de azul a
+  ámbar (los otros tres conservan su matiz: rojo/púrpura/esmeralda, no se tocaron por gusto, sólo por
+  necesidad).
+- `AIHistoryPanel.tsx`: etiqueta "new_feature" en el historial de intents era `bg-blue-900/40
+  text-blue-400` → `bg-pink-900/40 text-pink-400` (color libre en ese set de 7, no colisiona con ninguno).
+
+**Hallazgo de paso, mismo motivo que el azul (literales pensados para el fondo claro del Bloque 4, rotos
+al volver a oscuro) — corregido aunque no fue pedido explícitamente, porque de lo contrario esos 3 puntos
+se habrían visto como parches claros flotando sobre negro:**
+- `ForgeDashboard.tsx`: banner de error "Failed to load projects" (`bg-red-100 text-red-800` →
+  `bg-red-500/10 text-red-300`).
+- `SettingsModal.tsx`: resultado de push a GitHub (`bg-green-100`/`bg-red-100` → translúcidos oscuros).
+
+**NO tocado, deliberadamente (recuadros nombrados por Samuel como "etc" pero que en realidad son listas/
+herramientas de trabajo, no tarjetas-resumen — pintarlas de rojo entero las habría hecho ilegibles a
+escala; si esto no es lo que Samuel quería, decirlo y se ajusta):** `SchemaViewer.tsx` (lista de tablas,
+sólo se le quitó el azul del buscador), `SQLEditor.tsx` (editor + tabla de resultados, sin azul, sin
+tocar), `EdgeFunctionsPanel.tsx` (lista de funciones, sin azul, sin tocar), `UsersManager.tsx` (tabla de
+usuarios, sólo se le quitó el azul de un select), `LogsViewer.tsx` (lista de logs, sólo el color semántico
+de nivel). El modal de Chat (`ChatInterface.tsx`, `text-blue-400` en una línea) tampoco se tocó — Samuel lo
+señaló como el que YA estaba bien, no pidió cambiarlo.
+
+**Verificación:** `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 653/653.
+`npx vitest run` → 48/48. `npx vite build` real (no sólo tsc): confirmado en el CSS compilado que `F5F0EB`
+no aparece en ningún lado y que `.nebu-modal` trae los valores oscuros nuevos + `#D62828` intacto.
+`graphify update .` corrido. `dist/` del build de verificación borrado (no se commitea).
+
+**CHECK MANUAL — PENDIENTE.** Cómo reproducirlo (dev server local o rama desplegada):
+1. Abrir New Project, Settings, Share, History, y una migración destructiva de prueba: los 4 modales +
+   dashboard deben verse negros/carbón con acentos rojos — YA NO crema ni blanco.
+2. La alerta de "esto borra datos para siempre" debe verse en ámbar (no rojo), y debe seguir pidiendo la
+   frase de confirmación exacta antes de dejar aplicar (esto no debía cambiar).
+3. Settings → Secrets: "Platform Services" y "Project secrets" en rojo sólido con letras negras.
+4. Settings → Email, Analytics, Database (Overview/Usage), y la pestaña Deploy: sus recuadros principales
+   también en rojo/negro.
+5. Abrir el modal de Código (pestaña Code del panel inferior): el recuadro de archivos (Explorer) ya NO se
+   ve azul.
+6. El Command Palette (Chat/Visual/Código/Navegar) debe verse EXACTAMENTE igual que antes — oscuro, sin
+   cambios, no se tocó nada ahí en este bloque.
+
+Mundos pre-registrados:
+- **Esperado:** todo lo de arriba se cumple tal cual. Cero crema, cero blanco, cero azul, alerta destructiva
+  en ámbar con la frase intacta.
+- **Residuo conocido, no bug:** el contenido de SchemaViewer/SQLEditor/EdgeFunctionsPanel/UsersManager/
+  LogsViewer NO se pintó de rojo (son listas de trabajo, no tarjetas — ver arriba "NO tocado"); si Samuel
+  esperaba rojo ahí también, es un ajuste de alcance, no un bug.
+- **Falla real (si aparece, SÍ es bug):** cualquier crema/blanco/azul restante en las superficies de marca,
+  texto negro sobre fondo oscuro o viceversa en cualquier recuadro tocado, o `MigrationApplyModal` deja
+  aplicar sin pedir la frase.
+
 ### Resto del bucket (sin tocar esta sesión)
 - RAG de UI/UX: PatternRetriever da `direct: 0 | vector: 0`. Primera pregunta: ¿pasa igual en producción?
 - Catálogo de componentes, con auditoría de licencia por componente.
@@ -812,6 +918,199 @@ raíz y se borró antes de tocar el código real — no llegó a commitearse.
 — pendiente que Samuel abra el PR o pida el merge. Push inicial bloqueado por permisos (credenciales de
 git en la máquina apuntaban a otra cuenta sin acceso de escritura al repo); resuelto re-logueando
 `gh auth login` como `csestrada2005`.
+
+## 9. HECHO — infra: graphify no arrancaba en Windows nativo + hook de Caveman roto (2026-09-20)
+
+**Cirugía aparte, mismo motivo que el ítem 8** (entorno movido de Codespaces a Windows nativo, expone
+supuestos que sólo valían en Linux). Encontrado de paso, a pedido de Samuel ("veo que graphify falla,
+por qué?"), mientras se preparaba la sesión de colores (ítem 5.3 Bloque 5, ver abajo).
+
+**Causa 1 — graphify nunca quedó instalado:** `scripts/setup-agent-tools.sh` lo instala con
+`pip install graphifyy --break-system-packages --quiet`, pero en este Windows `pip` a secas no está en el
+PATH (sólo `python3 -m pip` lo es) — el `command -v graphify` de guarda nunca se cumplía y el paso se
+saltaba en falso. Aparte, incluso corriendo el install bien (`python3 -m pip install ...`, sí funciona),
+pip deja `graphify.exe` en la carpeta Scripts de Python, que tampoco está en el PATH que ven Git Bash ni
+PowerShell — a diferencia de Codespaces/Linux, donde sí quedaba usable solo. `graphify-out/` tenía datos
+viejos de cuando corría en Codespaces; el comando llevaba tiempo ausente sin que nadie lo notara hasta
+ahora.
+
+**Causa 2 (hallazgo colateral, no pedido, encontrado investigando la 1):** el hook de Caveman
+(`~/.claude/settings.json`, PreToolUse sobre la tool "Bash") tenía
+`& 'C:/.../caveman.CMD' shrink-hook` — sintaxis de operador de PowerShell — pero esa tool ejecuta sus
+hooks vía Git Bash, que revienta con "syntax error near unexpected token `&'" en cada comando Bash. Esto
+bloqueaba el tool Bash por completo (no sólo caveman), incluidos los primeros intentos de diagnosticar la
+Causa 1.
+
+**Hecho:**
+- `~/.claude/settings.json` (fuera del repo, config de usuario): comando del hook corregido a
+  `caveman shrink-hook` (sin el operador `&`, portable). Verificado que es durable: se volvió a correr
+  `caveman hooks install claude` (el mismo paso que ya corre en cada sesión, línea 14 del script) y NO
+  reescribió el hook — lo detectó ya instalado y lo dejó intacto.
+- `scripts/setup-agent-tools.sh`: el paso de graphify ahora instala con `python3 -m pip` (no `pip` a
+  secas) y, si el comando `graphify` sigue sin aparecer después (caso Windows), crea dos shims en la
+  carpeta global de npm (`npm prefix -g` — la misma carpeta donde ya viven caveman/codegraph, siempre en
+  PATH): `graphify.cmd` (`python -m graphify %*`, lo resuelve PowerShell/cmd.exe) y `graphify` sin
+  extensión (`exec python -m graphify "$@"`, lo resuelve Git Bash — mismo patrón de shim que npm ya deja
+  junto a caveman/codegraph). En Codespaces/Linux, donde el pip install ya deja `graphify` usable solo,
+  este bloque no se activa (la guarda `command -v graphify` ya se cumple antes de llegar ahí).
+- Aplicado también a esta sesión en caliente (no sólo al script, para no esperar al próximo arranque):
+  shims creados, `graphify --version` y `graphify update .` verificados en Bash y PowerShell. Grafo
+  reconstruido (4405 nodos, 10624 edges, 282 comunidades).
+
+**Higiene:** un backup temporal de `~/.claude/settings.json` (`.bak-check`, para probar si
+`caveman hooks install claude` iba a romper el fix) se creó y se borró en la misma sesión — no llegó a
+quedar rastro.
+
+**Sin verificar (queda para quien lo note primero):** si `tree_sitter_sql` no está instalado, graphify
+avisa que los `.sql` no aportan nada al grafo (`pip install "graphifyy[sql]"` lo arregla) — no se instaló
+hoy, fuera de alcance de esta cirugía, sólo anotado.
+
+## 10. HECHO (pendiente CHECK MANUAL) — Rediseño completo del modal de chat (2026-09-20)
+
+**Alcance confirmado con Samuel: sólo UI del modal de chat** — no se tocó ningún productor de datos
+(`ddlProposedMark`, `rlsPolicyGuard`/`clientCodeGuard`, el gate de plan `shouldGatePlan`/`requestPlanDecision`,
+el orquestador). Especificación completa + mockup navegable
+(https://claude.ai/artifact/HYr28WtZvQhstgWGEwMwWX, leído con el tool de Artifact — es la fuente de verdad de
+layout/animación/copy) dados por Samuel en un solo mensaje. Máquina de estados declarada:
+`type ForgeChatState = 'reposo' | 'pensando' | 'listo'`.
+
+**Investigación previa (antes de tocar código), por instrucción explícita de "PARA y repórtalo" si el modo
+plan se decidía server-side:** confirmado que NO es así — `planModeEnabled` es un booleano 100% cliente
+(`src/pages/StudioEngine.tsx`, `useState` + `sessionStorage['forge_plan_mode']`), y `src/utils/planGate.js`
+(`shouldGatePlan`) es una función pura que recibe ese booleano como parámetro. El checkbox viejo en
+`ChatInterface.tsx` (CIRUGÍA B3) fue SUSTITUIDO por el dropdown nuevo, mismo par valor/setter — no hay
+segundo camino hacia el pipeline. No hubo que parar.
+
+**Tres decisiones confirmadas con Samuel antes de escribir código** (el mockup no las cubre exactamente):
+1. El modal de Chat (y sólo Chat — Visual/Código/Navegar se quedan sólidos como estaban) flota translúcido
+   con blur sobre el preview en vivo, como en el mockup. Esto tocó `CommandModal.tsx` (compartido por las 4
+   pestañas): fondo/borde/backdrop condicionales a `activeTab==='chat'`.
+2. El chip de modo ("automático"/"plan") en cada turno del historial va escondido en el contenido
+   persistido (`[MODE:auto|plan]`, mismo truco que `[DDL_PROPOSED:...]`) — `forge_chat_messages` no tiene
+   columna de modo y esta sesión no toca schema. Turnos de antes de hoy no traen chip.
+3. La tarjeta de Plan SÍ lleva un botón "Rechazar" explícito (el mockup no lo tenía — Samuel lo pidió),
+   además de Construir/Editar el plan (disabled, "Próximamente")/Ver historial completo.
+
+**Hecho — archivos nuevos:**
+- `src/utils/chatModeMark.js` + `.d.ts` — `appendModeMark`/`parseModeMark`, puro, con
+  `server/chatModeMark.test.js` (6 tests). La marca se añade SÓLO al eco local/persistido del mensaje del
+  usuario — `onSendMessage` (lo que de verdad llega al pipeline/modelo) sigue recibiendo el texto pelado.
+- `src/components/chat/` (nuevo, 12 archivos): `types.ts` (tipos compartidos `ChatPlanStep`/`Message`,
+  separados de ChatInterface.tsx para evitar un ciclo de módulos con las tarjetas), `forgeChat.css` (port
+  casi literal del CSS del mockup, escopado bajo `.forge-chat` en vez de `body[data-estado]`; SIN el
+  navegador falso ni el panel de control del propio mockup, que eran andamiaje de demo — SIN media queries
+  de breakpoint, CON `prefers-reduced-motion`), `LiveNode.tsx` (Bloque 1.2, el nodo vivo — sin props de
+  estado, todo vía CSS contra `data-estado` del wrapper), `ModeSelector.tsx` (1.3, sustituye el checkbox
+  viejo), `CreditsHint.tsx` (1.4, mismo `CreditService.getBalance` + evento `forge:credits-updated` que ya
+  usaba `CreditBalance.tsx` — SIN endpoint nuevo, sólo otro render del mismo dato), `Typebar.tsx` (compone
+  1.1-1.5; adjuntar/dictar pintados inertes con tooltip "Próximamente" — no existe esa capacidad hoy),
+  `ProcessCard.tsx` (Bloque 2, reusa el `ProgressLine[]` que ya mantenía `sendMessage`, sin modelo nuevo),
+  `StepsCollapse.tsx` (el colapsable compartido de las 5 tarjetas de resultado), `useSqlPreview.ts` (el "Ver
+  el SQL" del DDL, nuevo — de sólo lectura, reusa `MigrationRunner.readMigrationSql`, el mismo método que ya
+  usaba `DDLApprovalButton`), `ResultCards.tsx` (las 5 variantes 3.1-3.5 + una sexta, `ErrorCard`, que el
+  mockup no cubre pero que ya existía en el chat viejo — saldo insuficiente / no se pudo arreglar el error de
+  compilar tras 3 intentos — quitarla habría sido una regresión real, no una limpieza), `HistoryOverlay.tsx`
+  (Bloque 4 — lee el `messages` que ChatInterface YA tiene en memoria, no repite la consulta a
+  `forge_chat_messages`).
+- `src/components/ChatInterface.tsx` — reescrito. Conserva TODA la lógica vieja sin tocar (rehidratación de
+  `chatHistory`, `sendMessage`, `buildAssistantMessage`, el gate de plan, la re-verificación de
+  `DDLApprovalButton`, la persistencia): sólo cambió qué renderiza y qué campos nuevos añade al `Message` de
+  sesión (`filesModifiedCount`, `durationSeconds`, `cancelled`, `stepsSnapshot`, `stepsCompletedSnapshot` —
+  ninguno se persiste, mismo trato que `planSteps`/`suggestedAction` de siempre). Regla dura verificada por
+  construcción: el render de la tarjeta de 'listo' es un único `? :` en cascada, nunca dos JSX a la vez.
+
+**Decisión de diseño no trivial — la propuesta DDL ejecutable se busca en TODO el historial, no sólo en el
+último turno** (`findExecutableProposal(messages)`, ya existía en `ddlProposalState.js`): como sólo puede
+haber UNA propuesta ejecutable a la vez y sigue viva hasta resolverse, una migración pendiente no debe
+"perderse de vista" sólo porque el usuario pidió otra cosa mientras tanto — sigue apareciendo como tarjeta
+DDL aunque hayan pasado turnos, usando las estadísticas (archivos/segundos/pasos) del turno que la propuso,
+no del último.
+
+**Decisión de diseño — el gate de plan (`pendingPlanSteps` no nulo) se trata como parte de 'pensando', no de
+'listo'**, aunque la tarjeta de Plan se vea como una tarjeta de resultado: verificado en
+`requestPlanDecision`/`handleSendMessage` que `isGenerating` sigue en `true` durante TODA la pausa de
+aprobación (la Promise del gate vive dentro del mismo `await` del pipeline) — mostrar el botón de enviar
+(en vez de cancelar) durante esa pausa habría permitido mandar un segundo turno mientras el primero sigue
+colgado. Cancelar (Esc o el botón de la barra) sigue funcionando igual que antes durante la pausa
+(aborta → `onAbort` dentro de `requestPlanDecision` resuelve 'rejected' → el orquestador lo trata como
+cancelación, no como rechazo — mecanismo ya existente, sin tocar).
+
+**Límite aceptado, documentado, no resuelto hoy — campos "ricos" del `Message` son sólo de sesión**:
+`appendMessage` sólo persiste `content` en `forge_chat_messages` (ya era así antes de hoy, mismo trato que
+`planSteps`/`suggestedAction`). Tras un refresh de página, el último turno rehidratado no trae
+`filesModifiedCount`/`warning`/`cancelled`/etc., y por diseño eso cae a `'reposo'` (typebar sola, sin
+tarjeta) en vez de inventar una tarjeta con datos que no están. La propuesta DDL SÍ sobrevive a un refresh
+(vive en el contenido, vía `[DDL_PROPOSED:...]`).
+
+**Límite aceptado — tras aplicar una migración desde `DDLApprovalButton`, la tarjeta siguiente puede quedar
+en blanco.** `onOutcome` anexa un mensaje nuevo con el veredicto (p.ej. "Migración aplicada correctamente")
+que no trae `filesModifiedCount` (aplicar una migración no modifica archivos del proyecto, modifica la base)
+— ese mensaje no cae en ninguna de las 5 tarjetas y el modal vuelve a `'reposo'`. El veredicto SÍ queda en
+"Ver historial completo". No es un olvido: es la esquina que quedó sin resolver por el alcance de hoy —
+antes de este rediseño, ese mismo veredicto se pintaba inline como burbuja de chat (ya no hay burbujas).
+
+**"Ver qué cambió" (SEGURIDAD, 3.3) no es un visor de diff dedicado** — no existía ninguno antes de hoy;
+expande el mismo colapsable de pasos ("N pasos completados"), que es lo más cercano a "qué se tocó" sin
+inventar una vista nueva fuera de alcance.
+
+**Restyle sin tocar lógica — `src/components/forge/DDLApprovalButton.tsx`:** el wrapper pasó a
+`display:contents` para que el botón viva como un ítem más de la fila de acciones de la tarjeta DDL (junto a
+"Ver el SQL"/"Ver historial completo"), con el texto de ayuda/aviso pidiendo su propia línea vía
+`flexBasis:'100%'` en vez de un contenedor en bloque que rompería la fila. Cero cambios en `handleClick`,
+`handleConfirm`, las re-verificaciones o `MigrationApplyModal`.
+
+**Wiring adicional en `src/pages/StudioEngine.tsx` (plomería, no pipeline):**
+- `handleSendMessage` ya calculaba `cancelled` localmente y lo descartaba antes de devolver el resultado al
+  chat — ahora viaja en el objeto de retorno (los dos `return`, el normal y el de la red de seguridad del
+  `catch`). Sin esto, CANCELADO (3.5) no tenía forma de saberse cancelado.
+- `persistChatMessage('user', ...)` ahora envuelve el mensaje con `appendModeMark` antes de guardarlo —
+  mismo valor de modo que el eco local en `ChatInterface.tsx` (ambos lo calculan independientemente a partir
+  del mismo estado, no se pasan el string ya marcado entre sí), así que el historial rehidratado desde la
+  DB y la sesión en vivo muestran el mismo chip.
+- Prop nueva `projectName` a `<ChatInterface>` (ya existía `currentProjectName` en el propio componente) —
+  sólo para el subtítulo del historial.
+
+**Verificación:** `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 659/659 (653 previos
++ 6 de `chatModeMark.test.js`). `npx vitest run` → 48/48. `npx vite build` real: confirmado que
+`forgeChat.css` compiló al bundle (`.forge-chat[data-estado=...]` presente en el CSS final). `dist/` de
+verificación borrado (no se commitea).
+
+**CHECK MANUAL — PENDIENTE.** Cómo reproducirlo (dev server local o rama desplegada), contra un proyecto
+con chat funcional:
+1. Abrir el Command Palette en la pestaña Chat: debe verse el preview en vivo DETRÁS, borroso, con sólo la
+   typebar flotando abajo (reposo — nada más en pantalla). Visual/Código/Navegar deben verse EXACTAMENTE
+   igual que antes (sólidos, sin cambios).
+2. Escribir un prompt normal y mandarlo: la typebar cambia a modo cancelar (■, borde rojo), el nodo late,
+   sube la tarjeta de proceso con los pasos en vivo y la barra de progreso. Al terminar: tarjeta de resumen
+   ("N archivos modificados · compiló sin errores · Ns"), colapsable de pasos, "Ver historial completo".
+3. Probar el selector de modo (dropdown que abre hacia arriba): cambiar a "Plan", mandar un prompt que
+   dispare el gate — debe aparecer la tarjeta Plan (Construir/Editar el plan deshabilitado/Ver historial/
+   Rechazar), la typebar sigue en modo cancelar durante la espera. "Construir" retoma la ejecución; "Rechazar"
+   o cancelar (Esc/■) cierra el turno sin aplicar nada.
+4. Mandar un prompt que dispare una migración: tarjeta DDL con borde rojo, "Aplicar cambio" (el botón real
+   de `DDLApprovalButton`, con su modal de confirmación si es destructivo), "Ver el SQL" (nuevo, de sólo
+   lectura), "Ver historial completo". Nunca debe decir "DDL"/"migración"/"RLS" en el texto visible.
+5. Cancelar una corrida a mitad de camino (Esc o el botón ■): tarjeta gris neutra "Detenido por ti", "X de N
+   pasos completados" con los no ejecutados en gris apagado, botón único "Retomar desde aquí".
+6. Abrir el historial (desde cualquier "Ver historial completo"): overlay a pantalla completa con blur sobre
+   el preview, cada turno de usuario con su chip de modo, cierra con ✕/clic en el fondo/Esc, el foco vuelve
+   al input al cerrar.
+7. Ctrl+Espacio: la typebar y las tarjetas se desvanecen (0.75s) revelando el preview completo; Ctrl+Espacio
+   de nuevo las regresa.
+8. Con `prefers-reduced-motion` activado en el SO: todas las animaciones deben colapsar a casi-instantáneas.
+
+Mundos pre-registrados:
+- **Esperado:** todo lo de arriba se cumple tal cual. En cualquier momento, EXACTAMENTE una tarjeta en
+  pantalla (nunca dos apiladas), o ninguna en reposo.
+- **Residuo conocido, no bug:** tras un refresh de página, el último turno puede aparecer sin tarjeta
+  (reposo) aunque haya sido una corrida normal — los campos ricos no sobreviven al refresh (ver arriba). Tras
+  aplicar una migración con éxito, el modal puede quedar en reposo en vez de mostrar una confirmación (ver
+  arriba, "límite aceptado"). El historial de antes de hoy no trae chip de modo.
+- **Falla real (si aparece, SÍ es bug):** dos tarjetas visibles a la vez, la frase de confirmación de
+  `MigrationApplyModal` saltada, el pipeline recibiendo literalmente el texto `[MODE:...]` en el prompt (se
+  vería en la respuesta del modelo o en los logs del servidor), Visual/Código/Navegar con su chrome
+  visualmente afectado por este cambio, o `git blame` mostrando que se tocó `ddlProposedMark`/
+  `rlsPolicyGuard`/`clientCodeGuard`/`shouldGatePlan`/`requestPlanDecision`.
 
 ## APARCADO hasta después de lanzar
 - **A+**: quitar el botón de aprobación cuando el guard no pudo inspeccionar. Aparcado: `unparseable` no tiene causa conocida tras G-3; sólo verificable con SQL fabricado a mano (choca con medir por comportamiento).
