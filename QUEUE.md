@@ -1198,6 +1198,64 @@ Mundos pre-registrados:
   Settings dejan el preview visible detrás (deberían reemplazarlo), o el modo Visual dejó de poder
   seleccionar elementos en el preview.
 
+## 12. HECHO (pendiente CHECK MANUAL) — Limpieza de "modos": Terminal fuera, tipos consolidados, una sola fuente de verdad (2026-09-21)
+
+Samuel pidió un inventario completo de los "modos" del sistema (ítem 10+11 dejaron seis: `ChatSendMode`,
+el estado del chat reposo/pensando/listo, `editMode`, `ViewportMode`, `PanelMode`, `TabType`). Del
+inventario salieron 4 puntos; los primeros 3 se hicieron hoy, el 4° (rediseño visual del navbar, demo con
+decisiones ya tomadas) se deja para después de que éstos se verifiquen manualmente — explícito, no se tocó
+nada del navbar hoy más allá de qué tipos importa.
+
+**1. Terminal eliminado por completo.** No era sólo una pestaña muerta: `terminalRef` alimentaba una
+consola con logs de compilación en color ANSI (`\x1b[33m⚡ Starting build...`, etc.) en 13 sitios de
+`StudioEngine.tsx`. Los 13 se borraron (no se dejaron como no-ops silenciosos), junto con `terminalRef`,
+el import de `Terminal`/`TerminalRef`, `TabType`, `activeBottomTab` y el archivo `src/components/
+Terminal.tsx` en sí (sin otro caller, confirmado antes de borrar). `CommandModal.tsx` perdió toda su
+maquinaria de pestañas — ya sólo es el chat, así que el fondo translúcido+blur (antes condicional a
+`activeTab==='chat'`) ahora es incondicional. **Costo real, dicho explícito:** esos logs de build/cancelación
+no se ven en NINGÚN lado de la UI ahora — antes vivían sólo en esa consola. Si hacía falta para debug,
+es una pérdida real, no cosmética.
+
+**2. `ViewportMode`/`PanelMode` consolidados.** Antes: `ViewportMode` declarado 3 veces
+(`StudioEngine.tsx`, `PreviewNavbar.tsx`, `ViewportToggle.tsx`), `PanelMode` 2 veces (`StudioEngine.tsx`,
+`PreviewNavbar.tsx`) — mismas tres/dos definiciones, sin importarse entre sí. Ahora viven una sola vez en
+`src/components/studio/types.ts`, importados donde hacen falta. Cero cambios de comportamiento.
+
+**3. Una sola fuente de verdad para el modo de envío del chat.** Se explicó el trade-off a Samuel antes de
+tocar nada (dos opciones: el padre manda vs. el hijo manda) — elegida la Opción A: `StudioEngine` sigue
+siendo el único dueño de `planModeEnabled` (booleano, sessionStorage, sin cambios ahí), y `ChatInterface`
+perdió su `useState` local — `mode` ahora es una constante derivada del prop en cada render
+(`const mode = planModeEnabled ? 'plan' : 'auto'`), no una copia que se pueda desalinear. El dropdown llama
+directo a `onPlanModeChange`. El `data-modo` huérfano de `ChatInterface.tsx:456` (nunca lo leía ningún
+selector de `forgeChat.css`) se borró en el mismo movimiento.
+
+**Verificación:** `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 666/666 (sin
+cambios — esta cirugía no tocó nada con tests propios). `npx vitest run` → 48/48. `npx vite build` real:
+sin errores, y el bundle JS bajó de ~5.57MB a ~5.23MB (consistente con quitar Terminal + su dependencia de
+render de terminal). `dist/` de verificación borrado.
+
+**CHECK MANUAL — PENDIENTE.**
+1. Abrir el Command Palette: debe abrir directo al chat, sin ninguna pestaña visible arriba (ni Chat/
+   Terminal, ni Visual/Código/Navegar — todo eso ya no existe en este modal).
+2. El chat debe seguir flotando translúcido con blur sobre el preview exactamente igual que en el ítem 10
+   — nada debe verse distinto ahí.
+3. Cambiar el modo (dropdown automático/plan) varias veces seguidas, rápido: el dropdown y la pista de
+   "Modo plan..." (si sigue existiendo en pantalla en ese momento) nunca deben mostrar un modo distinto al
+   que el sistema está usando de verdad — confirma con un prompt real en modo Plan que el gate se dispare
+   cuando el dropdown dice "Plan" y NO cuando dice "Automático".
+4. Cancelar una generación en curso: debe seguir funcionando exactamente igual (el botón ■/Esc, la tarjeta
+   CANCELADO) aunque ya no haya ninguna consola visible mostrando el "Cancelando…".
+
+Mundos pre-registrados:
+- **Esperado:** todo lo de arriba se cumple tal cual. Sin pestañas en CommandModal, sin desincronización
+  visible del modo del chat, cancelación funcionando igual que siempre.
+- **Residuo conocido, no bug:** no hay ningún lugar en la UI que muestre logs de build/cancelación en vivo
+  — se quitó a propósito junto con Terminal. Si Samuel lo extraña, es una decisión de producto para abrir
+  aparte (traerlo de vuelta en otro lado), no un bug de esta cirugía.
+- **Falla real (si aparece, SÍ es bug):** cualquier pestaña visible en CommandModal, el modal de chat
+  perdiendo el efecto de blur sobre el preview, el dropdown de modo mostrando un valor que el pipeline no
+  respeta, o la cancelación dejando de funcionar.
+
 ## APARCADO hasta después de lanzar
 - **A+**: quitar el botón de aprobación cuando el guard no pudo inspeccionar. Aparcado: `unparseable` no tiene causa conocida tras G-3; sólo verificable con SQL fabricado a mano (choca con medir por comportamiento).
 - **Auditoría del pipeline de deploy** (absorbe D-5).
