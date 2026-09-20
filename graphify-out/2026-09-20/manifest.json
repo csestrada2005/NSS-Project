@@ -216,9 +216,9 @@
     "semantic_hash": ""
   },
   "src/components/ChatInterface.tsx": {
-    "mtime": 1789886469.7489429,
-    "seen": 1789905281.6759865,
-    "ast_hash": "89761024e290426897ac10a434db67d3",
+    "mtime": 1789913197.661476,
+    "seen": 1789913489.895728,
+    "ast_hash": "6f5a258c84f607d5b301d45275896ff6",
     "semantic_hash": ""
   },
   "src/components/CommandBubble.tsx": {
@@ -228,9 +228,9 @@
     "semantic_hash": ""
   },
   "src/components/CommandModal.tsx": {
-    "mtime": 1789886469.749946,
-    "seen": 1789905281.6759894,
-    "ast_hash": "c021ba3e7a631410f0c7e0dd75f9c784",
+    "mtime": 1789913259.3781984,
+    "seen": 1789913489.895871,
+    "ast_hash": "e44df909d7065d234abc2f9533a46c6d",
     "semantic_hash": ""
   },
   "src/components/ElementEditPopover.tsx": {
@@ -690,9 +690,9 @@
     "semantic_hash": ""
   },
   "src/pages/StudioEngine.tsx": {
-    "mtime": 1789886469.8069856,
-    "seen": 1789905281.6761591,
-    "ast_hash": "4061e8a5b9e4f725f669db9e43021e10",
+    "mtime": 1789913218.8999486,
+    "seen": 1789913489.9118965,
+    "ast_hash": "2e8396745edc1bd8c4b7e9d15bebbb6e",
     "semantic_hash": ""
   },
   "src/pages/contacts/ClientContactView.tsx": {
@@ -1422,9 +1422,9 @@
     "semantic_hash": ""
   },
   "src/components/forge/DDLApprovalButton.tsx": {
-    "mtime": 1789886469.7579505,
-    "seen": 1789905281.676021,
-    "ast_hash": "df7f5a728a178428d2d037d5c376feed",
+    "mtime": 1789913130.7224133,
+    "seen": 1789913489.8987067,
+    "ast_hash": "428359ce252769002fbc310128d2c2f6",
     "semantic_hash": ""
   },
   "src/components/forge/MigrationApplyModal.tsx": {
@@ -1776,9 +1776,9 @@
     "semantic_hash": ""
   },
   "QUEUE.md": {
-    "mtime": 1789905307.5950892,
-    "seen": 1789906484.8636813,
-    "ast_hash": "e314e7a4f7cd9ac3d755de6b0e029c34",
+    "mtime": 1789913467.9641821,
+    "seen": 1789913489.9378211,
+    "ast_hash": "db7c8952235cf8ef01a7ee68a745564b",
     "semantic_hash": ""
   },
   "README.md": {
@@ -1995,6 +1995,84 @@
     "mtime": 1789886469.7659533,
     "seen": 1789905281.6760526,
     "ast_hash": "990950c2239c5cc4d29c825cc384c847",
+    "semantic_hash": ""
+  },
+  "server/chatModeMark.test.js": {
+    "mtime": 1789912438.173099,
+    "seen": 1789913489.8870277,
+    "ast_hash": "29449ee4a2b1c72ffc32cd51b28e4251",
+    "semantic_hash": ""
+  },
+  "src/components/chat/CreditsHint.tsx": {
+    "mtime": 1789912765.4357464,
+    "seen": 1789913489.8978665,
+    "ast_hash": "1d830304c0e1bcbc6059fcc8ad478563",
+    "semantic_hash": ""
+  },
+  "src/components/chat/HistoryOverlay.tsx": {
+    "mtime": 1789913293.1762571,
+    "seen": 1789913489.8978693,
+    "ast_hash": "a68eb10e79a0285071e70b4889d9a4ad",
+    "semantic_hash": ""
+  },
+  "src/components/chat/LiveNode.tsx": {
+    "mtime": 1789912501.6144464,
+    "seen": 1789913489.8978724,
+    "ast_hash": "b5a926e81a037741de1bf4ec423bda3a",
+    "semantic_hash": ""
+  },
+  "src/components/chat/ModeSelector.tsx": {
+    "mtime": 1789912513.9482946,
+    "seen": 1789913489.8978748,
+    "ast_hash": "ef33ff685d97a45e3b9e5d8e5dfda978",
+    "semantic_hash": ""
+  },
+  "src/components/chat/ProcessCard.tsx": {
+    "mtime": 1789912749.069422,
+    "seen": 1789913489.8978772,
+    "ast_hash": "97c51121175d55243fdc0cd76cdc055e",
+    "semantic_hash": ""
+  },
+  "src/components/chat/ResultCards.tsx": {
+    "mtime": 1789913103.2881002,
+    "seen": 1789913489.897879,
+    "ast_hash": "12a4ec98c2c04b29768c86f95e3917de",
+    "semantic_hash": ""
+  },
+  "src/components/chat/StepsCollapse.tsx": {
+    "mtime": 1789912715.2824845,
+    "seen": 1789913489.8978813,
+    "ast_hash": "bab399946c24e773f4440faa446a01e5",
+    "semantic_hash": ""
+  },
+  "src/components/chat/Typebar.tsx": {
+    "mtime": 1789913290.5506086,
+    "seen": 1789913489.897884,
+    "ast_hash": "f5b15cbb3ed062c748d1b3004df13eb0",
+    "semantic_hash": ""
+  },
+  "src/components/chat/types.ts": {
+    "mtime": 1789912662.355441,
+    "seen": 1789913489.8982506,
+    "ast_hash": "f97481937bcd46f18f6facb6f0100fa0",
+    "semantic_hash": ""
+  },
+  "src/components/chat/useSqlPreview.ts": {
+    "mtime": 1789912553.588679,
+    "seen": 1789913489.8982522,
+    "ast_hash": "1656ba3734b945fda28cebc0bef315bd",
+    "semantic_hash": ""
+  },
+  "src/utils/chatModeMark.d.ts": {
+    "mtime": 1789912431.8082678,
+    "seen": 1789913489.9237216,
+    "ast_hash": "0ef76c4b49e20bbf20d1a20877032eeb",
+    "semantic_hash": ""
+  },
+  "src/utils/chatModeMark.js": {
+    "mtime": 1789912429.671337,
+    "seen": 1789913489.923725,
+    "ast_hash": "8134c08a4e44ddb3224883ed5bec1437",
     "semantic_hash": ""
   }
 }

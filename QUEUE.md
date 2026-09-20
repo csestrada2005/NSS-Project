@@ -1112,6 +1112,92 @@ Mundos pre-registrados:
   visualmente afectado por este cambio, o `git blame` mostrando que se tocó `ddlProposedMark`/
   `rlsPolicyGuard`/`clientCodeGuard`/`shouldGatePlan`/`requestPlanDecision`.
 
+**Nota tardía (mismo día, ítem 11 de abajo): el mundo "Visual/Código/Navegar sin cambios" de arriba quedó
+SUPERADO a propósito** — esas tres pestañas de `CommandModal` se promovieron al navbar nuevo del preview,
+ítem 11. No es una regresión de esta sección; es el bloque siguiente moviendo algo a propósito.
+
+## 11. HECHO (pendiente CHECK MANUAL) — Navbar del preview: sustituye la píldora flotante (2026-09-20)
+
+**Alcance confirmado con Samuel, mismo día que el ítem 10** — retoma el "DISEÑADO PERO NO CONSTRUIDO" del
+bucket 5 ítem 3 (más arriba en este archivo), con tres decisiones nuevas que faltaban:
+
+1. **Botón Chat: el preview sigue visible y borroso detrás** (NO desaparece, a diferencia de lo que decía
+   la nota vieja, escrita antes de que existiera el modal de chat rediseñado en el ítem 10). Código y
+   Settings SÍ hacen que el preview desaparezca (in-place).
+2. **Contenedor del preview: "chrome de navegador"**, no marco de dispositivo. Se decidió NO duplicar una
+   segunda barra de direcciones bajo el navbar — el propio dropdown de páginas ya cumple ese papel; sólo
+   tres puntos decorativos a la izquierda quedan como la referencia visual a "chrome".
+3. **El dropdown de páginas NO necesitaba parser nuevo** — Samuel señaló que `CommandModal` ya tenía una
+   pestaña "Navigate" (`NavigatePanel.tsx`) que hacía exactamente esto: deriva rutas de los nombres de
+   archivo en `src/pages/` (no parsea `<Route>` de `App.tsx`, esa convención de nombre ya es la fuente de
+   verdad real del generador). La sesión había investigado mal y estuvo a punto de reconstruir algo que ya
+   existía — corregido antes de escribir código, no después.
+
+**Hecho:**
+- `src/utils/projectRoutes.js` + `.d.ts` — `deriveProjectRoutes(files)`, la misma derivación que tenía
+  `NavigatePanel.tsx`, extraída a módulo puro para que el dropdown nuevo la reuse sin duplicar lógica.
+  `server/projectRoutes.test.js`: 7 tests.
+- `src/components/studio/PageDropdown.tsx` (nuevo) — dropdown compacto tipo barra de direcciones, mismo
+  mecanismo de navegación que `NavigatePanel` (`postMessage({type:'navigate', path})` al iframe).
+  `NavigatePanel.tsx` quedó sin ningún caller tras este cambio y se borró (no se dejó muerto en el repo).
+- `src/components/studio/ViewportToggle.tsx` (nuevo) — un solo botón que cicla
+  desktop→tablet→móvil→desktop, reemplaza los 3 botones separados que había.
+- `src/components/studio/PreviewNavbar.tsx` (nuevo) — el navbar persistente en sí (ya no
+  `absolute top-4 left-1/2 -translate-x-1/2`, ahora un `<div>` normal que empuja el contenido, arriba del
+  todo): Preview/Visual (el toggle `editMode` de siempre, renombrado "Interaction"→"Preview" para lenguaje
+  llano) + PageDropdown + ViewportToggle (sólo visible con `panelMode==='preview'`) + Código/Settings/Chat.
+- `src/pages/StudioEngine.tsx` — nuevo estado `panelMode: 'preview' | 'code' | 'settings'` (sustituye a
+  `showSettings`, que sólo abría/cerraba un modal centrado). El área del preview ahora es
+  `flex flex-col` con `PreviewNavbar` arriba y, debajo, el iframe/`CodePanel`/`SettingsModal` según
+  `panelMode` — Código y Settings reemplazan al preview por completo (in-place, "el preview desaparece y se
+  ve todo el panel"), no flotan encima como antes. `CommandModal` se abre sólo para Chat/Terminal ahora
+  (ver abajo); su prop `visualEditMode`/`onToggleVisualEdit` se quitó (el toggle vive sólo en el navbar
+  nuevo, un único camino, no dos).
+- `src/components/CommandModal.tsx` — de 4 pestañas (Chat/Visual/Código/Navegar) a 2 (Chat/Terminal).
+  "Visual" se renombró a "Terminal": lo que de verdad vivía en esa pestaña era la consola de compilación
+  (`<Terminal ref={terminalRef}/>`, logs con colores ANSI) detrás de un toggle de modo visual que ya era
+  redundante con el del navbar nuevo — se quitó el toggle, se quedó la consola, que es la parte real.
+- `src/components/settings/SettingsModal.tsx` — de modal centrado flotante
+  (`fixed inset-0 ... bg-black/50 backdrop-blur-sm`, con animación de entrada/salida) a panel in-place
+  (`w-full h-full`, sin backdrop ni animación — mismo trato instantáneo que `CodePanel`, que ya intercambiaba
+  así). Sólo se usa desde `StudioEngine.tsx`, confirmado antes de tocarlo — ningún otro caller dependía del
+  modo flotante. Contenido interno (las 7 pestañas: Secrets/GitHub/Deploy/Domains/Database/Email/Analytics)
+  sin cambios.
+
+**NO tocado, deliberadamente:** `CommandBubble.tsx` (el botón flotante arrastrable que también abre
+`CommandModal`) se queda — es redundante con el botón Chat del navbar nuevo pero es una segunda vía
+funcional que nadie pidió quitar, y quitarla no estaba en el pedido de hoy.
+
+**Verificación:** `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 666/666 (659
+previos + 7 de `projectRoutes.test.js`). `npx vitest run` → 48/48. `npx vite build` real: sin errores,
+`dist/` de verificación borrado (no se commitea).
+
+**CHECK MANUAL — PENDIENTE.** Cómo reproducirlo (dev server local o rama desplegada), contra un proyecto
+con preview funcional:
+1. El navbar debe verse arriba del preview, SIEMPRE visible (no flotando encima) — no una píldora centrada.
+2. Preview/Visual: mismo comportamiento de siempre (click para seleccionar elementos en modo Visual).
+3. El dropdown de páginas debe listar las páginas reales del proyecto (`src/pages/*.tsx`) y navegar el
+   preview al hacer click en una.
+4. El botón de viewport debe ciclar desktop→tablet→móvil→desktop con UN solo click repetido, sin 3 botones
+   separados.
+5. "Código": el preview desaparece POR COMPLETO, se ve `CodePanel` a pantalla completa in-place. Volver a
+   "Preview" debe traer de vuelta el iframe.
+6. "Settings": mismo trato — el preview desaparece, se ve Settings a pantalla completa, con sus 7 pestañas
+   intactas. "Close" (o "Preview" en el navbar) regresa al preview.
+7. "Chat": abre el modal de chat de siempre (ítem 10) — el preview debe seguir visible, borroso, detrás.
+   `CommandModal` ahora sólo tiene 2 pestañas (Chat/Terminal, ya no Visual/Código/Navegar).
+8. `CommandBubble` (el botón flotante arrastrable) debe seguir abriendo el mismo modal — no se tocó.
+
+Mundos pre-registrados:
+- **Esperado:** todo lo de arriba se cumple tal cual. El navbar nunca se superpone al contenido, Código/
+  Settings reemplazan el preview por completo, Chat lo deja visible detrás.
+- **Residuo conocido, no bug:** `CommandBubble` sigue siendo una segunda vía para abrir Chat, redundante con
+  el botón del navbar — a propósito, no se quitó.
+- **Falla real (si aparece, SÍ es bug):** el navbar flota/se superpone en vez de empujar el contenido, el
+  dropdown de páginas muestra rutas inventadas o vacías con un proyecto que sí tiene páginas, Código/
+  Settings dejan el preview visible detrás (deberían reemplazarlo), o el modo Visual dejó de poder
+  seleccionar elementos en el preview.
+
 ## APARCADO hasta después de lanzar
 - **A+**: quitar el botón de aprobación cuando el guard no pudo inspeccionar. Aparcado: `unparseable` no tiene causa conocida tras G-3; sólo verificable con SQL fabricado a mano (choca con medir por comportamiento).
 - **Auditoría del pipeline de deploy** (absorbe D-5).
