@@ -1256,6 +1256,85 @@ Mundos pre-registrados:
   perdiendo el efecto de blur sobre el preview, el dropdown de modo mostrando un valor que el pipeline no
   respeta, o la cancelación dejando de funcionar.
 
+## 13. HECHO (pendiente CHECK MANUAL) — Rediseño visual del navbar del preview (ítem 4, 2026-09-21)
+
+Samuel confirmó el check manual de los ítems 10-12 y pasó un HTML de referencia (título "Wyrd Forge —
+navbar") con las decisiones de diseño ya tomadas: chrome negro opaco (no translúcido), tres zonas
+(navegación+modo a la izquierda, página al centro, salidas+acciones a la derecha), tres niveles de color
+para todo interactivo (gris claro en reposo / blanco en hover / blanco+fondo activo — nunca rojo salvo en
+"Publicar"), selector de página con nombre legible + ruta como dato secundario, toggle Preview/Editor con
+texto siempre visible, viewport como único ícono sin texto. Resumen textual: "nuestros usuarios no son
+desarrolladores... elige obvio".
+
+**Aclarado antes de tocar código:** el HTML incluía una barra de escritura fija abajo, siempre visible —
+contradecía "el chat sigue siendo el modal flotante y eso no se toca". Confirmado con Samuel: es sólo un
+botón chico en la navbar que abre el mismo modal de siempre (ítem 10); la barra del HTML era ilustración
+del atajo Ctrl+Espacio, no algo a construir literal.
+
+**Dos correcciones deliberadas sobre el HTML, no transcripción literal (avisadas antes de implementar):**
+- `--nebu` en el HTML era `#E54D5B` — el rojo VIEJO pre-brandbook (mismo error que tenía `index.css` antes
+  del Bloque 5). Se usó el oficial `#D62828`. De paso se encontraron y borraron `--nebu-accent`/
+  `--nebu-accent-soft` en `index.css` (el resto del bloque `--nebu-*` — 7 variables más — ya estaba
+  confirmado muerto desde la sesión de colores; sin consumidor en ningún `.tsx`/`.css`, verificado antes de
+  borrar).
+- `.wf-page` (el selector de página) tenía `align-items: baseline` mezclando dos tamaños de texto y un
+  ícono SVG sin baseline propio — el texto se leía empujado hacia arriba (el bug que Samuel señaló).
+  Corregido a `center`.
+
+**Hecho:**
+- `src/utils/projectRoutes.js`: nueva función `derivePageEntries(files)` — deriva `{name, route}` en vez
+  de sólo la ruta (`deriveProjectRoutes` se conserva, construida sobre la nueva). El nombre sale del
+  archivo con espacios insertados antes de cada mayúscula ("AboutUs" → "About Us") — NO se traduce, no hay
+  forma determinista de adivinar una traducción; "/" es el único caso especial ("Inicio"), para que esa
+  ruta lea igual sin importar si el archivo se llama `Index.tsx` o `Home.tsx`. 6 tests nuevos en
+  `server/projectRoutes.test.js`.
+- `src/components/studio/previewNavbar.css` (nuevo) — port del HTML, escopado bajo `.wf-navbar`, con las
+  dos correcciones de arriba.
+- `src/components/studio/PageDropdown.tsx` — reescrito: nombre + ruta en vez de sólo ruta, dropdown
+  centrado bajo el botón (antes alineado a la izquierda).
+- `src/components/studio/PreviewNavbar.tsx` — reescrito: tres zonas de verdad (`flex:1 1 0` en los
+  extremos, `flex:0 0 auto` al centro, no un spacer suelto), el menú hamburguesa RELOCALIZADO aquí desde
+  su posición flotante vieja (`absolute top-4 left-4` en `StudioEngine.tsx`, misma funcionalidad —
+  Back to Nebu/Version History/Export/Share/Invite sin cambios), "Visual" renombrado a "Editor" en el
+  texto visible (el valor interno `editMode` sigue siendo `'visual'`, no se tocó nada del pipeline), botón
+  Chat nuevo (sustituye a `CommandBubble`), botón Publicar nuevo (rojo, único de la barra).
+- `src/components/settings/SettingsModal.tsx`: prop nueva `initialTab` (default `'secrets'`, sin cambio de
+  comportamiento existente) — Publicar la usa para abrir directo en `'deploy'`, reusando `DeployManager.tsx`
+  tal cual en vez de reimplementar el flujo de deploy inline en la navbar.
+- `src/pages/StudioEngine.tsx`: `CommandBubble` (el botón rojo flotante arrastrable) se QUITÓ — confirmado
+  con Samuel que sí se iba esta vez (a diferencia del ítem 11, donde se había dejado a propósito). El
+  archivo `CommandBubble.tsx` se borró (sin otro caller). Nuevo estado `settingsInitialTab`.
+
+**Verificación:** `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 671/671 (666
+previos + 5 de `derivePageEntries`). `npx vitest run` → 48/48.
+`npx vite build` real: confirmado en el CSS compilado que `#D62828` está y `#E54D5B` YA NO aparece en
+ningún lado (antes de borrar `--nebu-accent`/`-accent-soft` sí aparecía 2 veces, aunque sin consumidor).
+`dist/` de verificación borrado.
+
+**CHECK MANUAL — PENDIENTE.**
+1. La navbar debe verse negra opaca (no gris translúcido) — línea de corte clara contra el sitio del
+   cliente detrás.
+2. Los botones en reposo deben leerse en gris claro (nunca "apagados"/deshabilitados); al pasar el mouse,
+   blanco; el que está activo (Preview o Editor, Código o Ajustes si están abiertos), blanco con fondo —
+   NUNCA rojo, salvo el botón Publicar.
+3. El selector de página, al centro: nombre legible arriba/junto, ruta chica al lado — el texto debe verse
+   centrado verticalmente en su recuadro, ya NO empujado hacia arriba.
+4. El menú hamburguesa (esquina izquierda de la navbar) debe abrir el mismo panel deslizante de siempre
+   (Back to Nebu, Version History, Export Zip, Visual Graph, Share, Invite) — nada de eso cambió.
+5. El botón Chat (zona derecha) debe abrir el mismo modal flotante con blur del ítem 10 — no debe quedar
+   ningún botón rojo flotante arrastrable sobre el preview.
+6. El botón Publicar debe abrir Settings directo en la pestaña Deploy (no en Secrets).
+
+Mundos pre-registrados:
+- **Esperado:** todo lo de arriba se cumple tal cual. Cero rojo fuera del botón Publicar. Cero texto
+  desalineado en el selector de página.
+- **Residuo conocido, no bug:** el botón Chat no se oculta en modo lectura (`isReadOnly`) — igual que
+  Código/Ajustes ya no se ocultaban ahí tampoco; sólo `CommandBubble` (ya borrado) tenía esa guarda. No es
+  una regresión nueva, es consistente con cómo ya se comportaban los otros botones.
+- **Falla real (si aparece, SÍ es bug):** cualquier rojo fuera de "Publicar", el selector de página con
+  texto desalineado, el menú hamburguesa roto, Publicar abriendo una pestaña que no es Deploy, o cualquier
+  botón rojo flotante todavía visible sobre el preview.
+
 ## APARCADO hasta después de lanzar
 - **A+**: quitar el botón de aprobación cuando el guard no pudo inspeccionar. Aparcado: `unparseable` no tiene causa conocida tras G-3; sólo verificable con SQL fabricado a mano (choca con medir por comportamiento).
 - **Auditoría del pipeline de deploy** (absorbe D-5).
