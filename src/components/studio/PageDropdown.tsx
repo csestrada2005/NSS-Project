@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { ChevronDown } from 'lucide-react';
-import { deriveProjectRoutes } from '@/utils/projectRoutes.js';
+import { derivePageEntries } from '@/utils/projectRoutes.js';
 
 /**
- * PageDropdown — el dropdown "tipo navegador" del navbar nuevo (2026-09-20).
+ * PageDropdown — el selector de página del navbar (zona central), estilo
+ * tipo navegador: nombre legible + ruta como dato secundario (pedido
+ * explícito — antes era sólo "/ ⌄", correcto pero ilegible para un usuario
+ * no técnico).
  *
- * Mismo dato y misma navegación que ya tenía `NavigatePanel.tsx` (route
- * derivado de los nombres de archivo en src/pages/, postMessage al iframe) —
- * no hace falta parsear <Route> de App.tsx, esa convención de nombre YA es
- * la fuente de verdad real que usa el generador. `NavigatePanel.tsx` quedó
- * sin uso tras este cambio (la pestaña "Navigate" de CommandModal se quitó,
- * promovida aquí) y se borró en vez de dejarlo muerto en el repo.
+ * Mismo dato y misma navegación que ya tenía `NavigatePanel.tsx` (ahora
+ * borrado, ver QUEUE.md ítem 11): `derivePageEntries` deriva de los nombres
+ * de archivo en src/pages/, la navegación real es
+ * `postMessage({type:'navigate', path})` al iframe.
  */
 export function PageDropdown({
   files,
@@ -28,7 +29,8 @@ export function PageDropdown({
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const routes = deriveProjectRoutes(files);
+  const entries = derivePageEntries(files);
+  const active = entries.find((e) => e.route === activeRoute) ?? entries.find((e) => e.route === '/');
 
   useEffect(() => {
     if (!open) return;
@@ -53,28 +55,26 @@ export function PageDropdown({
     <div className="relative" ref={rootRef}>
       <button
         type="button"
+        className="wf-page"
+        aria-haspopup="menu"
+        aria-expanded={open}
         onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
-        title="Páginas del proyecto"
       >
-        <span className="max-w-[140px] truncate">{activeRoute || '/'}</span>
-        <ChevronDown size={12} className={`shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <span className="wf-page-name">{active?.name ?? 'Inicio'}</span>
+        <span className="wf-page-route">{active?.route ?? '/'}</span>
+        <ChevronDown className="wf-caret" size={12} />
       </button>
       {open && (
-        <div className="absolute top-full left-0 mt-1 w-56 z-50 bg-card border border-border rounded-lg shadow-xl overflow-hidden py-1">
-          {routes.length === 0 ? (
-            <div className="px-3 py-2 text-xs text-muted-foreground">No se encontraron páginas</div>
+        <div className="wf-menu" role="menu">
+          {entries.length === 0 ? (
+            <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--ink-dim)' }}>
+              No se encontraron páginas
+            </div>
           ) : (
-            routes.map((route) => (
-              <button
-                key={route}
-                onClick={() => navigate(route)}
-                className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-xs font-mono text-left transition-colors ${
-                  activeRoute === route ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-accent'
-                }`}
-              >
-                {route}
-                {activeRoute === route && <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />}
+            entries.map((entry) => (
+              <button key={entry.route} role="menuitem" onClick={() => navigate(entry.route)}>
+                <span>{entry.name}</span>
+                <span className="wf-menu-route">{entry.route}</span>
               </button>
             ))
           )}

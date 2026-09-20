@@ -64,16 +64,6 @@
     --sidebar-accent-foreground: 0 0% 95%;
     --sidebar-border: 240 6% 14%;
     --sidebar-ring: 355 78% 56%;
-
-    --nebu-bg: #0a0a0f;
-    --nebu-surface: #111116;
-    --nebu-card: #16161d;
-    --nebu-accent: #E54D5B;
-    --nebu-accent-soft: #E54D5B22;
-    --nebu-text: #F0F0F5;
-    --nebu-text-secondary: #71717A;
-    --nebu-border: rgba(255, 255, 255, 0.06);
-    --nebu-active-bg: #1a1a24;
   }
 
   * { border-color: hsl(var(--border)); }

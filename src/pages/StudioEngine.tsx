@@ -33,7 +33,6 @@ import {
   Download,
   Loader2,
   Activity,
-  Menu,
   Eye,
   Share2,
   ChevronLeft,
@@ -44,9 +43,8 @@ import {
 } from 'lucide-react';
 import { TEMPLATES } from '../templates';
 import { ProtectedRoute } from '../components/auth/ProtectedRoute';
-import { SettingsModal } from '../components/settings/SettingsModal';
+import { SettingsModal, type MainTab } from '../components/settings/SettingsModal';
 import { StateGraph } from '../components/debug/StateGraph';
-import { CommandBubble } from '../components/CommandBubble';
 import { CommandModal } from '../components/CommandModal';
 import { HistoryDrawer } from '../components/HistoryDrawer';
 import { ProjectMemoryService } from '../services/ProjectMemoryService';
@@ -261,6 +259,9 @@ export function StudioEngine() {
   // UI state
   // -------------------------------------------------------------------------
   const [panelMode, setPanelMode] = useState<PanelMode>('preview');
+  // Con qué pestaña abre Settings cuando panelMode pasa a 'settings' — normal
+  // ('secrets', default) o vía el botón Publicar del navbar ('deploy').
+  const [settingsInitialTab, setSettingsInitialTab] = useState<MainTab>('secrets');
   const [showGraph, setShowGraph] = useState(false);
   const [isMenuPanelOpen, setIsMenuPanelOpen] = useState(false);
   const [selectedElement, setSelectedElement] = useState<TargetElement | null>(null);
@@ -1918,16 +1919,10 @@ export function StudioEngine() {
           <Panel defaultSize={100} minSize={30}>
             <div className="relative w-full h-full bg-background">
 
-              {/* Menu button — top left */}
-              <div className="absolute top-4 left-4 z-50">
-                <button
-                  onClick={() => setIsMenuPanelOpen(true)}
-                  className="p-2 bg-background/90 hover:bg-accent border border-border rounded-lg shadow-lg text-muted-foreground hover:text-foreground transition-colors"
-                  title="Menu"
-                >
-                  <Menu size={18} />
-                </button>
-              </div>
+              {/* El botón que abría este menú vivía flotando aquí
+                  (absolute top-4 left-4) — se relocalizó a la zona izquierda
+                  de PreviewNavbar (2026-09-21). El panel deslizante en sí no
+                  cambió. */}
 
               {/* Slide-in left panel */}
               {isMenuPanelOpen && (
@@ -2035,6 +2030,7 @@ export function StudioEngine() {
               ) : hasPreview ? (
                 <div className="relative w-full h-full flex flex-col">
                   <PreviewNavbar
+                    onOpenMenu={() => setIsMenuPanelOpen(true)}
                     editMode={editMode}
                     onPreview={() => { setPanelMode('preview'); guardUnsaved(() => setEditMode('interaction')); }}
                     onVisual={() => { setPanelMode('preview'); setEditMode('visual'); }}
@@ -2047,8 +2043,9 @@ export function StudioEngine() {
                     beforeNavigate={guardUnsaved}
                     panelMode={panelMode}
                     onOpenCode={() => setPanelMode('code')}
-                    onOpenSettings={() => setPanelMode('settings')}
+                    onOpenSettings={() => { setSettingsInitialTab('secrets'); setPanelMode('settings'); }}
                     onOpenChat={() => setIsCommandModalOpen(true)}
+                    onPublish={() => { setSettingsInitialTab('deploy'); setPanelMode('settings'); }}
                   />
                   <div className={`relative flex-1 min-h-0 w-full ${panelMode === 'preview' && viewportMode !== 'desktop' ? 'bg-zinc-900 flex items-start justify-center' : ''}`}>
                   {panelMode === 'code' ? (
@@ -2069,6 +2066,7 @@ export function StudioEngine() {
                       fileTree={fileTree}
                       files={files}
                       projectId={projectId ?? null}
+                      initialTab={settingsInitialTab}
                     />
                   ) : (
                   <>
@@ -2243,13 +2241,6 @@ export function StudioEngine() {
             </div>
           </Panel>
         </Group>
-
-        {/* Command bubble — hidden in read-only mode */}
-        {!isReadOnly && (
-          <CommandBubble
-            onClick={() => setIsCommandModalOpen(true)}
-          />
-        )}
 
         <AnimatePresence>
         {isCommandModalOpen && (

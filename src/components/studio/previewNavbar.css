@@ -1,0 +1,111 @@
+/*
+ * previewNavbar.css — port del HTML de referencia que pasó Samuel
+ * (2026-09-21, título "Wyrd Forge — navbar"), fuente de verdad de layout y
+ * color. Escopado bajo `.wf-navbar` en vez de aplicar a `body`/`:root` — el
+ * HTML era una página sola, esto vive dentro de Wyrd Forge.
+ *
+ * Dos correcciones deliberadas sobre el HTML original, no transcripción
+ * literal:
+ *   1. --nebu en el HTML era #E54D5B — el rojo VIEJO, pre-brandbook (mismo
+ *      error que index.css tenía en el Bloque 3 de la sesión de colores,
+ *      2026-09-20). Se usa el oficial #D62828 aquí.
+ *   2. .wf-page tenía align-items:baseline mezclando dos tamaños de texto y
+ *      un ícono SVG sin baseline propio — el texto se leía empujado hacia
+ *      arriba. Corregido a center (pedido explícito de Samuel).
+ *
+ * SIN media queries de breakpoint más allá de las que ya traía el HTML
+ * (ocultar texto de labels en pantallas angostas) — este builder no tiene
+ * versión móvil, mismo criterio que forgeChat.css.
+ */
+
+.wf-navbar {
+  --chrome: #0B0B0E;
+  --chrome-line: rgba(255, 255, 255, .10);
+  --surface: #17171C;
+  --ink-dim: #9A9AA4;
+  --ink: #FFFFFF;
+  --hover-bg: rgba(255, 255, 255, .07);
+  --active-bg: rgba(255, 255, 255, .12);
+  --wf-red: #D62828;
+  height: 52px;
+  flex: 0 0 auto;
+  background: var(--chrome);
+  border-bottom: 1px solid var(--chrome-line);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  position: relative;
+  z-index: 20;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+.wf-zone { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.wf-zone.wf-left { flex: 1 1 0; }
+.wf-zone.wf-center { flex: 0 0 auto; }
+.wf-zone.wf-right { flex: 1 1 0; justify-content: flex-end; }
+
+/* botón base: 3 niveles gris -> blanco -> blanco+fondo */
+.wf-btn {
+  appearance: none; border: 0; background: transparent;
+  color: var(--ink-dim); font: inherit; font-size: 13px; font-weight: 500;
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 34px; padding: 0 10px; border-radius: 8px; cursor: pointer;
+  transition: color .15s ease, background-color .15s ease;
+  white-space: nowrap;
+}
+.wf-btn:hover { color: var(--ink); background: var(--hover-bg); }
+.wf-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+.wf-btn:disabled { opacity: .4; cursor: not-allowed; }
+.wf-btn.wf-icon-only { padding: 0; width: 34px; justify-content: center; }
+.wf-btn[aria-pressed="true"], .wf-btn.wf-active { color: var(--ink); background: var(--active-bg); }
+
+/* toggle Preview / Editor */
+.wf-seg { display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: rgba(255, 255, 255, .05); }
+.wf-seg .wf-btn { height: 28px; min-width: 96px; justify-content: center; }
+
+.wf-divider { width: 1px; height: 20px; background: var(--chrome-line); margin: 0 4px; flex: 0 0 auto; }
+
+/* selector de página */
+.wf-page {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 34px; padding: 0 12px; border-radius: 8px;
+  background: transparent; border: 0; cursor: pointer; color: var(--ink-dim);
+  font: inherit; transition: background-color .15s ease;
+}
+.wf-page:hover { background: var(--hover-bg); }
+.wf-page .wf-page-name { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.wf-page .wf-page-route { font-size: 11.5px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+.wf-page .wf-caret { flex: 0 0 auto; width: 12px; height: 12px; stroke: var(--ink-dim); transition: transform .2s ease; }
+.wf-page[aria-expanded="true"] .wf-caret { transform: rotate(180deg); }
+
+/* acción de publicar — único rojo de la barra */
+.wf-publish {
+  background: var(--wf-red); color: #fff; font-weight: 600; font-size: 13px;
+  height: 32px; padding: 0 15px; border: 0; border-radius: 8px; cursor: pointer;
+  transition: filter .15s ease;
+}
+.wf-publish:hover { filter: brightness(1.1); }
+.wf-publish:disabled { opacity: .5; cursor: not-allowed; filter: none; }
+.wf-publish:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* dropdown de páginas */
+.wf-menu {
+  position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  background: var(--surface); border: 1px solid var(--chrome-line); border-radius: 10px;
+  padding: 5px; min-width: 230px; box-shadow: 0 12px 32px rgba(0, 0, 0, .5); z-index: 40;
+}
+.wf-menu button {
+  width: 100%; display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  background: transparent; border: 0; color: var(--ink); font: inherit; font-size: 13px;
+  padding: 8px 10px; border-radius: 7px; cursor: pointer; text-align: left;
+}
+.wf-menu button:hover { background: var(--hover-bg); }
+.wf-menu button .wf-menu-route { font-size: 11.5px; color: var(--ink-dim); }
+
+@media (max-width: 720px) {
+  .wf-seg .wf-btn span { display: none; }
+  .wf-seg .wf-btn[aria-pressed="true"] span { display: inline; }
+  .wf-zone.wf-right .wf-btn span { display: none; }
+  .wf-page .wf-page-route { display: none; }
+}

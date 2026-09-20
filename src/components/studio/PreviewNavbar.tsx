@@ -1,26 +1,34 @@
 import type { RefObject } from 'react';
-import { MousePointer2, Edit3, Code, Settings, MessageSquare } from 'lucide-react';
+import { Menu, Eye, Edit3, Code, Settings, MessageSquare } from 'lucide-react';
 import { PageDropdown } from './PageDropdown';
 import { ViewportToggle } from './ViewportToggle';
 import type { ViewportMode, PanelMode } from './types';
+import './previewNavbar.css';
 
 /**
- * PreviewNavbar — navbar superior persistente, reemplaza la píldora flotante
- * (`absolute top-4 left-1/2 -translate-x-1/2`) que vivía sobre el preview.
- * Pedido de Samuel, bucket 5 ítem 3 (2026-09-20): un solo botón de viewport
- * (ya no 3 separados), dropdown de páginas tipo navegador, Código/Settings
- * como paneles in-place (reemplazan el preview, no flotan encima) y Chat
- * como la excepción — sigue abriendo el modal flotante con blur de hoy, a
- * propósito (confirmado con Samuel: el preview debe seguir viéndose detrás
- * del chat, no desaparecer).
+ * PreviewNavbar — navbar superior persistente sobre el preview. Reescrito
+ * 2026-09-21 sobre el HTML de referencia que pasó Samuel (título "Wyrd Forge
+ * — navbar"), con dos correcciones deliberadas: el rojo oficial (#D62828, no
+ * el #E54D5B pre-brandbook del HTML) y el bug de alineación del selector de
+ * página (align-items:baseline mezclando texto+ícono → center). Ver
+ * previewNavbar.css para el resto de las decisiones de diseño (tres zonas,
+ * tres niveles de color, el rojo reservado sólo para Publicar).
  *
- * Los tres puntos a la izquierda son la única concesión a "chrome de
- * navegador" que Samuel pidió para el contenedor del preview — se decidió NO
- * duplicar una segunda barra de direcciones bajo ésta (el propio
- * PageDropdown ya cumple ese papel) para no gastar altura vertical en dos
- * barras que dicen lo mismo.
+ * El menú hamburguesa (Back to Nebu / Version History / Export / Share /
+ * Invite) se RELOCALIZÓ aquí desde su posición flotante vieja
+ * (`absolute top-4 left-4`) — misma funcionalidad, ahora vive en la zona
+ * izquierda del navbar en vez de un ícono suelto sobre el preview.
+ *
+ * "Preview"/"Editor" son la etiqueta nueva del toggle `editMode` de siempre
+ * (interaction/visual) — el valor interno no cambió, sólo el texto: "Editor"
+ * es más claro que "Visual" para quien no es desarrollador.
+ *
+ * El botón Chat abre el mismo modal flotante con blur de siempre (ítem 10) —
+ * sustituye a `CommandBubble`, que ya no se monta (confirmado con Samuel: el
+ * chat en sí no se tocó, sólo de dónde se dispara).
  */
 export function PreviewNavbar({
+  onOpenMenu,
   editMode,
   onPreview,
   onVisual,
@@ -35,7 +43,9 @@ export function PreviewNavbar({
   onOpenCode,
   onOpenSettings,
   onOpenChat,
+  onPublish,
 }: {
+  onOpenMenu: () => void;
   editMode: 'interaction' | 'visual';
   onPreview: () => void;
   onVisual: () => void;
@@ -50,76 +60,74 @@ export function PreviewNavbar({
   onOpenCode: () => void;
   onOpenSettings: () => void;
   onOpenChat: () => void;
+  onPublish: () => void;
 }) {
   return (
-    <div className="relative z-30 flex items-center gap-2 px-3 py-2 border-b border-border bg-card shrink-0">
-      {/* Puntos — ver nota de arriba, no es una barra de direcciones aparte. */}
-      <div className="flex items-center gap-1.5 pr-1">
-        <span className="w-2 h-2 rounded-full bg-muted" />
-        <span className="w-2 h-2 rounded-full bg-muted" />
-        <span className="w-2 h-2 rounded-full bg-muted" />
+    <div className="wf-navbar">
+      <div className="wf-zone wf-left">
+        <button type="button" className="wf-btn wf-icon-only" aria-label="Menú" onClick={onOpenMenu}>
+          <Menu size={16} />
+        </button>
+        <div className="wf-divider" />
+        <div className="wf-seg" role="group" aria-label="Modo">
+          <button
+            type="button"
+            className="wf-btn"
+            aria-pressed={panelMode === 'preview' && editMode === 'interaction'}
+            onClick={onPreview}
+          >
+            <Eye size={15} />
+            <span>Preview</span>
+          </button>
+          <button
+            type="button"
+            className="wf-btn"
+            aria-pressed={panelMode === 'preview' && editMode === 'visual'}
+            onClick={onVisual}
+          >
+            <Edit3 size={15} />
+            <span>Editor</span>
+          </button>
+        </div>
       </div>
 
-      <div className="flex items-center gap-0.5 bg-background/50 border border-border rounded-md p-0.5">
-        <button
-          type="button"
-          onClick={onPreview}
-          title="Preview"
-          className={`p-1.5 rounded transition-colors ${panelMode === 'preview' && editMode === 'interaction' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
-        >
-          <MousePointer2 size={13} />
-        </button>
-        <button
-          type="button"
-          onClick={onVisual}
-          title="Modo visual"
-          className={`p-1.5 rounded transition-colors ${panelMode === 'preview' && editMode === 'visual' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
-        >
-          <Edit3 size={13} />
-        </button>
+      <div className="wf-zone wf-center">
+        <PageDropdown
+          files={files}
+          iframeRef={iframeRef}
+          activeRoute={activeRoute}
+          setActiveRoute={setActiveRoute}
+          beforeNavigate={beforeNavigate}
+        />
       </div>
 
-      <PageDropdown
-        files={files}
-        iframeRef={iframeRef}
-        activeRoute={activeRoute}
-        setActiveRoute={setActiveRoute}
-        beforeNavigate={beforeNavigate}
-      />
-
-      {panelMode === 'preview' && (
-        <ViewportToggle mode={viewportMode} onChange={onViewportChange} />
-      )}
-
-      <div className="flex-1" />
-
-      <div className="flex items-center gap-0.5">
+      <div className="wf-zone wf-right">
+        {panelMode === 'preview' && (
+          <ViewportToggle mode={viewportMode} onChange={onViewportChange} />
+        )}
+        <div className="wf-divider" />
         <button
           type="button"
+          className={`wf-btn ${panelMode === 'code' ? 'wf-active' : ''}`}
           onClick={onOpenCode}
-          title="Código"
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors ${panelMode === 'code' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground hover:bg-accent'}`}
         >
-          <Code size={13} />
-          Código
+          <Code size={15} />
+          <span>Código</span>
         </button>
         <button
           type="button"
+          className={`wf-btn ${panelMode === 'settings' ? 'wf-active' : ''}`}
           onClick={onOpenSettings}
-          title="Settings"
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors ${panelMode === 'settings' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground hover:bg-accent'}`}
         >
-          <Settings size={13} />
-          Settings
+          <Settings size={15} />
+          <span>Ajustes</span>
         </button>
-        <button
-          type="button"
-          onClick={onOpenChat}
-          title="Chat"
-          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-accent"
-        >
-          <MessageSquare size={13} />
-          Chat
+        <button type="button" className="wf-btn" onClick={onOpenChat}>
+          <MessageSquare size={15} />
+          <span>Chat</span>
+        </button>
+        <button type="button" className="wf-publish" onClick={onPublish}>
+          Publicar
         </button>
       </div>
     </div>

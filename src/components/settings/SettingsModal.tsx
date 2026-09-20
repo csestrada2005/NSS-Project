@@ -22,9 +22,11 @@ interface SettingsModalProps {
   fileTree: FileSystemTree;
   files?: Map<string, string>;
   projectId?: string | null;
+  /** Con qué pestaña abrir — el botón "Publicar" del navbar la abre directo en 'deploy'. */
+  initialTab?: MainTab;
 }
 
-type MainTab = 'secrets' | 'github' | 'deploy' | 'domains' | 'database' | 'email' | 'analytics';
+export type MainTab = 'secrets' | 'github' | 'deploy' | 'domains' | 'database' | 'email' | 'analytics';
 type DbSubTab = 'overview' | 'schema' | 'sql' | 'secrets' | 'edge-functions' | 'logs' | 'usage' | 'users';
 
 // Panel Cloud (bucket 5, ítem 1): overview/edge-functions/logs/usage/users
@@ -42,8 +44,8 @@ const DB_SUB_TABS: { id: DbSubTab; label: string }[] = [
   { id: 'users', label: 'Users' },
 ];
 
-export function SettingsModal({ onClose, fileTree, files, projectId: propProjectId }: SettingsModalProps) {
-  const [activeTab, setActiveTab] = useState<MainTab>('secrets');
+export function SettingsModal({ onClose, fileTree, files, projectId: propProjectId, initialTab = 'secrets' }: SettingsModalProps) {
+  const [activeTab, setActiveTab] = useState<MainTab>(initialTab);
   const [dbSubTab, setDbSubTab] = useState<DbSubTab>('schema');
 
   const projectId = propProjectId ?? sessionStorage.getItem('forge_project_id');

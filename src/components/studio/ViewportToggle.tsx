@@ -17,7 +17,7 @@ export function ViewportToggle({ mode, onChange }: { mode: ViewportMode; onChang
       type="button"
       onClick={next}
       title={`Vista: ${LABEL[mode]} — clic para cambiar`}
-      className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
+      className="wf-btn wf-icon-only"
     >
       <Icon size={14} />
     </button>
