@@ -25,7 +25,7 @@ export const CommandModal = ({ onClose, visualEditMode, onToggleVisualEdit, chil
       <div className="fixed z-[70] inset-x-4 bottom-4 h-[88vh] max-h-[920px]">
       <motion.div
         {...bottomSheetMotion}
-        className="nebu-modal h-full rounded-2xl border border-border flex flex-col bg-card shadow-2xl overflow-hidden"
+        className="h-full rounded-2xl border border-border flex flex-col bg-card shadow-2xl overflow-hidden"
       >
         {/* Header Tabs */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-background/50 shrink-0">

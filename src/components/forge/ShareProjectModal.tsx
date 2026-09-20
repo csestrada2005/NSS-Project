@@ -52,10 +52,10 @@ function Avatar({ name, avatarUrl, size = 8 }: { name: string | null; avatarUrl?
 }
 
 const ROLE_BADGE: Record<string, string> = {
-  admin: 'bg-red-500/10 text-red-400',
-  dev: 'bg-blue-500/10 text-blue-400',
-  vendedor: 'bg-purple-500/10 text-purple-400',
-  cliente: 'bg-emerald-500/10 text-emerald-400',
+  admin: 'bg-red-100 text-red-700',
+  dev: 'bg-blue-100 text-blue-700',
+  vendedor: 'bg-purple-100 text-purple-700',
+  cliente: 'bg-emerald-100 text-emerald-700',
 };
 
 export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
@@ -205,8 +205,8 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
                         <span
                           className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
                             c.status === 'pending'
-                              ? 'bg-amber-500/10 text-amber-400'
-                              : 'bg-emerald-500/10 text-emerald-400'
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-emerald-100 text-emerald-700'
                           }`}
                         >
                           {c.status}
@@ -227,7 +227,7 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
                         </div>
                         <button
                           onClick={() => handleRevokeCollaborator(c.id)}
-                          className="text-xs text-red-400 hover:text-red-300 transition-colors px-2 py-1 rounded-lg hover:bg-red-400/10"
+                          className="text-xs text-red-600 hover:text-red-700 transition-colors px-2 py-1 rounded-lg hover:bg-red-100"
                         >
                           Revoke
                         </button>

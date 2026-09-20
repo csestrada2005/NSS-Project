@@ -86,7 +86,7 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
   const TAB_BUTTON = (id: MainTab, label: string, Icon: React.ComponentType<any>) => (
     <button
       onClick={() => setActiveTab(id)}
-      className={`px-3 py-2 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 ${activeTab === id ? 'bg-accent text-white border-b-2 border-primary' : 'text-muted-foreground hover:text-white hover:bg-accent/50'}`}
+      className={`px-3 py-2 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 ${activeTab === id ? 'bg-accent text-foreground border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'}`}
     >
       <Icon size={15} />
       {label}
@@ -103,8 +103,8 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
         className="nebu-modal bg-card border border-border rounded-xl shadow-2xl w-full max-w-4xl p-6 flex flex-col max-h-[90vh]"
       >
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-white">Settings</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-white transition-colors">
+          <h2 className="text-xl font-bold text-foreground">Settings</h2>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
             <X size={20} />
           </button>
         </div>
@@ -130,8 +130,8 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
           {activeTab === 'github' && (
             <div className="space-y-6">
               <div className="bg-background/50 rounded-lg p-4 border border-border">
-                <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
-                  <Github className="text-white" size={20} />
+                <h3 className="text-lg font-semibold text-foreground mb-2 flex items-center gap-2">
+                  <Github className="text-foreground" size={20} />
                   Push to GitHub
                 </h3>
                 <p className="text-sm text-muted-foreground mb-4">
@@ -142,25 +142,25 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
                   <div>
                     <label className="block text-xs font-medium text-muted-foreground mb-1">Repository (username/repo)</label>
                     <input type="text" placeholder="e.g. jules/my-app" value={repoName} onChange={(e) => setRepoName(e.target.value)}
-                      className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none" />
+                      className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-muted-foreground mb-1">Branch</label>
                     <input type="text" placeholder="main" value={branch} onChange={(e) => setBranch(e.target.value)}
-                      className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none" />
+                      className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-muted-foreground mb-1">Commit Message</label>
                     <input type="text" value={commitMessage} onChange={(e) => setCommitMessage(e.target.value)}
-                      className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none" />
+                      className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none" />
                   </div>
                   <button onClick={handleGitHubPush} disabled={isPushing || !repoName || !branch}
-                    className="w-full py-2 bg-secondary hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 border border-border">
+                    className="w-full py-2 bg-secondary hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed text-foreground rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 border border-border">
                     {isPushing ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" /> : <Github size={16} />}
                     {isPushing ? 'Pushing...' : 'Push Changes'}
                   </button>
                   {pushStatus && (
-                    <div className={`p-3 rounded border text-sm ${pushStatus.success ? 'bg-green-900/20 border-green-800 text-green-400' : 'bg-red-900/20 border-red-800 text-red-400'}`}>
+                    <div className={`p-3 rounded border text-sm ${pushStatus.success ? 'bg-green-100 border-green-300 text-green-800' : 'bg-red-100 border-red-300 text-red-800'}`}>
                       {pushStatus.message}
                     </div>
                   )}
@@ -230,7 +230,7 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
                   <button
                     key={tab.id}
                     onClick={() => setDbSubTab(tab.id)}
-                    className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${dbSubTab === tab.id ? 'border-primary text-white' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+                    className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${dbSubTab === tab.id ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
                   >
                     {tab.label}
                   </button>
@@ -252,7 +252,7 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
         </div>
 
         <div className="flex justify-end gap-3 pt-4 border-t border-border mt-4">
-          <button onClick={onClose} className="px-4 py-2 text-muted-foreground hover:text-white text-sm font-medium transition-colors">
+          <button onClick={onClose} className="px-4 py-2 text-muted-foreground hover:text-foreground text-sm font-medium transition-colors">
             Close
           </button>
         </div>

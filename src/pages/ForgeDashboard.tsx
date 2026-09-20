@@ -128,13 +128,13 @@ const ForgeDashboard = () => {
 
   if (error) {
     return (
-      <div className="flex flex-col h-screen bg-background items-center justify-center p-6">
-        <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-xl px-5 py-4 text-sm max-w-md w-full text-center">
+      <div className="nebu-modal flex flex-col h-screen bg-background items-center justify-center p-6">
+        <div className="bg-red-100 border border-red-300 text-red-800 rounded-xl px-5 py-4 text-sm max-w-md w-full text-center">
           <p className="font-semibold mb-1">Failed to load projects</p>
           <p>{error}</p>
           <Button
             variant="outline"
-            className="mt-4 border-red-700 hover:bg-red-900/40 text-red-300"
+            className="mt-4 border-red-300 hover:bg-red-100 text-red-800"
             onClick={() => {
               setError(null);
               loadProjects();
@@ -148,7 +148,7 @@ const ForgeDashboard = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-background">
+    <div className="nebu-modal flex flex-col h-screen bg-background">
       <AnimatePresence>
         {shareProject && (
           <ShareProjectModal

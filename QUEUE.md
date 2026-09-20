@@ -623,33 +623,94 @@ les llegue igual que a los otros 4 modales, que ya los usaban.
 `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 653/653. `npx vitest run` → 48/48.
 `graphify update .` corrido.
 
+**Bloque 4 (2026-09-20, mismo día) — brandbook OFICIAL de Nebu Studio reemplaza los valores adivinados del
+Bloque 3:** Samuel mandó el brandbook real (rojo `#D62828`, negro profundo `#0D0D0D`, carbón `#1A1A1A`,
+gris claro `#E8E8E8`, crema `#F5F0EB`, proporción 60% crema/blanco – 30% negro/carbón – 10% rojo,
+tipografía Outfit/Inter, principios de minimalismo). Los valores `--nebu-*` que usé en el Bloque 3 (rojo
+`#E54D5B`, negro `#0a0a0f`, etc.) NO eran los oficiales — alguien los había puesto de antes, adivinando.
+
+**Dos decisiones de alcance, confirmadas con Samuel antes de tocar código:**
+- La proporción 60/30/10 (dominada por claro) aplica SÓLO a superficies de marca (los 4 modales
+  administrativos + dashboard + onboarding), NO al área de trabajo del editor (Command Palette:
+  Chat/Visual/Código/Navegar), que se queda oscura — es el lienzo de trabajo, no una superficie de marca.
+  Deshecho el `nebu-modal` que el Bloque 3 le había puesto a `CommandModal.tsx`.
+- Alcance de hoy: sólo Wyrd Forge. Nebu Studio (CRM/Novy) queda fuera, es su propia sesión.
+
+**Hecho — `.nebu-modal` reescrita con los valores oficiales, misma mecánica del Bloque 3 (una sola clase de
+ámbito, sin `@layer`, sobrescribe `--color-*`):** fondo/tarjeta blanco `#FFFFFF` + crema `#F5F0EB`, texto
+negro profundo `#0D0D0D`, botones/CTA rojo `#D62828` con texto blanco, bordes y superficies secundarias gris
+claro `#E8E8E8`. `--color-destructive` (la alarma roja de "esto borra datos para siempre" en
+`MigrationApplyModal`) NO se tocó a propósito — usar el mismo rojo ahí que en un botón normal le quitaría la
+señal de peligro a la única confirmación irreversible de la plataforma.
+
+**Hecho — migración de colores sueltos que el override no alcanzaba (literales, no tokens):** encontrado
+DURANTE la implementación, no antes — varios `text-white` en `SettingsModal.tsx` (título, botones, inputs)
+que se habrían vuelto invisibles sobre el nuevo fondo claro → migrados a `text-foreground`. El bloque de
+alerta de DDL destructivo en `MigrationApplyModal.tsx` (la pieza de seguridad más delicada de toda la
+plataforma) usaba rosa/rojo claro sobre fondo casi negro, ilegible sobre fondo claro → recoloreado a
+rojo oscuro sobre fondo rojo pálido, alto contraste, sin tocar la lógica de confirmación. `ShareProjectModal.
+tsx` (badges de rol admin/dev/vendedor/cliente, píldora pending/accepted, botón "Revoke") y el banner de
+error de `ForgeDashboard.tsx` tenían el mismo patrón (colores claros pensados para fondo oscuro) → todos
+recoloreados a sus equivalentes de alto contraste sobre claro.
+
+**Hecho — tipografía:** `--font-display` pasó de "Archivo Black" a "Outfit" (Google Fonts, mismo mecanismo
+que Inter). Blast radius confirmado por grep antes de tocar: sólo las 4 pantallas de onboarding
+(`Login.tsx`, `RoleSelectionPage.tsx`, `SetupPage.tsx`, `PendingApprovalPage.tsx`) usan la clase
+`font-display` hoy — cambia solo, sin tocar esos 4 archivos. Inter se queda para todo el cuerpo de texto.
+No se reconstruyó la escala tipográfica completa H1/H2/H3 del brandbook (fuera de alcance de hoy).
+
+**Confirmado como ya cumplido, sin trabajo pendiente:** iconografía monocromática (lucide-react ya renderiza
+en un solo color por diseño) y "cero plantillas genéricas" (la UI ya es a medida, no viene de Canva/
+plantillas). No son tareas, son verificaciones.
+
+`npx tsc -b --force`: 0 errores. `node --test "server/*.test.js"`: 653/653. `npx vitest run`: 48/48.
+Verificado con build real (`npx vite build`) que `.nebu-modal` y `--font-display: "Outfit"` compilan
+correctamente antes de dar el bloque por bueno.
+
+**PENDIENTE PARA DESPUÉS — anotado, no resuelto hoy (dos residuos del mismo tamaño, mismo motivo: son
+pantallas/paneles construidos con colores fijos en vez del sistema de tokens, así que el truco de
+`.nebu-modal` no les llega):**
+1. **Onboarding (Login, selección de rol, setup, pendiente de aprobación):** 4 pantallas hechas a mano con
+   colores fijos (`bg-[#0A0A0A]`, `text-[#E60000]`, gradientes de opacidad de blanco para la jerarquía de
+   texto — 8 a 13 apariciones por archivo), con una animación de "pincel de tinta" para el texto "NEBU
+   STUDIO", cuadrícula de fondo y viñeteado, todo diseñado para verse sobre negro. Convertirlas a
+   claro/crema es rediseñar el efecto (hoy: texto blanco fantasma revelándose sobre negro; en claro sería
+   al revés) más el rojo exacto (`#E60000` actual no es siquiera el `#D62828` oficial) — no es un cambio de
+   paleta, es diseño nuevo. Necesita su propia sesión con mockup delante.
+2. **Contenido de 8 sub-pestañas de Database + Domains + Email + Deploy, dentro de `SettingsModal`:** el
+   MARCO del modal (fondo, título, las 7 pestañas principales) ya quedó con la marca correcta — es el
+   CONTENIDO de esas pestañas específicas el que tiene 224 clases de color oscuras sueltas repartidas en 11
+   archivos (`SecretsPanel` 26, `SchemaViewer` 16, `SQLEditor` 20, `DatabaseOverview` 16,
+   `EdgeFunctionsPanel` 14, `LogsViewer` 13, `UsagePanel` 10, `UsersManager` 19, `DomainsPanel` 22,
+   `EmailPanel` 54, `DeployManager` 14) — se van a ver oscuras flotando dentro del modal claro. Encontrado
+   mientras se hacía este bloque, no antes; no se tocó ninguno de los 11 archivos hoy.
+
 **CHECK MANUAL — PENDIENTE.** Cómo reproducirlo (dev server local o `sesión-5` desplegada):
 1. Abre y cierra, uno por uno: New Project, Settings, Share, History. Cada uno debe entrar Y salir con un
-   fundido/pop notorio (más lento que antes, se debe alcanzar a ver el movimiento).
-2. Si hay una migración destructiva pendiente: `MigrationApplyModal` debe animar igual al abrir/cerrar Y
-   seguir pidiendo la frase de confirmación exacta antes de dejar aplicar (esto NO debía cambiar).
-3. Abre el Command Palette: debe nacer chico desde abajo y crecer hacia los lados hasta ocupar casi toda la
-   pantalla (no sólo deslizar). Ciérralo: mismo efecto en reversa, más lento que antes.
-4. Con el Command Palette abierto, revisa las 4 pestañas (Chat/Visual/Code/Navigate): fondo oscuro sólido
-   consistente en las 4 (no transparente, no gris genérico) — debe verse un tinte ligeramente distinto al
-   resto de la plataforma (la paleta Nebu: fondo casi negro con un toque azulado).
-5. Abre Settings → todas las pestañas (Secrets/GitHub/Deploy/Domains/Database con sus 8 sub-pestañas/Email/
-   Analytics) — deben verse con el mismo tinte Nebu, sin ningún cuadro/botón en gris plano suelto que
-   desentone.
-6. Fuera de los modales (dashboard, editor detrás del Command Palette, etc.): debe verse EXACTAMENTE igual
-   que antes de esta sesión — la paleta Nebu es sólo para dentro de los modales.
+   fundido/pop notorio (más lento que antes), ahora con fondo claro/crema, texto negro, acentos rojos.
+2. Si hay una migración destructiva pendiente: `MigrationApplyModal` debe verse clara con el bloque de
+   alerta en rojo oscuro sobre rosa pálido bien legible, y debe seguir pidiendo la frase de confirmación
+   exacta antes de dejar aplicar (esto NO debía cambiar).
+3. Abre el Command Palette: debe seguir OSCURO como antes de este bloque (no debe verse afectado por el
+   cambio de marca) — nace chico desde abajo y crece hasta ocupar casi toda la pantalla.
+4. Abre Settings → pestaña Secrets (la que abre por default) y Database → Schema (default): el MARCO
+   (fondo, título, pestañas) debe verse claro/marca; el CONTENIDO de esas pestañas puede verse oscuro
+   todavía (residuo conocido, anotado arriba, no es sorpresa).
+5. En el dashboard (lista de proyectos): fondo claro/crema, tarjetas blancas, acentos rojos en hover/CTA.
+6. El Command Palette y el editor detrás de los modales deben verse EXACTAMENTE igual que antes de este
+   bloque — el brandbook es sólo para las superficies de marca.
 
 Mundos pre-registrados:
-- **Esperado:** los 6 modales entran/salen animados y más lentos; Command Palette nace chico y crece; las 4
-  pestañas del Command Palette y las 8+ pestañas de Settings tienen fondo Nebu sólido y consistente; el
-  resto de la plataforma (fuera de modales) no cambió en nada; la frase de confirmación de migración
-  destructiva se sigue pidiendo igual.
-- **Residuo conocido, no bug:** los botones/acentos en rojo de marca (`primary`, `destructive` para
-  peligro/error) NO cambiaron de tono — es a propósito, ese rojo ya coincidía con Nebu.
-- **Falla real (si aparece, SÍ es bug):** algún modal aparece sin fondo/transparente (señal de que la clase
-  `nebu-modal` no se está aplicando o el override no está ganando), colores grises sueltos que no matchean
-  el resto (señal de que quedó algún `bg-gray-*`/`bg-zinc-*` sin migrar), doble transform o posición rota en
-  el Command Palette, o `MigrationApplyModal` deja aplicar sin pedir la frase.
+- **Esperado:** los 4 modales administrativos + dashboard se ven claros/crema con acentos rojos oficiales
+  (`#D62828`) y texto negro (`#0D0D0D`); el Command Palette y el editor siguen oscuros sin cambios; la
+  alerta de migración destructiva se lee claro y sigue pidiendo la frase.
+- **Residuo conocido, no bug:** el contenido de Database/Domains/Email/Deploy dentro de Settings se ve
+  oscuro (anotado arriba, su propio bloque futuro); el onboarding sigue con su diseño oscuro anterior
+  (anotado arriba, su propio bloque futuro).
+- **Falla real (si aparece, SÍ es bug):** algún modal se ve sin fondo/transparente, texto negro sobre fondo
+  oscuro o texto claro sobre fondo claro en CUALQUIER parte del marco de los 4 modales o el dashboard
+  (harían el texto ilegible), el Command Palette cambió de apariencia sin que se le tocara nada, o
+  `MigrationApplyModal` deja aplicar sin pedir la frase.
 
 **REENCUADRE (2026-09-20, antes de correr el check):** el mundo pre-registrado original (abajo, ya
 corregido) describía `CommandModal` como "sigue centrado en pantalla" — eso era cierto para el Bloque 1,
