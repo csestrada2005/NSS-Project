@@ -17,7 +17,6 @@ import { toast } from 'sonner';
 import { useProjectFiles } from '../hooks/useProjectFiles';
 import '../App.css';
 import { ChatInterface, type ChatPlanStep, type Message } from '../components/ChatInterface';
-import { Terminal, type TerminalRef } from '../components/Terminal';
 import { PropertyPanel } from '../components/studio/PropertyPanel';
 import { AIOrchestrator } from '../services/AIOrchestrator';
 import { platformService } from '../services/PlatformService';
@@ -57,20 +56,12 @@ import CreditBalance from '../components/forge/CreditBalance';
 import { ShareProjectModal } from '../components/forge/ShareProjectModal';
 import { CodePanel } from '../components/studio/CodePanel';
 import { PreviewNavbar } from '../components/studio/PreviewNavbar';
+import type { ViewportMode, PanelMode } from '../components/studio/types';
 
-// Rediseño del navbar del preview (bucket 5 ítem 3, 2026-09-20): CommandModal
-// se quedó sólo con Chat (con el look flotante+blur de hoy) y Terminal (los
-// logs de compilación con colores ANSI que ya existían); Visual/Código/
-// Navegar se promovieron a PreviewNavbar, persistente arriba del preview en
-// vez de una píldora flotante encima. "Terminal" reemplaza el nombre "Visual"
-// del tab viejo: lo que de verdad vivía ahí era la consola, el toggle de modo
-// visual ya está en el navbar nuevo.
-type TabType = 'chat' | 'terminal';
-type ViewportMode = 'mobile' | 'tablet' | 'desktop';
-/** Qué se ve en el área central: el preview en vivo, o uno de los paneles
- * "in-place" (reemplazan el preview entero, no flotan encima — pedido
- * explícito, distinto de cómo funcionaba Settings antes de hoy). */
-type PanelMode = 'preview' | 'code' | 'settings';
+// Navbar del preview (bucket 5 ítem 3, 2026-09-20): Visual/Código/Navegar se
+// promovieron a PreviewNavbar, persistente arriba del preview en vez de una
+// píldora flotante encima. CommandModal se quedó sólo con Chat (2026-09-21:
+// Terminal se eliminó por completo — ver ítem 12 de QUEUE.md).
 
 // CAMBIO 1 — una mutación visual pendiente de guardar. Se indexa por
 // `oid::property` en el buffer (el último gana), y guarda todo lo que updateCode
@@ -336,7 +327,6 @@ export function StudioEngine() {
   const [pendingNavAction, setPendingNavAction] = useState<{ proceed: () => void } | null>(null);
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [selectedFileContent, setSelectedFileContent] = useState<string>('');
-  const [activeBottomTab, setActiveBottomTab] = useState<TabType>('chat');
   const [isCommandModalOpen, setIsCommandModalOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isReadOnly, setIsReadOnly] = useState(false);
@@ -365,7 +355,6 @@ export function StudioEngine() {
   const oidMapRef = useRef<OidMap>({});
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const terminalRef = useRef<TerminalRef>(null);
 
   const [isPublic, setIsPublic] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -1577,9 +1566,6 @@ export function StudioEngine() {
     abortControllerRef.current = abortController;
     setIsCancelling(false);
 
-    terminalRef.current?.clear();
-    terminalRef.current?.write('\r\n\x1b[33m⚡ Starting build...\x1b[0m\r\n');
-
     // CIRUGÍA (cobro dentro del pipeline servido): abrir un intent correlaciona
     // todas las llamadas /api/chat-forge de esta acción bajo un mismo id, para
     // que el server acumule y cobre server-side. El cierre (finally) es sólo un
@@ -1595,9 +1581,6 @@ export function StudioEngine() {
         selectedElement,
         projectId,
         (step, total, file, description) => {
-          terminalRef.current?.write(
-            `\r\n\x1b[32m  [${step}/${total}] Writing ${file}\x1b[0m`
-          );
           // CAMBIO 2: alimenta la línea secundaria del overlay de generación.
           setGenerationProgress({ step, total, file });
           // CAMBIO 4 (progreso honesto): propaga la description real del step al
@@ -1605,12 +1588,6 @@ export function StudioEngine() {
           onProgress?.(step, total, file, description);
         },
         (attempt, errorMsg) => {
-          terminalRef.current?.write(
-            `\r\n\x1b[31m  ⚠ Compile error — auto-fixing (attempt ${attempt}/3)\x1b[0m`
-          );
-          terminalRef.current?.write(
-            `\r\n\x1b[90m  ${errorMsg.slice(0, 200)}\x1b[0m`
-          );
           onRetry?.(attempt, errorMsg);
         },
         // CIRUGÍA B2 — plan visible en vivo: el orchestrator anuncia el plan
@@ -1653,17 +1630,6 @@ export function StudioEngine() {
       if (cancelled) {
         // CAMBIO 4 — sostener el overlay honesto post-cancelación.
         setCancelledInfo({ count: result.modifiedFiles.length });
-        terminalRef.current?.write(
-          `\r\n\x1b[33m⏹ Generación cancelada — ${result.modifiedFiles.length} archivo(s) conservado(s).\x1b[0m\r\n`
-        );
-      } else if (success) {
-        terminalRef.current?.write(
-          `\r\n\x1b[32m✅ Done — ${result.modifiedFiles.length} file(s) updated.\x1b[0m\r\n`
-        );
-      } else {
-        terminalRef.current?.write(
-          '\r\n\x1b[31m❌ Build failed after 3 retries.\x1b[0m\r\n'
-        );
       }
 
       return {
@@ -1693,7 +1659,6 @@ export function StudioEngine() {
       // como cancelación honesta: en ese punto no se persistió ningún archivo.
       if (isAbortError(error) || abortController.signal.aborted) {
         setCancelledInfo({ count: 0 });
-        terminalRef.current?.write('\r\n\x1b[33m⏹ Generación cancelada.\x1b[0m\r\n');
         return {
           success: true,
           modifiedFiles: [],
@@ -1702,7 +1667,6 @@ export function StudioEngine() {
         };
       }
       console.error('[StudioEngine] Error processing message:', error);
-      terminalRef.current?.write('\r\n\x1b[31m❌ Unexpected error.\x1b[0m\r\n');
       return { success: false, modifiedFiles: [] };
     } finally {
       // Cerrar el intent: cobra server-side lo acumulado (incluye runs
@@ -1725,7 +1689,6 @@ export function StudioEngine() {
     const controller = abortControllerRef.current;
     if (!controller || controller.signal.aborted) return;
     setIsCancelling(true);
-    terminalRef.current?.write('\r\n\x1b[33m⏹ Cancelando…\x1b[0m\r\n');
     controller.abort();
   }, []);
 
@@ -1808,7 +1771,6 @@ export function StudioEngine() {
   const COMPLETE_PROJECT_PROMPT =
     'Completa el proyecto: conserva los componentes existentes y genera las secciones y páginas que faltan.';
   const handleCompleteProject = useCallback(() => {
-    setActiveBottomTab('chat');
     setIsCommandModalOpen(true);
     setPendingChatSend(COMPLETE_PROJECT_PROMPT);
   }, [COMPLETE_PROJECT_PROMPT]);
@@ -2291,38 +2253,27 @@ export function StudioEngine() {
 
         <AnimatePresence>
         {isCommandModalOpen && (
-          <CommandModal
-            onClose={() => setIsCommandModalOpen(false)}
-            activeTab={activeBottomTab}
-            setActiveTab={(tab) => setActiveBottomTab(tab)}
-          >
-            <div className="h-full w-full flex flex-col">
-              <div className={`w-full h-full ${activeBottomTab === 'chat' ? 'block' : 'hidden'}`}>
-                <ChatInterface
-                  isLoading={isGenerating}
-                  onSendMessage={handleSendMessage}
-                  selectedElement={selectedElement}
-                  chatHistory={chatHistory}
-                  onHistoryUpdate={(history) => setChatHistory(history.slice(-30))}
-                  onPersistMessage={persistChatMessage}
-                  onCancel={handleCancelGeneration}
-                  isCancelling={isCancelling}
-                  injectedMessage={pendingChatSend}
-                  onInjectedConsumed={() => setPendingChatSend(null)}
-                  projectId={projectId}
-                  isReadOnly={isReadOnly}
-                  pendingPlanSteps={pendingPlanDecision?.steps ?? null}
-                  onApprovePlan={handleApprovePlan}
-                  onRejectPlan={handleRejectPlan}
-                  planModeEnabled={planModeEnabled}
-                  onPlanModeChange={handlePlanModeChange}
-                  projectName={currentProjectName}
-                />
-              </div>
-              <div className={`w-full h-full ${activeBottomTab === 'terminal' ? 'block' : 'hidden'}`}>
-                <Terminal ref={terminalRef} />
-              </div>
-            </div>
+          <CommandModal onClose={() => setIsCommandModalOpen(false)}>
+            <ChatInterface
+              isLoading={isGenerating}
+              onSendMessage={handleSendMessage}
+              selectedElement={selectedElement}
+              chatHistory={chatHistory}
+              onHistoryUpdate={(history) => setChatHistory(history.slice(-30))}
+              onPersistMessage={persistChatMessage}
+              onCancel={handleCancelGeneration}
+              isCancelling={isCancelling}
+              injectedMessage={pendingChatSend}
+              onInjectedConsumed={() => setPendingChatSend(null)}
+              projectId={projectId}
+              isReadOnly={isReadOnly}
+              pendingPlanSteps={pendingPlanDecision?.steps ?? null}
+              onApprovePlan={handleApprovePlan}
+              onRejectPlan={handleRejectPlan}
+              planModeEnabled={planModeEnabled}
+              onPlanModeChange={handlePlanModeChange}
+              projectName={currentProjectName}
+            />
           </CommandModal>
         )}
         </AnimatePresence>

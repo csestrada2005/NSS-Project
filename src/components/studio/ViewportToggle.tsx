@@ -1,6 +1,5 @@
 import { Monitor, Tablet, Smartphone } from 'lucide-react';
-
-type ViewportMode = 'mobile' | 'tablet' | 'desktop';
+import type { ViewportMode } from './types';
 
 const ORDER: ViewportMode[] = ['desktop', 'tablet', 'mobile'];
 const ICON: Record<ViewportMode, typeof Monitor> = { desktop: Monitor, tablet: Tablet, mobile: Smartphone };

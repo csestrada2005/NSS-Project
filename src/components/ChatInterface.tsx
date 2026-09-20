@@ -133,8 +133,12 @@ export function ChatInterface({
   // Último prompt enviado — el "eco" de la tarjeta de proceso (fc-prompt-eco).
   const [lastSentText, setLastSentText] = useState('');
 
-  // Rediseño (2026-09-20): estado propio nuevo.
-  const [mode, setMode] = useState<ChatSendMode>(planModeEnabled ? 'plan' : 'auto');
+  // Rediseño (2026-09-20), consolidado (2026-09-21): `mode` NO es estado
+  // propio — es `planModeEnabled` derivado. El dato real que le importa al
+  // pipeline (shouldGatePlan, la marca [MODE:...]) vive en StudioEngine; un
+  // useState local aquí era una segunda copia que podía desalinearse del
+  // prop. Mismo motivo por el que pendingPlanSteps tampoco es estado local.
+  const mode: ChatSendMode = planModeEnabled ? 'plan' : 'auto';
   const [historyOpen, setHistoryOpen] = useState(false);
   const [typebarHidden, setTypebarHidden] = useState(false);
 
@@ -361,7 +365,6 @@ export function ChatInterface({
   };
 
   const handleModeChange = (next: ChatSendMode) => {
-    setMode(next);
     onPlanModeChange?.(next === 'plan');
   };
 
@@ -453,7 +456,7 @@ export function ChatInterface({
   }, [historyOpen, isLoading, onCancel]);
 
   return (
-    <div className="forge-chat" data-estado={estado} data-modo={mode}>
+    <div className="forge-chat" data-estado={estado}>
       <div className={`fc-modal-layer ${typebarHidden ? 'fc-hidden' : ''}`}>
         <div className="fc-stack">
           <CreditsBadge />

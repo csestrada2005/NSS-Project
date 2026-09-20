@@ -2,9 +2,7 @@ import type { RefObject } from 'react';
 import { MousePointer2, Edit3, Code, Settings, MessageSquare } from 'lucide-react';
 import { PageDropdown } from './PageDropdown';
 import { ViewportToggle } from './ViewportToggle';
-
-type ViewportMode = 'mobile' | 'tablet' | 'desktop';
-type PanelMode = 'preview' | 'code' | 'settings';
+import type { ViewportMode, PanelMode } from './types';
 
 /**
  * PreviewNavbar — navbar superior persistente, reemplaza la píldora flotante
