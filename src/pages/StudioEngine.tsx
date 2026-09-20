@@ -2346,15 +2346,19 @@ export function StudioEngine() {
         )}
         </AnimatePresence>
 
-        {showSettings && <SettingsModal onClose={() => setShowSettings(false)} fileTree={fileTree} files={files} projectId={projectId ?? null} />}
+        <AnimatePresence>
+          {showSettings && <SettingsModal onClose={() => setShowSettings(false)} fileTree={fileTree} files={files} projectId={projectId ?? null} />}
+        </AnimatePresence>
         {showGraph && <StateGraph fileTree={fileTree} onClose={() => setShowGraph(false)} />}
-        {showShareModal && projectId && (
-          <ShareProjectModal
-            projectId={projectId}
-            projectName={currentProjectName}
-            onClose={() => setShowShareModal(false)}
-          />
-        )}
+        <AnimatePresence>
+          {showShareModal && projectId && (
+            <ShareProjectModal
+              projectId={projectId}
+              projectName={currentProjectName}
+              onClose={() => setShowShareModal(false)}
+            />
+          )}
+        </AnimatePresence>
 
         <HistoryDrawer
           projectId={projectId ?? null}

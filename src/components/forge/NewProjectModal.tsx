@@ -148,7 +148,7 @@ export default function NewProjectModal({ onClose, onCreated }: NewProjectModalP
     >
       <motion.div
         {...modalPanelMotion}
-        className="bg-zinc-800 border border-zinc-700 rounded-2xl shadow-2xl w-full max-w-lg p-6 flex flex-col gap-5"
+        className="nebu-modal bg-card border border-border rounded-2xl shadow-2xl w-full max-w-lg p-6 flex flex-col gap-5"
       >
         {/* Header */}
         <div className="flex items-center justify-between">

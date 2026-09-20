@@ -114,7 +114,7 @@ export function MigrationApplyModal({
       <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-4">
         <motion.div
           {...modalPanelMotion}
-          className="bg-card border border-border rounded-2xl w-full max-w-lg shadow-2xl pointer-events-auto flex flex-col max-h-[90vh]"
+          className="nebu-modal bg-card border border-border rounded-2xl w-full max-w-lg shadow-2xl pointer-events-auto flex flex-col max-h-[90vh]"
         >
           <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
             <h2 className="text-base font-semibold text-foreground flex items-center gap-2">

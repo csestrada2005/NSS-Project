@@ -7,6 +7,28 @@
   --color-primary-foreground: hsl(0 0% 100%);
   --color-background: hsl(0 0% 4%);
   --color-foreground: hsl(0 0% 98%);
+
+  /*
+   * Tokens que faltaban desde la migración a Tailwind v4: sin ellos, clases
+   * como bg-card/border-border/bg-muted/text-muted-foreground/bg-destructive
+   * no generaban NINGÚN CSS (v4 sólo fabrica utilidades de color desde el
+   * namespace --color-*, no desde los --nombre sueltos de :root de abajo).
+   * Valores tomados literal de los mismos :root de abajo, sin inventar nada
+   * nuevo — puramente aditivo, 2026-09-20.
+   */
+  --color-card: hsl(0 0% 8%);
+  --color-card-foreground: hsl(0 0% 95%);
+  --color-secondary: hsl(240 10% 10%);
+  --color-secondary-foreground: hsl(0 0% 90%);
+  --color-muted: hsl(240 6% 10%);
+  --color-muted-foreground: hsl(240 5% 50%);
+  --color-accent: hsl(240 10% 12%);
+  --color-accent-foreground: hsl(0 0% 95%);
+  --color-destructive: hsl(0 84% 60%);
+  --color-destructive-foreground: hsl(0 0% 100%);
+  --color-border: hsl(240 6% 14%);
+  --color-input: hsl(240 6% 14%);
+  --color-ring: hsl(355 78% 56%);
 }
 
 @layer base {
@@ -87,6 +109,31 @@ button, [role="button"], a { cursor: pointer; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground)); }
+
+/*
+ * Paleta Nebu para los modales del builder (bucket 5, ítem 3, 2026-09-20).
+ * Sobrescribe el namespace --color-* (el que Tailwind v4 lee para fabricar
+ * bg-card/border-border/bg-muted/etc., ver @theme arriba) SÓLO dentro de
+ * .nebu-modal y sus descendientes — regla sin @layer, a propósito, para que
+ * gane sobre @layer theme (mismo truco que select/scrollbar de arriba). El
+ * rojo de marca (--color-primary/--color-destructive) NO se toca: ya
+ * coincide con --nebu-accent. Valores tomados de --nebu-* (arriba, hasta hoy
+ * sin usar en ningún componente).
+ */
+.nebu-modal {
+  --color-background: #0a0a0f;
+  --color-card: #16161d;
+  --color-card-foreground: #F0F0F5;
+  --color-foreground: #F0F0F5;
+  --color-muted: #111116;
+  --color-muted-foreground: #71717A;
+  --color-secondary: #111116;
+  --color-secondary-foreground: #F0F0F5;
+  --color-accent: #1a1a24;
+  --color-accent-foreground: #F0F0F5;
+  --color-border: rgba(255, 255, 255, 0.06);
+  --color-input: rgba(255, 255, 255, 0.06);
+}
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }

@@ -565,21 +565,118 @@ hay que REUSAR, no reconstruir:
 **Pendiente, bucket 5 ítem 3 en general (sin tocar):** `ForgeDashboard` (cards, hover states) y una
 pasada del checklist de calidad del skill (cursor-pointer, contraste, espaciado) sobre esas pantallas.
 
+**Bloque 3 (2026-09-20) — salida animada en los 5 modales + Command Palette que crece + hallazgo de raíz
+(bug de Tailwind v4, no sólo cosmético) + paleta Nebu:**
+
+Pedido de Samuel, 4 partes: (a) fade-out en los 5 modales, no sólo entrada; (b) todo más lento, entrada Y
+salida; (c) Command Palette nace chico desde abajo y crece hasta llenar pantalla, no sólo desliza; (d) fondo
+negro sólido en el modal de chat, en las 4 pestañas, con la MISMA lógica de (e) paleta Nebu en todos los
+modales.
+
+**Hecho (a+b+c) — `src/components/ui/modalMotion.ts`:** `modalPanelMotion` ganó `exit` (antes sólo tenía
+entrada). Duraciones de `modalBackdropMotion`/`modalPanelMotion` subieron de 0.15/0.18s a 0.32s;
+`bottomSheetMotion` de 0.25s a 0.45s y ahora anima también `scale` (0.55→1, `transformOrigin: 'bottom
+center'`) además de `y`, para el efecto "nace chico y crece". `AnimatePresence` envuelto en los 4 puntos de
+montaje condicional que faltaban (cada modal se monta/desmonta con `{cond && <Modal/>}` en su padre, mismo
+patrón que ya tenía `CommandModal` en `StudioEngine.tsx`): `NewProjectModal`/`ShareProjectModal` en
+`ForgeDashboard.tsx`, `SettingsModal`/`ShareProjectModal` en `StudioEngine.tsx`, `MigrationApplyModal` en
+`DDLApprovalButton.tsx` — sólo el envoltorio visual, cero cambios a la lógica de cada uno (en particular,
+`MigrationApplyModal` sigue exigiendo la frase de confirmación exacta igual que siempre).
+
+**Hallazgo de raíz, mientras investigaba (d) "por qué el chat no es negro sino como transparente":**
+compilé el proyecto (`npx vite build`) y miré el CSS real que sale al navegador — `bg-card`,
+`border-border`, `bg-muted`, `bg-accent`, `bg-destructive`, `bg-secondary`, `text-muted-foreground` (28-42
+archivos cada una, `border-border` 40 archivos) no generaban NINGÚN CSS en TODA la plataforma. Causa: el
+bloque `@theme` de `src/index.css` (Tailwind v4, líneas 4-10) sólo registraba 4 tokens
+(`primary`/`primary-foreground`/`background`/`foreground`); el resto de los nombres semánticos vivían sólo
+en el `:root` viejo estilo shadcn v3 (líneas 13-52), que Tailwind v4 no lee para fabricar clases. No era "un
+gris poco negro" como asumí en el plan original — el panel del chat literalmente no tenía fondo, se veía lo
+que hubiera detrás. **Reencuadrado con Samuel en caliente, evidencia mostrada cruda antes de la lectura**;
+decisión: arreglar de raíz, no parchar sólo los 6 modales.
+
+**Hecho (raíz) — `src/index.css`:** 13 tokens nuevos en `@theme` (`--color-card`, `-card-foreground`,
+`-secondary`, `-secondary-foreground`, `-muted`, `-muted-foreground`, `-accent`, `-accent-foreground`,
+`-destructive`, `-destructive-foreground`, `-border`, `-input`, `-ring`), valor literal copiado del `:root`
+correspondiente — puramente aditivo, nada se quitó ni se cambió de valor. `popover`/`sidebar-*` quedaron
+fuera a propósito: verificado por grep que ningún componente los usa, agregarlos sería un token sin dueño.
+Verificado con build real (no de memoria): antes → `.bg-card{...}` ausente del CSS compilado; después →
+`.bg-card{background-color:var(--color-card)}` presente, mismo patrón confirmado para las 9 clases.
+`npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 653/653. `npx vitest run` → 48/48
+(ninguno de los tests existentes cubre generación de CSS de Tailwind — la verificación de esto fue el build
+real, no la batería automática).
+
+**Hecho (d+e) — paleta Nebu en los 6 modales, vía una sola clase de ámbito:** en vez de tocar cada
+ocurrencia de color en cada archivo, nueva regla `.nebu-modal` en `index.css` (sin `@layer`, a propósito —
+mismo truco que las reglas de `select`/scrollbar que ya vivían ahí sin capa — para ganarle a `@layer theme`
+por origen, no por especificidad; verificado en el CSS compilado que la regla queda fuera de cualquier
+`@layer`). Sobrescribe `--color-background/-card/-card-foreground/-foreground/-muted/-muted-foreground/
+-secondary/-secondary-foreground/-accent/-accent-foreground/-border/-input` a los valores `--nebu-*` que ya
+existían en `index.css` sin que ningún componente los usara. El rojo de marca (`--color-primary`/
+`-destructive`) NO se toca. Clase `nebu-modal` añadida al panel de `NewProjectModal`, `SettingsModal`,
+`ShareProjectModal`, `MigrationApplyModal` y `CommandModal` — en este último, puesta en el panel exterior
+para que herede a las 4 pestañas (Chat/Visual/Code/Navigate) sin tocar `ChatInterface.tsx`/`CodePanel.tsx`/
+etc. (esos componentes se reusan fuera de `CommandModal` — recolorearlos por dentro habría filtrado Nebu a
+contextos donde no se pidió). De paso, `SettingsModal.tsx` (30+ colores `gray-*`/`zinc-*` sueltos, nunca
+conectados al sistema de diseño) y `NewProjectModal.tsx` (1 línea) migraron a los tokens semánticos
+(`bg-card`, `border-border`, `bg-muted`, `text-muted-foreground`, etc.) — necesario para que la paleta Nebu
+les llegue igual que a los otros 4 modales, que ya los usaban.
+`npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 653/653. `npx vitest run` → 48/48.
+`graphify update .` corrido.
+
+**CHECK MANUAL — PENDIENTE.** Cómo reproducirlo (dev server local o `sesión-5` desplegada):
+1. Abre y cierra, uno por uno: New Project, Settings, Share, History. Cada uno debe entrar Y salir con un
+   fundido/pop notorio (más lento que antes, se debe alcanzar a ver el movimiento).
+2. Si hay una migración destructiva pendiente: `MigrationApplyModal` debe animar igual al abrir/cerrar Y
+   seguir pidiendo la frase de confirmación exacta antes de dejar aplicar (esto NO debía cambiar).
+3. Abre el Command Palette: debe nacer chico desde abajo y crecer hacia los lados hasta ocupar casi toda la
+   pantalla (no sólo deslizar). Ciérralo: mismo efecto en reversa, más lento que antes.
+4. Con el Command Palette abierto, revisa las 4 pestañas (Chat/Visual/Code/Navigate): fondo oscuro sólido
+   consistente en las 4 (no transparente, no gris genérico) — debe verse un tinte ligeramente distinto al
+   resto de la plataforma (la paleta Nebu: fondo casi negro con un toque azulado).
+5. Abre Settings → todas las pestañas (Secrets/GitHub/Deploy/Domains/Database con sus 8 sub-pestañas/Email/
+   Analytics) — deben verse con el mismo tinte Nebu, sin ningún cuadro/botón en gris plano suelto que
+   desentone.
+6. Fuera de los modales (dashboard, editor detrás del Command Palette, etc.): debe verse EXACTAMENTE igual
+   que antes de esta sesión — la paleta Nebu es sólo para dentro de los modales.
+
+Mundos pre-registrados:
+- **Esperado:** los 6 modales entran/salen animados y más lentos; Command Palette nace chico y crece; las 4
+  pestañas del Command Palette y las 8+ pestañas de Settings tienen fondo Nebu sólido y consistente; el
+  resto de la plataforma (fuera de modales) no cambió en nada; la frase de confirmación de migración
+  destructiva se sigue pidiendo igual.
+- **Residuo conocido, no bug:** los botones/acentos en rojo de marca (`primary`, `destructive` para
+  peligro/error) NO cambiaron de tono — es a propósito, ese rojo ya coincidía con Nebu.
+- **Falla real (si aparece, SÍ es bug):** algún modal aparece sin fondo/transparente (señal de que la clase
+  `nebu-modal` no se está aplicando o el override no está ganando), colores grises sueltos que no matchean
+  el resto (señal de que quedó algún `bg-gray-*`/`bg-zinc-*` sin migrar), doble transform o posición rota en
+  el Command Palette, o `MigrationApplyModal` deja aplicar sin pedir la frase.
+
+**REENCUADRE (2026-09-20, antes de correr el check):** el mundo pre-registrado original (abajo, ya
+corregido) describía `CommandModal` como "sigue centrado en pantalla" — eso era cierto para el Bloque 1,
+pero el Bloque 2 (ya commiteado, `972ab79`) lo cambió deliberadamente a bottom sheet
+(`inset-x-4 bottom-4 h-[88vh]`, entra desde abajo, y ahora también SALE animado vía `AnimatePresence` en
+`StudioEngine.tsx`). Verificado leyendo `CommandModal.tsx` y `StudioEngine.tsx` antes de escribir esto, no
+de memoria. El paso 4 y la falla-real de abajo quedan corregidos para reflejar el estado real del código;
+el resto del check (pasos 1-3, los otros 4 modales) no cambió.
+
 **CHECK MANUAL — PENDIENTE.** Cómo reproducirlo (dev server local o `sesión-5` desplegada):
 1. Abrir "New Project" — el modal debe entrar con un fundido + pop suave, no aparecer de golpe.
 2. Abrir Settings, Share, History (el ícono de historial) — mismo fundido en cada uno; History además debe
    seguir deslizando desde la derecha como antes.
 3. Si hay una migración destructiva pendiente para probar, confirmar que `MigrationApplyModal` anima igual
    Y que la frase de confirmación sigue exigiéndose exactamente igual que antes (esto NO debía cambiar).
-4. Abrir el Command Palette (⌘K o como se dispare) — debe seguir centrado en pantalla, ahora con el mismo
-   fundido, sin saltar de posición ni aparecer descentrado.
+4. Abrir el Command Palette (botón "Código" o como se dispare) — debe entrar como panel deslizante desde
+   ABAJO, ocupando casi toda la altura de pantalla (no centrado, no un cuadro chico). Cerrarlo: debe
+   deslizarse de vuelta hacia abajo y desvanecerse (salida animada), no desaparecer de golpe.
 
 Mundos pre-registrados:
-- **Esperado:** los 5 modales + el drawer de historial entran con el mismo fundido/pop consistente: nada
-  de saltos, nada descentrado, ninguna lógica de confirmación/contenido cambiada.
-- **Falla real (si aparece, SÍ es bug):** `CommandModal` aparece descentrado o con doble transform
-  (síntoma de que el `translate(-50%,-50%)` de Tailwind chocó con el transform de framer-motion), o
-  `MigrationApplyModal` deja aplicar sin pedir la frase de confirmación en el caso destructivo.
+- **Esperado:** los 5 modales + el drawer de historial entran con el mismo fundido/pop consistente (New
+  Project, Settings, Share, MigrationApplyModal, History); `CommandModal` entra Y sale como bottom sheet
+  animado, ocupando casi toda la pantalla. Ninguna lógica de confirmación/contenido cambiada.
+- **Falla real (si aparece, SÍ es bug):** `CommandModal` aparece centrado o como cuadro chico (señal de que
+  quedó código viejo sin actualizar), no anima al cerrarse (aparece/desaparece de golpe pese al
+  `AnimatePresence`), o `MigrationApplyModal` deja aplicar sin pedir la frase de confirmación en el caso
+  destructivo.
 
 ### Resto del bucket (sin tocar esta sesión)
 - RAG de UI/UX: PatternRetriever da `direct: 0 | vector: 0`. Primera pregunta: ¿pasa igual en producción?

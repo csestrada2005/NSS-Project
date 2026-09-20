@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { AnimatePresence } from "framer-motion";
 import { Layers, Flame, Plus, Search, Trash2, Loader2, LayoutDashboard, Share2, ChevronLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { SupabaseService } from "@/services/SupabaseService";
@@ -148,22 +149,26 @@ const ForgeDashboard = () => {
 
   return (
     <div className="flex flex-col h-screen bg-background">
-      {shareProject && (
-        <ShareProjectModal
-          projectId={shareProject.id}
-          projectName={shareProject.name}
-          onClose={() => setShareProject(null)}
-        />
-      )}
-      {showNewProjectModal && (
-        <NewProjectModal
-          onClose={() => setShowNewProjectModal(false)}
-          onCreated={(projectId, _, initialPrompt, designHints) => {
-            setShowNewProjectModal(false);
-            navigate(`/studio/${projectId}`, { state: { initialPrompt, designHints } });
-          }}
-        />
-      )}
+      <AnimatePresence>
+        {shareProject && (
+          <ShareProjectModal
+            projectId={shareProject.id}
+            projectName={shareProject.name}
+            onClose={() => setShareProject(null)}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showNewProjectModal && (
+          <NewProjectModal
+            onClose={() => setShowNewProjectModal(false)}
+            onCreated={(projectId, _, initialPrompt, designHints) => {
+              setShowNewProjectModal(false);
+              navigate(`/studio/${projectId}`, { state: { initialPrompt, designHints } });
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Top header bar */}
       <header className="h-14 border-b border-border bg-background flex items-center justify-between px-6 shrink-0">
