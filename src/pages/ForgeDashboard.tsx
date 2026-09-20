@@ -129,12 +129,12 @@ const ForgeDashboard = () => {
   if (error) {
     return (
       <div className="nebu-modal flex flex-col h-screen bg-background items-center justify-center p-6">
-        <div className="bg-red-100 border border-red-300 text-red-800 rounded-xl px-5 py-4 text-sm max-w-md w-full text-center">
+        <div className="bg-red-500/10 border border-red-500/30 text-red-300 rounded-xl px-5 py-4 text-sm max-w-md w-full text-center">
           <p className="font-semibold mb-1">Failed to load projects</p>
           <p>{error}</p>
           <Button
             variant="outline"
-            className="mt-4 border-red-300 hover:bg-red-100 text-red-800"
+            className="mt-4 border-red-500/30 hover:bg-red-500/10 text-red-300"
             onClick={() => {
               setError(null);
               loadProjects();

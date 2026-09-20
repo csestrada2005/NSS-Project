@@ -107,7 +107,7 @@ export function UsersManager() {
                       <select
                         value={p.role}
                         onChange={(e) => updateRole(p.id, e.target.value)}
-                        className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:border-blue-500"
+                        className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:border-primary"
                       >
                         {ROLES.map(r => (
                           <option key={r} value={r}>{r}</option>

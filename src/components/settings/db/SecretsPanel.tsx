@@ -133,10 +133,10 @@ export function SecretsPanel({ projectId }: SecretsPanelProps) {
       )}
 
       {/* Platform services (read-only) */}
-      <div className="bg-blue-950/30 rounded-xl p-4 border border-blue-800/40">
-        <h3 className="text-sm font-semibold text-blue-300 mb-3">Platform Services</h3>
+      <div className="bg-primary rounded-xl p-4 border border-primary">
+        <h3 className="text-sm font-semibold text-black mb-3">Platform Services</h3>
         {loadingPlatform ? (
-          <div className="flex items-center gap-2 text-xs text-zinc-400">
+          <div className="flex items-center gap-2 text-xs text-black/70">
             <Loader2 size={12} className="animate-spin" />
             Checking platform services...
           </div>
@@ -147,20 +147,20 @@ export function SecretsPanel({ projectId }: SecretsPanelProps) {
               return (
                 <div key={key} className="flex items-center gap-2 text-xs">
                   {connected
-                    ? <CheckCircle size={12} className="text-emerald-400 shrink-0" />
-                    : <Circle size={12} className="text-zinc-600 shrink-0" />}
-                  <span className={connected ? 'text-zinc-300' : 'text-zinc-500'}>{label}</span>
+                    ? <CheckCircle size={12} className="text-emerald-900 shrink-0" />
+                    : <Circle size={12} className="text-black/40 shrink-0" />}
+                  <span className={connected ? 'text-black' : 'text-black/60'}>{label}</span>
                 </div>
               );
             })}
           </div>
         )}
-        <p className="text-xs text-zinc-600 mt-3">Platform keys are managed server-side and never exposed to the client.</p>
+        <p className="text-xs text-black/60 mt-3">Platform keys are managed server-side and never exposed to the client.</p>
       </div>
 
       {/* User-managed secrets */}
-      <div className="bg-zinc-800/50 rounded-lg p-4 border border-zinc-700">
-        <p className="text-sm text-zinc-400 mb-1">
+      <div className="bg-primary rounded-lg p-4 border border-primary">
+        <p className="text-sm text-black/80 mb-1">
           Project secrets (e.g. <code>GITHUB_TOKEN</code>, custom API keys) are stored securely per project.
         </p>
         <div className="flex gap-2 mb-4 mt-4">
@@ -169,19 +169,19 @@ export function SecretsPanel({ projectId }: SecretsPanelProps) {
             placeholder="KEY (e.g. GITHUB_TOKEN)"
             value={newKey}
             onChange={(e) => setNewKey(e.target.value)}
-            className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+            className="flex-1 bg-black/15 border border-black/30 rounded px-3 py-2 text-sm text-black placeholder-black/50 focus:border-black focus:outline-none"
           />
           <input
             type="password"
             placeholder="VALUE"
             value={newValue}
             onChange={(e) => setNewValue(e.target.value)}
-            className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+            className="flex-1 bg-black/15 border border-black/30 rounded px-3 py-2 text-sm text-black placeholder-black/50 focus:border-black focus:outline-none"
           />
           <button
             onClick={addSecret}
             disabled={!newKey.trim()}
-            className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
+            className="px-4 py-2 bg-black hover:bg-black/80 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
           >
             <Plus size={16} />
             Add
@@ -195,7 +195,7 @@ export function SecretsPanel({ projectId }: SecretsPanelProps) {
         ) : (
           secrets.map((secret, index) => (
             <div key={index} className="flex items-center gap-2 bg-zinc-800/50 p-3 rounded border border-zinc-800 group hover:border-zinc-700 transition-colors">
-              <div className="flex-1 font-mono text-sm text-blue-400 truncate" title={secret.key}>
+              <div className="flex-1 font-mono text-sm text-foreground truncate" title={secret.key}>
                 {secret.key}
               </div>
               <div className="flex items-center gap-2 bg-zinc-900 px-2 py-1 rounded border border-zinc-800 max-w-[200px]">

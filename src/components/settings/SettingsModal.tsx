@@ -160,7 +160,7 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
                     {isPushing ? 'Pushing...' : 'Push Changes'}
                   </button>
                   {pushStatus && (
-                    <div className={`p-3 rounded border text-sm ${pushStatus.success ? 'bg-green-100 border-green-300 text-green-800' : 'bg-red-100 border-red-300 text-red-800'}`}>
+                    <div className={`p-3 rounded border text-sm ${pushStatus.success ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-red-500/10 border-red-500/30 text-red-300'}`}>
                       {pushStatus.message}
                     </div>
                   )}

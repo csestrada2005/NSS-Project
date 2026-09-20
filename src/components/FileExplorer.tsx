@@ -101,12 +101,12 @@ const TreeNodeItem: React.FC<TreeNodeProps> = ({ node, depth, onSelect }) => {
   return (
     <div>
       <div
-        className="flex items-center gap-1 py-1 px-2 hover:bg-gray-800 cursor-pointer select-none text-gray-300 hover:text-white transition-colors"
+        className="flex items-center gap-1 py-1 px-2 hover:bg-accent cursor-pointer select-none text-muted-foreground hover:text-foreground transition-colors"
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={handleClick}
       >
         {node.isDirectory ? (
-          <span className="text-gray-500">
+          <span className="text-muted-foreground">
             {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           </span>
         ) : (
@@ -114,9 +114,9 @@ const TreeNodeItem: React.FC<TreeNodeProps> = ({ node, depth, onSelect }) => {
         )}
 
         {node.isDirectory ? (
-          <Folder size={14} className="text-red-400" />
+          <Folder size={14} className="text-primary" />
         ) : (
-          <File size={14} className="text-gray-400" />
+          <File size={14} className="text-muted-foreground" />
         )}
 
         <span className="text-sm truncate">{node.name}</span>
@@ -154,13 +154,13 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ files, onSelect, onA
   const tree = buildTree(files);
 
   return (
-    <div className="h-full bg-gray-900 overflow-y-auto border-r border-gray-800 flex flex-col">
-      <div className="p-3 font-semibold text-xs text-gray-500 uppercase tracking-wider border-b border-gray-800 flex justify-between items-center">
+    <div className="h-full bg-background overflow-y-auto border-r border-border flex flex-col">
+      <div className="p-3 font-semibold text-xs text-muted-foreground uppercase tracking-wider border-b border-border flex justify-between items-center">
         <span>Explorer</span>
         {onAddPackage && (
           <button
             onClick={handleAddPackage}
-            className="hover:text-white transition-colors p-1 rounded hover:bg-gray-800"
+            className="hover:text-foreground transition-colors p-1 rounded hover:bg-accent focus:outline-none focus-visible:ring-1 focus-visible:ring-primary"
             title="Install npm package"
           >
             <Plus size={14} />

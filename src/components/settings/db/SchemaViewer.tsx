@@ -96,7 +96,7 @@ export function SchemaViewer({ projectId }: SchemaViewerProps = {}) {
         placeholder="Search tables..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-blue-500 placeholder-zinc-500"
+        className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-primary placeholder-zinc-500"
       />
 
       <div className="space-y-1">

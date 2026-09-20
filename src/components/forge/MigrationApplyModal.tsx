@@ -118,7 +118,7 @@ export function MigrationApplyModal({
         >
           <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
             <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
-              {isDestructive && <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />}
+              {isDestructive && <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />}
               {isDestructive ? 'Esta migración destruye datos' : 'Aplicar migración'}
             </h2>
             <button
@@ -145,18 +145,18 @@ export function MigrationApplyModal({
             </div>
 
             {isDestructive && (
-              <div className="rounded-lg border border-red-300 bg-red-50 p-3 space-y-2">
-                <p className="text-xs font-semibold text-red-800">
+              <div className="rounded-lg border border-amber-600/40 bg-amber-950/40 p-3 space-y-2">
+                <p className="text-xs font-semibold text-amber-300">
                   {flagged.length === 1
                     ? 'Una sentencia destruye datos existentes:'
                     : `${flagged.length} sentencias destruyen datos existentes:`}
                 </p>
                 {flagged.map(({ path, finding }, index) => (
                   <div key={`${path}:${finding.line}:${index}`} className="space-y-0.5">
-                    <div className="text-[10px] uppercase tracking-wide text-red-700/80">
+                    <div className="text-[10px] uppercase tracking-wide text-amber-400/80">
                       {fileName(path)}:{finding.line} — {KIND_LABEL[finding.kind] ?? finding.kind}
                     </div>
-                    <pre className="text-[11px] text-red-900 bg-white border border-red-200 rounded p-2 overflow-x-auto whitespace-pre-wrap">
+                    <pre className="text-[11px] text-amber-200 bg-black/40 border border-amber-800/40 rounded p-2 overflow-x-auto whitespace-pre-wrap">
                       {finding.statement}
                     </pre>
                   </div>
@@ -165,7 +165,7 @@ export function MigrationApplyModal({
             )}
 
             {unnameable && (
-              <p className="text-xs text-red-700">
+              <p className="text-xs text-amber-400">
                 No puedo identificar con seguridad el objeto que esta migración destruye, así que no
                 ofrezco confirmarla desde aquí. Revísala y aplícala a mano.
               </p>
@@ -192,7 +192,7 @@ export function MigrationApplyModal({
                   disabled={isApplying}
                   onChange={e => setTyped(e.target.value)}
                   placeholder={required}
-                  className="w-full bg-accent text-foreground border border-border rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-red-500 placeholder:text-muted-foreground/50 disabled:opacity-50"
+                  className="w-full bg-accent text-foreground border border-border rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder:text-muted-foreground/50 disabled:opacity-50"
                 />
               </div>
             )}
@@ -210,8 +210,8 @@ export function MigrationApplyModal({
               <button
                 onClick={onConfirm}
                 disabled={!canConfirm}
-                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                  isDestructive ? 'bg-red-600 hover:bg-red-500' : 'bg-primary hover:bg-primary/90'
+                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                  isDestructive ? 'bg-amber-500 hover:bg-amber-400 text-black font-semibold' : 'bg-primary hover:bg-primary/90 text-white'
                 }`}
               >
                 {isApplying && <Loader2 className="w-4 h-4 animate-spin" />}

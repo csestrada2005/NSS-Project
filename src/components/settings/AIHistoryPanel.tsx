@@ -22,7 +22,7 @@ interface AIHistoryRecord {
 }
 
 const colorMap: Record<string, string> = {
-  new_feature: 'bg-blue-900/40 text-blue-400 border-blue-500/30',
+  new_feature: 'bg-pink-900/40 text-pink-400 border-pink-500/30',
   style_change: 'bg-purple-900/40 text-purple-400 border-purple-500/30',
   fix_bug: 'bg-amber-900/40 text-amber-400 border-amber-500/30',
   modify_existing: 'bg-zinc-800 text-zinc-300 border-zinc-700',

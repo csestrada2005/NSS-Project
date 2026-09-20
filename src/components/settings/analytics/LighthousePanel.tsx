@@ -17,11 +17,14 @@ interface Scores {
   ttfb: number | null;
 }
 
+// Los recuadros de este panel ahora tienen fondo rojo de marca — el "malo"
+// pasa de rojo (se perdía contra el fondo) a negro, que ya es el color de
+// "alarma" sobre rojo en el resto de este rediseño.
 function scoreColor(score: number | null): string {
-  if (score === null) return '#71717a';
+  if (score === null) return '#00000066';
   if (score >= 90) return '#22c55e';
   if (score >= 50) return '#f59e0b';
-  return '#ef4444';
+  return '#0D0D0D';
 }
 
 function ScoreGauge({ label, score }: { label: string; score: number | null }) {
@@ -34,7 +37,7 @@ function ScoreGauge({ label, score }: { label: string; score: number | null }) {
   return (
     <div className="flex flex-col items-center gap-2">
       <svg width="88" height="88" viewBox="0 0 88 88">
-        <circle cx="44" cy="44" r={r} fill="none" stroke="#27272a" strokeWidth="8" />
+        <circle cx="44" cy="44" r={r} fill="none" stroke="#00000033" strokeWidth="8" />
         <circle
           cx="44" cy="44" r={r} fill="none"
           stroke={color} strokeWidth="8"
@@ -47,7 +50,7 @@ function ScoreGauge({ label, score }: { label: string; score: number | null }) {
           {score !== null ? score : '--'}
         </text>
       </svg>
-      <span className="text-xs text-zinc-400 text-center">{label}</span>
+      <span className="text-xs text-black/70 text-center">{label}</span>
     </div>
   );
 }
@@ -63,12 +66,12 @@ interface CWV {
 function CWVRow({ label, value, unit, target, targetLabel }: CWV) {
   const pass = value !== null && value <= target;
   return (
-    <div className="flex items-center justify-between py-2 border-b border-zinc-800 last:border-0">
-      <span className="text-sm text-zinc-300">{label}</span>
+    <div className="flex items-center justify-between py-2 border-b border-black/20 last:border-0">
+      <span className="text-sm text-black">{label}</span>
       <div className="flex items-center gap-3">
-        <span className="text-sm text-zinc-200 font-mono">{value !== null ? `${value}${unit}` : '--'}</span>
-        <span className="text-xs text-zinc-500">target &lt;{targetLabel}</span>
-        <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${pass ? 'bg-emerald-600/20 text-emerald-400' : 'bg-red-600/20 text-red-400'}`}>
+        <span className="text-sm text-black font-mono">{value !== null ? `${value}${unit}` : '--'}</span>
+        <span className="text-xs text-black/60">target &lt;{targetLabel}</span>
+        <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${pass ? 'bg-emerald-600/20 text-emerald-900' : 'bg-black/20 text-black'}`}>
           {pass ? 'Pass' : 'Fail'}
         </span>
       </div>
@@ -138,7 +141,7 @@ export function LighthousePanel({ projectId, initialUrl }: LighthousePanelProps 
           placeholder="https://your-site.com"
           value={deployedUrl}
           onChange={(e) => setDeployedUrl(e.target.value)}
-          className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-blue-500 placeholder-zinc-500"
+          className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-primary placeholder-zinc-500"
         />
         <button
           onClick={() => setStrategy(s => s === 'mobile' ? 'desktop' : 'mobile')}
@@ -149,7 +152,7 @@ export function LighthousePanel({ projectId, initialUrl }: LighthousePanelProps 
         <button
           onClick={runAudit}
           disabled={isRunning || !deployedUrl || !projectId}
-          className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm rounded-lg transition-colors flex items-center gap-2"
+          className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-sm rounded-lg transition-colors flex items-center gap-2"
         >
           {isRunning ? <Loader2 size={14} className="animate-spin" /> : null}
           {isRunning ? 'Running...' : 'Run Audit'}
@@ -166,19 +169,19 @@ export function LighthousePanel({ projectId, initialUrl }: LighthousePanelProps 
 
       {/* Gauges */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-zinc-800/30 border border-zinc-700 rounded-xl p-4 flex justify-around">
+        <div className="bg-primary border border-primary rounded-xl p-4 flex justify-around">
           <ScoreGauge label="Performance" score={scores.perf} />
           <ScoreGauge label="Accessibility" score={scores.a11y} />
         </div>
-        <div className="bg-zinc-800/30 border border-zinc-700 rounded-xl p-4 flex justify-around">
+        <div className="bg-primary border border-primary rounded-xl p-4 flex justify-around">
           <ScoreGauge label="Best Practices" score={scores.bestPractices} />
           <ScoreGauge label="SEO" score={scores.seo} />
         </div>
       </div>
 
       {/* Core Web Vitals */}
-      <div className="bg-zinc-800/30 border border-zinc-700 rounded-xl p-4">
-        <h3 className="text-sm font-medium text-zinc-300 mb-3">Core Web Vitals</h3>
+      <div className="bg-primary border border-primary rounded-xl p-4">
+        <h3 className="text-sm font-medium text-black mb-3">Core Web Vitals</h3>
         <CWVRow label="LCP" value={scores.lcp} unit="ms" target={2500} targetLabel="2500ms" />
         <CWVRow label="TBT (FID proxy)" value={scores.tbt} unit="ms" target={200} targetLabel="200ms" />
         <CWVRow label="CLS" value={scores.cls !== null ? Math.round(scores.cls * 1000) / 1000 : null} unit="" target={0.1} targetLabel="0.1" />

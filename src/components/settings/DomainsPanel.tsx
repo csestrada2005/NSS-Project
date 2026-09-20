@@ -139,8 +139,8 @@ export function DomainsPanel({ projectId }: DomainsPanelProps) {
   return (
     <div className="space-y-6">
       {/* Add domain */}
-      <div className="bg-zinc-800/50 rounded-lg p-4 border border-zinc-700">
-        <h3 className="text-sm font-semibold text-zinc-200 mb-3 flex items-center gap-2">
+      <div className="bg-primary rounded-lg p-4 border border-primary">
+        <h3 className="text-sm font-semibold text-black mb-3 flex items-center gap-2">
           <Globe size={14} />
           Connect a custom domain
         </h3>
@@ -151,12 +151,12 @@ export function DomainsPanel({ projectId }: DomainsPanelProps) {
             value={newDomain}
             onChange={(e) => setNewDomain(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && connectDomain()}
-            className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none placeholder-zinc-600"
+            className="flex-1 bg-black/15 border border-black/30 rounded px-3 py-2 text-sm text-black placeholder-black/50 focus:border-black focus:outline-none"
           />
           <button
             onClick={connectDomain}
             disabled={isConnecting || !newDomain.trim()}
-            className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
+            className="px-4 py-2 bg-black hover:bg-black/80 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
           >
             {isConnecting ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
             Connect
@@ -201,19 +201,19 @@ export function DomainsPanel({ projectId }: DomainsPanelProps) {
 
       {/* Info box for manual DNS */}
       {deploymentUrl && (
-        <div className="bg-zinc-800/30 border border-zinc-700 rounded-lg p-4">
+        <div className="bg-primary border border-primary rounded-lg p-4">
           <div className="flex items-start gap-2">
-            <Info size={14} className="text-blue-400 mt-0.5 shrink-0" />
+            <Info size={14} className="text-black mt-0.5 shrink-0" />
             <div className="space-y-1">
-              <p className="text-xs font-medium text-zinc-300">How to point your domain (if not using Cloudflare)</p>
-              <p className="text-xs text-zinc-500">Add a CNAME record pointing to your deployment:</p>
+              <p className="text-xs font-medium text-black">How to point your domain (if not using Cloudflare)</p>
+              <p className="text-xs text-black/70">Add a CNAME record pointing to your deployment:</p>
               <div className="flex items-center gap-2 mt-2">
-                <code className="text-xs font-mono text-blue-300 bg-zinc-900 px-2 py-1 rounded flex-1">
+                <code className="text-xs font-mono text-black bg-black/15 px-2 py-1 rounded flex-1">
                   CNAME → {new URL(deploymentUrl).hostname}
                 </code>
                 <button
                   onClick={() => navigator.clipboard.writeText(new URL(deploymentUrl).hostname)}
-                  className="p-1 text-zinc-500 hover:text-white transition-colors"
+                  className="p-1 text-black/70 hover:text-black transition-colors"
                   title="Copy hostname"
                 >
                   <Copy size={12} />

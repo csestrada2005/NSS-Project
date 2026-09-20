@@ -60,7 +60,7 @@ export function LogsViewer({ projectId }: LogsViewerProps) {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
-  const LEVEL_COLORS = { INFO: 'text-blue-400', WARN: 'text-amber-400', ERROR: 'text-red-400' };
+  const LEVEL_COLORS = { INFO: 'text-zinc-400', WARN: 'text-amber-400', ERROR: 'text-red-400' };
 
   if (!projectId) {
     return <div className="text-center text-zinc-500 text-sm py-8">Save your project first to view logs.</div>;

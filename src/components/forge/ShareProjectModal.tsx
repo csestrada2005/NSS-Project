@@ -51,11 +51,14 @@ function Avatar({ name, avatarUrl, size = 8 }: { name: string | null; avatarUrl?
   );
 }
 
+// Fondo oscuro (ver index.css .nebu-modal) — insignias translúcidas en vez de
+// pastel-100/700 (pensadas para el fondo claro que este modal tenía antes).
+// "dev" pasa de azul a ámbar: el azul se eliminó de toda la plataforma.
 const ROLE_BADGE: Record<string, string> = {
-  admin: 'bg-red-100 text-red-700',
-  dev: 'bg-blue-100 text-blue-700',
-  vendedor: 'bg-purple-100 text-purple-700',
-  cliente: 'bg-emerald-100 text-emerald-700',
+  admin: 'bg-red-500/20 text-red-300',
+  dev: 'bg-amber-500/20 text-amber-300',
+  vendedor: 'bg-purple-500/20 text-purple-300',
+  cliente: 'bg-emerald-500/20 text-emerald-300',
 };
 
 export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
@@ -205,8 +208,8 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
                         <span
                           className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
                             c.status === 'pending'
-                              ? 'bg-amber-100 text-amber-700'
-                              : 'bg-emerald-100 text-emerald-700'
+                              ? 'bg-amber-500/20 text-amber-300'
+                              : 'bg-emerald-500/20 text-emerald-300'
                           }`}
                         >
                           {c.status}
@@ -227,7 +230,7 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
                         </div>
                         <button
                           onClick={() => handleRevokeCollaborator(c.id)}
-                          className="text-xs text-red-600 hover:text-red-700 transition-colors px-2 py-1 rounded-lg hover:bg-red-100"
+                          className="text-xs text-red-400 hover:text-red-300 transition-colors px-2 py-1 rounded-lg hover:bg-red-500/10"
                         >
                           Revoke
                         </button>

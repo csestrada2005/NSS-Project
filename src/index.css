@@ -113,39 +113,42 @@ button, [role="button"], a { cursor: pointer; }
 ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground)); }
 
 /*
- * Brandbook oficial Nebu Studio (2026-09-20) para las "superficies de marca"
- * de Wyrd Forge: los 4 modales administrativos (New Project, Settings,
- * Share, confirmación de migración) y el dashboard. El área de TRABAJO
- * (Command Palette: Chat/Visual/Código/Navegar) se queda oscura a propósito
- * — es el lienzo donde se programa, no una superficie de marca — por eso NO
- * tiene esta clase.
+ * REVERSIÓN explícita del brandbook claro (2026-09-20, mismo día): Samuel
+ * probó el resultado y el contraste crema/blanco (estos 4 modales + dashboard)
+ * contra el área de trabajo, que se queda SIEMPRE oscura (Command Palette:
+ * Chat/Visual/Código/Navegar — es el lienzo donde se programa, no una
+ * superficie de marca), se sentía "muy rudo". Decisión: eliminar el crema/
+ * blanco aunque esté en el brandbook oficial — unificar todo a oscuro, con el
+ * rojo como único acento. El brandbook define negro profundo/carbón/gris
+ * claro/rojo pero NUNCA los combinó en un esquema oscuro; los tonos de
+ * carbón/gris intermedio de abajo son derivados (mismo criterio de "derivado,
+ * no inventado de la nada" que ya se usaba para el gris intermedio de texto).
  *
  * Sobrescribe el namespace --color-* (el que Tailwind v4 lee para fabricar
  * bg-card/border-border/bg-muted/etc., ver @theme arriba) SÓLO dentro de
  * .nebu-modal y sus descendientes — regla sin @layer, a propósito, para que
  * gane sobre @layer theme (mismo truco que select/scrollbar de arriba).
  *
- * Proporción del brandbook: 60% crema/blanco (background/card), 30%
- * negro/carbón (texto, sólo como color, no como fondo dominante aquí), 10%
- * rojo (--color-primary, único acento). --color-destructive NO se toca a
- * propósito: es la alarma de "esto borra datos para siempre" en la
- * confirmación de migración destructiva, y usar el mismo rojo para eso y
- * para un botón normal le quitaría la señal de peligro.
+ * --color-destructive NO se toca acá (nunca se leyó desde este archivo — la
+ * alarma de "esto borra datos para siempre" en MigrationApplyModal.tsx usa
+ * clases Tailwind sueltas, no este token; se recoloreó de rojo a ámbar aparte,
+ * ver ese archivo, para que el rojo quede libre para los recuadros normales
+ * sin diluir la señal de la única confirmación irreversible de la plataforma).
  */
 .nebu-modal {
-  --color-background: #F5F0EB;         /* crema */
-  --color-card: #FFFFFF;               /* blanco */
-  --color-card-foreground: #0D0D0D;    /* negro profundo */
-  --color-foreground: #0D0D0D;
-  --color-muted: #F5F0EB;              /* crema */
-  --color-muted-foreground: #5C5C5C;   /* gris intermedio: el brandbook no da un tono de texto secundario, derivado para mantener contraste AA sobre blanco/crema */
-  --color-secondary: #E8E8E8;          /* gris claro */
-  --color-secondary-foreground: #0D0D0D;
-  --color-accent: #E8E8E8;             /* gris claro (hover) */
-  --color-accent-foreground: #0D0D0D;
-  --color-border: #E8E8E8;             /* gris claro: "líneas y divisores" */
-  --color-input: #E8E8E8;
-  --color-primary: #D62828;            /* rojo primario oficial */
+  --color-background: #0D0D0D;         /* negro profundo */
+  --color-card: #1A1A1A;               /* carbón */
+  --color-card-foreground: #E8E8E8;    /* gris claro */
+  --color-foreground: #E8E8E8;
+  --color-muted: #1A1A1A;              /* carbón */
+  --color-muted-foreground: #9A9A9A;   /* derivado: gris intermedio para texto secundario, contraste AA sobre negro/carbón */
+  --color-secondary: #242424;          /* derivado: carbón un poco más claro, para distinguir superficies secundarias */
+  --color-secondary-foreground: #E8E8E8;
+  --color-accent: #242424;             /* derivado (hover) */
+  --color-accent-foreground: #E8E8E8;
+  --color-border: #2A2A2A;             /* derivado: línea sutil sobre negro/carbón */
+  --color-input: #2A2A2A;
+  --color-primary: #D62828;            /* rojo primario oficial — sin cambios */
   --color-primary-foreground: #FFFFFF;
   --color-ring: #D62828;
 }
