@@ -777,6 +777,42 @@ no opcionales, nacidos del diseño del ítem 4:
 
 Pendiente: escribir el tutorial (sesión de producto, bucket 5, con mockup) una vez cerrado el ítem 4.
 
+## 8. HECHO (pendiente merge a main) — infra: ruta duplicada `C:\C:\` en Windows (2026-09-20)
+
+**Cirugía aparte, fuera de los buckets de producto** — el entorno de desarrollo se acaba de mover de
+GitHub Codespaces a Windows nativo, y esto expuso un bug que siempre estuvo ahí.
+
+**Síntoma verificado:** 3 tests fallaban con `ENOENT` sobre
+`C:\C:\Users\...\node_modules\lucide-react\dist\esm\lucide-react.js` (unidad duplicada) —
+`server/compiler.test.js:238,260` y `server/deterministicRestore.test.js:187`.
+
+**Causa confirmada (reproducida en aislado antes de tocar código):** todo el mapa `ALIAS` de
+`server/compiler.js` (react, lucide-react, framer-motion, supabase, tslib, etc. — ~20 entradas) y
+`LUCIDE_ICONS_DIR` construían rutas con `new URL(rel, import.meta.url).pathname`. En Windows eso da
+`/C:/Users/...` (barra inicial antes de la letra de unidad); pasado directo a `fs`/`path`, Windows le
+antepone la unidad actual otra vez → `C:\C:\Users\...`. En Linux nunca se manifestaba (no hay letras de
+unidad).
+
+**Hecho:** helper `localModule(relPath)` en `server/compiler.js`, basado en `fileURLToPath` (import
+nuevo de `node:url`) — portable en Windows y Linux. Reemplazadas las ~20 entradas de `ALIAS` +
+`LUCIDE_ICONS_DIR`. No se tocó `lucideFacadePlugin` ni el resto del pipeline de compilación.
+`node --test "server/*.test.js"` → 653/653 verdes. `npx vitest run` → 48/48. `npx tsc -b --force` → 0
+errores.
+
+**Mismo patrón, encontrado pero NO arreglado en esta cirugía (fuera de alcance, sólo reportado):**
+- `scripts/compilerPerfHarness.mjs` líneas 171-172 (`tslib`, `iceberg-js`), mismo `.pathname`.
+- `server.js` línea 2505: patrón relacionado pero distinto — compara `import.meta.url` contra
+  `file://${process.argv[1]}` armado a mano sin normalizar separadores. Otra fragilidad Windows-specific,
+  no la duplicación de unidad.
+
+**Higiene:** un script de reproducción aislado (`server/_pathtest.mjs`) se creó para confirmar la causa
+raíz y se borró antes de tocar el código real — no llegó a commitearse.
+
+**Estado:** commiteado en rama `sesion-g5` (`3f08d3f`), empujado a origin. **NO mergeado a main todavía**
+— pendiente que Samuel abra el PR o pida el merge. Push inicial bloqueado por permisos (credenciales de
+git en la máquina apuntaban a otra cuenta sin acceso de escritura al repo); resuelto re-logueando
+`gh auth login` como `csestrada2005`.
+
 ## APARCADO hasta después de lanzar
 - **A+**: quitar el botón de aprobación cuando el guard no pudo inspeccionar. Aparcado: `unparseable` no tiene causa conocida tras G-3; sólo verificable con SQL fabricado a mano (choca con medir por comportamiento).
 - **Auditoría del pipeline de deploy** (absorbe D-5).
