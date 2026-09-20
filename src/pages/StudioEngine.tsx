@@ -25,6 +25,7 @@ import { SupabaseService } from '../services/SupabaseService';
 import { compileWithMeta, classifyCompileResult, isPreviewError, type OidMap } from '../services/BrowserCompiler';
 import { isAbortError } from '../utils/abort';
 import { ddlProposedMark } from '../utils/ddlProposalState.js';
+import { appendModeMark } from '../utils/chatModeMark.js';
 import { updateCode, type TargetElement } from '../utils/ast';
 import { fileSystemTreeToMap, mapToFileSystemTree } from '../utils/context';
 import type { FileSystemTree } from '@webcontainer/api';
@@ -1532,7 +1533,7 @@ export function StudioEngine() {
     // construcción que sella el acta de #290, y se expresa aquí como lo que es,
     // un argumento, y no como una condición que pueda cambiar sola.
     allowPlanGate: boolean = true
-  ): Promise<{ success: boolean; modifiedFiles: string[]; error?: string; errorReason?: string; warning?: string; chatResponse?: string; suggestedAction?: string; planSteps?: { order: number; description: string; file_path: string; action: 'create' | 'modify' | 'delete' }[] }> => {
+  ): Promise<{ success: boolean; modifiedFiles: string[]; error?: string; errorReason?: string; warning?: string; chatResponse?: string; suggestedAction?: string; planSteps?: { order: number; description: string; file_path: string; action: 'create' | 'modify' | 'delete' }[]; cancelled?: boolean }> => {
     if (isReadOnly) return { success: false, modifiedFiles: [] };
 
     // Persistencia del mensaje del usuario: embudo común de TODOS los envíos.
@@ -1544,7 +1545,13 @@ export function StudioEngine() {
     // del initialPrompt corre post-auth y post-carga del proyecto. Fire-and-forget
     // como el resto — persistChatMessage ya suprime modo lectura y falta de
     // projectId, y el servicio traga sus propios errores.
-    persistChatMessage('user', message);
+    //
+    // Rediseño del modal de chat (2026-09-20) — el chip "automático"/"plan" del
+    // historial (Bloque 4) no tiene columna en forge_chat_messages (sesión
+    // sólo-UI, sin cambios de schema): va escondido en el contenido, mismo
+    // truco que ddlProposedMark. Turnos de antes de este cambio no traen marca
+    // y el historial simplemente no les pinta chip.
+    persistChatMessage('user', appendModeMark(message, planModeEnabled ? 'plan' : 'auto'));
 
     setIsGenerating(true);
     setGenerationProgress(null);
@@ -1666,6 +1673,11 @@ export function StudioEngine() {
         // mensaje del asistente pueda mostrarlo; es informativo y efímero (no se
         // persiste), igual que suggestedAction.
         planSteps: result.steps,
+        // Rediseño del modal de chat (2026-09-20) — `outcome` ya se calculaba
+        // aquí (`cancelled` arriba) y antes se descartaba al devolver; el chat
+        // lo necesita para pintar la tarjeta CANCELADO (3.5) en vez de tratar
+        // la cancelación como un éxito normal.
+        cancelled,
       };
     } catch (error) {
       // CAMBIO 2 — última red de seguridad de la ruta de cancelación: una
@@ -1680,6 +1692,7 @@ export function StudioEngine() {
           success: true,
           modifiedFiles: [],
           chatResponse: 'Generación cancelada — se conservaron 0 archivos.',
+          cancelled: true,
         };
       }
       console.error('[StudioEngine] Error processing message:', error);
@@ -2314,6 +2327,7 @@ export function StudioEngine() {
                   onRejectPlan={handleRejectPlan}
                   planModeEnabled={planModeEnabled}
                   onPlanModeChange={handlePlanModeChange}
+                  projectName={currentProjectName}
                 />
               </div>
               <div className={`w-full h-full ${activeBottomTab === 'visual' ? 'block' : 'hidden'}`}>

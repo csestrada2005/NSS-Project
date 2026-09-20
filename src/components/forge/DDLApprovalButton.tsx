@@ -347,13 +347,21 @@ export function DDLApprovalButton({
     }
   };
 
+  // display:contents — este componente vive como UN ítem más dentro de la fila
+  // de botones de DDLCard (.fc-accion-fila, un flex row); "contents" deja que
+  // el botón se comporte como hijo directo de esa fila (mismo alto/alineación
+  // que "Ver el SQL"/"Ver historial completo") mientras que el texto de ayuda,
+  // el aviso y el modal — que SÍ necesitan su propia línea — se lo piden al
+  // flex-wrap de la fila con flexBasis:'100%', en vez de forzar un contenedor
+  // en bloque que rompería la fila.
   return (
-    <div className="mt-2 pt-2 border-t border-border/50 space-y-2">
+    <div style={{ display: 'contents' }}>
       <button
         onClick={handleClick}
         disabled={disabled || busy || !projectId}
         title={`Aplicar ${names} contra la base de datos del proyecto`}
-        className="w-full text-left flex items-center gap-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-md px-3 py-2 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="fc-accion-btn"
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
       >
         {busy ? (
           <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
@@ -371,12 +379,12 @@ export function DDLApprovalButton({
         </span>
       </button>
 
-      <p className="text-[10px] text-muted-foreground">
+      <p className="fc-accion-cuerpo" style={{ flexBasis: '100%', fontSize: 11, margin: '6px 0 0' }}>
         Todavía no se ha ejecutado nada contra tu base de datos.
       </p>
 
       {notice && (
-        <div className="flex items-start gap-2 text-xs text-amber-400">
+        <div className="fc-accion-cuerpo" style={{ flexBasis: '100%', display: 'flex', alignItems: 'flex-start', gap: 8, color: '#fbbf24', fontSize: 12, margin: '6px 0 0' }}>
           <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
           <span>{notice}</span>
         </div>

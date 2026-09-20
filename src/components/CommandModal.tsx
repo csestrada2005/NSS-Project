@@ -14,18 +14,28 @@ interface CommandModalProps {
 }
 
 export const CommandModal = ({ onClose, visualEditMode, onToggleVisualEdit, children, activeTab, setActiveTab }: CommandModalProps) => {
+  // Rediseño del modal de chat (2026-09-20): SÓLO la pestaña Chat flota
+  // translúcida con blur sobre el preview en vivo, mismo look del mockup
+  // (https://claude.ai/artifact/HYr28WtZvQhstgWGEwMwWX) — Visual/Código/
+  // Navegar se quedan exactamente como estaban (hoja sólida bg-card). El
+  // riesgo conocido es backdrop-filter sobre el iframe del preview mientras
+  // recompila; si se siente pesado, el primer candidato a quitar es el blur
+  // del historial (HistoryOverlay), no esta capa base.
+  const isChatTab = activeTab === 'chat';
 
   return (
     <>
       <motion.div
         {...modalBackdropMotion}
-        className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm"
+        className={`fixed inset-0 z-[60] ${isChatTab ? '' : 'bg-black/40 backdrop-blur-sm'}`}
         onClick={onClose}
       />
       <div className="fixed z-[70] inset-x-4 bottom-4 h-[88vh] max-h-[920px]">
       <motion.div
         {...bottomSheetMotion}
-        className="h-full rounded-2xl border border-border flex flex-col bg-card shadow-2xl overflow-hidden"
+        className={`h-full rounded-2xl flex flex-col overflow-hidden ${
+          isChatTab ? 'border-0 bg-transparent shadow-none' : 'border border-border bg-card shadow-2xl'
+        }`}
       >
         {/* Header Tabs */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-background/50 shrink-0">
@@ -65,7 +75,7 @@ export const CommandModal = ({ onClose, visualEditMode, onToggleVisualEdit, chil
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-hidden relative flex flex-col bg-card">
+        <div className={`flex-1 overflow-hidden relative flex flex-col ${isChatTab ? 'bg-transparent' : 'bg-card'}`}>
           {activeTab === 'visual' && (
              <div className="p-4 border-b border-border bg-background shrink-0">
                <div className="flex items-center justify-between">
