@@ -228,9 +228,9 @@
     "semantic_hash": "1e1499980c4c2db2bb1e08cb058c7337"
   },
   "src/components/CommandModal.tsx": {
-    "mtime": 1789829514.790558,
-    "seen": 1789829609.2451541,
-    "ast_hash": "6548506268c8ad2ec420b1098f055019",
+    "mtime": 1789877281.6118357,
+    "seen": 1789877419.455073,
+    "ast_hash": "6ca29173b5d4f0179c66a3ada2f87468",
     "semantic_hash": ""
   },
   "src/components/ElementEditPopover.tsx": {
@@ -324,15 +324,15 @@
     "semantic_hash": "939e298bd49c6baaa9a0da5787b0ccdd"
   },
   "src/components/forge/NewProjectModal.tsx": {
-    "mtime": 1789827174.3855066,
-    "seen": 1789827243.8340948,
-    "ast_hash": "88b0f27d53b633dfec3c8fb007d8f801",
+    "mtime": 1789877242.2828383,
+    "seen": 1789877419.4557407,
+    "ast_hash": "e8264c0d9ec3a048781df82e70aa07f0",
     "semantic_hash": ""
   },
   "src/components/forge/ShareProjectModal.tsx": {
-    "mtime": 1789827022.7765033,
-    "seen": 1789827243.8340964,
-    "ast_hash": "301c8b9d589b2528db121d9447608d67",
+    "mtime": 1789877262.670837,
+    "seen": 1789877419.4557428,
+    "ast_hash": "ad8ed0fec899212f70af8efcb2aa8c97",
     "semantic_hash": ""
   },
   "src/components/settings/AIHistoryPanel.tsx": {
@@ -354,9 +354,9 @@
     "semantic_hash": "97e89f9165f98b1f2c8e338721d4d1f3"
   },
   "src/components/settings/SettingsModal.tsx": {
-    "mtime": 1789827006.293503,
-    "seen": 1789827243.8342042,
-    "ast_hash": "d65e8d594d38b9efeaf513a69be2e919",
+    "mtime": 1789877226.8218393,
+    "seen": 1789877419.4561338,
+    "ast_hash": "b6346f9a290df663b7b4bc6e2283d56d",
     "semantic_hash": ""
   },
   "src/components/settings/analytics/LighthousePanel.tsx": {
@@ -624,9 +624,9 @@
     "semantic_hash": "c5e8ae93448cc60ad07cb52436facf20"
   },
   "src/pages/ForgeDashboard.tsx": {
-    "mtime": 1789824327.543444,
-    "seen": 1789824440.3285346,
-    "ast_hash": "8e04cdbdd80eeef1d9f2d17dd61946df",
+    "mtime": 1789876303.189901,
+    "seen": 1789877419.457805,
+    "ast_hash": "81e4e298a3387b01cc607aeba590bed0",
     "semantic_hash": ""
   },
   "src/pages/MetricsPage.tsx": {
@@ -690,9 +690,9 @@
     "semantic_hash": "25c90b02dc6d722341e12b14b3f5796a"
   },
   "src/pages/StudioEngine.tsx": {
-    "mtime": 1789829531.6865585,
-    "seen": 1789829609.2480357,
-    "ast_hash": "fd921855554d5e7b8d3df3f5e40b8dd1",
+    "mtime": 1789876309.4829009,
+    "seen": 1789877419.4581099,
+    "ast_hash": "fe65d61731fa25a9957e9b6af27f614e",
     "semantic_hash": ""
   },
   "src/pages/contacts/ClientContactView.tsx": {
@@ -1422,15 +1422,15 @@
     "semantic_hash": "555cdb20a94dc5ab3f33759cfaafb084"
   },
   "src/components/forge/DDLApprovalButton.tsx": {
-    "mtime": 1789817570.3352952,
-    "seen": 1789821096.093994,
-    "ast_hash": "d3accf8e826c27dfc96bad85e8407bbc",
-    "semantic_hash": "d3accf8e826c27dfc96bad85e8407bbc"
+    "mtime": 1789876336.136899,
+    "seen": 1789877419.4557004,
+    "ast_hash": "32ad7c20c4cdad6ccd34f1d480ca0c20",
+    "semantic_hash": ""
   },
   "src/components/forge/MigrationApplyModal.tsx": {
-    "mtime": 1789827048.3875039,
-    "seen": 1789827243.8340566,
-    "ast_hash": "ebfbe14bc3dfe7892e15f1875674db17",
+    "mtime": 1789877266.6018367,
+    "seen": 1789877419.4557025,
+    "ast_hash": "98cf6d630269965a9c524a6f8a1fb59c",
     "semantic_hash": ""
   },
   "src/data.json": {
@@ -1776,9 +1776,9 @@
     "semantic_hash": ""
   },
   "QUEUE.md": {
-    "mtime": 1789827271.8595088,
-    "seen": 1789829609.252711,
-    "ast_hash": "2ef508be3cf01d58a3b44b4780831b3a",
+    "mtime": 1789874718.9870074,
+    "seen": 1789877419.4631207,
+    "ast_hash": "92af190a195ed44acdaf24eaab343086",
     "semantic_hash": ""
   },
   "README.md": {
@@ -1944,9 +1944,9 @@
     "semantic_hash": ""
   },
   "src/components/ui/modalMotion.ts": {
-    "mtime": 1789829508.580558,
-    "seen": 1789829609.246883,
-    "ast_hash": "a7a1f59ed020005b151c14263060fde0",
+    "mtime": 1789876279.9209027,
+    "seen": 1789877419.4569342,
+    "ast_hash": "c4aeda57acc508e0e9127233dc85d566",
     "semantic_hash": ""
   },
   "src/components/magicui/animated-list.tsx": {

@@ -228,9 +228,9 @@
     "semantic_hash": "1e1499980c4c2db2bb1e08cb058c7337"
   },
   "src/components/CommandModal.tsx": {
-    "mtime": 1789877281.6118357,
-    "seen": 1789877419.455073,
-    "ast_hash": "6ca29173b5d4f0179c66a3ada2f87468",
+    "mtime": 1789879355.6866965,
+    "seen": 1789879626.1909814,
+    "ast_hash": "6548506268c8ad2ec420b1098f055019",
     "semantic_hash": ""
   },
   "src/components/ElementEditPopover.tsx": {
@@ -330,9 +330,9 @@
     "semantic_hash": ""
   },
   "src/components/forge/ShareProjectModal.tsx": {
-    "mtime": 1789877262.670837,
-    "seen": 1789877419.4557428,
-    "ast_hash": "ad8ed0fec899212f70af8efcb2aa8c97",
+    "mtime": 1789879296.1317005,
+    "seen": 1789879626.1917472,
+    "ast_hash": "714f576b139dd69e9863f34fdb751021",
     "semantic_hash": ""
   },
   "src/components/settings/AIHistoryPanel.tsx": {
@@ -354,9 +354,9 @@
     "semantic_hash": "97e89f9165f98b1f2c8e338721d4d1f3"
   },
   "src/components/settings/SettingsModal.tsx": {
-    "mtime": 1789877226.8218393,
-    "seen": 1789877419.4561338,
-    "ast_hash": "b6346f9a290df663b7b4bc6e2283d56d",
+    "mtime": 1789879201.7647069,
+    "seen": 1789879626.192141,
+    "ast_hash": "747fce20d37d65c65989e2d96600e319",
     "semantic_hash": ""
   },
   "src/components/settings/analytics/LighthousePanel.tsx": {
@@ -624,9 +624,9 @@
     "semantic_hash": "c5e8ae93448cc60ad07cb52436facf20"
   },
   "src/pages/ForgeDashboard.tsx": {
-    "mtime": 1789876303.189901,
-    "seen": 1789877419.457805,
-    "ast_hash": "81e4e298a3387b01cc607aeba590bed0",
+    "mtime": 1789879350.4126968,
+    "seen": 1789879626.1937954,
+    "ast_hash": "b942a3592879feb88a73f35a7b370137",
     "semantic_hash": ""
   },
   "src/pages/MetricsPage.tsx": {
@@ -1428,9 +1428,9 @@
     "semantic_hash": ""
   },
   "src/components/forge/MigrationApplyModal.tsx": {
-    "mtime": 1789877266.6018367,
-    "seen": 1789877419.4557025,
-    "ast_hash": "98cf6d630269965a9c524a6f8a1fb59c",
+    "mtime": 1789879312.5546994,
+    "seen": 1789879626.191673,
+    "ast_hash": "a6ebb04c377ca50ac80ba33d246f625d",
     "semantic_hash": ""
   },
   "src/data.json": {
@@ -1776,9 +1776,9 @@
     "semantic_hash": ""
   },
   "QUEUE.md": {
-    "mtime": 1789874718.9870074,
-    "seen": 1789877419.4631207,
-    "ast_hash": "92af190a195ed44acdaf24eaab343086",
+    "mtime": 1789879592.9356806,
+    "seen": 1789879626.1990657,
+    "ast_hash": "63a57ca6f905ff0b974a9f22835f4bb5",
     "semantic_hash": ""
   },
   "README.md": {
