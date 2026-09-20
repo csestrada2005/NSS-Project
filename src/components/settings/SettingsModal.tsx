@@ -1,7 +1,5 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
 import { X, Lock, Github, Rocket, Database, Globe, Mail, BarChart3 } from 'lucide-react';
-import { modalBackdropMotion, modalPanelMotion } from '@/components/ui/modalMotion';
 import { DeployManager } from '../deploy/DeployManager';
 import { gitHubService } from '../../services/GitHubService';
 import type { FileSystemTree } from '@webcontainer/api';
@@ -93,21 +91,20 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
     </button>
   );
 
+  // In-place dentro del área del preview (StudioEngine, navbar nuevo del
+  // 2026-09-20) — antes era un modal centrado flotante (fixed inset-0 +
+  // backdrop); ahora reemplaza al preview igual que CodePanel, sin backdrop
+  // ni animación de entrada/salida (mismo trato instantáneo que Code).
+  // SettingsModal sólo se usa desde StudioEngine.tsx — no hay otro caller que
+  // dependa del modo flotante.
   return (
-    <motion.div
-      {...modalBackdropMotion}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-    >
-      <motion.div
-        {...modalPanelMotion}
-        className="nebu-modal bg-card border border-border rounded-xl shadow-2xl w-full max-w-4xl p-6 flex flex-col max-h-[90vh]"
-      >
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-foreground">Settings</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
-            <X size={20} />
-          </button>
-        </div>
+    <div className="nebu-modal bg-card w-full h-full p-6 flex flex-col">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-bold text-foreground">Settings</h2>
+        <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
+          <X size={20} />
+        </button>
+      </div>
 
         {/* Main tabs */}
         <div className="flex gap-1 mb-6 border-b border-border pb-1 overflow-x-auto">
@@ -251,12 +248,11 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
           )}
         </div>
 
-        <div className="flex justify-end gap-3 pt-4 border-t border-border mt-4">
-          <button onClick={onClose} className="px-4 py-2 text-muted-foreground hover:text-foreground text-sm font-medium transition-colors">
-            Close
-          </button>
-        </div>
-      </motion.div>
-    </motion.div>
+      <div className="flex justify-end gap-3 pt-4 border-t border-border mt-4">
+        <button onClick={onClose} className="px-4 py-2 text-muted-foreground hover:text-foreground text-sm font-medium transition-colors">
+          Close
+        </button>
+      </div>
+    </div>
   );
 }

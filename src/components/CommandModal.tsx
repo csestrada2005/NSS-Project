@@ -1,26 +1,28 @@
 import { motion } from "framer-motion";
-import { X, MessageSquare, MousePointer2, Edit3, Code, Map } from "lucide-react";
+import { X, MessageSquare, TerminalSquare } from "lucide-react";
 import { modalBackdropMotion, bottomSheetMotion } from "@/components/ui/modalMotion";
 
-type TabType = "chat" | "visual" | "code" | "navigate";
+// Rediseño del navbar del preview (bucket 5 ítem 3, 2026-09-20): Visual/
+// Código/Navegar se promovieron a PreviewNavbar (persistente arriba del
+// preview) — CommandModal se quedó sólo con lo que de verdad necesita ser un
+// modal flotante: Chat (con el look de vidrio esmerilado sobre el preview en
+// vivo) y Terminal (los logs de compilación con colores ANSI).
+type TabType = "chat" | "terminal";
 
 interface CommandModalProps {
   onClose: () => void;
-  visualEditMode: boolean;
-  onToggleVisualEdit: (active: boolean) => void;
   children: React.ReactNode;
   activeTab: TabType;
   setActiveTab: (tab: TabType) => void;
 }
 
-export const CommandModal = ({ onClose, visualEditMode, onToggleVisualEdit, children, activeTab, setActiveTab }: CommandModalProps) => {
-  // Rediseño del modal de chat (2026-09-20): SÓLO la pestaña Chat flota
-  // translúcida con blur sobre el preview en vivo, mismo look del mockup
-  // (https://claude.ai/artifact/HYr28WtZvQhstgWGEwMwWX) — Visual/Código/
-  // Navegar se quedan exactamente como estaban (hoja sólida bg-card). El
-  // riesgo conocido es backdrop-filter sobre el iframe del preview mientras
-  // recompila; si se siente pesado, el primer candidato a quitar es el blur
-  // del historial (HistoryOverlay), no esta capa base.
+export const CommandModal = ({ onClose, children, activeTab, setActiveTab }: CommandModalProps) => {
+  // SÓLO la pestaña Chat flota translúcida con blur sobre el preview en vivo,
+  // mismo look del mockup (https://claude.ai/artifact/HYr28WtZvQhstgWGEwMwWX)
+  // — Terminal se queda como hoja sólida bg-card. El riesgo conocido es
+  // backdrop-filter sobre el iframe del preview mientras recompila; si se
+  // siente pesado, el primer candidato a quitar es el blur del historial
+  // (HistoryOverlay), no esta capa base.
   const isChatTab = activeTab === 'chat';
 
   return (
@@ -48,25 +50,11 @@ export const CommandModal = ({ onClose, visualEditMode, onToggleVisualEdit, chil
                Chat
              </button>
              <button
-               onClick={() => setActiveTab('visual')}
-               className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'visual' ? 'bg-primary text-white shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-accent'}`}
+               onClick={() => setActiveTab('terminal')}
+               className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'terminal' ? 'bg-primary text-white shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-accent'}`}
              >
-               <MousePointer2 size={16} />
-               Visual
-             </button>
-             <button
-               onClick={() => setActiveTab('code')}
-               className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'code' ? 'bg-primary text-white shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-accent'}`}
-             >
-               <Code size={16} />
-               Code
-             </button>
-             <button
-               onClick={() => setActiveTab('navigate')}
-               className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'navigate' ? 'bg-primary text-white shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-accent'}`}
-             >
-               <Map size={16} />
-               Navigate
+               <TerminalSquare size={16} />
+               Terminal
              </button>
           </div>
           <button onClick={onClose} className="p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-full transition-colors">
@@ -76,36 +64,6 @@ export const CommandModal = ({ onClose, visualEditMode, onToggleVisualEdit, chil
 
         {/* Content Area */}
         <div className={`flex-1 overflow-hidden relative flex flex-col ${isChatTab ? 'bg-transparent' : 'bg-card'}`}>
-          {activeTab === 'visual' && (
-             <div className="p-4 border-b border-border bg-background shrink-0">
-               <div className="flex items-center justify-between">
-                 <div>
-                    <h3 className="text-sm font-medium text-foreground">Visual Edit Mode</h3>
-                    <p className="text-xs text-muted-foreground mt-1">Select elements on the canvas to change their text, color, and properties directly.</p>
-                 </div>
-                 <button
-                    onClick={() => onToggleVisualEdit(!visualEditMode)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${visualEditMode ? 'bg-primary' : 'bg-muted'}`}
-                 >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${visualEditMode ? 'translate-x-6' : 'translate-x-1'}`} />
-                 </button>
-               </div>
-               {visualEditMode && (
-                   <div className="mt-4 p-3 bg-primary/10 border border-primary/30 rounded-lg flex items-start gap-2 text-xs text-primary">
-                      <Edit3 size={14} className="mt-0.5 shrink-0 text-primary" />
-                      <p>Visual Mode is active. Click anywhere on the preview to select an element, or hold Shift to drag it. Press Esc to select its parent.</p>
-                   </div>
-               )}
-             </div>
-          )}
-
-          {activeTab === 'code' && (
-            <div className="p-3 border-b border-border bg-background shrink-0 flex items-start gap-2 text-xs text-muted-foreground">
-              <Code size={13} className="mt-0.5 shrink-0 text-muted-foreground" />
-              <p>Browse and edit your project files. Click <span className="text-white font-medium">Save &amp; Run</span> to apply changes to the preview.</p>
-            </div>
-          )}
-
           <div className="flex-1 overflow-hidden">
              {children}
           </div>

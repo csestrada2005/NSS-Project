@@ -33,10 +33,8 @@ import JSZip from 'jszip';
 import {
   Download,
   Loader2,
-  Settings,
   Activity,
   Menu,
-  Code,
   Eye,
   Share2,
   ChevronLeft,
@@ -44,9 +42,6 @@ import {
   Clock,
   UserPlus,
   X as XIcon,
-  Monitor,
-  Tablet,
-  Smartphone,
 } from 'lucide-react';
 import { TEMPLATES } from '../templates';
 import { ProtectedRoute } from '../components/auth/ProtectedRoute';
@@ -61,10 +56,21 @@ import { DesignBriefService, type DesignHints } from '../services/DesignBriefSer
 import CreditBalance from '../components/forge/CreditBalance';
 import { ShareProjectModal } from '../components/forge/ShareProjectModal';
 import { CodePanel } from '../components/studio/CodePanel';
-import { NavigatePanel } from '../components/studio/NavigatePanel';
+import { PreviewNavbar } from '../components/studio/PreviewNavbar';
 
-type TabType = 'chat' | 'visual' | 'code' | 'navigate';
+// Rediseño del navbar del preview (bucket 5 ítem 3, 2026-09-20): CommandModal
+// se quedó sólo con Chat (con el look flotante+blur de hoy) y Terminal (los
+// logs de compilación con colores ANSI que ya existían); Visual/Código/
+// Navegar se promovieron a PreviewNavbar, persistente arriba del preview en
+// vez de una píldora flotante encima. "Terminal" reemplaza el nombre "Visual"
+// del tab viejo: lo que de verdad vivía ahí era la consola, el toggle de modo
+// visual ya está en el navbar nuevo.
+type TabType = 'chat' | 'terminal';
 type ViewportMode = 'mobile' | 'tablet' | 'desktop';
+/** Qué se ve en el área central: el preview en vivo, o uno de los paneles
+ * "in-place" (reemplazan el preview entero, no flotan encima — pedido
+ * explícito, distinto de cómo funcionaba Settings antes de hoy). */
+type PanelMode = 'preview' | 'code' | 'settings';
 
 // CAMBIO 1 — una mutación visual pendiente de guardar. Se indexa por
 // `oid::property` en el buffer (el último gana), y guarda todo lo que updateCode
@@ -263,7 +269,7 @@ export function StudioEngine() {
   // -------------------------------------------------------------------------
   // UI state
   // -------------------------------------------------------------------------
-  const [showSettings, setShowSettings] = useState(false);
+  const [panelMode, setPanelMode] = useState<PanelMode>('preview');
   const [showGraph, setShowGraph] = useState(false);
   const [isMenuPanelOpen, setIsMenuPanelOpen] = useState(false);
   const [selectedElement, setSelectedElement] = useState<TargetElement | null>(null);
@@ -1808,7 +1814,8 @@ export function StudioEngine() {
   }, [COMPLETE_PROJECT_PROMPT]);
 
   // -------------------------------------------------------------------------
-  // Navigate panel state (panel extraído a src/components/studio/NavigatePanel)
+  // Ruta activa del preview — consumida por PageDropdown (navbar nuevo,
+  // src/components/studio/PreviewNavbar.tsx), antes por NavigatePanel.
   // -------------------------------------------------------------------------
   const [activeRoute, setActiveRoute] = useState<string>('/');
 
@@ -2064,61 +2071,45 @@ export function StudioEngine() {
                   <div>Loading project...</div>
                 </div>
               ) : hasPreview ? (
-                <div className={`relative w-full h-full ${viewportMode !== 'desktop' ? 'bg-zinc-900 flex items-start justify-center' : ''}`}>
-                  {/* Edit mode toolbar. z-50 keeps the Interaction/Visual toggle
-                      above the property panel (z-40) — previously the visual-mode
-                      overlay glass pane sat on top of it and swallowed the click. */}
-                  <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-card border border-border rounded-lg flex overflow-hidden shadow-lg">
-                    <button
-                      onClick={() => guardUnsaved(() => setEditMode('interaction'))}
-                      className={`px-3 py-1.5 text-xs font-medium transition-colors ${editMode === 'interaction' ? 'bg-red-600 text-white' : 'text-muted-foreground hover:text-foreground'}`}
-                    >
-                      Interaction
-                    </button>
-                    <button
-                      onClick={() => setEditMode('visual')}
-                      className={`px-3 py-1.5 text-xs font-medium transition-colors ${editMode === 'visual' ? 'bg-red-600 text-white' : 'text-muted-foreground hover:text-foreground'}`}
-                    >
-                      Visual
-                    </button>
-                    <div className="border-l border-border mx-1" />
-                    <button
-                      onClick={() => handleViewportChange('desktop')}
-                      className={`px-2 py-1.5 text-xs font-medium transition-colors ${viewportMode === 'desktop' ? 'bg-red-600 text-white' : 'text-muted-foreground hover:text-foreground'}`}
-                      title="Desktop"
-                    >
-                      <Monitor size={13} />
-                    </button>
-                    <button
-                      onClick={() => handleViewportChange('tablet')}
-                      className={`px-2 py-1.5 text-xs font-medium transition-colors ${viewportMode === 'tablet' ? 'bg-red-600 text-white' : 'text-muted-foreground hover:text-foreground'}`}
-                      title="Tablet (768px)"
-                    >
-                      <Tablet size={13} />
-                    </button>
-                    <button
-                      onClick={() => handleViewportChange('mobile')}
-                      className={`px-2 py-1.5 text-xs font-medium transition-colors ${viewportMode === 'mobile' ? 'bg-red-600 text-white' : 'text-muted-foreground hover:text-foreground'}`}
-                      title="Mobile (390px)"
-                    >
-                      <Smartphone size={13} />
-                    </button>
-                    <button
-                      onClick={() => { setActiveBottomTab('code'); setIsCommandModalOpen(true); }}
-                      className={`px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1 ${activeBottomTab === 'code' && isCommandModalOpen ? 'bg-red-600 text-white' : 'text-muted-foreground hover:text-foreground'}`}
-                    >
-                      <Code size={12} />
-                      Code
-                    </button>
-                    <button
-                      onClick={() => setShowSettings(true)}
-                      className="px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 border-l border-border ml-1 pl-3"
-                    >
-                      <Settings size={12} />
-                      Settings
-                    </button>
-                  </div>
-
+                <div className="relative w-full h-full flex flex-col">
+                  <PreviewNavbar
+                    editMode={editMode}
+                    onPreview={() => { setPanelMode('preview'); guardUnsaved(() => setEditMode('interaction')); }}
+                    onVisual={() => { setPanelMode('preview'); setEditMode('visual'); }}
+                    viewportMode={viewportMode}
+                    onViewportChange={handleViewportChange}
+                    files={files}
+                    iframeRef={iframeRef}
+                    activeRoute={activeRoute}
+                    setActiveRoute={setActiveRoute}
+                    beforeNavigate={guardUnsaved}
+                    panelMode={panelMode}
+                    onOpenCode={() => setPanelMode('code')}
+                    onOpenSettings={() => setPanelMode('settings')}
+                    onOpenChat={() => setIsCommandModalOpen(true)}
+                  />
+                  <div className={`relative flex-1 min-h-0 w-full ${panelMode === 'preview' && viewportMode !== 'desktop' ? 'bg-zinc-900 flex items-start justify-center' : ''}`}>
+                  {panelMode === 'code' ? (
+                    <CodePanel
+                      files={files}
+                      selectedFilePath={selectedFilePath}
+                      selectedFileContent={selectedFileContent}
+                      onFileSelect={handleFileSelect}
+                      onCodeEdit={handleCodeEdit}
+                      onSaveAndRun={saveAndRun}
+                      isSaving={isSaving}
+                      onDownloadZip={downloadProject}
+                      isGenerating={isGenerating}
+                    />
+                  ) : panelMode === 'settings' ? (
+                    <SettingsModal
+                      onClose={() => setPanelMode('preview')}
+                      fileTree={fileTree}
+                      files={files}
+                      projectId={projectId ?? null}
+                    />
+                  ) : (
+                  <>
                   {/* Compiling indicator */}
                   {isCompiling && (
                     <div className="absolute bottom-4 right-4 z-40 flex items-center gap-2 bg-card/90 border border-border text-muted-foreground text-xs px-3 py-1.5 rounded-full">
@@ -2213,6 +2204,9 @@ export function StudioEngine() {
                       </button>
                     </div>
                   )}
+                  </>
+                  )}
+                  </div>
                 </div>
               ) : compiledHtml !== '' ? (
                 /* Show error HTML in iframe even when hasValidPreview is false */
@@ -2299,11 +2293,6 @@ export function StudioEngine() {
         {isCommandModalOpen && (
           <CommandModal
             onClose={() => setIsCommandModalOpen(false)}
-            visualEditMode={editMode === 'visual'}
-            onToggleVisualEdit={(active) => {
-              if (active) setEditMode('visual');
-              else guardUnsaved(() => setEditMode('interaction'));
-            }}
             activeTab={activeBottomTab}
             setActiveTab={(tab) => setActiveBottomTab(tab)}
           >
@@ -2330,38 +2319,12 @@ export function StudioEngine() {
                   projectName={currentProjectName}
                 />
               </div>
-              <div className={`w-full h-full ${activeBottomTab === 'visual' ? 'block' : 'hidden'}`}>
+              <div className={`w-full h-full ${activeBottomTab === 'terminal' ? 'block' : 'hidden'}`}>
                 <Terminal ref={terminalRef} />
-              </div>
-              <div className={`w-full h-full ${activeBottomTab === 'code' ? 'flex' : 'hidden'}`}>
-                <CodePanel
-                  files={files}
-                  selectedFilePath={selectedFilePath}
-                  selectedFileContent={selectedFileContent}
-                  onFileSelect={handleFileSelect}
-                  onCodeEdit={handleCodeEdit}
-                  onSaveAndRun={saveAndRun}
-                  isSaving={isSaving}
-                  onDownloadZip={downloadProject}
-                  isGenerating={isGenerating}
-                />
-              </div>
-              <div className={`w-full h-full ${activeBottomTab === 'navigate' ? 'flex' : 'hidden'}`}>
-                <NavigatePanel
-                  files={files}
-                  iframeRef={iframeRef}
-                  activeRoute={activeRoute}
-                  setActiveRoute={setActiveRoute}
-                  beforeNavigate={guardUnsaved}
-                />
               </div>
             </div>
           </CommandModal>
         )}
-        </AnimatePresence>
-
-        <AnimatePresence>
-          {showSettings && <SettingsModal onClose={() => setShowSettings(false)} fileTree={fileTree} files={files} projectId={projectId ?? null} />}
         </AnimatePresence>
         {showGraph && <StateGraph fileTree={fileTree} onClose={() => setShowGraph(false)} />}
         <AnimatePresence>
