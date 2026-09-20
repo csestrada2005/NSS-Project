@@ -1,12 +1,17 @@
 import { Paperclip, Mic, ArrowUp, Square } from 'lucide-react';
 import { LiveNode } from './LiveNode';
 import { ModeSelector } from './ModeSelector';
-import { CreditsHint } from './CreditsHint';
 import type { ChatSendMode } from '@/utils/chatModeMark.js';
 
 /**
  * Typebar — Bloque 1 del rediseño: nodo vivo | selector de modo | input |
- * adjuntar | dictar | enviar↔cancelar, más la pista debajo.
+ * adjuntar | dictar | enviar↔cancelar.
+ *
+ * Sin la pista de debajo (texto "Modo automático"/"Modo plan · ...") — el
+ * propio dropdown de modo ya dice en qué modo está y qué hace cada uno al
+ * abrirse; repetirlo en una línea aparte era redundante (pedido explícito,
+ * 2026-09-20). Los créditos se movieron arriba del todo, ver CreditsBadge en
+ * ChatInterface.tsx — ya no viven en esta pista tampoco.
  *
  * Adjuntar/dictar no tienen ninguna capacidad real detrás hoy (no hay adjuntos
  * ni dictado en el pipeline) — se pintan inertes con tooltip "Próximamente",
@@ -68,14 +73,6 @@ export function Typebar({
         >
           {isBusy ? <Square size={13} /> : <ArrowUp size={16} />}
         </button>
-      </div>
-      <div className="fc-pista">
-        <span className="fc-izq">
-          {mode === 'plan'
-            ? <span><b>Modo plan</b> · Wyrd pide tu visto bueno antes de tocar archivos</span>
-            : <span>Modo automático</span>}
-        </span>
-        <CreditsHint />
       </div>
     </div>
   );

@@ -9,6 +9,7 @@ import type { ProgressLine } from './chat/progressSummary';
 import { Typebar } from './chat/Typebar';
 import { ProcessCard } from './chat/ProcessCard';
 import { HistoryOverlay } from './chat/HistoryOverlay';
+import { CreditsBadge } from './chat/CreditsBadge';
 import {
   ResumenCard,
   DDLCard,
@@ -455,6 +456,7 @@ export function ChatInterface({
     <div className="forge-chat" data-estado={estado} data-modo={mode}>
       <div className={`fc-modal-layer ${typebarHidden ? 'fc-hidden' : ''}`}>
         <div className="fc-stack">
+          <CreditsBadge />
           {selectedElement && (
             <div className="fc-pieza" style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: 12, color: 'var(--fc-texto-2)' }}>

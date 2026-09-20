@@ -134,7 +134,11 @@
 }
 .fc-modo-btn:hover { color: var(--crema); border-color: var(--linea-fuerte); }
 .fc-modo-btn:disabled { opacity: .5; cursor: not-allowed; }
-.fc-modo-btn .fc-glifo { width: 13px; height: 13px; flex: 0 0 auto; position: relative; }
+/* width/height/position:relative en .fc-glifo en general (no sólo bajo
+   .fc-modo-btn): sin esto, el ::before absoluto de abajo no tenía ancestro
+   posicionado propio dentro de las opciones del menú y se estiraba contra
+   .fc-modo-menu entero — un círculo rojo gigante tapando los dos modos. */
+.fc-glifo { width: 13px; height: 13px; flex: 0 0 auto; position: relative; }
 .fc-glifo.fc-auto::before {
   content: ""; position: absolute; inset: 4px; border-radius: 50%; background: var(--rojo);
   box-shadow: 0 0 7px 2px rgba(214, 40, 40, .55);
@@ -163,13 +167,18 @@
 .fc-modo-opt strong { display: block; font-size: 12.5px; font-weight: 500; margin-bottom: 3px; }
 .fc-modo-opt span { display: block; font-size: 11.5px; color: var(--fc-texto-3); line-height: 1.45; }
 
-/* pista bajo la typebar */
-.fc-pista {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 0 6px; font-size: 11px; color: var(--fc-texto-3); font-family: var(--fc-mono);
+/* contador de créditos — píldora fija arriba del todo (2026-09-20), mismo
+   patrón que "Admin — Unlimited" en CreditBalance.tsx, con la paleta Nebu del
+   chat en vez de clases Tailwind ámbar/genéricas. */
+.fc-creditos {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--fc-mono); font-size: 11px; color: var(--fc-texto-2);
+  background: rgba(26, 26, 26, .86); backdrop-filter: blur(18px);
+  border: 1px solid var(--linea-fuerte); padding: 6px 12px; border-radius: 999px;
 }
-.fc-pista .fc-izq { display: flex; align-items: center; gap: 8px; }
-.fc-pista b { color: rgba(214, 40, 40, .9); font-weight: 500; }
+.fc-creditos.fc-ilimitado {
+  color: var(--rojo); border-color: rgba(214, 40, 40, .4); background: rgba(214, 40, 40, .1);
+}
 
 /* ---------- tarjetas ---------- */
 .fc-pieza {
