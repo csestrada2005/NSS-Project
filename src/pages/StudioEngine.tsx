@@ -32,9 +32,7 @@ import JSZip from 'jszip';
 import {
   Download,
   Loader2,
-  Activity,
   Eye,
-  Share2,
   ChevronLeft,
   Flame,
   Clock,
@@ -44,7 +42,6 @@ import {
 import { TEMPLATES } from '../templates';
 import { ProtectedRoute } from '../components/auth/ProtectedRoute';
 import { SettingsModal, type MainTab } from '../components/settings/SettingsModal';
-import { StateGraph } from '../components/debug/StateGraph';
 import { CommandModal } from '../components/CommandModal';
 import { HistoryDrawer } from '../components/HistoryDrawer';
 import { ProjectMemoryService } from '../services/ProjectMemoryService';
@@ -262,7 +259,6 @@ export function StudioEngine() {
   // Con qué pestaña abre Settings cuando panelMode pasa a 'settings' — normal
   // ('secrets', default) o vía el botón Publicar del navbar ('deploy').
   const [settingsInitialTab, setSettingsInitialTab] = useState<MainTab>('secrets');
-  const [showGraph, setShowGraph] = useState(false);
   const [isMenuPanelOpen, setIsMenuPanelOpen] = useState(false);
   const [selectedElement, setSelectedElement] = useState<TargetElement | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -329,6 +325,12 @@ export function StudioEngine() {
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [selectedFileContent, setSelectedFileContent] = useState<string>('');
   const [isCommandModalOpen, setIsCommandModalOpen] = useState(false);
+  // "Peek" del chat (Ctrl+Espacio con el chat ya abierto): esconde la typebar/
+  // tarjetas para ver el preview completo sin cerrar el modal. Vive aquí (no
+  // en ChatInterface) porque CommandModal también necesita saberlo — su
+  // backdrop invisible (fixed inset-0, sólo para cerrar al hacer click fuera)
+  // seguía bloqueando el scroll del preview mientras se veía "vacío".
+  const [chatPeeking, setChatPeeking] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isReadOnly, setIsReadOnly] = useState(false);
   const [viewportMode, setViewportMode] = useState<ViewportMode>(() => {
@@ -926,6 +928,36 @@ export function StudioEngine() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  // Abrir Chat (botón del navbar o Ctrl+Espacio) — única puerta de entrada,
+  // para que el guard de "sólo desde preview" (QUEUE.md ítem 5.3 Bloque 6) no
+  // se pueda esquivar por un camino y no por el otro.
+  const handleOpenChat = useCallback(() => {
+    if (panelMode !== 'preview') {
+      toast.error('Ve a preview primero para abrir chat');
+      return;
+    }
+    setChatPeeking(false);
+    setIsCommandModalOpen(true);
+  }, [panelMode]);
+
+  // Ctrl+Espacio — global, no sólo mientras el chat está montado (antes vivía
+  // dentro de ChatInterface, así que sólo funcionaba después de abrir el chat
+  // al menos una vez con click). Con el chat cerrado, abre; con el chat ya
+  // abierto, alterna el "peek" (esconder typebar/tarjetas sin cerrar).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey && e.code === 'Space')) return;
+      e.preventDefault();
+      if (isCommandModalOpen) {
+        setChatPeeking(v => !v);
+      } else {
+        handleOpenChat();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isCommandModalOpen, handleOpenChat]);
 
   // -------------------------------------------------------------------------
   // Snapshot save to forge_snapshots (for HistoryDrawer)
@@ -1723,27 +1755,10 @@ export function StudioEngine() {
     URL.revokeObjectURL(objectUrl);
   };
 
-  // Toggle public share access
-  const togglePublicAccess = async () => {
-    if (!projectId) return;
-    const supabase = SupabaseService.getInstance().client;
-    const newValue = !isPublic;
-    await supabase
-      .from('forge_projects')
-      .update({ is_public: newValue })
-      .eq('id', projectId);
-    setIsPublic(newValue);
-    if (newValue) {
-      const url = `${window.location.origin}/preview/${projectId}`;
-      await navigator.clipboard.writeText(url);
-      toast.success('Preview link copied to clipboard');
-    }
-  };
-
   // -------------------------------------------------------------------------
   // Derived state
   // -------------------------------------------------------------------------
-  const fileTree = mapToFileSystemTree(files); // for legacy components (StateGraph, SettingsModal, HistoryDrawer)
+  const fileTree = mapToFileSystemTree(files); // for legacy components (SettingsModal, HistoryDrawer)
   const hasPreview = hasValidPreview;
   // CAMBIO 1 — número de cambios visuales pendientes de guardar (oid::propiedad).
   const pendingCount = pendingEdits.size;
@@ -1977,20 +1992,6 @@ export function StudioEngine() {
                     Export Zip
                   </button>
                   <button
-                    onClick={() => { setIsMenuPanelOpen(false); setShowGraph(true); }}
-                    className="w-full flex items-center gap-3 px-5 py-3 text-sm text-foreground hover:bg-primary/10 hover:text-primary transition-colors"
-                  >
-                    <Activity size={16} />
-                    Visual Graph
-                  </button>
-                  <button
-                    onClick={() => { setIsMenuPanelOpen(false); togglePublicAccess(); }}
-                    className="w-full flex items-center gap-3 px-5 py-3 text-sm text-foreground hover:bg-primary/10 hover:text-primary transition-colors"
-                  >
-                    <Share2 size={16} />
-                    {isPublic ? 'Unshare' : 'Share'}
-                  </button>
-                  <button
                     onClick={() => { setIsMenuPanelOpen(false); setShowShareModal(true); }}
                     className="w-full flex items-center gap-3 px-5 py-3 text-sm text-foreground hover:bg-primary/10 hover:text-primary transition-colors"
                   >
@@ -2042,10 +2043,10 @@ export function StudioEngine() {
                     setActiveRoute={setActiveRoute}
                     beforeNavigate={guardUnsaved}
                     panelMode={panelMode}
-                    onOpenCode={() => setPanelMode('code')}
-                    onOpenSettings={() => { setSettingsInitialTab('secrets'); setPanelMode('settings'); }}
-                    onOpenChat={() => setIsCommandModalOpen(true)}
-                    onPublish={() => { setSettingsInitialTab('deploy'); setPanelMode('settings'); }}
+                    onOpenCode={() => { setIsCommandModalOpen(false); setPanelMode('code'); }}
+                    onOpenSettings={() => { setIsCommandModalOpen(false); setSettingsInitialTab('secrets'); setPanelMode('settings'); }}
+                    onOpenChat={handleOpenChat}
+                    onPublish={() => { setIsCommandModalOpen(false); setSettingsInitialTab('deploy'); setPanelMode('settings'); }}
                   />
                   <div className={`relative flex-1 min-h-0 w-full ${panelMode === 'preview' && viewportMode !== 'desktop' ? 'bg-zinc-900 flex items-start justify-center' : ''}`}>
                   {panelMode === 'code' ? (
@@ -2244,7 +2245,10 @@ export function StudioEngine() {
 
         <AnimatePresence>
         {isCommandModalOpen && (
-          <CommandModal onClose={() => setIsCommandModalOpen(false)}>
+          <CommandModal
+            onClose={() => { setIsCommandModalOpen(false); setChatPeeking(false); }}
+            peeking={chatPeeking}
+          >
             <ChatInterface
               isLoading={isGenerating}
               onSendMessage={handleSendMessage}
@@ -2264,11 +2268,11 @@ export function StudioEngine() {
               planModeEnabled={planModeEnabled}
               onPlanModeChange={handlePlanModeChange}
               projectName={currentProjectName}
+              typebarHidden={chatPeeking}
             />
           </CommandModal>
         )}
         </AnimatePresence>
-        {showGraph && <StateGraph fileTree={fileTree} onClose={() => setShowGraph(false)} />}
         <AnimatePresence>
           {showShareModal && projectId && (
             <ShareProjectModal

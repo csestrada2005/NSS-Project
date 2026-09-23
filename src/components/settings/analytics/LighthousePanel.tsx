@@ -17,14 +17,11 @@ interface Scores {
   ttfb: number | null;
 }
 
-// Los recuadros de este panel ahora tienen fondo rojo de marca — el "malo"
-// pasa de rojo (se perdía contra el fondo) a negro, que ya es el color de
-// "alarma" sobre rojo en el resto de este rediseño.
 function scoreColor(score: number | null): string {
-  if (score === null) return '#00000066';
+  if (score === null) return 'rgba(255,255,255,0.3)';
   if (score >= 90) return '#22c55e';
   if (score >= 50) return '#f59e0b';
-  return '#0D0D0D';
+  return '#ef4444';
 }
 
 function ScoreGauge({ label, score }: { label: string; score: number | null }) {
@@ -37,7 +34,7 @@ function ScoreGauge({ label, score }: { label: string; score: number | null }) {
   return (
     <div className="flex flex-col items-center gap-2">
       <svg width="88" height="88" viewBox="0 0 88 88">
-        <circle cx="44" cy="44" r={r} fill="none" stroke="#00000033" strokeWidth="8" />
+        <circle cx="44" cy="44" r={r} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="8" />
         <circle
           cx="44" cy="44" r={r} fill="none"
           stroke={color} strokeWidth="8"
@@ -50,7 +47,7 @@ function ScoreGauge({ label, score }: { label: string; score: number | null }) {
           {score !== null ? score : '--'}
         </text>
       </svg>
-      <span className="text-xs text-black/70 text-center">{label}</span>
+      <span className="text-xs text-muted-foreground text-center">{label}</span>
     </div>
   );
 }
@@ -66,12 +63,12 @@ interface CWV {
 function CWVRow({ label, value, unit, target, targetLabel }: CWV) {
   const pass = value !== null && value <= target;
   return (
-    <div className="flex items-center justify-between py-2 border-b border-black/20 last:border-0">
-      <span className="text-sm text-black">{label}</span>
+    <div className="flex items-center justify-between py-2 border-b border-border last:border-0">
+      <span className="text-sm text-foreground">{label}</span>
       <div className="flex items-center gap-3">
-        <span className="text-sm text-black font-mono">{value !== null ? `${value}${unit}` : '--'}</span>
-        <span className="text-xs text-black/60">target &lt;{targetLabel}</span>
-        <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${pass ? 'bg-emerald-600/20 text-emerald-900' : 'bg-black/20 text-black'}`}>
+        <span className="text-sm text-foreground font-mono">{value !== null ? `${value}${unit}` : '--'}</span>
+        <span className="text-xs text-muted-foreground">target &lt;{targetLabel}</span>
+        <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${pass ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
           {pass ? 'Pass' : 'Fail'}
         </span>
       </div>
@@ -169,19 +166,19 @@ export function LighthousePanel({ projectId, initialUrl }: LighthousePanelProps 
 
       {/* Gauges */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-primary border border-primary rounded-xl p-4 flex justify-around">
+        <div className="bg-background/50 border border-border border-l-4 border-l-primary rounded-xl p-4 flex justify-around">
           <ScoreGauge label="Performance" score={scores.perf} />
           <ScoreGauge label="Accessibility" score={scores.a11y} />
         </div>
-        <div className="bg-primary border border-primary rounded-xl p-4 flex justify-around">
+        <div className="bg-background/50 border border-border border-l-4 border-l-primary rounded-xl p-4 flex justify-around">
           <ScoreGauge label="Best Practices" score={scores.bestPractices} />
           <ScoreGauge label="SEO" score={scores.seo} />
         </div>
       </div>
 
       {/* Core Web Vitals */}
-      <div className="bg-primary border border-primary rounded-xl p-4">
-        <h3 className="text-sm font-medium text-black mb-3">Core Web Vitals</h3>
+      <div className="bg-background/50 border border-border border-l-4 border-l-primary rounded-xl p-4">
+        <h3 className="text-sm font-medium text-foreground mb-3">Core Web Vitals</h3>
         <CWVRow label="LCP" value={scores.lcp} unit="ms" target={2500} targetLabel="2500ms" />
         <CWVRow label="TBT (FID proxy)" value={scores.tbt} unit="ms" target={200} targetLabel="200ms" />
         <CWVRow label="CLS" value={scores.cls !== null ? Math.round(scores.cls * 1000) / 1000 : null} unit="" target={0.1} targetLabel="0.1" />

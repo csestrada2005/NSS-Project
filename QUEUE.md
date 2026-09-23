@@ -965,7 +965,12 @@ quedar rastro.
 avisa que los `.sql` no aportan nada al grafo (`pip install "graphifyy[sql]"` lo arregla) — no se instaló
 hoy, fuera de alcance de esta cirugía, sólo anotado.
 
-## 10. HECHO (pendiente CHECK MANUAL) — Rediseño completo del modal de chat (2026-09-20)
+## 10. HECHO Y CONFIRMADO — Rediseño completo del modal de chat (2026-09-20)
+
+**CHECK MANUAL — CONFIRMADO (dato indirecto, no paso a paso):** el propio ítem 13 (abajo) registra que
+"Samuel confirmó el check manual de los ítems 10-12" antes de pasar a esa cirugía. No hay evidencia cruda
+paso-a-paso archivada aquí para este ítem en particular (los 8 pasos de la lista de abajo no fueron
+confirmados uno por uno por separado) — se deja anotado así, sin inventar detalle que no se dio.
 
 **Alcance confirmado con Samuel: sólo UI del modal de chat** — no se tocó ningún productor de datos
 (`ddlProposedMark`, `rlsPolicyGuard`/`clientCodeGuard`, el gate de plan `shouldGatePlan`/`requestPlanDecision`,
@@ -1116,7 +1121,9 @@ Mundos pre-registrados:
 SUPERADO a propósito** — esas tres pestañas de `CommandModal` se promovieron al navbar nuevo del preview,
 ítem 11. No es una regresión de esta sección; es el bloque siguiente moviendo algo a propósito.
 
-## 11. HECHO (pendiente CHECK MANUAL) — Navbar del preview: sustituye la píldora flotante (2026-09-20)
+## 11. HECHO Y CONFIRMADO — Navbar del preview: sustituye la píldora flotante (2026-09-20)
+
+**CHECK MANUAL — CONFIRMADO (mismo dato indirecto que el ítem 10, ver esa nota).**
 
 **Alcance confirmado con Samuel, mismo día que el ítem 10** — retoma el "DISEÑADO PERO NO CONSTRUIDO" del
 bucket 5 ítem 3 (más arriba en este archivo), con tres decisiones nuevas que faltaban:
@@ -1198,7 +1205,9 @@ Mundos pre-registrados:
   Settings dejan el preview visible detrás (deberían reemplazarlo), o el modo Visual dejó de poder
   seleccionar elementos en el preview.
 
-## 12. HECHO (pendiente CHECK MANUAL) — Limpieza de "modos": Terminal fuera, tipos consolidados, una sola fuente de verdad (2026-09-21)
+## 12. HECHO Y CONFIRMADO — Limpieza de "modos": Terminal fuera, tipos consolidados, una sola fuente de verdad (2026-09-21)
+
+**CHECK MANUAL — CONFIRMADO (mismo dato indirecto que el ítem 10, ver esa nota).**
 
 Samuel pidió un inventario completo de los "modos" del sistema (ítem 10+11 dejaron seis: `ChatSendMode`,
 el estado del chat reposo/pensando/listo, `editMode`, `ViewportMode`, `PanelMode`, `TabType`). Del
@@ -1256,7 +1265,12 @@ Mundos pre-registrados:
   perdiendo el efecto de blur sobre el preview, el dropdown de modo mostrando un valor que el pipeline no
   respeta, o la cancelación dejando de funcionar.
 
-## 13. HECHO (pendiente CHECK MANUAL) — Rediseño visual del navbar del preview (ítem 4, 2026-09-21)
+## 13. HECHO Y CONFIRMADO — Rediseño visual del navbar del preview (ítem 4, 2026-09-21)
+
+**CHECK MANUAL — CONFIRMADO (2026-09-23).** Evidencia cruda (Samuel, palabras textuales): "Item 13
+funcionando, la navbar se ve bien y funcional." Confirmación general, no verificada paso a paso contra los
+6 pasos ni contra la falla-real registrados abajo — se deja anotado así (no se marca cada paso individual
+como probado porque no se reportó a ese nivel de detalle).
 
 Samuel confirmó el check manual de los ítems 10-12 y pasó un HTML de referencia (título "Wyrd Forge —
 navbar") con las decisiones de diseño ya tomadas: chrome negro opaco (no translúcido), tres zonas
@@ -1334,6 +1348,100 @@ Mundos pre-registrados:
 - **Falla real (si aparece, SÍ es bug):** cualquier rojo fuera de "Publicar", el selector de página con
   texto desalineado, el menú hamburguesa roto, Publicar abriendo una pestaña que no es Deploy, o cualquier
   botón rojo flotante todavía visible sobre el preview.
+
+### 5.3 Bloque 6 (PENDIENTE, sin empezar) — Bugs de chat/navbar + segunda pasada de estética (pedido de Samuel, 2026-09-23)
+
+Pedido en un solo mensaje tras confirmar el ítem 13. Aún NO se ha diseñado en frío ni tocado código —
+queda registrado aquí para no perderlo, pendiente de acordar orden y bloques atómicos con Samuel.
+
+**Bugs (candidatos a un solo bloque, misma zona de código — apertura/cierre del chat vía navbar/Ctrl+Espacio):**
+- El atajo Ctrl+Espacio para abrir el chat sólo funciona si antes se le dio click al botón Chat al menos
+  una vez en la sesión; si nunca se hizo click, el atajo no abre nada.
+- Al cerrar el chat con Ctrl+Espacio, el preview deja de poder hacer scroll.
+- Si Código o Ajustes están abiertos (reemplazando el preview), intentar abrir Chat (por click o por
+  Ctrl+Espacio) debe mostrar un aviso "Ve a preview primero para abrir chat" en vez de fallar en silencio o
+  abrir en un estado raro.
+
+**Limpieza de menú:**
+- Quitar del menú hamburguesa (izquierda del navbar) las opciones "Visual Graph" y "Share".
+
+**Copy:**
+- Quitar el mensaje "The AI will auto fix this" (premisa falsa) y reemplazarlo por algo tipo "Debes
+  arreglar esto en el Chat".
+
+**Color:**
+- Los contenedores en rojo sólido de Settings (Bloque 5 de este mismo ítem 5.3) resultaron demasiado
+  agresivos a la vista. Samuel pide otro approach, similar al que ya se ve bien en la pestaña "GitHub" de
+  Settings — revisar esa pestaña como referencia antes de proponer alternativa.
+
+**Estado de "compilando"/generación de proyecto nuevo:**
+- Reemplazar el indicador actual (spinner circular chico) por una animación a pantalla completa, estilo la
+  pantalla de "cold start" de Render en el plan free (recuadros del lado derecho que reaccionan al mouse).
+  Aplica tanto al compilar como a la generación inicial de un proyecto nuevo.
+
+**Rediseño visual — segunda pasada, dirección "brutalista Nebu" (la pieza más grande, con criterio explícito
+de Samuel para decidir alcance):**
+- Diagnóstico de Samuel: los contenedores de la plataforma se ven genéricos (radius uniforme suave, bordes
+  de 1px casi invisibles, "shadcn de fábrica", ninguna decisión de marca tomada).
+- Referencia: el sitio público de Nebu Studio usa lenguaje brutalista — sombra dura desplazada en rojo,
+  bordes con peso real, radius mínimo, labels en mayúsculas con tracking, hover que desplaza el elemento en
+  diagonal. Samuel pasó el markup de un botón de ese sitio como muestra exacta.
+- Regla de alcance que Samuel dio explícita (no inventar dónde aplica cada intensidad):
+  - **Superficies de marca** (onboarding, tutorial, login, estados vacíos, modales administrativos,
+    dashboard): lenguaje brutalista completo, sin diluir.
+  - **Superficies de trabajo** (navbar del preview, chat, panel de código, property panel — las que
+    `CLAUDE.md` ya fija como oscuras a propósito): versión destilada, mismo ADN sin el volumen — radius casi
+    cero, bordes que se leen como estructura, un solo acento rojo por pantalla, hover de COLOR en vez de
+    desplazamiento (no la sombra dura ni el desplazamiento diagonal ahí).
+  - Dos ajustes que Samuel ya avisó que NO se portan tal cual: la sombra dura funciona sobre el papel crema
+    del sitio público, pero sobre fondo oscuro se ve como bloque flotante — hay que repensarla si se usa en
+    oscuro; y el hover con desplazamiento diagonal es correcto en un botón que aparece una vez, pero en un
+    menú de varios ítems es movimiento constante y cansa — no aplicarlo ahí tal cual.
+  - Instrucción explícita de Samuel: cuando una superficie sea ambigua entre marca/trabajo, preguntar antes
+    de decidir, no adivinar.
+- Corolario del mismo pedido: rediseñar toda la estética de los popups/modales con este lenguaje Nebu (una
+  sola pieza de trabajo, pero conviene resolverla como parte de la auditoría de superficies de marca de
+  arriba, no aparte, porque los modales administrativos SON superficie de marca).
+
+**Hecho (2026-09-23) — bugs de chat/navbar + menú + copy + color, con dos hallazgos resueltos con Samuel:**
+- Los tres bugs de chat (Ctrl+Espacio no abría si nunca se había hecho click, el preview dejaba de
+  scrollear al "peekear" con Ctrl+Espacio, y faltaba el aviso al intentar abrir chat con Código/Ajustes
+  abiertos) — resueltos moviendo el estado de "peek" (`chatPeeking`) y el listener global de Ctrl+Espacio de
+  `ChatInterface.tsx` a `StudioEngine.tsx` (antes sólo existía mientras el modal estaba montado), y pasando
+  `peeking` a `CommandModal.tsx` para que su backdrop invisible deje de bloquear el scroll cuando está
+  "peekeado". Nuevo `handleOpenChat` único (botón + atajo) con el guard de panelMode.
+- Menú hamburguesa: quitados "Visual Graph" y "Share".
+  - **"Share" resultó ser más que un ítem de menú**: era el único botón en toda la UI para activar/
+    desactivar el link público de preview (`togglePublicAccess`, escribe `is_public` en `forge_projects`,
+    ruta `/preview/:projectId`). Se quitó (única forma de que compilara sin la función huérfana bajo
+    `noUnusedLocals`). **Decisión de Samuel: no reconstruir esto ahora — se revisará cuando se trabaje el
+    flujo de "Publish" (ligado al ítem 4/tutorial de arriba, y a `DeployManager`/"Publicar" del navbar,
+    ítem 13). Anotado aquí para no perderlo.**
+  - "Visual Graph" (`StateGraph`, debug de dependencias): Samuel confirmó borrarlo por completo, no sólo
+    el botón. Borrado `src/components/debug/StateGraph.tsx`, su import, el estado `showGraph`/`setShowGraph`
+    y el punto de montaje en `StudioEngine.tsx`.
+- Copy: "The AI will auto-fix this..." (mentira — no hay tal mecanismo) → "Debes arreglar esto en el Chat."
+  en `generateErrorHTML` (`src/services/BrowserCompiler.ts`), la página de error que se ve DENTRO del
+  iframe del preview cuando falla la compilación.
+- Color de Ajustes: los ~18 recuadros rojo-sólido-con-texto-negro de Bloque 5 (Secrets, Email, Domains,
+  Analytics, Database Overview, Usage, Deploy) pasan a fondo neutro oscuro (`bg-background/50`) + borde
+  normal + una franja roja gruesa a la izquierda (`border-l-4 border-l-primary`), decisión de Samuel entre
+  3 opciones presentadas (ganó "neutro + borde lateral" sobre "igual que GitHub" y "rojo translúcido").
+  Texto vuelve a los tokens semánticos normales (`text-foreground`/`text-muted-foreground`), ya no negro.
+  De paso, en `LighthousePanel.tsx` los colores hardcodeados de `scoreColor()`/el aro base de los gauges
+  (ajustados en Bloque 5 para leerse sobre rojo) vuelven a una paleta semáforo normal sobre fondo oscuro
+  (verde/ámbar/`#ef4444`, aro `rgba(255,255,255,.12)`).
+- `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 671/671 (sin cambios — nada de esto
+  toca servidor). `npx vitest run` → 48/48. `npx vite build` real: confirmado que `border-l-primary`
+  compila, `#0D0D0D` (color "malo" viejo de los gauges) ya no aparece, `#ef4444` (nuevo) sí.
+
+**CHECK MANUAL — PENDIENTE.** Ver mensaje de cierre de la sesión para el detalle paso a paso.
+
+**Siguiente paso real, antes de escribir código:** diseño en frío con Samuel — decidir orden de bloques
+(los bugs primero, por ser acotados y de bajo riesgo, parece lo obvio; el rediseño brutalista es la pieza
+más grande y probablemente necesita su propia sesión con mockup, como ya pasó con el resto de 5.3) y
+resolver con `ui-ux-pro-max` qué encaja mejor para portar el estilo brutalista dado que el skill no dio
+buenos resultados la primera vez que se usó en este ítem (ver Bloque 1, "Hallazgo del skill, con matiz").
 
 ## APARCADO hasta después de lanzar
 - **A+**: quitar el botón de aprobación cuando el guard no pudo inspeccionar. Aparcado: `unparseable` no tiene causa conocida tras G-3; sólo verificable con SQL fabricado a mano (choca con medir por comportamiento).

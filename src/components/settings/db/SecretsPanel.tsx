@@ -133,10 +133,10 @@ export function SecretsPanel({ projectId }: SecretsPanelProps) {
       )}
 
       {/* Platform services (read-only) */}
-      <div className="bg-primary rounded-xl p-4 border border-primary">
-        <h3 className="text-sm font-semibold text-black mb-3">Platform Services</h3>
+      <div className="bg-background/50 rounded-xl p-4 border border-border border-l-4 border-l-primary">
+        <h3 className="text-sm font-semibold text-foreground mb-3">Platform Services</h3>
         {loadingPlatform ? (
-          <div className="flex items-center gap-2 text-xs text-black/70">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Loader2 size={12} className="animate-spin" />
             Checking platform services...
           </div>
@@ -147,20 +147,20 @@ export function SecretsPanel({ projectId }: SecretsPanelProps) {
               return (
                 <div key={key} className="flex items-center gap-2 text-xs">
                   {connected
-                    ? <CheckCircle size={12} className="text-emerald-900 shrink-0" />
-                    : <Circle size={12} className="text-black/40 shrink-0" />}
-                  <span className={connected ? 'text-black' : 'text-black/60'}>{label}</span>
+                    ? <CheckCircle size={12} className="text-emerald-500 shrink-0" />
+                    : <Circle size={12} className="text-muted-foreground/40 shrink-0" />}
+                  <span className={connected ? 'text-foreground' : 'text-muted-foreground'}>{label}</span>
                 </div>
               );
             })}
           </div>
         )}
-        <p className="text-xs text-black/60 mt-3">Platform keys are managed server-side and never exposed to the client.</p>
+        <p className="text-xs text-muted-foreground mt-3">Platform keys are managed server-side and never exposed to the client.</p>
       </div>
 
       {/* User-managed secrets */}
-      <div className="bg-primary rounded-lg p-4 border border-primary">
-        <p className="text-sm text-black/80 mb-1">
+      <div className="bg-background/50 rounded-lg p-4 border border-border border-l-4 border-l-primary">
+        <p className="text-sm text-muted-foreground mb-1">
           Project secrets (e.g. <code>GITHUB_TOKEN</code>, custom API keys) are stored securely per project.
         </p>
         <div className="flex gap-2 mb-4 mt-4">
@@ -169,19 +169,19 @@ export function SecretsPanel({ projectId }: SecretsPanelProps) {
             placeholder="KEY (e.g. GITHUB_TOKEN)"
             value={newKey}
             onChange={(e) => setNewKey(e.target.value)}
-            className="flex-1 bg-black/15 border border-black/30 rounded px-3 py-2 text-sm text-black placeholder-black/50 focus:border-black focus:outline-none"
+            className="flex-1 bg-muted border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
           />
           <input
             type="password"
             placeholder="VALUE"
             value={newValue}
             onChange={(e) => setNewValue(e.target.value)}
-            className="flex-1 bg-black/15 border border-black/30 rounded px-3 py-2 text-sm text-black placeholder-black/50 focus:border-black focus:outline-none"
+            className="flex-1 bg-muted border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
           />
           <button
             onClick={addSecret}
             disabled={!newKey.trim()}
-            className="px-4 py-2 bg-black hover:bg-black/80 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
+            className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
           >
             <Plus size={16} />
             Add

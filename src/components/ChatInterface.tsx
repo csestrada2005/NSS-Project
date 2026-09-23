@@ -84,6 +84,14 @@ interface ChatInterfaceProps {
   onPlanModeChange?: (enabled: boolean) => void;
   /** Sólo para el subtítulo del historial ("N turnos · <nombre>"). */
   projectName?: string | null;
+  /**
+   * "Peek" (Ctrl+Espacio): esconde la typebar/tarjetas para revelar el
+   * preview completo, sin cerrar el chat. Controlado desde StudioEngine
+   * (QUEUE.md ítem 5.3 Bloque 6) — antes era estado local de este
+   * componente, pero CommandModal también necesita saber este valor para
+   * dejar de bloquear el scroll del preview mientras está escondido.
+   */
+  typebarHidden?: boolean;
 }
 
 export function ChatInterface({
@@ -105,6 +113,7 @@ export function ChatInterface({
   planModeEnabled = false,
   onPlanModeChange,
   projectName,
+  typebarHidden = false,
 }: ChatInterfaceProps) {
   // --- Estado heredado (sin cambios de lógica, sólo de qué lo consume) ------
 
@@ -140,7 +149,6 @@ export function ChatInterface({
   // prop. Mismo motivo por el que pendingPlanSteps tampoco es estado local.
   const mode: ChatSendMode = planModeEnabled ? 'plan' : 'auto';
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [typebarHidden, setTypebarHidden] = useState(false);
 
   const onHistoryUpdateRef = useRef(onHistoryUpdate);
   useEffect(() => { onHistoryUpdateRef.current = onHistoryUpdate; }, [onHistoryUpdate]);
@@ -428,20 +436,6 @@ export function ChatInterface({
 
   const isBusy = isLoading;
   const processTitle = mode === 'plan' ? 'Armando el plan' : 'Trabajando';
-
-  // Ctrl+Space — esconder/mostrar la typebar y las tarjetas (nota final del
-  // rediseño), mismo mecanismo que el fade in/out del modal antiguo, más
-  // lento (0.75s, ver forgeChat.css .fc-modal-layer).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.code === 'Space') {
-        e.preventDefault();
-        setTypebarHidden(v => !v);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
 
   // Esc — prioridad: historial abierto > cancelar un run en curso. El menú de
   // modo se cierra solo (ModeSelector detiene la propagación de su propio Esc).

@@ -75,36 +75,36 @@ export function DatabaseOverview({ projectId }: DatabaseOverviewProps) {
   }, [projectId]);
 
   const kpis: KPI[] = [
-    { label: 'Tables', value: tableCount !== null ? tableCount : '--', icon: <Database size={16} className="text-black/60" /> },
-    { label: 'Active Users', value: userCount !== null ? userCount : '--', icon: <Activity size={16} className="text-black/60" /> },
-    { label: 'Snapshots', value: snapshotCount !== null ? snapshotCount : '--', icon: <Database size={16} className="text-black/60" /> },
+    { label: 'Tables', value: tableCount !== null ? tableCount : '--', icon: <Database size={16} className="text-muted-foreground" /> },
+    { label: 'Active Users', value: userCount !== null ? userCount : '--', icon: <Activity size={16} className="text-muted-foreground" /> },
+    { label: 'Snapshots', value: snapshotCount !== null ? snapshotCount : '--', icon: <Database size={16} className="text-muted-foreground" /> },
   ];
 
   return (
     <div className="space-y-4">
       {/* Connection Card */}
-      <div className="bg-primary border border-primary rounded-xl p-4 space-y-3">
+      <div className="bg-background/50 border border-border border-l-4 border-l-primary rounded-xl p-4 space-y-3">
         <div className="flex items-center gap-2">
-          <Database size={16} className="text-black/60" />
-          <h3 className="text-sm font-medium text-black">Connection</h3>
+          <Database size={16} className="text-muted-foreground" />
+          <h3 className="text-sm font-medium text-foreground">Connection</h3>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-xs text-black/60">Project URL</span>
-          <span className="text-xs font-mono text-black">{maskedUrl}</span>
+          <span className="text-xs text-muted-foreground">Project URL</span>
+          <span className="text-xs font-mono text-foreground">{maskedUrl}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-xs text-black/60">Status</span>
+          <span className="text-xs text-muted-foreground">Status</span>
           {isLoading ? (
-            <Loader2 size={14} className="animate-spin text-black/60" />
+            <Loader2 size={14} className="animate-spin text-muted-foreground" />
           ) : connectionOk === true ? (
             <div className="flex items-center gap-1.5">
-              <CheckCircle size={14} className="text-emerald-900" />
-              <span className="text-xs text-emerald-900">{latencyMs}ms</span>
+              <CheckCircle size={14} className="text-emerald-500" />
+              <span className="text-xs text-emerald-500">{latencyMs}ms</span>
             </div>
           ) : (
             <div className="flex items-center gap-1.5">
-              <XCircle size={14} className="text-black" />
-              <span className="text-xs text-black">Error</span>
+              <XCircle size={14} className="text-red-400" />
+              <span className="text-xs text-red-400">Error</span>
             </div>
           )}
         </div>
@@ -113,15 +113,15 @@ export function DatabaseOverview({ projectId }: DatabaseOverviewProps) {
       {/* KPI Cards */}
       <div className="grid grid-cols-3 gap-3">
         {kpis.map((kpi) => (
-          <div key={kpi.label} className="bg-primary border border-primary rounded-xl p-4">
+          <div key={kpi.label} className="bg-background/50 border border-border border-l-4 border-l-primary rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-black/60">{kpi.label}</span>
+              <span className="text-xs text-muted-foreground">{kpi.label}</span>
               {kpi.icon}
             </div>
             {isLoading ? (
-              <Loader2 size={16} className="animate-spin text-black/60" />
+              <Loader2 size={16} className="animate-spin text-muted-foreground" />
             ) : (
-              <p className="text-xl font-bold text-black">{kpi.value}</p>
+              <p className="text-xl font-bold text-foreground">{kpi.value}</p>
             )}
           </div>
         ))}

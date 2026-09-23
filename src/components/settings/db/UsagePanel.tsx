@@ -46,10 +46,10 @@ export function UsagePanel({ projectId }: UsagePanelProps) {
   }, [projectId]);
 
   const kpis = [
-    { label: 'REST Requests', value: snapshot?.total_rest_requests, icon: <Database size={18} className="text-black/60" /> },
-    { label: 'Auth Requests', value: snapshot?.total_auth_requests, icon: <Zap size={18} className="text-black/60" /> },
-    { label: 'Storage Requests', value: snapshot?.total_storage_requests, icon: <HardDrive size={18} className="text-black/60" /> },
-    { label: 'Realtime Requests', value: snapshot?.total_realtime_requests, icon: <Radio size={18} className="text-black/60" /> },
+    { label: 'REST Requests', value: snapshot?.total_rest_requests, icon: <Database size={18} className="text-muted-foreground" /> },
+    { label: 'Auth Requests', value: snapshot?.total_auth_requests, icon: <Zap size={18} className="text-muted-foreground" /> },
+    { label: 'Storage Requests', value: snapshot?.total_storage_requests, icon: <HardDrive size={18} className="text-muted-foreground" /> },
+    { label: 'Realtime Requests', value: snapshot?.total_realtime_requests, icon: <Radio size={18} className="text-muted-foreground" /> },
   ];
 
   if (!projectId) {
@@ -65,15 +65,15 @@ export function UsagePanel({ projectId }: UsagePanelProps) {
       )}
       <div className="grid grid-cols-2 gap-4">
         {kpis.map((kpi) => (
-          <div key={kpi.label} className="bg-primary border border-primary rounded-xl p-4">
+          <div key={kpi.label} className="bg-background/50 border border-border border-l-4 border-l-primary rounded-xl p-4">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs text-black/60">{kpi.label}</span>
+              <span className="text-xs text-muted-foreground">{kpi.label}</span>
               {kpi.icon}
             </div>
             {isLoading ? (
-              <Loader2 size={16} className="animate-spin text-black/60" />
+              <Loader2 size={16} className="animate-spin text-muted-foreground" />
             ) : (
-              <p className="text-2xl font-bold text-black">
+              <p className="text-2xl font-bold text-foreground">
                 {kpi.value !== undefined && kpi.value !== null ? kpi.value.toLocaleString() : '--'}
               </p>
             )}

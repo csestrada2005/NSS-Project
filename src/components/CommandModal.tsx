@@ -15,17 +15,27 @@ import { modalBackdropMotion, bottomSheetMotion } from "@/components/ui/modalMot
 interface CommandModalProps {
   onClose: () => void;
   children: React.ReactNode;
+  /**
+   * "Peek" (Ctrl+Espacio con el chat ya abierto, QUEUE.md ítem 5.3 Bloque 6):
+   * ChatInterface esconde su typebar/tarjetas para revelar el preview
+   * completo, pero este backdrop (invisible — sólo existe para cerrar al
+   * hacer click fuera) seguía cubriendo toda la pantalla y bloqueando el
+   * scroll/click del preview aunque no se viera nada encima. Con `peeking`,
+   * tanto el backdrop como el contenedor del bottom sheet dejan pasar el
+   * puntero.
+   */
+  peeking?: boolean;
 }
 
-export const CommandModal = ({ onClose, children }: CommandModalProps) => {
+export const CommandModal = ({ onClose, children, peeking = false }: CommandModalProps) => {
   return (
     <>
       <motion.div
         {...modalBackdropMotion}
-        className="fixed inset-0 z-[60]"
+        className={`fixed inset-0 z-[60] ${peeking ? 'pointer-events-none' : ''}`}
         onClick={onClose}
       />
-      <div className="fixed z-[70] inset-x-4 bottom-4 h-[88vh] max-h-[920px]">
+      <div className={`fixed z-[70] inset-x-4 bottom-4 h-[88vh] max-h-[920px] ${peeking ? 'pointer-events-none' : ''}`}>
       <motion.div
         {...bottomSheetMotion}
         className="h-full rounded-2xl flex flex-col overflow-hidden border-0 bg-transparent shadow-none"

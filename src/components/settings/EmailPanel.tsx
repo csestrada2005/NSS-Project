@@ -167,41 +167,41 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
   const TemplateEditor = ({ template, onSave, onCancel }: { template: Partial<EmailTemplate>; onSave: (t: Partial<EmailTemplate>) => void; onCancel: () => void }) => {
     const [local, setLocal] = useState(template);
     return (
-      <div className="bg-primary border border-primary rounded-lg p-4 space-y-3">
+      <div className="bg-background/50 border border-border border-l-4 border-l-primary rounded-lg p-4 space-y-3">
         <input
           type="text"
           placeholder="Template name (e.g. welcome, otp)"
           value={local.name || ''}
           onChange={e => setLocal(p => ({ ...p, name: e.target.value }))}
-          className="w-full bg-black/15 border border-black/30 rounded px-3 py-2 text-sm text-black placeholder-black/50 focus:border-black focus:outline-none"
+          className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
         />
         <input
           type="text"
           placeholder="Subject line (use {{variable}} for placeholders)"
           value={local.subject || ''}
           onChange={e => setLocal(p => ({ ...p, subject: e.target.value }))}
-          className="w-full bg-black/15 border border-black/30 rounded px-3 py-2 text-sm text-black placeholder-black/50 focus:border-black focus:outline-none"
+          className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
         />
         <div>
-          <p className="text-xs text-black/60 mb-1">HTML body — use {'{{variable}}'} for dynamic values</p>
+          <p className="text-xs text-muted-foreground mb-1">HTML body — use {'{{variable}}'} for dynamic values</p>
           <textarea
             placeholder="<h1>Hello {{name}}</h1><p>Welcome!</p>"
             value={local.html_body || ''}
             onChange={e => setLocal(p => ({ ...p, html_body: e.target.value }))}
             rows={6}
-            className="w-full bg-black/15 border border-black/30 rounded px-3 py-2 text-sm text-black placeholder-black/50 font-mono focus:border-black focus:outline-none resize-y"
+            className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground font-mono focus:border-primary focus:outline-none resize-y"
           />
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => onSave(local)}
             disabled={!local.name || !local.subject}
-            className="px-4 py-1.5 bg-black hover:bg-black/80 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-1.5"
+            className="px-4 py-1.5 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-1.5"
           >
             <Save size={13} />
             Save
           </button>
-          <button onClick={onCancel} className="px-4 py-1.5 bg-black/15 hover:bg-black/25 text-black rounded text-sm transition-colors flex items-center gap-1.5">
+          <button onClick={onCancel} className="px-4 py-1.5 bg-secondary hover:bg-accent text-foreground border border-border rounded text-sm transition-colors flex items-center gap-1.5">
             <X size={13} />
             Cancel
           </button>
@@ -223,8 +223,8 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
       )}
 
       {/* Section A: Sending domain */}
-      <div className="bg-primary rounded-lg p-4 border border-primary">
-        <h3 className="text-sm font-semibold text-black mb-3 flex items-center gap-2">
+      <div className="bg-background/50 rounded-lg p-4 border border-border border-l-4 border-l-primary">
+        <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
           <Mail size={14} />
           Sending Domain
         </h3>
@@ -236,12 +236,12 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
               placeholder="e.g. mail.myapp.com"
               value={sendingDomain}
               onChange={e => setSendingDomain(e.target.value)}
-              className="flex-1 bg-black/15 border border-black/30 rounded px-3 py-2 text-sm text-black placeholder-black/50 focus:border-black focus:outline-none"
+              className="flex-1 bg-muted border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
             />
             <button
               onClick={setupDomain}
               disabled={isSettingUp || !sendingDomain.trim()}
-              className="px-4 py-2 bg-black hover:bg-black/80 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
             >
               {isSettingUp ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
               Setup
@@ -251,16 +251,16 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
           <div className="space-y-3">
             <div className="flex items-center gap-3">
               {emailConfig.status === 'verified'
-                ? <CheckCircle size={14} className="text-emerald-900" />
-                : <Clock size={14} className="text-black/70 animate-pulse" />}
-              <span className={`text-sm font-medium ${emailConfig.status === 'verified' ? 'text-emerald-900' : 'text-black'}`}>
+                ? <CheckCircle size={14} className="text-emerald-500" />
+                : <Clock size={14} className="text-muted-foreground animate-pulse" />}
+              <span className={`text-sm font-medium ${emailConfig.status === 'verified' ? 'text-emerald-500' : 'text-foreground'}`}>
                 {emailConfig.status === 'verified' ? 'Verified' : 'Pending verification'}
               </span>
               {emailConfig.status === 'pending' && (
                 <button
                   onClick={checkVerification}
                   disabled={isCheckingStatus}
-                  className="ml-auto text-xs text-black/70 hover:text-black flex items-center gap-1 transition-colors"
+                  className="ml-auto text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
                 >
                   {isCheckingStatus ? <Loader2 size={11} className="animate-spin" /> : null}
                   Check verification
@@ -270,22 +270,22 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
 
             {emailConfig.dnsRecords && emailConfig.dnsRecords.length > 0 && emailConfig.status === 'pending' && (
               <div>
-                <p className="text-xs text-black/70 mb-2">Add these DNS records to verify your domain:</p>
-                <div className="overflow-x-auto border border-black/30 rounded-lg">
+                <p className="text-xs text-muted-foreground mb-2">Add these DNS records to verify your domain:</p>
+                <div className="overflow-x-auto border border-border rounded-lg">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="bg-black/10 text-black/70 border-b border-black/30">
+                      <tr className="bg-muted text-muted-foreground border-b border-border">
                         <th className="text-left px-3 py-2 font-medium">Type</th>
                         <th className="text-left px-3 py-2 font-medium">Name</th>
                         <th className="text-left px-3 py-2 font-medium">Value</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-black/20">
+                    <tbody className="divide-y divide-border">
                       {emailConfig.dnsRecords.map((record, i) => (
                         <tr key={i}>
-                          <td className="px-3 py-2 font-mono text-black">{record.type}</td>
-                          <td className="px-3 py-2 font-mono text-black max-w-[120px] truncate">{record.name}</td>
-                          <td className="px-3 py-2 font-mono text-black max-w-[200px] truncate">{record.value}</td>
+                          <td className="px-3 py-2 font-mono text-foreground">{record.type}</td>
+                          <td className="px-3 py-2 font-mono text-foreground max-w-[120px] truncate">{record.name}</td>
+                          <td className="px-3 py-2 font-mono text-foreground max-w-[200px] truncate">{record.value}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -361,8 +361,8 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
 
       {/* Section C: Test send */}
       {emailConfig?.status === 'verified' && templates.length > 0 && (
-        <div className="bg-primary rounded-lg p-4 border border-primary">
-          <h3 className="text-sm font-semibold text-black mb-3 flex items-center gap-2">
+        <div className="bg-background/50 rounded-lg p-4 border border-border border-l-4 border-l-primary">
+          <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
             <Send size={14} />
             Test Send
           </h3>
@@ -372,12 +372,12 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
               placeholder="Recipient email"
               value={testEmail}
               onChange={e => setTestEmail(e.target.value)}
-              className="w-full bg-black/15 border border-black/30 rounded px-3 py-2 text-sm text-black placeholder-black/50 focus:border-black focus:outline-none"
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
             />
             <select
               value={testTemplate}
               onChange={e => setTestTemplate(e.target.value)}
-              className="w-full bg-black/15 border border-black/30 rounded px-3 py-2 text-sm text-black focus:border-black focus:outline-none"
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
             >
               <option value="">Select template...</option>
               {templates.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
@@ -385,7 +385,7 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
             <button
               onClick={sendTestEmail}
               disabled={isSending || !testEmail || !testTemplate}
-              className="px-4 py-2 bg-black hover:bg-black/80 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
             >
               {isSending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
               {isSending ? 'Sending...' : 'Send Test'}

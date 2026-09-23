@@ -361,7 +361,7 @@ export function generateErrorHTML(message: string, stack?: string): string {
     '<body>',
     '  <h1>Compilation Error</h1>',
     `  <pre>${escapeHtml(message)}${stack ? '\n\n' + escapeHtml(stack) : ''}</pre>`,
-    '  <p class="note">The AI will auto-fix this...</p>',
+    '  <p class="note">Debes arreglar esto en el Chat.</p>',
     '</body>',
     '</html>',
   ].join('\n');
