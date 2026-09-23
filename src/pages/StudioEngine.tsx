@@ -2231,7 +2231,9 @@ export function StudioEngine() {
                   fondo neutro + spinner + paso actual. z-40 deja accesibles el
                   botón de menú y los badges (z-50). */}
               {showGeneratingOverlay && (
-                <ColdStartOverlay>
+                <ColdStartOverlay
+                  progress={generationProgress ? generationProgress.step / generationProgress.total : undefined}
+                >
                   <Loader2 className="w-8 h-8 animate-spin text-primary" />
                   <div className="text-sm font-medium text-foreground">Generando tu proyecto…</div>
                   {generationProgress && (

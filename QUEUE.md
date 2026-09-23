@@ -889,6 +889,43 @@ una sesión de Wyrd Forge cruzaría esa frontera a propósito, no por descuido �
 para confirmar con Samuel si de verdad quiere tocar estas 4 pantallas desde esta sesión, o si esto se queda
 para "su propia sesión" como ya estaba anotado.
 
+### Animación de carga — v2, reactiva por celda + progreso real (2026-09-23)
+
+Samuel probó el check manual del lote anterior: todo bien EXCEPTO la animación de carga (v1, ítem "Bloque
+2" de arriba) — "no me acaba de encantar, quiero algo más interactivo". Se le propusieron 3 direcciones
+(rejilla reactiva por celda / partículas al click / progreso real en vez de decorativo) — eligió una
+combinación: la rejilla reactiva por celda como base, MÁS que las celdas se enciendan según el progreso
+real cuando se genera un proyecto nuevo.
+
+**Hecho — `ColdStartOverlay.tsx`/`coldStartOverlay.css` reescritos (v2):**
+- Antes: un único `radial-gradient` sobre toda la cuadrícula, seguía al mouse vía 2 variables CSS
+  (`--cso-mx`/`--cso-my`) en el contenedor. Ahora: CADA celda tiene su propia variable `--cso-t` (0–1,
+  qué tan cerca está del cursor), calculada en cada `mousemove` (un solo `requestAnimationFrame` por
+  movimiento, nunca más de uno en vuelo) y escrita directo a esa celda por `ref` — sigue sin pasar por
+  `useState`/re-render de React. Cada celda reacciona sola: se agranda (`scale`), gana fondo rojo y brillo
+  (`box-shadow`) en proporción a `--cso-t` — efecto tipo dock de macOS / teclado mecánico, no un solo
+  reflector suave.
+- Nuevo prop `progress?: number` (0–1): una fracción de celdas queda "encendida" de forma PERSISTENTE
+  (clase `.cso-lit`, independiente del mouse), en un orden fijo pero no lineal (`LIGHT_ORDER`, un shuffle
+  con semilla fija — mismo orden en cada carga, para que no "salte" al re-renderizar cuando cambia el
+  progreso, y para que no se vea mecánico encendiéndose fila por fila). Conectado en `StudioEngine.tsx`
+  SÓLO en `showGeneratingOverlay` (generación de proyecto nuevo): `progress={generationProgress.step /
+  generationProgress.total}`. El caso de abrir un proyecto existente (`isLoading`) y el de "esperando el
+  primer compile" NO reciben `progress` (no hay un conteo de pasos real que mostrar ahí) — se quedan sólo
+  con la reactividad al mouse.
+- Las otras dos direcciones que se ofrecieron (partículas al click, o reemplazar del todo la reactividad al
+  mouse por progreso) NO se hicieron — quedan descartadas, no pendientes.
+
+**Verificación:** `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 671/671 (sin
+cambios). `npx vitest run` → 48/48. `npx vite build` real: confirmado que `--cso-t` y `.cso-lit` compilan
+con los valores nuevos.
+
+**CHECK MANUAL — PENDIENTE.** Abrir un proyecto: la cuadrícula debe reaccionar celda por celda al mover el
+mouse (cada recuadro cercano al cursor se agranda/ilumina, no un solo reflector difuso). Generar un
+proyecto nuevo: además de esa reactividad, las celdas deben irse "encendiendo" de forma permanente,
+repartidas (no en una fila prolija), a medida que avanzan los pasos reales — para cuando termine la
+generación, buena parte de la cuadrícula debe quedar encendida.
+
 ### Toasts (pop ups de aviso) — blanco sólido con rojo (2026-09-23)
 
 Pedido de Samuel, a media sesión: los toasts (avisos flotantes tipo "Ve a preview primero para abrir

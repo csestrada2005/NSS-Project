@@ -3,14 +3,17 @@
  * Bloque 6, 2026-09-23), pedida por Samuel para reemplazar el "circulito
  * girando" en dos momentos de espera real: abrir un proyecto (isLoading, ver
  * StudioEngine.tsx) y generar un proyecto nuevo (showGeneratingOverlay).
- * Referencia dada: la pantalla de "cold start" de Render en el plan free —
- * una cuadrícula de recuadros del lado derecho que reaccionan al mouse.
  *
- * El efecto (una luz roja que sigue al mouse sobre una cuadrícula) se hace
- * con UNA variable CSS por eje, escrita directo al DOM en cada mousemove
- * (ColdStartOverlay.tsx, sin useState) para no re-renderizar React en cada
- * frame — el spotlight en sí es un solo radial-gradient, no JS por celda.
- * Sin mouse (o en móvil, sin hover), las celdas siguen "respirando" solas
+ * v2 (mismo día): la v1 (un solo spotlight radial-gradient siguiendo al
+ * mouse) "no acababa de encantar" — Samuel pidió algo más interactivo. Ahora
+ * cada celda reacciona SOLA según su propia variable `--cso-t` (0–1, qué tan
+ * cerca está del cursor), escrita por ColdStartOverlay.tsx directo al DOM de
+ * cada celda vía ref (sin React/setState por frame). `.cso-lit` es un
+ * segundo estado, independiente del mouse: celdas que se quedan encendidas
+ * de forma persistente para reflejar progreso real (generación de proyecto
+ * nuevo) — ver el prop `progress` del componente.
+ *
+ * Sin mouse (o sin hover, ej. tablet), las celdas siguen "respirando" solas
  * vía la animación de abajo, así la pantalla nunca se ve estática.
  */
 .cso-root {
@@ -30,14 +33,18 @@
   display: grid;
   grid-template-columns: repeat(14, 1fr);
   grid-template-rows: repeat(9, 1fr);
-  --cso-mx: 50%;
-  --cso-my: 40%;
 }
 
 .cso-cell {
+  --cso-t: 0;
   border: 1px solid rgba(232, 232, 232, 0.06);
   opacity: 0.18;
   animation: cso-twinkle 5s ease-in-out infinite;
+  background: rgba(214, 40, 40, calc(var(--cso-t) * 0.4));
+  box-shadow: 0 0 calc(var(--cso-t) * 20px) rgba(214, 40, 40, calc(var(--cso-t) * 0.85));
+  transform: scale(calc(1 + var(--cso-t) * 0.55));
+  transition: transform 0.08s linear, box-shadow 0.08s linear, background-color 0.08s linear;
+  will-change: transform;
 }
 
 @keyframes cso-twinkle {
@@ -45,16 +52,14 @@
   50% { opacity: 0.32; }
 }
 
-/* El spotlight: un único radial-gradient que sigue al mouse vía las
-   variables --cso-mx/--cso-my. mix-blend-mode: screen para que se sienta
-   como luz sobre la cuadrícula, no como una mancha pintada encima. */
-.cso-grid::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle 260px at var(--cso-mx) var(--cso-my), rgba(214, 40, 40, 0.4), transparent 70%);
-  mix-blend-mode: screen;
-  pointer-events: none;
+/* Celda "encendida" por progreso real (generación de proyecto nuevo) — fija,
+   no depende del mouse. El mouse sigue pudiendo sumarle brillo encima vía
+   --cso-t (box-shadow/transform sin tocar), sólo el color base cambia. */
+.cso-cell.cso-lit {
+  background-color: rgba(214, 40, 40, 0.32);
+  border-color: rgba(214, 40, 40, 0.55);
+  opacity: 1;
+  animation: none;
 }
 
 .cso-content {
@@ -69,5 +74,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cso-cell { animation: none; opacity: 0.16; }
+  .cso-cell { animation: none; opacity: 0.16; transition: none; }
 }
