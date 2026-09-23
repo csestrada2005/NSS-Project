@@ -19,6 +19,7 @@ interface ForgeProject {
   created_at: string;
   updated_at: string;
   deployment_url: string | null;
+  preview_html: string | null;
 }
 
 const ForgeDashboard = () => {
@@ -45,7 +46,7 @@ const ForgeDashboard = () => {
     try {
       const { data, error: fetchError } = await supabase
         .from("forge_projects")
-        .select("id, name, description, created_at, updated_at, deployment_url")
+        .select("id, name, description, created_at, updated_at, deployment_url, preview_html")
         .eq("user_id", user.id)
         .order("updated_at", { ascending: false });
       if (fetchError) throw fetchError;
@@ -245,55 +246,77 @@ const ForgeDashboard = () => {
             {filteredProjects.map((project, i) => (
               <div
                 key={project.id}
-                className="nebu-card relative text-left rounded-xl border border-border bg-card p-5 transition-colors duration-200 hover:border-primary group cursor-pointer"
+                className="nebu-card relative text-left rounded-xl border border-border bg-card overflow-hidden transition-colors duration-200 hover:border-primary group cursor-pointer"
                 onClick={() => openProject(project)}
                 style={{ animationDelay: `${i * 60}ms` }}
               >
                 {/* Delete button */}
                 <button
                   onClick={(e) => deleteProject(e, project.id)}
-                  className="absolute top-3 right-3 p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all"
+                  className="absolute top-3 right-3 z-10 p-1.5 rounded-md bg-background/80 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all"
                   title="Delete project"
                 >
                   <Trash2 size={14} />
                 </button>
 
-                <h3 className="text-sm font-semibold text-foreground truncate pr-8">{project.name}</h3>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Updated {formatDate(project.updated_at)}
-                </p>
-                {(() => {
-                  const summary = projectSummaries.get(project.id);
-                  if (!summary) return <div className="h-4 mt-1" />;
-                  return (
-                    <p className="text-xs text-muted-foreground font-mono mt-1">
-                      {summary.componentCount} components · {summary.routeCount} routes
-                    </p>
-                  );
-                })()}
+                {/* Thumbnail — última foto del preview compilado (guardada
+                    automáticamente desde StudioEngine.tsx en cada compile
+                    exitoso, sin depender de haber publicado el proyecto). */}
+                <div className="relative w-full aspect-video bg-muted overflow-hidden border-b border-border">
+                  {project.preview_html ? (
+                    <iframe
+                      srcDoc={project.preview_html}
+                      sandbox="allow-scripts"
+                      tabIndex={-1}
+                      title={`${project.name} preview`}
+                      className="absolute top-0 left-0 origin-top-left pointer-events-none"
+                      style={{ width: '400%', height: '400%', transform: 'scale(0.25)' }}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-muted-foreground/30">
+                      <Layers size={28} />
+                    </div>
+                  )}
+                </div>
 
-                {/* Action buttons */}
-                <div className="flex gap-2 mt-4 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); openProject(project); }}
-                    className="flex-1 py-1.5 text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors"
-                  >
-                    Open
-                  </button>
-                  <button
-                    onClick={(e) => openHub(e, project)}
-                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-accent text-muted-foreground hover:text-foreground rounded-lg transition-colors"
-                  >
-                    <LayoutDashboard size={11} />
-                    Hub
-                  </button>
-                  <button
-                    onClick={(e) => shareProjectFn(e, project)}
-                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-accent text-muted-foreground hover:text-foreground rounded-lg transition-colors"
-                    title="Share project"
-                  >
-                    <Share2 size={11} />
-                  </button>
+                <div className="p-5">
+                  <h3 className="text-sm font-semibold text-foreground truncate pr-8">{project.name}</h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Updated {formatDate(project.updated_at)}
+                  </p>
+                  {(() => {
+                    const summary = projectSummaries.get(project.id);
+                    if (!summary) return <div className="h-4 mt-1" />;
+                    return (
+                      <p className="text-xs text-muted-foreground font-mono mt-1">
+                        {summary.componentCount} components · {summary.routeCount} routes
+                      </p>
+                    );
+                  })()}
+
+                  {/* Action buttons */}
+                  <div className="flex gap-2 mt-4 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); openProject(project); }}
+                      className="flex-1 py-1.5 text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors"
+                    >
+                      Open
+                    </button>
+                    <button
+                      onClick={(e) => openHub(e, project)}
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-accent text-muted-foreground hover:text-foreground rounded-lg transition-colors"
+                    >
+                      <LayoutDashboard size={11} />
+                      Hub
+                    </button>
+                    <button
+                      onClick={(e) => shareProjectFn(e, project)}
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-accent text-muted-foreground hover:text-foreground rounded-lg transition-colors"
+                      title="Share project"
+                    >
+                      <Share2 size={11} />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}

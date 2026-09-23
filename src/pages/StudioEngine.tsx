@@ -600,6 +600,31 @@ export function StudioEngine() {
     if (!isPreviewError(html)) setHasValidPreview(true);
   }, []);
 
+  // Miniatura del Dashboard (bucket 5, ítem 3, "paso 4" — pedido de Samuel,
+  // 2026-09-23): guarda el HTML compilado como "última foto" del proyecto
+  // cada vez que compila sin errores, para que ForgeDashboard.tsx la muestre
+  // encogida sin depender de haber publicado nada. Una sola columna que se
+  // SOBRESCRIBE (UPDATE, no INSERT) — nunca se acumulan versiones viejas.
+  // Escucha `compiledHtml`/`hasValidPreview` en vez de engancharse a cada
+  // callsite de compile (hay varios, no todos pasan por applyPreviewHtml) —
+  // así se captura cualquier compile exitoso sin duplicar la persistencia en
+  // cada uno. Debounce de 3s: varios compiles seguidos (p. ej. durante una
+  // generación con varios pasos) sólo guardan la última versión asentada.
+  useEffect(() => {
+    if (!hasValidPreview || !projectId || !compiledHtml || isReadOnly) return;
+    const timer = setTimeout(() => {
+      const supabase = SupabaseService.getInstance().client;
+      supabase
+        .from('forge_projects')
+        .update({ preview_html: compiledHtml })
+        .eq('id', projectId)
+        .then(({ error }) => {
+          if (error) console.error('[StudioEngine] preview_html save error:', error);
+        });
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [compiledHtml, hasValidPreview, projectId, isReadOnly]);
+
   // Lectura por ref para que la lógica del compile no re-cree callbacks ni
   // re-programe el debounce en cada cambio de este flag.
   const awaitingFirstBuildCompileRef = useRef(false);

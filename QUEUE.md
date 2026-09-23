@@ -927,6 +927,59 @@ Código/Ajustes abierto) y confirmar que se ve blanco sólido con borde rojo, te
 un toast disparado desde una pantalla de Nebu Studio (CRM) sigue viéndose exactamente como antes (sin
 tocar).
 
+### Miniaturas de proyecto en el Dashboard (2026-09-23)
+
+Pedido de Samuel al ver `/forge` desplegado (rama `continuacion-sesion-g5` en Render): las tarjetas de
+proyecto eran sólo un recuadro gris con el título, quería ver una imagen real del preview. Se descartaron
+dos opciones porque dependían de haber publicado el proyecto (servicio externo sobre `deployment_url`, o
+captura al momento de publicar) — en el flujo real de Samuel, publicar es lo ÚLTIMO que pasa, así que la
+tarjeta se hubiera quedado sin imagen durante toda la vida útil del proyecto. Se optó por guardar la
+ÚLTIMA versión compilada dentro del editor (no depende de publicar nada).
+
+**Duda de Samuel, resuelta por diseño antes de escribir código:** ¿se acumulan versiones viejas en la
+base? No — es una sola columna que un `UPDATE` sobrescribe cada vez (nunca un `INSERT`), así que sólo
+existe la más reciente; no hay nada que limpiar.
+
+**DDL — DB principal de Wyrd, aditivo (sin frase de confirmación, no es destructivo).** `forge_projects`
+verificado antes de tocarla vía `information_schema.columns` (lo pegó Samuel, no adivinado): sin columna
+`preview_html` previa. SQL entregado a Samuel para correr él mismo en el SQL Editor de Supabase:
+```sql
+alter table public.forge_projects add column preview_html text;
+```
+**Estado del DDL: entregado, sin confirmar si ya se corrió** — el código de abajo asume que la columna ya
+existe; si Samuel todavía no la corrió, los `UPDATE`/`SELECT` a esa columna van a fallar en silencio
+(Supabase devuelve error, capturado y sólo logueado a consola, no rompe nada más) hasta que exista.
+
+**Hecho:**
+- `StudioEngine.tsx`: nuevo `useEffect` que escucha `compiledHtml`/`hasValidPreview` (no se enganchó a un
+  callsite de compile en particular — hay varios que no pasan por `applyPreviewHtml`, y este patrón los
+  cubre todos sin duplicar lógica) y guarda `compiledHtml` en `forge_projects.preview_html` 3s después del
+  último compile exitoso (debounce: varios compiles seguidos sólo guardan el último). Se salta si
+  `isReadOnly` (un colaborador de sólo lectura no debe escribir en el proyecto).
+- `ForgeDashboard.tsx`: la tarjeta de cada proyecto ahora tiene un recuadro de miniatura (16:9) arriba del
+  título — si hay `preview_html`, un `<iframe sandbox="allow-scripts" pointer-events:none>` con el mismo
+  truco que ya usa la industria para miniaturas (el iframe renderiza a 4× el tamaño real y se encoge con
+  `transform: scale(0.25)`, para que se vea como una versión "desktop" del sitio, no una versión móvil
+  aplastada); si no hay preview guardado aún, un ícono placeholder. `preview_html` se agrega al `select`
+  que ya hacía `loadProjects()`.
+
+**Costo real, avisado, no resuelto hoy:** cada carga del Dashboard descarga el HTML compilado completo de
+CADA proyecto visible (puede ser cientos de KB por proyecto) — con pocos proyectos no se nota; si la lista
+crece mucho, esto se vuelve una optimización pendiente (cargar la miniatura sólo cuando la tarjeta entra en
+pantalla, o una versión recortada/comprimida en vez del HTML completo). No se intentó resolver hoy, para no
+sobreconstruir algo que no se sabe si hace falta todavía.
+
+**Verificación:** `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 671/671 (sin
+cambios). `npx vitest run` → 48/48. `npx vite build` real: confirmado que `preview_html` aparece tanto en
+el lado que guarda (StudioEngine) como en el que lee (ForgeDashboard) del bundle.
+
+**CHECK MANUAL — PENDIENTE, en dos partes:**
+1. Confirmar que el `ALTER TABLE` de arriba ya se corrió en Supabase.
+2. Abrir un proyecto existente en el editor, esperar a que compile sin errores, volver al Dashboard: la
+   tarjeta de ese proyecto debe mostrar ahora una miniatura real del sitio (no el ícono placeholder). Las
+   demás tarjetas (proyectos no abiertos desde este cambio) siguen con el placeholder hasta que se abran
+   una vez.
+
 ### Resto del bucket (sin tocar esta sesión)
 - RAG de UI/UX: PatternRetriever da `direct: 0 | vector: 0`. Primera pregunta: ¿pasa igual en producción?
 - Catálogo de componentes, con auditoría de licencia por componente.
