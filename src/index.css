@@ -172,10 +172,27 @@ button, [role="button"], a { cursor: pointer; }
 .nebu-modal .border {
   border-width: 2px;
 }
+.nebu-modal h1,
 .nebu-modal h2,
 .nebu-modal h3 {
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+/* "Paso 4" (2026-09-23): tarjeta con el mismo lenguaje de .nebu-cta pero para
+   un contenedor clickeable completo, no un botón — usada en las tarjetas de
+   proyecto del Dashboard (ForgeDashboard.tsx). Sin sombra/desplazamiento en
+   reposo (a diferencia de .nebu-cta): en una cuadrícula de varias tarjetas,
+   la sombra dura permanente en TODAS a la vez se habría visto recargada;
+   sólo aparece en la que se está mirando. */
+.nebu-modal .nebu-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.nebu-modal .nebu-card:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 4px 4px 0 rgba(214, 40, 40, 0.35);
+}
+@media (prefers-reduced-motion: reduce) {
+  .nebu-modal .nebu-card:hover { transform: none; }
 }
 .nebu-modal .nebu-cta {
   border-radius: 2px;

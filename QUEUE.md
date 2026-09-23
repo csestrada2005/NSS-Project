@@ -845,6 +845,50 @@ Mundos pre-registrados:
   texto negro sobre fondo oscuro o viceversa en cualquier recuadro tocado, o `MigrationApplyModal` deja
   aplicar sin pedir la frase.
 
+### "Paso 4" (continuación) — Dashboard de proyectos (2026-09-23)
+
+Confirmado con Samuel que "paso 4" es el resto del rediseño brutalista: Dashboard de proyectos +
+onboarding. Empezado por Dashboard (`ForgeDashboard.tsx`) — es exclusivamente Wyrd Forge, sin ambigüedad
+de alcance (a diferencia del onboarding, ver el bloque BLOQUEADO justo abajo).
+
+**Hecho:** `ForgeDashboard.tsx` YA llevaba la clase `.nebu-modal` desde el Bloque 4 (brandbook oficial) —
+las reglas nuevas de "paso 3"/`.nebu-cta` (radius, bordes, mayúsculas) ya le llegaban automáticamente, sin
+tocar el archivo. Encima de eso:
+- `src/index.css`: la regla de mayúsculas ganó `h1` (antes sólo `h2`/`h3` — los popups no usan `h1`, pero
+  el título "Projects" del Dashboard sí).
+- Nueva clase `.nebu-card` — mismo lenguaje que `.nebu-cta` pero para un CONTENEDOR clickeable completo,
+  no un botón: al pasar el mouse se desplaza un poco y gana una sombra roja. A propósito SIN sombra en
+  reposo (a diferencia de `.nebu-cta`) — con varias tarjetas en una cuadrícula, todas con sombra dura
+  permanente se habría visto recargado; sólo la que se está mirando la muestra.
+- `nebu-cta` en el botón "New Project" (la CTA principal de la página) y `nebu-card` en cada tarjeta de
+  proyecto de la cuadrícula.
+- `EmptyState.tsx` (el estado vacío "No projects yet") NO se tocó — es un componente COMPARTIDO con Nebu
+  Studio (usado en `StaffProjects`, `ClientProjects`, `StaffFinance`, etc., confirmado por grep antes de
+  tocar nada). Ya recibe el tratamiento automáticamente cuando se renderiza dentro de `.nebu-modal`
+  (Dashboard), sin filtrar a los usos de Nebu Studio (que no están envueltos en esa clase).
+
+**Verificación:** `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 671/671 (sin
+cambios). `npx vitest run` → 48/48. `npx vite build` real: confirmado que `.nebu-card` compila.
+
+**CHECK MANUAL — PENDIENTE.** Dashboard: el título "Projects" en mayúsculas, las tarjetas con esquinas
+casi rectas, y al pasar el mouse sobre una tarjeta debe desplazarse levemente con una sombra roja (sin
+sombra en las demás tarjetas al mismo tiempo). "New Project" con el mismo tratamiento que "Start
+Building"/"Send Invitations".
+
+**BLOQUEADO — Onboarding (Login, selección de rol, setup, pendiente de aprobación): NO se tocó, hallazgo
+que hay que resolver con Samuel antes de seguir.** Al investigar estas 4 pantallas para aplicarles el
+mismo estilo, `Login.tsx` resultó traer literal el texto "NEBU STUDIO" como marca central (animación de
+pincel de tinta sobre ese texto) — confirmado con `graphify` que estas 4 páginas viven en la misma
+comunidad que páginas explícitamente de Nebu Studio (`DealsPage`, `ProposalsPage`, `ContactsPage`,
+`FinancePage`, `DashboardPage`, etc.), no en la comunidad de Wyrd Forge. Es decir: estas pantallas NO son
+"onboarding de Wyrd Forge" — son el login/onboarding de NEBU STUDIO como plataforma completa (el usuario
+entra por ahí antes de elegir/llegar a Wyrd Forge). `CLAUDE.md` es explícito: "Deben seguir
+arquitectónicamente separados", y el propio Bloque 4 de este ítem ya había dejado esto fuera con la misma
+razón ("Alcance de hoy: sólo Wyrd Forge. Nebu Studio... es su propia sesión"). Aplicar el estilo aquí en
+una sesión de Wyrd Forge cruzaría esa frontera a propósito, no por descuido — se detuvo el trabajo aquí
+para confirmar con Samuel si de verdad quiere tocar estas 4 pantallas desde esta sesión, o si esto se queda
+para "su propia sesión" como ya estaba anotado.
+
 ### Resto del bucket (sin tocar esta sesión)
 - RAG de UI/UX: PatternRetriever da `direct: 0 | vector: 0`. Primera pregunta: ¿pasa igual en producción?
 - Catálogo de componentes, con auditoría de licencia por componente.

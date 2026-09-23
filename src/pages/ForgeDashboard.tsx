@@ -214,6 +214,7 @@ const ForgeDashboard = () => {
             <Button
               onClick={() => setShowNewProjectModal(true)}
               size="sm"
+              className="nebu-cta"
             >
               <Plus size={16} />
               New Project
@@ -244,7 +245,7 @@ const ForgeDashboard = () => {
             {filteredProjects.map((project, i) => (
               <div
                 key={project.id}
-                className="relative text-left rounded-xl border border-border bg-card p-5 transition-colors duration-200 hover:border-primary group cursor-pointer"
+                className="nebu-card relative text-left rounded-xl border border-border bg-card p-5 transition-colors duration-200 hover:border-primary group cursor-pointer"
                 onClick={() => openProject(project)}
                 style={{ animationDelay: `${i * 60}ms` }}
               >
