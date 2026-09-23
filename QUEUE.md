@@ -889,6 +889,44 @@ una sesión de Wyrd Forge cruzaría esa frontera a propósito, no por descuido �
 para confirmar con Samuel si de verdad quiere tocar estas 4 pantallas desde esta sesión, o si esto se queda
 para "su propia sesión" como ya estaba anotado.
 
+### Toasts (pop ups de aviso) — blanco sólido con rojo (2026-09-23)
+
+Pedido de Samuel, a media sesión: los toasts (avisos flotantes tipo "Ve a preview primero para abrir
+chat") "me siguen sin gustar, hay que hacerlos full blancos con rojo todos".
+
+**Hallazgo antes de tocar nada:** `<Toaster>` (sonner) es UNO SOLO para todo el monorepo, montado en
+`main.tsx` — compartido con Nebu Studio/CRM (`StaffProjects`, `DealsPage`, `ProposalsPage`, etc., 11
+archivos más además de los 5 de Wyrd Forge). Restylearlo ahí habría pintado también los toasts del CRM,
+cruzando la separación de `CLAUDE.md` sin necesidad (a diferencia del onboarding de arriba, aquí SÍ hay
+una forma de aislarlo sin cruzar la frontera).
+
+**Hecho:** `src/utils/wyrdToast.ts` (nuevo) — wrapper de `sonner` que pasa un `style` inline (fondo
+`#FFFFFF`, texto `#0D0D0D`, borde `2px solid #D62828`, radius `4px`) en cada llamada; el inline style gana
+sobre las variables CSS que usa `sonner` por dentro, sin pelear especificidad ni tocar el `<Toaster>`
+global. Se reemplazó `import { toast } from 'sonner'` por `import { wyrdToast as toast } from
+'@/utils/wyrdToast'` en los 5 archivos que son EXCLUSIVOS de Wyrd Forge: `StudioEngine.tsx`,
+`ShareProjectModal.tsx`, `SecretsPanel.tsx`, `PlatformService.ts`, `CreditBalance.tsx` — confirmado uno
+por uno contra los otros 11 archivos con `toast` de sonner (todos Nebu Studio/CRM), que NO se tocaron.
+`RoleSelectionPage.tsx` (que sí se toca más abajo para el estilo visual del onboarding) usa `toast` para
+errores genéricos de cuenta, no para avisos de Wyrd Forge — se dejó con el `toast` normal de sonner a
+propósito.
+
+**Alcance, avisado explícito:** "todos" se interpretó como los tres tipos (`error`/`success`/`message`)
+disparados desde Wyrd Forge — no sólo el de "Ve a preview primero". Esto pierde la distinción semántica
+habitual (verde=éxito, rojo=error): ahora todos se ven igual (blanco+rojo). Si Samuel prefiere conservar
+algo de esa distinción (p. ej. un ícono verde en success sobre el mismo fondo blanco), es un ajuste rápido
+sobre el mismo wrapper.
+
+**Verificación:** `npx tsc -b --force` → 0 errores (un `toast('...')` suelto en `CreditBalance.tsx` no
+tenía firma compatible con el wrapper — cambiado a `toast.message('...')`, mismo comportamiento). `node
+--test "server/*.test.js"` → 671/671. `npx vitest run` → 48/48. `npx vite build` real: confirmado
+`background:"#FFFFFF",color:"#0D0D0D",border:"2px solid #D62828"` en el bundle.
+
+**CHECK MANUAL — PENDIENTE.** Disparar cualquier aviso de Wyrd Forge (por ejemplo, intentar abrir Chat con
+Código/Ajustes abierto) y confirmar que se ve blanco sólido con borde rojo, texto oscuro legible — y que
+un toast disparado desde una pantalla de Nebu Studio (CRM) sigue viéndose exactamente como antes (sin
+tocar).
+
 ### Resto del bucket (sin tocar esta sesión)
 - RAG de UI/UX: PatternRetriever da `direct: 0 | vector: 0`. Primera pregunta: ¿pasa igual en producción?
 - Catálogo de componentes, con auditoría de licencia por componente.

@@ -4,7 +4,7 @@ import { CreditService } from '../../services/CreditService';
 import { formatCredits } from '../../lib/creditDisplay';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
+import { wyrdToast as toast } from '@/utils/wyrdToast';
 
 export default function CreditBalance() {
   const { user } = useAuth();
@@ -69,7 +69,7 @@ export default function CreditBalance() {
               <span>{formatCredits(0)} créditos</span>
             </div>
             <button
-              onClick={() => { toast('Credit packages coming soon'); navigate('/forge'); }}
+              onClick={() => { toast.message('Credit packages coming soon'); navigate('/forge'); }}
               className="text-xs text-primary hover:underline"
             >
               Buy credits

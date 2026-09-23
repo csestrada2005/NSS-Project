@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Eye, EyeOff, Plus, Trash2, Save, Cloud, CheckCircle, Circle, Loader2 } from 'lucide-react';
 import { SupabaseService } from '@/services/SupabaseService';
 import { platformService } from '@/services/PlatformService';
-import { toast } from 'sonner';
+import { wyrdToast as toast } from '@/utils/wyrdToast';
 
 interface Secret {
   key: string;

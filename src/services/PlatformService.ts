@@ -4,7 +4,7 @@
  */
 
 import { SupabaseService } from './SupabaseService';
-import { toast } from 'sonner';
+import { wyrdToast as toast } from '@/utils/wyrdToast';
 
 /**
  * Structured compile error propagated from esbuild (server/compiler.js) so the

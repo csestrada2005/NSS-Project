@@ -13,7 +13,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Panel, Group } from 'react-resizable-panels';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
+import { wyrdToast as toast } from '@/utils/wyrdToast';
 import { useProjectFiles } from '../hooks/useProjectFiles';
 import '../App.css';
 import { ChatInterface, type ChatPlanStep, type Message } from '../components/ChatInterface';

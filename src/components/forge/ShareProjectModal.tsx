@@ -4,7 +4,7 @@ import { X, Search, UserPlus, Loader2, ChevronDown } from 'lucide-react';
 import { SupabaseService } from '@/services/SupabaseService';
 import { CollaboratorService, type Collaborator } from '@/services/CollaboratorService';
 import { useAuth } from '@/contexts/AuthContext';
-import { toast } from 'sonner';
+import { wyrdToast as toast } from '@/utils/wyrdToast';
 import { modalBackdropMotion, modalPanelMotion } from '@/components/ui/modalMotion';
 
 interface SearchResult {
