@@ -1495,9 +1495,75 @@ animación arrancaba. **Corregido:** ese bloque ahora también usa `ColdStartOve
 `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 671/671. `npx vitest run` → 48/48.
 `npx vite build` real verificado.
 
-**CHECK MANUAL — PENDIENTE, sólo de este fix puntual.** Abrir un proyecto (sobre todo si estaba "frío")
-o generar uno nuevo: la cuadrícula con el spotlight rojo debe verse SIN CORTES desde que empieza la espera
-hasta que el preview real aparece — nunca debe aparecer un círculo gris suelto sin la cuadrícula de fondo.
+**CHECK MANUAL — CONFIRMADO.** Samuel probó el fix: la animación ya no se corta, sin residuos.
+
+### "Paso 3" — estética Nebu de los popups (2026-09-23)
+
+Aclarado con Samuel antes de tocar código (el pedido original mezclaba dos cosas de tamaño muy distinto):
+"paso 3" es sólo la estética de los **popups/modales administrativos** (`NewProjectModal`,
+`ShareProjectModal`, `MigrationApplyModal`, `SettingsModal` — los mismos 4 que ya llevan la clase
+`.nebu-modal` desde el Bloque 3/5 de este ítem), NO el rediseño brutalista completo de toda la plataforma
+(dashboard, onboarding, etc.) que describe el mensaje largo de Samuel — eso se queda como pieza aparte,
+más grande, para después.
+
+**Hecho — `src/index.css`, reglas nuevas debajo de `.nebu-modal` (mismo truco de especificidad sin
+`@layer` que ya usaba ese bloque, para ganarle a las utilidades de Tailwind sin `!important`):**
+- Radius casi cero: `.rounded-2xl/-xl/-lg/-md` dentro de `.nebu-modal` bajan a `4px`. Deliberadamente NO
+  se tocó `.rounded-full` — eso son avatares/badges/el botón X, círculos de verdad, no "esquinas suaves de
+  más" (el reclamo de Samuel era sobre contenedores/botones rectangulares, no sobre lo que ya es redondo a
+  propósito).
+- Bordes con peso real: `.border` (la utilidad base de Tailwind) pasa de 1px a 2px dentro de `.nebu-modal`.
+- Labels en mayúsculas: `h2`/`h3` dentro de `.nebu-modal` (los títulos de cada modal/sección) en
+  `uppercase` con tracking.
+- Nueva clase `.nebu-cta` (radius 2px, mayúsculas, negrita, sombra dura + desplazamiento diagonal al
+  hover/active) — agregada A MANO sólo al botón principal de dos modales: "Start Building →"
+  (`NewProjectModal.tsx`) y "Send Invitations" (`ShareProjectModal.tsx`).
+
+**Adaptación deliberada, avisada por el propio Samuel antes de portar el markup de referencia:** la sombra
+dura de su ejemplo (`box-shadow: 0.3rem 0.3rem 0 var(--nebu)`) es un rojo SÓLIDO/opaco, pensado para el
+papel crema del sitio público — sobre este fondo casi negro un rojo opaco se vería como un bloque flotante,
+no como profundidad (advertencia textual de Samuel). `.nebu-cta` usa el mismo desplazamiento diagonal pero
+con el rojo TRANSLÚCIDO (`rgba(214,40,40,.4)`, sube a `.55` en hover), para que lea como un acento/glow y
+no como una sombra sólida fuera de lugar — juicio de diseño mío, sin confirmar visualmente por Samuel
+todavía, a validar en el check manual.
+
+**Deliberadamente NO tocado, con motivo explícito:**
+- `MigrationApplyModal.tsx` — su botón de confirmación ya usa ámbar (destructivo) o rojo (no destructivo)
+  para codificar severidad, con una nota extensa en el propio archivo sobre por qué esas dos puertas
+  existen. Añadirle `.nebu-cta` encima habría diluido esa señal sin necesidad; el modal SÍ hereda el
+  radius/border/mayúsculas parejos con los otros tres (efecto del CSS de arriba, automático), pero su
+  botón de acción se queda exactamente como estaba.
+- Los botones de acción dentro de las 7 pestañas de `SettingsModal` (Save Secrets, Push Changes, Deploy,
+  Connect domain, Send Test, etc.) — son muchos botones repartidos en varios archivos ya tocados en el
+  Bloque 4 de color; aplicarles `.nebu-cta` uno por uno es su propia pasada, no incluida aquí. El MARCO de
+  Settings (fondo, radius, bordes, títulos de pestaña) sí recibe el tratamiento parejo vía el CSS de arriba.
+
+**Verificación:** `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 671/671 (sin
+cambios). `npx vitest run` → 48/48. `npx vite build` real: confirmado que `.nebu-modal .nebu-cta`,
+`.nebu-modal .rounded-*` y `.nebu-modal .border` compilan, y que la clase `nebu-cta` aparece exactamente 2
+veces en el bundle (los dos botones tocados).
+
+**CHECK MANUAL — PENDIENTE.** Cómo reproducirlo: abrir New Project (avanzar a "Start Building"), Share,
+Settings, y una migración de prueba (destructiva y no destructiva):
+1. Los 4 modales deben verse con esquinas casi rectas (no muy redondeadas) y bordes/líneas divisorias más
+   gruesos que antes — pero los círculos de verdad (avatares, el botón X, badges/píldoras) siguen redondos.
+2. Los títulos de cada modal/sección ("New Project", "Share Project", etc.) deben verse en MAYÚSCULAS.
+3. "Start Building →" (New Project) y "Send Invitations" (Share) deben verse en mayúsculas, con un borde/
+   sombra roja dura — y al pasar el mouse, desplazarse un poco hacia arriba-izquierda con la sombra
+   creciendo (efecto "botón físico").
+4. El botón de confirmación de una migración (ámbar si destruye datos, rojo si no) debe verse EXACTAMENTE
+   igual que antes — sin el efecto de desplazamiento/sombra nuevo — y debe seguir pidiendo la frase de
+   confirmación exacta en el caso destructivo.
+5. Dentro de Settings, el contenido de cada pestaña (Secrets, Email, etc.) puede seguir viéndose con botones
+   "normales" (sin el efecto de mayúsculas/sombra) — residuo conocido, anotado arriba, no un olvido.
+
+Mundos pre-registrados:
+- **Esperado:** todo lo de arriba se cumple tal cual. El sombreado rojo del `.nebu-cta` se lee como un
+  acento, no como un bloque sólido fuera de lugar.
+- **Residuo conocido, no bug:** los botones dentro de las pestañas de Settings y el botón de confirmar
+  migración se quedan con su estilo actual, sin el tratamiento `.nebu-cta` — decisión explícita, no olvido.
+- **Falla real (si aparece, SÍ es bug):** avatares/badges/el botón X perdiendo su forma circular, la frase
+  de confirmación de `MigrationApplyModal` saltada, o el efecto de `.nebu-cta` viéndose roto/ilegible.
 
 **Siguiente paso real, antes de escribir código:** diseño en frío con Samuel — decidir orden de bloques
 (los bugs primero, por ser acotados y de bajo riesgo, parece lo obvio; el rediseño brutalista es la pieza

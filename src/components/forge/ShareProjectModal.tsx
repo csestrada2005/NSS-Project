@@ -351,7 +351,7 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
             <button
               onClick={handleSend}
               disabled={pendingInvites.length === 0 || sending}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium bg-primary hover:bg-primary/90 text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="nebu-cta w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium bg-primary hover:bg-primary/90 text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {sending && <Loader2 size={14} className="animate-spin" />}
               Send Invitations

@@ -143,6 +143,60 @@ button, [role="button"], a { cursor: pointer; }
   --color-ring: #D62828;
 }
 
+/*
+ * Bucket 5, ítem 3, "paso 3" (2026-09-23): estética Nebu para los popups —
+ * lenguaje brutalista destilado sobre .nebu-modal (radius casi cero, bordes
+ * con peso real, labels en mayúsculas), adaptado para fondo oscuro. Dos
+ * ajustes deliberados sobre el markup de referencia que dio Samuel, avisados
+ * por él mismo antes de portar: la sombra dura de su ejemplo funciona sobre
+ * el papel crema del sitio público, pero un rojo sólido/opaco sobre este
+ * fondo casi negro se vería como un bloque flotante, no como profundidad —
+ * .nebu-cta usa un rojo TRANSLÚCIDO en vez de opaco, para que lea como un
+ * acento/glow y no como una sombra sólida fuera de lugar. Escopado con dos
+ * clases (no @layer) por el mismo motivo que el bloque de arriba: ganar por
+ * especificidad sobre las utilidades sueltas de Tailwind sin usar !important.
+ *
+ * .nebu-cta se agrega a mano sólo al botón principal de cada modal
+ * (NewProjectModal "Start Building", ShareProjectModal "Send Invitations")
+ * — deliberadamente NO en MigrationApplyModal (su ámbar/rojo ya codifica
+ * severidad, ver la nota de arriba y el propio archivo) ni en los botones
+ * de cada pestaña de SettingsModal (7 pestañas con su propio CTA — queda
+ * como residuo explícito para una pasada aparte, no un olvido).
+ */
+.nebu-modal .rounded-2xl,
+.nebu-modal .rounded-xl,
+.nebu-modal .rounded-lg,
+.nebu-modal .rounded-md {
+  border-radius: 4px;
+}
+.nebu-modal .border {
+  border-width: 2px;
+}
+.nebu-modal h2,
+.nebu-modal h3 {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.nebu-modal .nebu-cta {
+  border-radius: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  box-shadow: 3px 3px 0 rgba(214, 40, 40, 0.4);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+.nebu-modal .nebu-cta:hover:not(:disabled) {
+  transform: translate(-2px, -2px);
+  box-shadow: 5px 5px 0 rgba(214, 40, 40, 0.55);
+}
+.nebu-modal .nebu-cta:active:not(:disabled) {
+  transform: translate(0, 0);
+  box-shadow: 1px 1px 0 rgba(214, 40, 40, 0.55);
+}
+@media (prefers-reduced-motion: reduce) {
+  .nebu-modal .nebu-cta:hover:not(:disabled) { transform: none; }
+}
+
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }

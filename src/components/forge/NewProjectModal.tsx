@@ -339,7 +339,7 @@ export default function NewProjectModal({ onClose, onCreated }: NewProjectModalP
               <Button variant="ghost" onClick={() => setStep(2)} disabled={isCreating}>
                 ← Back
               </Button>
-              <Button onClick={handleSubmit} disabled={isCreating}>
+              <Button onClick={handleSubmit} disabled={isCreating} className="nebu-cta">
                 {isCreating && <Loader2 size={14} className="animate-spin mr-1" />}
                 Start Building →
               </Button>
