@@ -980,6 +980,49 @@ el lado que guarda (StudioEngine) como en el que lee (ForgeDashboard) del bundle
    demás tarjetas (proyectos no abiertos desde este cambio) siguen con el placeholder hasta que se abran
    una vez.
 
+### "Paso 4" (continuación) — onboarding de Nebu Studio (Login/rol/setup/aprobación) (2026-09-23)
+
+Samuel confirmó explícito cruzar la frontera Wyrd/Nebu para esto (ver el bloque BLOQUEADO de arriba,
+ahora resuelto): "Sí, tócalas ahora (son la marca Nebu, tiene sentido)". Toque ligero — estas 4 pantallas
+ya tenían bastante lenguaje brutalista de fábrica (sin radius en los botones de wipe-fill, `uppercase
+tracking-widest`), así que el ajuste fue sobre todo grosor de borde + un par de detalles sueltos, NO un
+rediseño desde cero (ese sigue siendo el "diseño nuevo" que quedó anotado como pendiente en el Bloque 4
+original, sobre todo si algún día se quiere el crema/blanco del brandbook oficial en vez de negro).
+
+**Hecho:**
+- `Login.tsx`: el botón "Log in with Google" (`MagneticLoginBtn`) pasa de `rounded-full` con sombra suave
+  a `rounded-sm` con sombra dura desplazada (`3px 3px 0 rgba(230,0,0,.5)`) + `uppercase tracking-wider`.
+  El efecto "magnético" (el botón sigue al mouse dentro de un rango chico, ya existía) se dejó intacto —
+  mezclarlo con el desplazamiento diagonal de `.nebu-cta` se veía redundante/conflictivo (dos transforms
+  peleando).
+- `RoleSelectionPage.tsx`: las 3 tarjetas de rol pasan de `rounded-xl border` (1px) a `rounded-sm
+  border-2`, con desplazamiento diagonal + sombra dura al hover (vía utilidades de Tailwind directas,
+  `hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[...]` — esta página no importa CSS propio,
+  así que no hizo falta un archivo nuevo). Título de cada rol ("Admin", "Developer", "Client") en
+  mayúsculas. El botón "Continue" (ya tenía el efecto de relleno tipo wipe al hover, sin radius) sólo ganó
+  `border-2`.
+- `SetupPage.tsx` / `PendingApprovalPage.tsx`: mismo ajuste de `border` a `border-2` en el botón de
+  "Sign out" (mismo patrón wipe-fill que ya traían). `PendingApprovalPage.tsx` además en la píldora
+  "Requested: {rol}".
+- El ícono circular de cada tarjeta de rol (`rounded-full`) y las píldoras existentes se quedaron
+  redondas — mismo criterio de "no tocar lo que ya es un círculo de verdad" del resto de este ítem.
+
+**Deliberadamente NO tocado:** el color `#E60000` (el rojo VIEJO pre-brandbook, ya documentado como
+incorrecto desde el Bloque 4) se dejó tal cual — cambiarlo a `#D62828` es un cambio de paleta que ya había
+quedado anotado como "su propia sesión, es diseño nuevo" y no era lo que se pidió hoy (sólo el lenguaje
+brutalista: radius/bordes/sombra/mayúsculas). Si se quiere corregir el color de paso, es un hallazgo
+aparte a confirmar.
+
+**Verificación:** `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 671/671 (sin
+cambios). `npx vitest run` → 48/48. `npx vite build` real verificado.
+
+**CHECK MANUAL — PENDIENTE.** Cerrar sesión (o abrir en una ventana privada) para ver Login: el botón de
+Google debe verse con esquinas casi rectas, mayúsculas, y una sombra roja dura fija (no un halo difuso) —
+el movimiento "magnético" al mover el mouse cerca del botón debe seguir funcionando igual que antes. En
+selección de rol: las 3 tarjetas deben desplazarse un poco y ganar sombra roja al pasar el mouse, con
+bordes más gruesos; el botón "Continue" sigue con su efecto de relleno de siempre. Setup/Pending
+Approval: el botón de salir con el mismo borde más grueso, sin cambios de comportamiento.
+
 ### Resto del bucket (sin tocar esta sesión)
 - RAG de UI/UX: PatternRetriever da `direct: 0 | vector: 0`. Primera pregunta: ¿pasa igual en producción?
 - Catálogo de componentes, con auditoría de licencia por componente.

@@ -98,7 +98,7 @@ const RoleSelectionPage = () => {
               <button
                 key={role.id}
                 onClick={() => setSelected(role.id)}
-                className={`flex flex-col items-center gap-4 p-6 rounded-xl border transition-all duration-200 text-left group ${
+                className={`flex flex-col items-center gap-4 p-6 rounded-sm border-2 transition-all duration-200 text-left group hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[3px_3px_0_rgba(230,0,0,0.4)] ${
                   isSelected
                     ? 'border-[#E60000] bg-[#E60000]/10 text-white'
                     : 'border-white/10 bg-white/[0.03] text-white/60 hover:border-white/30 hover:bg-white/[0.06] hover:text-white'
@@ -115,7 +115,7 @@ const RoleSelectionPage = () => {
                   />
                 </div>
                 <div className="text-center">
-                  <p className={`font-semibold text-sm ${isSelected ? 'text-white' : ''}`}>{role.title}</p>
+                  <p className={`font-semibold text-sm uppercase tracking-wide ${isSelected ? 'text-white' : ''}`}>{role.title}</p>
                   <p className="text-xs mt-1 text-white/40 leading-relaxed">{role.description}</p>
                 </div>
               </button>
@@ -130,7 +130,7 @@ const RoleSelectionPage = () => {
           transition={{ delay: 0.5, duration: 0.5 }}
           onClick={handleContinue}
           disabled={!selected || submitting}
-          className="group relative flex items-center justify-center gap-3 px-10 py-3 text-sm font-medium tracking-widest uppercase overflow-hidden border border-[#E60000] bg-transparent transition-all disabled:opacity-30 disabled:cursor-not-allowed enabled:text-[#E60000] enabled:hover:text-white"
+          className="group relative flex items-center justify-center gap-3 px-10 py-3 text-sm font-medium tracking-widest uppercase overflow-hidden border-2 border-[#E60000] bg-transparent transition-all disabled:opacity-30 disabled:cursor-not-allowed enabled:text-[#E60000] enabled:hover:text-white"
         >
           <div className="absolute inset-0 bg-[#E60000] -translate-x-full transition-transform duration-300 ease-out group-enabled:group-hover:translate-x-0" />
           <span className="relative z-10">{submitting ? 'Saving...' : 'Continue'}</span>

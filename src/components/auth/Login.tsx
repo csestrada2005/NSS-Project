@@ -25,9 +25,9 @@ const MagneticLoginBtn = ({ onClick }: { onClick: () => void }) => {
       onClick={onClick}
       onMouseMove={handleMove}
       onMouseLeave={() => { x.set(0); y.set(0); }}
-      style={{ x: springX, y: springY, boxShadow: "0 4px 20px -4px hsl(0 100% 50% / 0.4)" }}
+      style={{ x: springX, y: springY, boxShadow: "3px 3px 0 rgba(230,0,0,0.5)" }}
       whileTap={{ scale: 0.95 }}
-      className="mt-8 px-8 py-4 rounded-full bg-[#E60000] text-white font-semibold text-sm transition-shadow hover:bg-red-600 w-full sm:w-auto z-20 relative"
+      className="mt-8 px-8 py-4 rounded-sm bg-[#E60000] text-white font-bold text-sm uppercase tracking-wider transition-shadow hover:bg-red-600 w-full sm:w-auto z-20 relative"
     >
       Log in with Google
     </motion.button>

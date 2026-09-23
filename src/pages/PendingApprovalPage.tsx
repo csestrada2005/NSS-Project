@@ -57,7 +57,7 @@ const PendingApprovalPage = () => {
           {/* Role badge */}
           {pendingRole && (
             <div className="flex justify-center pt-2">
-              <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#E60000]/40 bg-[#E60000]/10 text-[#E60000] text-xs font-medium uppercase tracking-wider">
+              <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border-2 border-[#E60000]/40 bg-[#E60000]/10 text-[#E60000] text-xs font-medium uppercase tracking-wider">
                 Requested: {ROLE_LABELS[pendingRole] ?? pendingRole}
               </span>
             </div>
@@ -70,7 +70,7 @@ const PendingApprovalPage = () => {
           animate={{ opacity: 1 }}
           transition={{ delay: 0.6, duration: 0.5 }}
           onClick={signOut}
-          className="group relative flex items-center justify-center gap-3 px-8 py-3 text-sm font-medium tracking-widest uppercase text-[#E60000] transition-all hover:text-white overflow-hidden border border-[#E60000] bg-transparent"
+          className="group relative flex items-center justify-center gap-3 px-8 py-3 text-sm font-medium tracking-widest uppercase text-[#E60000] transition-all hover:text-white overflow-hidden border-2 border-[#E60000] bg-transparent"
         >
           <div className="absolute inset-0 bg-[#E60000] -translate-x-full transition-transform duration-300 ease-out group-hover:translate-x-0" />
           <LogOut size={18} className="relative z-10" />
