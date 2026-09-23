@@ -50,6 +50,7 @@ import { DesignBriefService, type DesignHints } from '../services/DesignBriefSer
 import { ShareProjectModal } from '../components/forge/ShareProjectModal';
 import { CodePanel } from '../components/studio/CodePanel';
 import { PreviewNavbar } from '../components/studio/PreviewNavbar';
+import { ColdStartOverlay } from '../components/studio/ColdStartOverlay';
 import type { ViewportMode, PanelMode } from '../components/studio/types';
 
 // Navbar del preview (bucket 5 ítem 3, 2026-09-20): Visual/Código/Navegar se
@@ -2030,9 +2031,11 @@ export function StudioEngine() {
 
               {/* Main content area */}
               {isLoading ? (
-                <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-4">
-                  <Loader2 className="animate-spin w-8 h-8" />
-                  <div>Loading project...</div>
+                <div className="relative h-full w-full">
+                  <ColdStartOverlay>
+                    <Loader2 className="animate-spin w-8 h-8 text-primary" />
+                    <div className="text-sm font-medium text-foreground">Cargando tu proyecto…</div>
+                  </ColdStartOverlay>
                 </div>
               ) : hasPreview ? (
                 <div className="relative w-full h-full flex flex-col">
@@ -2196,7 +2199,7 @@ export function StudioEngine() {
                   fondo neutro + spinner + paso actual. z-40 deja accesibles el
                   botón de menú y los badges (z-50). */}
               {showGeneratingOverlay && (
-                <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-4 bg-background">
+                <ColdStartOverlay>
                   <Loader2 className="w-8 h-8 animate-spin text-primary" />
                   <div className="text-sm font-medium text-foreground">Generando tu proyecto…</div>
                   {generationProgress && (
@@ -2220,7 +2223,7 @@ export function StudioEngine() {
                       <span>{isCancelling ? 'Cancelando…' : 'Cancelar'}</span>
                     </button>
                   )}
-                </div>
+                </ColdStartOverlay>
               )}
 
               {/* CAMBIO 4 — overlay honesto tras cancelar: en vez de dejar ver la

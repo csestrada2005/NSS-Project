@@ -1437,6 +1437,53 @@ de Samuel para decidir alcance):**
 
 **CHECK MANUAL — PENDIENTE.** Ver mensaje de cierre de la sesión para el detalle paso a paso.
 
+**Hecho (2026-09-23, mismo día) — dos ajustes de chat pedidos al confirmar lo de arriba:**
+- `CommandModal.tsx` perdió el botón X y el cierre al hacer click en el backdrop — el chat ahora sólo se
+  cierra con Ctrl+Espacio (alterna el "peek") o haciendo click en "Chat" del navbar, que ahora es un toggle
+  real (`handleOpenChat` en `StudioEngine.tsx`: si ya está abierto, cierra del todo; si no, abre con el
+  mismo guard de `panelMode==='preview'` de antes).
+- `.fc-creditos.fc-ilimitado` (el pill "Créditos ilimitados" del chat) tenía fondo casi transparente
+  (`rgba(214,40,40,.1)`) — pasa a `var(--carbon)` (sólido), el rojo se queda sólo en texto/borde/ícono.
+- Se quitó `<CreditBalance />` (el contador "Admin — Unlimited") de la esquina del editor en
+  `StudioEngine.tsx` — quedaba redundante con el pill nuevo del chat. `ForgeDashboard.tsx` conserva el
+  suyo sin tocar (contexto distinto, sin chat).
+- `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 671/671. `npx vitest run` → 48/48.
+
+**Hecho (2026-09-23, mismo día) — pantalla de espera a pantalla completa estilo "cold start" de Render,
+para reemplazar el spinner chico en los dos momentos de espera larga real:**
+
+Pedido de Samuel: reemplazar el "circulito girando" por algo a pantalla completa, con la referencia
+explícita de la pantalla de "cold start" de Render en el plan free (cuadrícula de recuadros del lado
+derecho que reaccionan al mouse), aplicado tanto al "compiling" como a la generación de un proyecto nuevo.
+
+**Decisión de alcance (no confirmada con Samuel, a validar en el check manual):** se interpretó "compiling"
+como los dos momentos de ESPERA LARGA real — abrir un proyecto (`isLoading`, viene de `useProjectFiles()`,
+es justo el caso "volver a un proyecto después de un rato" que describe el ejemplo de Render) y generar un
+proyecto nuevo (`showGeneratingOverlay`) — NO el aviso chico "Compiling…"/"Compiling preview..." de la
+esquina inferior derecha, que sigue como pill pequeño: ese dispara en cada recompilación tras una edición
+normal (frecuente, casi siempre menos de un segundo) y ponerlo a pantalla completa cada vez se sentía como
+el tipo de interrupción distinta a la que describe el ejemplo de Render. Si Samuel quería que el pill
+chico también pasara a pantalla completa, es un ajuste rápido sobre el mismo componente nuevo.
+
+**Hecho:**
+- `src/components/studio/ColdStartOverlay.tsx` + `coldStartOverlay.css` (nuevo) — cuadrícula de recuadros
+  (14×9) con un spotlight rojo (`radial-gradient` + `mix-blend-mode: screen`) que sigue al mouse; la
+  posición se escribe directo a variables CSS por ref en cada `mousemove` (sin `useState`) para no
+  disparar un re-render de React por frame. Sin mouse (o sin hover, ej. tablet), las celdas "respiran"
+  solas vía una animación CSS con delay escalonado, así la pantalla nunca se ve estática; respeta
+  `prefers-reduced-motion`. Recibe el contenido real (spinner/texto/progreso/botón) como `children` — el
+  componente sólo pone el fondo, cero cambios a la lógica de generación/carga.
+- Conectado en dos puntos de `StudioEngine.tsx`: el estado `isLoading` (antes "Loading project..." con un
+  spinner suelto, ahora "Cargando tu proyecto…" sobre el overlay) y `showGeneratingOverlay` (antes fondo
+  plano `bg-background`, ahora el mismo overlay — el spinner, el texto de progreso por paso y el botón
+  Cancelar quedan exactamente igual, sólo cambió el fondo).
+- `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 671/671 (sin cambios, nada de esto
+  toca servidor). `npx vitest run` → 48/48. `npx vite build` real: confirmado que `cso-grid`/`cso-cell` y
+  la variable `--cso-mx` compilan.
+
+**CHECK MANUAL — PENDIENTE (agrupado con lo de arriba, a pedido de Samuel: un solo check para bugs de
+chat + menú + copy + color + estos dos ajustes + el overlay nuevo).** Ver mensaje de cierre de la sesión.
+
 **Siguiente paso real, antes de escribir código:** diseño en frío con Samuel — decidir orden de bloques
 (los bugs primero, por ser acotados y de bajo riesgo, parece lo obvio; el rediseño brutalista es la pieza
 más grande y probablemente necesita su propia sesión con mockup, como ya pasó con el resto de 5.3) y
