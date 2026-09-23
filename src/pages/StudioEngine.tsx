@@ -2188,9 +2188,16 @@ export function StudioEngine() {
                   title="Preview"
                 />
               ) : (
-                /* Waiting / auto-loading state */
-                <div className="flex items-center justify-center h-full">
-                  <Loader2 className="animate-spin w-8 h-8 text-muted-foreground" />
+                /* Waiting / auto-loading state — brecha entre "isLoading" ya en
+                   false y el primer compile listo (hasPreview/compiledHtml). Antes
+                   era un spinner suelto sin fondo: se veía como una segunda
+                   pantalla distinta justo después del ColdStartOverlay de arriba,
+                   cortando la animación a la mitad (reportado por Samuel,
+                   2026-09-23). Mismo overlay para que la espera se sienta continua. */
+                <div className="relative h-full w-full">
+                  <ColdStartOverlay>
+                    <Loader2 className="animate-spin w-8 h-8 text-primary" />
+                  </ColdStartOverlay>
                 </div>
               )}
 

@@ -1481,8 +1481,23 @@ chico también pasara a pantalla completa, es un ajuste rápido sobre el mismo c
   toca servidor). `npx vitest run` → 48/48. `npx vite build` real: confirmado que `cso-grid`/`cso-cell` y
   la variable `--cso-mx` compilan.
 
-**CHECK MANUAL — PENDIENTE (agrupado con lo de arriba, a pedido de Samuel: un solo check para bugs de
-chat + menú + copy + color + estos dos ajustes + el overlay nuevo).** Ver mensaje de cierre de la sesión.
+**CHECK MANUAL — CONFIRMADO en su mayoría (2026-09-23), con un bug encontrado y corregido en el
+overlay:** Samuel probó todo lo de arriba (chat sin X, no cierra al hacer click fuera, créditos con fondo
+sólido, contador viejo fuera del editor y presente en el Dashboard) — confirmado sin residuos. La duda
+sobre el alcance de "compiling" (sólo carga/generación, no el pill chico) se confirmó correcta, sin ajuste.
+
+**Bug encontrado — la animación se cortaba a la mitad:** entre `isLoading` (ColdStartOverlay) y el
+primer compile listo (`hasPreview`/`compiledHtml`) había una brecha — el bloque "Waiting / auto-loading
+state" (`compiledHtml === '' && !hasPreview`, ya existía desde antes de este ítem) mostraba un spinner
+gris SUELTO, sin el overlay, dando la sensación de "una segunda pantalla distinta" justo después de que la
+animación arrancaba. **Corregido:** ese bloque ahora también usa `ColdStartOverlay`, mismo componente que
+`isLoading`/`showGeneratingOverlay` — la espera se ve continua de principio a fin, sin corte.
+`npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 671/671. `npx vitest run` → 48/48.
+`npx vite build` real verificado.
+
+**CHECK MANUAL — PENDIENTE, sólo de este fix puntual.** Abrir un proyecto (sobre todo si estaba "frío")
+o generar uno nuevo: la cuadrícula con el spotlight rojo debe verse SIN CORTES desde que empieza la espera
+hasta que el preview real aparece — nunca debe aparecer un círculo gris suelto sin la cuadrícula de fondo.
 
 **Siguiente paso real, antes de escribir código:** diseño en frío con Samuel — decidir orden de bloques
 (los bugs primero, por ser acotados y de bajo riesgo, parece lo obvio; el rediseño brutalista es la pieza
