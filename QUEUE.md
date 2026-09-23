@@ -1565,6 +1565,52 @@ Mundos pre-registrados:
 - **Falla real (si aparece, SÍ es bug):** avatares/badges/el botón X perdiendo su forma circular, la frase
   de confirmación de `MigrationApplyModal` saltada, o el efecto de `.nebu-cta` viéndose roto/ilegible.
 
+### "Paso 4" — mismo estilo en el modal de chat (2026-09-23)
+
+Aclarado con Samuel antes de tocar código: el chat estaba clasificado como "superficie de trabajo" en su
+propio mensaje de diseño (se queda oscuro, versión destilada, sin desplazamiento diagonal) — Samuel
+confirmó que esta vez quiere el tratamiento IDÉNTICO al de los popups (radius, bordes, mayúsculas y el
+desplazamiento diagonal del botón principal), no la versión destilada. El chat NO usa `.nebu-modal`/
+Tailwind (tiene su propio sistema, `forgeChat.css`, con clases `.fc-*` y valores literales) — así que el
+mismo look se portó editando los valores directo en ese archivo, no reutilizando las reglas de
+`.nebu-modal`/`.nebu-cta` de `index.css` (no habrían alcanzado estas clases).
+
+**Hecho — `src/components/chat/forgeChat.css`:**
+- Radius casi cero en los contenedores rectangulares: `.typebar` 14px→4px, `.fc-icon-btn`/`.fc-modo-btn`
+  9px→4px, `.fc-modo-menu` 12px→4px, `.fc-modo-opt` 9px→4px, `.fc-pieza` (las tarjetas de resultado) 14px→
+  4px, `.fc-accion-btn` 10px→4px. Deliberadamente SIN tocar lo que ya es una píldora/círculo de verdad:
+  `.fc-creditos`, `.fc-pill`, `.fc-turno-modo` (píldoras, radius 999px) y los indicadores circulares
+  (`.fc-nodo`, `.fc-marca`, los glifos del selector de modo) — mismo criterio que en los popups.
+- Bordes con más peso: de 1px a 2px en `.typebar`, `.fc-icon-btn`, `.fc-modo-btn`, `.fc-modo-menu`,
+  `.fc-pieza`, `.fc-pill`, `.fc-creditos`, `.fc-accion-btn`.
+- Mayúsculas: `.fc-marcador` (las etiquetas cortas tipo "Cambio en base de datos", "Plan listo") y el `h2`
+  de `.fc-historial-head` ("Historial de la conversación").
+- **Desviación deliberada, no aplicada tal cual pese al pedido de "idéntico":** `.fc-pieza-titulo` (el
+  título grande de cada tarjeta) NO se puso en mayúsculas — a diferencia de los títulos cortos de los
+  popups ("New Project"), aquí el texto es una ORACIÓN completa ("Hay que aprobar esto antes de
+  aplicarlo", "Wyrd corrigió un permiso abierto") — ponerla en mayúsculas la habría hecho notablemente más
+  difícil de leer, en contra de la regla permanente de este archivo de explicar todo en términos simples.
+  Juicio de diseño mío, a confirmar con Samuel si prefiere consistencia literal por encima de legibilidad
+  aquí.
+- Desplazamiento diagonal + sombra dura translúcida (mismo `.nebu-cta` adaptado a rojo translúcido sobre
+  fondo oscuro, ver nota del "paso 3"): en `.fc-enviar` (el botón de enviar, NO en su variante
+  `.fc-cancelar`) y en `.fc-accion-btn` sólido (NO en sus variantes `.fc-secundario`/`.fc-rechazar`, que
+  ya son de bajo énfasis a propósito).
+- `prefers-reduced-motion`: el desplazamiento nuevo también se anula ahí, mismo trato que el resto del
+  archivo.
+
+**Verificación:** `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 671/671 (sin
+cambios). `npx vitest run` → 48/48. `npx vite build` real: confirmado que `.fc-pieza`/`.fc-marcador`/
+`.fc-enviar:not(.fc-cancelar):hover` compilan con los valores nuevos.
+
+**CHECK MANUAL — PENDIENTE.** Abrir el chat y revisar: la typebar y las tarjetas de resultado deben verse
+con esquinas casi rectas y bordes más gruesos; las etiquetas cortas ("Plan listo", etc.) y el título del
+historial en mayúsculas; el botón de enviar y el de "Aplicar cambio"/similar deben desplazarse un poco
+hacia arriba-izquierda con la sombra roja creciendo al pasar el mouse. Los títulos largos de cada tarjeta
+("Hay que aprobar esto...") NO deben estar en mayúsculas (desviación explicada arriba — avisar si se
+prefiere lo contrario). El nodo vivo, los círculos de estado y las píldoras (créditos, "Ver historial
+completo") siguen redondos.
+
 **Siguiente paso real, antes de escribir código:** diseño en frío con Samuel — decidir orden de bloques
 (los bugs primero, por ser acotados y de bajo riesgo, parece lo obvio; el rediseño brutalista es la pieza
 más grande y probablemente necesita su propia sesión con mockup, como ya pasó con el resto de 5.3) y

@@ -70,7 +70,7 @@
 .typebar {
   position: relative; display: flex; align-items: center; gap: 8px;
   background: rgba(26, 26, 26, .86); backdrop-filter: blur(18px) saturate(1.2);
-  border: 1px solid var(--linea-fuerte); border-radius: 14px; padding: 8px 8px 8px 12px;
+  border: 2px solid var(--linea-fuerte); border-radius: 4px; padding: 8px 8px 8px 12px;
   transition: border-color .35s ease, box-shadow .5s ease;
 }
 .forge-chat[data-estado="reposo"] .typebar { animation: fc-respira 6s ease-in-out infinite; }
@@ -90,7 +90,7 @@
 .typebar input:disabled { color: var(--fc-texto-3); }
 
 .fc-icon-btn {
-  width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--linea);
+  width: 32px; height: 32px; border-radius: 4px; border: 2px solid var(--linea);
   background: rgba(245, 240, 235, .03); color: var(--fc-texto-2); display: grid; place-items: center;
   cursor: pointer; flex: 0 0 auto; font: inherit; transition: border-color .2s, color .2s, background .2s;
 }
@@ -104,6 +104,22 @@
 .fc-enviar:hover { background: #e83535; }
 .fc-enviar.fc-cancelar { background: transparent; border-color: rgba(214, 40, 40, .6); color: var(--rojo); }
 .fc-enviar.fc-cancelar:hover { background: rgba(214, 40, 40, .12); }
+/* "Paso 4" (2026-09-23): mismo tratamiento brutalista que .nebu-cta en los
+   popups — sombra dura translúcida + desplazamiento diagonal al hover, sólo
+   en el botón de ENVIAR (no en su variante Cancelar, que es una acción de
+   detener, no la CTA principal de la pantalla). */
+.fc-enviar:not(.fc-cancelar) {
+  transition: background .25s, transform .15s ease, box-shadow .15s ease;
+  box-shadow: 3px 3px 0 rgba(214, 40, 40, .4);
+}
+.fc-enviar:not(.fc-cancelar):hover:not(:disabled) {
+  transform: translate(-2px, -2px);
+  box-shadow: 5px 5px 0 rgba(214, 40, 40, .55);
+}
+.fc-enviar:not(.fc-cancelar):active:not(:disabled) {
+  transform: translate(0, 0);
+  box-shadow: 1px 1px 0 rgba(214, 40, 40, .55);
+}
 
 /* nodo vivo */
 .fc-nodo { position: relative; width: 24px; height: 24px; flex: 0 0 auto; display: grid; place-items: center; }
@@ -134,7 +150,7 @@
 .fc-modo { position: relative; flex: 0 0 auto; }
 .fc-modo-btn {
   display: flex; align-items: center; gap: 7px; font: inherit; font-size: 12px; cursor: pointer;
-  padding: 7px 10px; border-radius: 9px; border: 1px solid var(--linea); color: var(--fc-texto-2);
+  padding: 7px 10px; border-radius: 4px; border: 2px solid var(--linea); color: var(--fc-texto-2);
   background: rgba(245, 240, 235, .03); transition: color .2s, border-color .2s, background .2s;
 }
 .fc-modo-btn:hover { color: var(--crema); border-color: var(--linea-fuerte); }
@@ -155,7 +171,7 @@
 .fc-modo-btn .fc-flecha { font-size: 9px; color: var(--fc-texto-3); }
 .fc-modo-menu {
   position: absolute; bottom: calc(100% + 10px); left: 0; width: 262px; z-index: 20;
-  background: var(--carbon); border: 1px solid var(--linea-fuerte); border-radius: 12px; padding: 6px;
+  background: var(--carbon); border: 2px solid var(--linea-fuerte); border-radius: 4px; padding: 6px;
   box-shadow: 0 20px 50px -20px rgba(0, 0, 0, .9);
   opacity: 0; visibility: hidden; transform: translateY(8px) scale(.98); transform-origin: bottom left;
   transition: opacity .2s ease, transform .25s cubic-bezier(.16, 1, .3, 1), visibility .2s;
@@ -163,7 +179,7 @@
 .fc-modo-menu.fc-abierto { opacity: 1; visibility: visible; transform: none; }
 .fc-modo-opt {
   display: flex; gap: 10px; width: 100%; text-align: left; font: inherit; cursor: pointer;
-  padding: 10px 11px; border-radius: 9px; border: 0; background: none; color: var(--fc-texto-2);
+  padding: 10px 11px; border-radius: 4px; border: 0; background: none; color: var(--fc-texto-2);
   transition: background .18s, color .18s;
 }
 .fc-modo-opt:hover { background: rgba(245, 240, 235, .05); color: var(--fc-texto); }
@@ -179,7 +195,7 @@
   display: inline-flex; align-items: center; gap: 6px;
   font-family: var(--fc-mono); font-size: 11px; color: var(--fc-texto-2);
   background: rgba(26, 26, 26, .86); backdrop-filter: blur(18px);
-  border: 1px solid var(--linea-fuerte); padding: 6px 12px; border-radius: 999px;
+  border: 2px solid var(--linea-fuerte); padding: 6px 12px; border-radius: 999px;
 }
 .fc-creditos.fc-ilimitado {
   color: var(--rojo); border-color: rgba(214, 40, 40, .4); background: var(--carbon);
@@ -187,7 +203,7 @@
 
 /* ---------- tarjetas ---------- */
 .fc-pieza {
-  background: var(--carbon); border: 1px solid var(--linea); border-radius: 14px; padding: 16px 18px;
+  background: var(--carbon); border: 2px solid var(--linea); border-radius: 4px; padding: 16px 18px;
   transform-origin: bottom center; animation: fc-sube .42s cubic-bezier(.16, 1, .3, 1) both;
 }
 @keyframes fc-sube { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: none; } }
@@ -245,7 +261,7 @@
 .fc-resumen-texto b { color: var(--fc-texto); font-weight: 500; }
 .fc-pill {
   flex: 0 0 auto; font: inherit; font-size: 12px; color: var(--fc-texto-2); background: rgba(245, 240, 235, .04);
-  border: 1px solid var(--linea); padding: 7px 13px; border-radius: 999px; cursor: pointer;
+  border: 2px solid var(--linea); padding: 7px 13px; border-radius: 999px; cursor: pointer;
   transition: color .2s, border-color .2s, background .2s;
 }
 .fc-pill:hover { color: var(--crema); border-color: var(--linea-fuerte); background: rgba(245, 240, 235, .08); }
@@ -264,8 +280,8 @@
 }
 .fc-accion-fila { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .fc-accion-btn {
-  font: inherit; font-size: 13px; padding: 9px 16px; border-radius: 10px; cursor: pointer;
-  border: 1px solid var(--rojo); background: var(--rojo); color: #fff; font-weight: 500; transition: background .2s;
+  font: inherit; font-size: 13px; padding: 9px 16px; border-radius: 4px; cursor: pointer;
+  border: 2px solid var(--rojo); background: var(--rojo); color: #fff; font-weight: 500; transition: background .2s;
 }
 .fc-accion-btn:hover { background: #e83535; }
 .fc-accion-btn:disabled { opacity: .5; cursor: not-allowed; }
@@ -273,9 +289,25 @@
 .fc-accion-btn.fc-secundario:hover { color: var(--crema); background: rgba(245, 240, 235, .06); }
 .fc-accion-btn.fc-rechazar { background: transparent; color: rgba(214, 40, 40, .75); border-color: rgba(214, 40, 40, .35); }
 .fc-accion-btn.fc-rechazar:hover { color: var(--rojo); background: rgba(214, 40, 40, .08); }
+/* "Paso 4": mismo desplazamiento diagonal + sombra dura que .fc-enviar/
+   .nebu-cta, sólo en la variante sólida (no en Secundario/Rechazar, que ya
+   son transparentes/de bajo énfasis a propósito). */
+.fc-accion-btn:not(.fc-secundario):not(.fc-rechazar) {
+  transition: background .2s, transform .15s ease, box-shadow .15s ease;
+  box-shadow: 3px 3px 0 rgba(214, 40, 40, .4);
+}
+.fc-accion-btn:not(.fc-secundario):not(.fc-rechazar):hover:not(:disabled) {
+  transform: translate(-2px, -2px);
+  box-shadow: 5px 5px 0 rgba(214, 40, 40, .55);
+}
+.fc-accion-btn:not(.fc-secundario):not(.fc-rechazar):active:not(:disabled) {
+  transform: translate(0, 0);
+  box-shadow: 1px 1px 0 rgba(214, 40, 40, .55);
+}
 .fc-marcador {
   display: inline-flex; align-items: center; gap: 7px; font-family: var(--fc-mono); font-size: 11px;
   color: var(--rojo); margin-bottom: 10px;
+  text-transform: uppercase; letter-spacing: .04em;
 }
 .fc-marcador::before {
   content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--rojo);
@@ -303,7 +335,7 @@
   display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
   padding-bottom: 14px; border-bottom: 1px solid var(--linea-fuerte);
 }
-.fc-historial-head h2 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -.015em; color: var(--crema); }
+.fc-historial-head h2 { margin: 0; font-size: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--crema); }
 .fc-historial-head span { font-family: var(--fc-mono); font-size: 11px; color: var(--fc-texto-3); }
 .fc-historial-scroll { overflow-y: auto; padding: 6px 2px 0; display: flex; flex-direction: column; }
 .fc-turno { padding: 14px 0; border-bottom: 1px solid var(--linea); }
@@ -324,4 +356,5 @@
     animation-iteration-count: 1 !important;
     transition-duration: .01ms !important;
   }
+  .fc-enviar:hover, .fc-accion-btn:hover { transform: none !important; }
 }
