@@ -182,7 +182,7 @@
   border: 1px solid var(--linea-fuerte); padding: 6px 12px; border-radius: 999px;
 }
 .fc-creditos.fc-ilimitado {
-  color: var(--rojo); border-color: rgba(214, 40, 40, .4); background: rgba(214, 40, 40, .1);
+  color: var(--rojo); border-color: rgba(214, 40, 40, .4); background: var(--carbon);
 }
 
 /* ---------- tarjetas ---------- */

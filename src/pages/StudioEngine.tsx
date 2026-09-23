@@ -47,7 +47,6 @@ import { HistoryDrawer } from '../components/HistoryDrawer';
 import { ProjectMemoryService } from '../services/ProjectMemoryService';
 import { ChatPersistenceService } from '../services/ChatPersistenceService';
 import { DesignBriefService, type DesignHints } from '../services/DesignBriefService';
-import CreditBalance from '../components/forge/CreditBalance';
 import { ShareProjectModal } from '../components/forge/ShareProjectModal';
 import { CodePanel } from '../components/studio/CodePanel';
 import { PreviewNavbar } from '../components/studio/PreviewNavbar';
@@ -328,8 +327,8 @@ export function StudioEngine() {
   // "Peek" del chat (Ctrl+Espacio con el chat ya abierto): esconde la typebar/
   // tarjetas para ver el preview completo sin cerrar el modal. Vive aquí (no
   // en ChatInterface) porque CommandModal también necesita saberlo — su
-  // backdrop invisible (fixed inset-0, sólo para cerrar al hacer click fuera)
-  // seguía bloqueando el scroll del preview mientras se veía "vacío".
+  // backdrop invisible (fixed inset-0) seguía bloqueando el scroll del
+  // preview mientras se veía "vacío".
   const [chatPeeking, setChatPeeking] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isReadOnly, setIsReadOnly] = useState(false);
@@ -929,17 +928,26 @@ export function StudioEngine() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Abrir Chat (botón del navbar o Ctrl+Espacio) — única puerta de entrada,
-  // para que el guard de "sólo desde preview" (QUEUE.md ítem 5.3 Bloque 6) no
-  // se pueda esquivar por un camino y no por el otro.
+  // Abrir/cerrar Chat desde el botón del navbar — única puerta de entrada
+  // para ABRIR (junto con Ctrl+Espacio más abajo), para que el guard de
+  // "sólo desde preview" (QUEUE.md ítem 5.3 Bloque 6) no se pueda esquivar
+  // por un camino y no por el otro. Si ya está abierto, el mismo botón lo
+  // CIERRA del todo (pedido explícito de Samuel, 2026-09-23: sin botón X
+  // dentro del modal ni cierre al hacer click fuera — sólo Ctrl+Espacio o
+  // este botón).
   const handleOpenChat = useCallback(() => {
+    if (isCommandModalOpen) {
+      setIsCommandModalOpen(false);
+      setChatPeeking(false);
+      return;
+    }
     if (panelMode !== 'preview') {
       toast.error('Ve a preview primero para abrir chat');
       return;
     }
     setChatPeeking(false);
     setIsCommandModalOpen(true);
-  }, [panelMode]);
+  }, [isCommandModalOpen, panelMode]);
 
   // Ctrl+Espacio — global, no sólo mientras el chat está montado (antes vivía
   // dentro de ChatInterface, así que sólo funcionaba después de abrir el chat
@@ -2009,16 +2017,14 @@ export function StudioEngine() {
                 </div>
               )}
 
-              {/* Credit balance — only for owners */}
-              {!isReadOnly && (
-                <div className="absolute top-14 right-4 z-40 flex flex-col items-end gap-2">
-                  <CreditBalance />
-                  {isPublic && (
-                    <div className="flex items-center gap-1.5 bg-green-950/80 border border-green-700/50 rounded-full px-2.5 py-1 text-[10px] text-green-400 font-medium">
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                      Live
-                    </div>
-                  )}
+              {/* Live badge — el contador de créditos viejo se quitó de aquí
+                  (2026-09-23): ahora vive sólo dentro del modal de chat
+                  (CreditsBadge.tsx), tenerlo duplicado en la esquina del
+                  editor ya no tenía sentido. */}
+              {!isReadOnly && isPublic && (
+                <div className="absolute top-14 right-4 z-40 flex items-center gap-1.5 bg-green-950/80 border border-green-700/50 rounded-full px-2.5 py-1 text-[10px] text-green-400 font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                  Live
                 </div>
               )}
 
@@ -2245,10 +2251,7 @@ export function StudioEngine() {
 
         <AnimatePresence>
         {isCommandModalOpen && (
-          <CommandModal
-            onClose={() => { setIsCommandModalOpen(false); setChatPeeking(false); }}
-            peeking={chatPeeking}
-          >
+          <CommandModal peeking={chatPeeking}>
             <ChatInterface
               isLoading={isGenerating}
               onSendMessage={handleSendMessage}
