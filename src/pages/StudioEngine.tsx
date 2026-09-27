@@ -49,10 +49,9 @@ import { DesignBriefService, type DesignHints } from '../services/DesignBriefSer
 import { ShareProjectModal } from '../components/forge/ShareProjectModal';
 import { CodePanel } from '../components/studio/CodePanel';
 import { PreviewNavbar } from '../components/studio/PreviewNavbar';
-import { ColdStartOverlay } from '../components/studio/ColdStartOverlay';
 import NebuLoader from '../components/brand/NebuLoader';
 import NebuLoadingCard from '../components/brand/NebuLoadingCard';
-import { StudioLoadOverlay } from '../components/studio/StudioLoadOverlay';
+import { StudioLoadOverlay, StudioProgressOverlay } from '../components/studio/StudioLoadOverlay';
 import type { ViewportMode, PanelMode } from '../components/studio/types';
 import LoadingSquares from '../components/brand/LoadingSquares';
 
@@ -2227,20 +2226,28 @@ export function StudioEngine() {
               )}
 
               {/* CAMBIO 2: overlay "Generando tu proyecto…" — tapa el scaffold
-                  crudo de React+Vite durante la primera construcción. Brand Wyrd:
-                  fondo neutro + spinner + paso actual. z-40 deja accesibles el
-                  botón de menú y los badges (z-50). */}
+                  crudo de React+Vite durante la primera construcción. z-40 deja
+                  accesibles el botón de menú y los badges (z-50). Desde
+                  2026-09-27 misma pantalla que la carga (búho + barra): cada paso
+                  real ocupa su tramo de la banda 5–95 %; antes del primer paso
+                  0–5 %, y tras el último (esperando el primer compile) 95–99 %. */}
               {showGeneratingOverlay && (
-                <ColdStartOverlay
-                  progress={generationProgress ? generationProgress.step / generationProgress.total : undefined}
+                <StudioProgressOverlay
+                  band={
+                    generationProgress
+                      ? [
+                          0.05 + (0.9 * (generationProgress.step - 1)) / generationProgress.total,
+                          0.05 + (0.9 * generationProgress.step) / generationProgress.total,
+                        ]
+                      : isGenerating ? [0, 0.05] : [0.95, 0.99]
+                  }
+                  title="Generando tu proyecto…"
+                  detail={
+                    generationProgress
+                      ? `Paso ${generationProgress.step}/${generationProgress.total} · ${generationProgress.file}`
+                      : undefined
+                  }
                 >
-                  <NebuLoader size={160} delay={0} />
-                  <div className="text-sm font-medium text-foreground">Generando tu proyecto…</div>
-                  {generationProgress && (
-                    <div className="text-xs text-muted-foreground font-mono max-w-[80%] truncate">
-                      Paso {generationProgress.step}/{generationProgress.total} · {generationProgress.file}
-                    </div>
-                  )}
                   {/* CAMBIO 3 — botón Cancelar en el overlay de generación. Mismo
                       handler (handleCancelGeneration) y confirmación de un click
                       que el del chat; deshabilitado durante el cierre. */}
@@ -2257,7 +2264,7 @@ export function StudioEngine() {
                       <span>{isCancelling ? 'Cancelando…' : 'Cancelar'}</span>
                     </button>
                   )}
-                </ColdStartOverlay>
+                </StudioProgressOverlay>
               )}
 
               {/* CAMBIO 4 — overlay honesto tras cancelar: en vez de dejar ver la

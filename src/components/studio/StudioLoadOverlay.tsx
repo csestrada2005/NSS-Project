@@ -1,30 +1,77 @@
-import { useEffect, useState, type MutableRefObject } from 'react';
+import { useEffect, useState, type MutableRefObject, type ReactNode } from 'react';
 import { ColdStartOverlay } from './ColdStartOverlay';
 import NebuLoader from '../brand/NebuLoader';
 
 /**
- * Pantalla de carga de un proyecto existente, con barra de progreso por
- * ETAPAS REALES (2026-09-27, pedido de Samuel):
- *   download → acceso + descarga de forge_files (una sola petición, sin
- *              avance interno) — banda 0–60 %
- *   compile  → primer compile del preview — banda 60–95 %
- * Dentro de cada etapa el avance es una aproximación suave que se acerca al
- * tope de la banda sin alcanzarlo: nunca marca 100 % antes de terminar. La
- * misma fracción enciende las celdas de la rejilla (prop `progress`).
+ * Pantalla de espera del Studio con búho + barra de progreso (2026-09-27,
+ * pedido de Samuel). La usan la carga de un proyecto existente
+ * (StudioLoadOverlay) y la generación de uno nuevo (StudioEngine, overlay
+ * "Generando tu proyecto…"), para que las dos se vean y se sientan igual.
  *
- * `progressRef` vive en StudioEngine: las dos etapas se pintan con dos
- * instancias distintas de este overlay (ramas distintas del render), y el ref
- * es lo que deja que la barra continúe en vez de volver a 0 al cambiar de
- * etapa — sin re-renderizar StudioEngine en cada tick.
+ * `band` = [desde, hasta] (0–1) de la etapa real en curso. Dentro de la banda
+ * el avance es una aproximación suave que se acerca al tope sin alcanzarlo:
+ * nunca marca 100 % antes de terminar. La misma fracción enciende las celdas
+ * de la rejilla (prop `progress` de ColdStartOverlay).
+ *
+ * `progressRef` (opcional) guarda el avance fuera del componente, para cuando
+ * una misma espera se pinta con instancias distintas (ramas distintas del
+ * render) y la barra debe continuar en vez de volver a 0.
  */
+export function StudioProgressOverlay({
+  band,
+  title,
+  detail,
+  progressRef,
+  children,
+}: {
+  band: [number, number];
+  title: string;
+  detail?: string;
+  progressRef?: MutableRefObject<number>;
+  children?: ReactNode;
+}) {
+  const [lo, hi] = band;
+  const [progress, setProgress] = useState(() => Math.max(progressRef?.current ?? 0, lo));
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setProgress((prev) => {
+        const base = Math.max(prev, lo);
+        // max(0, …): si la banda baja (p. ej. se limpia el paso actual), la
+        // barra se queda quieta en vez de retroceder.
+        const next = base + Math.max(0, hi - base) * 0.04;
+        if (progressRef) progressRef.current = next;
+        return next;
+      });
+    }, 100);
+    return () => clearInterval(id);
+  }, [lo, hi, progressRef]);
+
+  const pct = Math.round(progress * 100);
+  return (
+    <ColdStartOverlay progress={progress}>
+      <NebuLoader size={160} delay={0} />
+      <div className="text-sm font-medium text-foreground">{title}</div>
+      <div className="w-64 h-1 bg-[#2A2A2A] overflow-hidden" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+        <div className="h-full bg-[#E8E8E8] transition-[width] duration-200 ease-out" style={{ width: `${progress * 100}%` }} />
+      </div>
+      <div className="text-xs text-muted-foreground font-mono max-w-[80%] truncate">
+        {detail ? `${detail} · ` : ''}{pct}%
+      </div>
+      {children}
+    </ColdStartOverlay>
+  );
+}
+
+/** Carga de un proyecto existente: download (acceso + forge_files) → compile (primer preview). */
 export type LoadStage = 'download' | 'compile';
 
-const BANDS: Record<LoadStage, [number, number]> = {
+const LOAD_BANDS: Record<LoadStage, [number, number]> = {
   download: [0, 0.6],
   compile: [0.6, 0.95],
 };
 
-const LABELS: Record<LoadStage, string> = {
+const LOAD_LABELS: Record<LoadStage, string> = {
   download: 'Descargando archivos…',
   compile: 'Preparando vista previa…',
 };
@@ -36,31 +83,12 @@ export function StudioLoadOverlay({
   stage: LoadStage;
   progressRef: MutableRefObject<number>;
 }) {
-  const [lo, hi] = BANDS[stage];
-  const [progress, setProgress] = useState(() => Math.max(progressRef.current, lo));
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      setProgress((prev) => {
-        const base = Math.max(prev, lo);
-        const next = base + (hi - base) * 0.04;
-        progressRef.current = next;
-        return next;
-      });
-    }, 100);
-    return () => clearInterval(id);
-  }, [lo, hi, progressRef]);
-
   return (
-    <ColdStartOverlay progress={progress}>
-      <NebuLoader size={160} delay={0} />
-      <div className="text-sm font-medium text-foreground">Cargando tu proyecto…</div>
-      <div className="w-64 h-1 bg-[#2A2A2A] overflow-hidden" role="progressbar" aria-valuenow={Math.round(progress * 100)} aria-valuemin={0} aria-valuemax={100}>
-        <div className="h-full bg-[#E8E8E8] transition-[width] duration-200 ease-out" style={{ width: `${progress * 100}%` }} />
-      </div>
-      <div className="text-xs text-muted-foreground font-mono">
-        {LABELS[stage]} {Math.round(progress * 100)}%
-      </div>
-    </ColdStartOverlay>
+    <StudioProgressOverlay
+      band={LOAD_BANDS[stage]}
+      title="Cargando tu proyecto…"
+      detail={LOAD_LABELS[stage]}
+      progressRef={progressRef}
+    />
   );
 }
