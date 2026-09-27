@@ -19,7 +19,7 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { SupabaseService } from '@/services/SupabaseService';
 import { toast } from 'sonner';
 import type { Notification } from '@/services/NotificationService';
-import NebuLoader from '../components/brand/NebuLoader';
+import LoadingSquares from '../components/brand/LoadingSquares';
 
 function notificationIcon(type: string) {
   switch (type) {
@@ -153,7 +153,7 @@ const NotificationsPage = () => {
       {/* List */}
       {loading ? (
         <div className="flex items-center justify-center py-20">
-          <NebuLoader size={140} />
+          <LoadingSquares size={40} />
         </div>
       ) : notifications.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center gap-3">

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { X, Loader2, Palette, Sparkles } from 'lucide-react';
+import { X, Palette, Sparkles } from 'lucide-react';
 import { SupabaseService } from '@/services/SupabaseService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { hexToHslString } from '@/utils/colorConversion.js';
 import type { DesignHints, BrandColor } from '@/services/DesignBriefService';
 import { modalBackdropMotion, modalPanelMotion } from '@/components/ui/modalMotion';
 import NebuLoader from '../brand/NebuLoader';
+import LoadingSquares from '../brand/LoadingSquares';
 
 interface NewProjectModalProps {
   onClose: () => void;
@@ -341,7 +342,7 @@ export default function NewProjectModal({ onClose, onCreated }: NewProjectModalP
                 ← Back
               </Button>
               <Button onClick={handleSubmit} disabled={isCreating} className="nebu-cta">
-                {isCreating && <Loader2 size={14} className="animate-spin mr-1 text-[#E8E8E8]" />}
+                {isCreating && <LoadingSquares size={14} className="mr-1" />}
                 Start Building →
               </Button>
             </div>

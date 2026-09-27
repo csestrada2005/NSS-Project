@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { X, Search, UserPlus, Loader2, ChevronDown } from 'lucide-react';
+import { X, Search, UserPlus, ChevronDown } from 'lucide-react';
 import { SupabaseService } from '@/services/SupabaseService';
 import { CollaboratorService, type Collaborator } from '@/services/CollaboratorService';
 import { useAuth } from '@/contexts/AuthContext';
 import { wyrdToast as toast } from '@/utils/wyrdToast';
 import { modalBackdropMotion, modalPanelMotion } from '@/components/ui/modalMotion';
+import LoadingSquares from '../brand/LoadingSquares';
 
 interface SearchResult {
   id: string;
@@ -255,7 +256,7 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
                   className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm bg-accent border border-border text-foreground placeholder-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
                 />
                 {searching && (
-                  <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-[#E8E8E8]" />
+                  <LoadingSquares size={14} className="absolute right-3 top-1/2 -translate-y-1/2" />
                 )}
               </div>
 
@@ -353,7 +354,7 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
               disabled={pendingInvites.length === 0 || sending}
               className="nebu-cta w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium bg-primary hover:bg-primary/90 text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {sending && <Loader2 size={14} className="animate-spin text-[#E8E8E8]" />}
+              {sending && <LoadingSquares size={14} />}
               Send Invitations
               {pendingInvites.length > 0 && ` (${pendingInvites.length})`}
             </button>

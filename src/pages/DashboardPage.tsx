@@ -3,7 +3,7 @@ import { useViewMode } from "@/contexts/ViewModeContext";
 import AdminDashboard from "@/pages/dashboard/AdminDashboard";
 import DevDashboard from "@/pages/dashboard/DevDashboard";
 import ClientDashboard from "@/pages/dashboard/ClientDashboard";
-import NebuLoader from '../components/brand/NebuLoader';
+import LoadingSquares from '../components/brand/LoadingSquares';
 
 const DashboardPage = () => {
   const { loading, isAdmin, isDev, isVendedor, isCliente } = useAuth();
@@ -12,7 +12,7 @@ const DashboardPage = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <NebuLoader size={140} />
+        <LoadingSquares size={40} />
       </div>
     );
   }

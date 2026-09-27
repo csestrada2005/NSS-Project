@@ -25,7 +25,7 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { AlertTriangle, Loader2, X } from 'lucide-react';
+import { AlertTriangle, X } from 'lucide-react';
 import { modalBackdropMotion, modalPanelMotion } from '@/components/ui/modalMotion';
 import type { DestructiveFinding } from '@/utils/ddlGuard.js';
 import {
@@ -35,6 +35,7 @@ import {
   DROP_COLUMN,
   isTargetConfirmed,
 } from '@/utils/ddlGuard.js';
+import LoadingSquares from '../brand/LoadingSquares';
 
 /** Un hallazgo destructivo, con el archivo del que salió. */
 export interface FlaggedStatement {
@@ -214,7 +215,7 @@ export function MigrationApplyModal({
                   isDestructive ? 'bg-amber-500 hover:bg-amber-400 text-black font-semibold' : 'bg-primary hover:bg-primary/90 text-white'
                 }`}
               >
-                {isApplying && <Loader2 className="w-4 h-4 animate-spin text-[#E8E8E8]" />}
+                {isApplying && <LoadingSquares size={16} />}
                 {isApplying ? 'Aplicando…' : isDestructive ? 'Destruir y aplicar' : 'Aplicar'}
               </button>
             )}

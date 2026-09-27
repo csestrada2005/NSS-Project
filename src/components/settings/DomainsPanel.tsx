@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { Globe, Plus, Trash2, Loader2, CheckCircle, Clock, AlertCircle, Info, Copy } from 'lucide-react';
+import { Globe, Plus, Trash2, CheckCircle, Clock, AlertCircle, Info, Copy } from 'lucide-react';
 import { SupabaseService } from '@/services/SupabaseService';
 import NebuLoader from '../brand/NebuLoader';
+import LoadingSquares from '../brand/LoadingSquares';
 
 interface Domain {
   id: string;
@@ -159,7 +160,7 @@ export function DomainsPanel({ projectId }: DomainsPanelProps) {
             disabled={isConnecting || !newDomain.trim()}
             className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
           >
-            {isConnecting ? <Loader2 size={14} className="animate-spin text-[#E8E8E8]" /> : <Plus size={14} />}
+            {isConnecting ? <LoadingSquares size={14} /> : <Plus size={14} />}
             Connect
           </button>
         </div>

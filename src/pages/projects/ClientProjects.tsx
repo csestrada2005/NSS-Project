@@ -13,7 +13,7 @@ import EmptyState from '@/components/EmptyState';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getProjectsForClient } from '@/services/data/supabaseData';
 import type { Project } from '@/types';
-import NebuLoader from '../../components/brand/NebuLoader';
+import LoadingSquares from '../../components/brand/LoadingSquares';
 
 type ProjectWithClient = Project & { contacts: { name: string } | null };
 
@@ -60,7 +60,7 @@ const ClientProjects = () => {
       <div className="rounded-xl bg-card border border-border overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
-            <NebuLoader size={96} />
+            <LoadingSquares size={32} />
           </div>
         ) : projects.length === 0 ? (
           <EmptyState

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import type { Payment } from '@/types';
 import PaymentForm from './PaymentForm';
+import LoadingSquares from '../../components/brand/LoadingSquares';
 
 type PaymentWithProject = Payment & { projects: { title: string } | null };
 
@@ -185,7 +186,7 @@ const PaymentDetailPanel = ({
                       className="w-full mt-2"
                     >
                       {isLoading ? (
-                        <span className="w-4 h-4 border-2 border-[#E8E8E8]/30 border-t-[#E8E8E8] rounded-full animate-spin" />
+                        <LoadingSquares size={16} />
                       ) : labels.markPaid[lang]}
                     </Button>
                   )}
@@ -214,7 +215,7 @@ const PaymentDetailPanel = ({
                       className="flex-1"
                     >
                       {isLoading ? (
-                        <span className="w-4 h-4 border-2 border-[#E8E8E8]/30 border-t-[#E8E8E8] rounded-full animate-spin" />
+                        <LoadingSquares size={16} />
                       ) : labels.confirm[lang]}
                     </Button>
                     <Button

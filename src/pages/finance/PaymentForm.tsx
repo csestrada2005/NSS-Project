@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { Payment } from '@/types';
+import LoadingSquares from '../../components/brand/LoadingSquares';
 
 interface PaymentFormProps {
   initialData?: Partial<Payment & { project_id?: string | null; clientEmail?: string }>;
@@ -195,7 +196,7 @@ const PaymentForm = ({
         <Button onClick={handleSubmit} disabled={isLoading} className="flex-1">
           {isLoading ? (
             <span className="flex items-center gap-2">
-              <span className="w-4 h-4 border-2 border-[#E8E8E8]/30 border-t-[#E8E8E8] rounded-full animate-spin" />
+              <LoadingSquares size={16} />
               {labels.submit[lang]}
             </span>
           ) : labels.submit[lang]}

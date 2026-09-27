@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { X, Clock, RotateCcw, Tag, Loader2, GitBranch, ChevronDown, ChevronRight } from 'lucide-react';
+import { X, Clock, RotateCcw, Tag, GitBranch, ChevronDown, ChevronRight } from 'lucide-react';
 import type { FileSystemTree } from '@webcontainer/api';
 import { SupabaseService } from '@/services/SupabaseService';
 import NebuLoader from './brand/NebuLoader';
+import LoadingSquares from './brand/LoadingSquares';
 
 // CAMBIO 3 — el listado del drawer NO baja file_tree (puede pesar MBs por fila,
 // x50 filas). El árbol se descarga sólo al ejecutar un restore (select por id).
@@ -204,7 +205,7 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
               className="flex items-center gap-1 px-2.5 py-1 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-xs rounded transition-colors"
             >
               {restoringId === snap.id
-                ? <Loader2 size={11} className="animate-spin text-[#E8E8E8]" />
+                ? <LoadingSquares size={11} />
                 : <RotateCcw size={11} />}
               Restaurar
             </button>
@@ -270,7 +271,7 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
                 disabled={!labelValue.trim() || isSaving}
                 className="px-3 py-1.5 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-xs rounded transition-colors"
               >
-                {isSaving ? <Loader2 size={12} className="animate-spin text-[#E8E8E8]" /> : 'Save'}
+                {isSaving ? <LoadingSquares size={12} /> : 'Save'}
               </button>
               <button
                 onClick={() => { setShowLabelInput(false); setLabelValue(''); }}

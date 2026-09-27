@@ -8,7 +8,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { SupabaseService } from '@/services/SupabaseService';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import NebuLoader from '../components/brand/NebuLoader';
+import LoadingSquares from '../components/brand/LoadingSquares';
 
 type DealRevisionSummary = {
   id: string;
@@ -174,7 +174,7 @@ const ProposalsPage = () => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-24">
-        <NebuLoader size={140} />
+        <LoadingSquares size={40} />
       </div>
     );
   }
@@ -320,7 +320,7 @@ const ProposalsPage = () => {
                       className="flex-1"
                     >
                       {actionLoading === 'revise-' + deal.id ? (
-                        <span className="w-4 h-4 border-2 border-[#E8E8E8]/30 border-t-[#E8E8E8] rounded-full animate-spin" />
+                        <LoadingSquares size={16} />
                       ) : (lang === 'es' ? 'Enviar Cambios' : 'Send Changes')}
                     </Button>
                     <Button variant="outline" onClick={() => setReviseOpenDeal(null)} className="flex-1">
@@ -413,7 +413,7 @@ const ProposalsPage = () => {
                 className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
               >
                 {actionLoading === 'accept-' + confirmAcceptDeal.id ? (
-                  <span className="w-4 h-4 border-2 border-[#E8E8E8]/30 border-t-[#E8E8E8] rounded-full animate-spin" />
+                  <LoadingSquares size={16} />
                 ) : (lang === 'es' ? 'Confirmar y Pagar' : 'Confirm & Pay')}
               </Button>
               <Button variant="outline" onClick={() => setConfirmAcceptDeal(null)} className="flex-1">

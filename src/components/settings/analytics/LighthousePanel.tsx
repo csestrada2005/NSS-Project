@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
 import { SupabaseService } from '@/services/SupabaseService';
+import LoadingSquares from '../../brand/LoadingSquares';
 
 interface LighthousePanelProps {
   projectId: string | null;
@@ -151,7 +151,7 @@ export function LighthousePanel({ projectId, initialUrl }: LighthousePanelProps 
           disabled={isRunning || !deployedUrl || !projectId}
           className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-sm rounded-lg transition-colors flex items-center gap-2"
         >
-          {isRunning ? <Loader2 size={14} className="animate-spin text-[#E8E8E8]" /> : null}
+          {isRunning ? <LoadingSquares size={14} /> : null}
           {isRunning ? 'Running...' : 'Run Audit'}
         </button>
       </div>

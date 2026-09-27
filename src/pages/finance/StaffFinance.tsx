@@ -28,7 +28,7 @@ import { usePagination } from '@/hooks/usePagination';
 import type { Payment } from '@/types';
 import PaymentDetailPanel from './PaymentDetailPanel';
 import PaymentForm from './PaymentForm';
-import NebuLoader from '../../components/brand/NebuLoader';
+import LoadingSquares from '../../components/brand/LoadingSquares';
 
 type PaymentWithProject = Payment & { projects: { title: string } | null; user_id?: string | null };
 
@@ -331,7 +331,7 @@ const StaffFinance = () => {
       <div className="rounded-xl bg-card border border-border overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
-            <NebuLoader size={96} />
+            <LoadingSquares size={32} />
           </div>
         ) : payments.length === 0 ? (
           <EmptyState

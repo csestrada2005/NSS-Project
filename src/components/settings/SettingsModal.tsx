@@ -16,6 +16,7 @@ import { LighthousePanel } from './analytics/LighthousePanel';
 import { TopPagesTable } from './analytics/TopPagesTable';
 import { DomainsPanel } from './DomainsPanel';
 import { EmailPanel } from './EmailPanel';
+import LoadingSquares from '../brand/LoadingSquares';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -155,7 +156,7 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
                   </div>
                   <button onClick={handleGitHubPush} disabled={isPushing || !repoName || !branch}
                     className="w-full py-2 bg-secondary hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed text-foreground rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 border border-border">
-                    {isPushing ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-[#E8E8E8] border-t-transparent" /> : <Github size={16} />}
+                    {isPushing ? <LoadingSquares size={16} /> : <Github size={16} />}
                     {isPushing ? 'Pushing...' : 'Push Changes'}
                   </button>
                   {pushStatus && (

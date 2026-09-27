@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Loader2 } from 'lucide-react';
 import { SupabaseService } from '@/services/SupabaseService';
+import LoadingSquares from '../../brand/LoadingSquares';
 
 type LogSource = 'postgres' | 'auth' | 'edge-functions';
 
@@ -104,7 +104,7 @@ export function LogsViewer({ projectId }: LogsViewerProps) {
       <div className="bg-black rounded-xl font-mono text-xs h-64 overflow-y-auto p-4 space-y-1 relative">
         {isLoading && (
           <div className="absolute top-2 right-2">
-            <Loader2 size={12} className="animate-spin text-[#E8E8E8]" />
+            <LoadingSquares size={12} />
           </div>
         )}
         {logs.map((log, i) => (

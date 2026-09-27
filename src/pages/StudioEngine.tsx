@@ -31,7 +31,6 @@ import type { FileSystemTree } from '@webcontainer/api';
 import JSZip from 'jszip';
 import {
   Download,
-  Loader2,
   Eye,
   ChevronLeft,
   Flame,
@@ -53,7 +52,9 @@ import { PreviewNavbar } from '../components/studio/PreviewNavbar';
 import { ColdStartOverlay } from '../components/studio/ColdStartOverlay';
 import NebuLoader from '../components/brand/NebuLoader';
 import NebuLoadingCard from '../components/brand/NebuLoadingCard';
+import { StudioLoadOverlay } from '../components/studio/StudioLoadOverlay';
 import type { ViewportMode, PanelMode } from '../components/studio/types';
+import LoadingSquares from '../components/brand/LoadingSquares';
 
 // Navbar del preview (bucket 5 ítem 3, 2026-09-20): Visual/Código/Navegar se
 // promovieron a PreviewNavbar, persistente arriba del preview en vez de una
@@ -365,6 +366,10 @@ export function StudioEngine() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [currentProjectName, setCurrentProjectName] = useState<string>('');
   const [isProjectReady, setIsProjectReady] = useState(false);
+  // Avance de la barra de carga (StudioLoadOverlay). Ref y no state: persiste
+  // entre las dos etapas sin re-renderizar este componente en cada tick.
+  const loadProgressRef = useRef(0);
+  useEffect(() => { loadProgressRef.current = 0; }, [projectId]);
 
   // -------------------------------------------------------------------------
   // Mount: load project files from Supabase
@@ -2059,10 +2064,7 @@ export function StudioEngine() {
               {/* Main content area */}
               {isLoading ? (
                 <div className="relative h-full w-full">
-                  <ColdStartOverlay>
-                    <NebuLoader size={160} delay={0} />
-                    <div className="text-sm font-medium text-foreground">Cargando tu proyecto…</div>
-                  </ColdStartOverlay>
+                  <StudioLoadOverlay stage="download" progressRef={loadProgressRef} />
                 </div>
               ) : hasPreview ? (
                 <div className="relative w-full h-full flex flex-col">
@@ -2217,9 +2219,10 @@ export function StudioEngine() {
                    cortando la animación a la mitad (reportado por Samuel,
                    2026-09-23). Mismo overlay para que la espera se sienta continua. */
                 <div className="relative h-full w-full">
-                  <ColdStartOverlay>
-                    <NebuLoader size={160} delay={0} />
-                  </ColdStartOverlay>
+                  <StudioLoadOverlay
+                    stage={isProjectReady ? 'compile' : 'download'}
+                    progressRef={loadProgressRef}
+                  />
                 </div>
               )}
 
@@ -2249,7 +2252,7 @@ export function StudioEngine() {
                       className="mt-2 flex items-center gap-1.5 bg-destructive/90 text-white px-4 py-2 rounded-md hover:bg-destructive disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
                     >
                       {isCancelling
-                        ? <Loader2 className="w-4 h-4 animate-spin text-[#E8E8E8]" />
+                        ? <LoadingSquares size={16} />
                         : <XIcon className="w-4 h-4" />}
                       <span>{isCancelling ? 'Cancelando…' : 'Cancelar'}</span>
                     </button>

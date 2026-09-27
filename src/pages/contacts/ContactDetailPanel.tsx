@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import type { Contact } from '@/types';
 import ContactForm from './ContactForm';
+import LoadingSquares from '../../components/brand/LoadingSquares';
 
 interface ContactDetailPanelProps {
   contact: Contact | null;
@@ -147,7 +148,7 @@ const ContactDetailPanel = ({ contact, onClose, onUpdate, onDelete, lang }: Cont
                       className="flex-1"
                     >
                       {isLoading ? (
-                        <span className="w-4 h-4 border-2 border-[#E8E8E8]/30 border-t-[#E8E8E8] rounded-full animate-spin" />
+                        <LoadingSquares size={16} />
                       ) : labels.confirm[lang]}
                     </Button>
                     <Button

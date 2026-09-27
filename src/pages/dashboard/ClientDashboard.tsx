@@ -4,7 +4,7 @@ import { FolderOpen, CreditCard } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getClientProjects, getClientPayments } from "@/services/data/supabaseData";
 import type { Project, Payment } from "@/types";
-import NebuLoader from '../../components/brand/NebuLoader';
+import LoadingSquares from '../../components/brand/LoadingSquares';
 
 const STATUS_COLORS: Record<Project["status"], string> = {
   active: "bg-emerald-500/10 text-emerald-500",
@@ -77,7 +77,7 @@ const ClientDashboard = () => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <NebuLoader size={140} />
+        <LoadingSquares size={40} />
       </div>
     );
   }

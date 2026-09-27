@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Database, Zap, Radio, HardDrive, Loader2 } from 'lucide-react';
+import { Database, Zap, Radio, HardDrive } from 'lucide-react';
 import { SupabaseService } from '@/services/SupabaseService';
+import LoadingSquares from '../../brand/LoadingSquares';
 
 interface UsagePanelProps {
   projectId?: string | null;
@@ -71,7 +72,7 @@ export function UsagePanel({ projectId }: UsagePanelProps) {
               {kpi.icon}
             </div>
             {isLoading ? (
-              <Loader2 size={16} className="animate-spin text-[#E8E8E8]" />
+              <LoadingSquares size={16} />
             ) : (
               <p className="text-2xl font-bold text-foreground">
                 {kpi.value !== undefined && kpi.value !== null ? kpi.value.toLocaleString() : '--'}

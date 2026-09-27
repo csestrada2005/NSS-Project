@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Globe,
-  Loader2,
-  Plus,
+  Globe,  Plus,
   ChevronDown,
   ChevronRight,
   MessageSquare,
@@ -14,7 +12,7 @@ import { SupabaseService } from '@/services/SupabaseService';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjectAccess } from '@/hooks/useProjectAccess';
 import { toast } from 'sonner';
-import NebuLoader from '../components/brand/NebuLoader';
+import LoadingSquares from '../components/brand/LoadingSquares';
 
 interface ProjectDetails {
   id: string;
@@ -178,7 +176,7 @@ function MilestoneCard({
               disabled={!noteText.trim() || submittingNote}
               className="px-3 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {submittingNote ? <Loader2 size={13} className="animate-spin text-[#E8E8E8]" /> : <Send size={13} />}
+              {submittingNote ? <LoadingSquares size={13} /> : <Send size={13} />}
             </button>
           </div>
         </div>
@@ -340,7 +338,7 @@ const ClientProjectPage = () => {
   if (accessLoading || loadingProject) {
     return (
       <div className="flex items-center justify-center h-full py-20">
-        <NebuLoader size={140} />
+        <LoadingSquares size={40} />
       </div>
     );
   }
@@ -482,7 +480,7 @@ const ClientProjectPage = () => {
                 disabled={!newMilestone.title.trim() || addingMilestone}
                 className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {addingMilestone && <Loader2 size={12} className="animate-spin text-[#E8E8E8]" />}
+                {addingMilestone && <LoadingSquares size={12} />}
                 Add Milestone
               </button>
             </div>

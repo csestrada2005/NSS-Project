@@ -1,7 +1,7 @@
 import { useAuth } from '@/contexts/AuthContext';
 import StaffContacts from './contacts/StaffContacts';
 import ClientContactView from './contacts/ClientContactView';
-import NebuLoader from '../components/brand/NebuLoader';
+import LoadingSquares from '../components/brand/LoadingSquares';
 
 const ContactsPage = () => {
   const { isCliente, loading } = useAuth();
@@ -9,7 +9,7 @@ const ContactsPage = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <NebuLoader size={140} />
+        <LoadingSquares size={40} />
       </div>
     );
   }

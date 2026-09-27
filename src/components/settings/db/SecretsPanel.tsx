@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Eye, EyeOff, Plus, Trash2, Save, Cloud, CheckCircle, Circle, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Plus, Trash2, Save, Cloud, CheckCircle, Circle } from 'lucide-react';
 import { SupabaseService } from '@/services/SupabaseService';
 import { platformService } from '@/services/PlatformService';
 import { wyrdToast as toast } from '@/utils/wyrdToast';
+import LoadingSquares from '../../brand/LoadingSquares';
 
 interface Secret {
   key: string;
@@ -137,7 +138,7 @@ export function SecretsPanel({ projectId }: SecretsPanelProps) {
         <h3 className="text-sm font-semibold text-foreground mb-3">Platform Services</h3>
         {loadingPlatform ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Loader2 size={12} className="animate-spin text-[#E8E8E8]" />
+            <LoadingSquares size={12} />
             Checking platform services...
           </div>
         ) : (

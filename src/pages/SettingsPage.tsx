@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
-import { Save, User, Bell, Mail, Camera, Loader2 } from 'lucide-react';
+import { Save, User, Bell, Mail, Camera } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { SupabaseService } from '@/services/SupabaseService';
+import LoadingSquares from '../components/brand/LoadingSquares';
 
 const supabase = SupabaseService.getInstance().client;
 
@@ -105,7 +106,7 @@ function AvatarUpload({ userId, avatarUrl, displayName, onUpload }: AvatarUpload
           className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity disabled:cursor-not-allowed"
         >
           {uploading ? (
-            <Loader2 size={20} className="animate-spin text-[#E8E8E8]" />
+            <LoadingSquares size={20} />
           ) : (
             <Camera size={20} className="text-white" />
           )}
@@ -255,7 +256,7 @@ const SettingsPage = () => {
                 >
                   {isSaving ? (
                     <>
-                      <span className="w-4 h-4 border-2 border-[#E8E8E8]/30 border-t-[#E8E8E8] rounded-full animate-spin" />
+                      <LoadingSquares size={16} />
                       {labels.saving[lang]}
                     </>
                   ) : (

@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getMyContactRecord } from '@/services/data/supabaseData';
 import type { Contact } from '@/types';
-import NebuLoader from '../../components/brand/NebuLoader';
+import LoadingSquares from '../../components/brand/LoadingSquares';
 
 const labels = {
   title: { en: 'My Contact Record', es: 'Mi Registro de Contacto' },
@@ -50,7 +50,7 @@ const ClientContactView = () => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <NebuLoader size={96} />
+        <LoadingSquares size={32} />
       </div>
     );
   }

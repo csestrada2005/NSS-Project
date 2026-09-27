@@ -42,9 +42,7 @@ import {
   CheckCircle2,
   Database,
   Eye,
-  History,
-  Loader2,
-  XCircle,
+  History,  XCircle,
 } from 'lucide-react';
 import { MigrationRunner } from '@/services/MigrationRunner';
 import { destructiveTargets, findDestructiveDDL } from '@/utils/ddlGuard.js';
@@ -63,6 +61,7 @@ import {
   type ProposalSourceMessage,
 } from '@/utils/ddlProposalState.js';
 import { MigrationApplyModal, type FlaggedStatement } from './MigrationApplyModal';
+import LoadingSquares from '../brand/LoadingSquares';
 
 interface Props {
   /** La propuesta que este mensaje anunció, ya resuelta a un estado. */
@@ -364,7 +363,7 @@ export function DDLApprovalButton({
         style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
       >
         {busy ? (
-          <Loader2 className="w-4 h-4 shrink-0 animate-spin text-[#E8E8E8]" />
+          <LoadingSquares size={16} />
         ) : (
           <Database className="w-4 h-4 shrink-0" />
         )}

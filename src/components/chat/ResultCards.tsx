@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { AlertTriangle, Loader2 } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { StepsCollapse } from './StepsCollapse';
 import { useSqlPreview } from './useSqlPreview';
 import { DDLApprovalButton } from '../forge/DDLApprovalButton';
 import type { DdlProposal, ProposalSourceMessage } from '@/utils/ddlProposalState.js';
 import type { ChatPlanStep } from './types';
+import LoadingSquares from '../brand/LoadingSquares';
 
 /**
  * ResultCards — las 5 variantes de tarjeta de resultado (Bloque 3 del
@@ -308,7 +309,7 @@ export function ErrorCard({
             disabled={isLoading}
             onClick={() => onSuggestedAction(suggestedAction)}
           >
-            {isLoading ? <Loader2 size={14} className="animate-spin text-[#E8E8E8]" style={{ display: 'inline', marginRight: 6 }} /> : null}
+            {isLoading ? <LoadingSquares size={14} style={{ marginRight: 6 }} /> : null}
             {actionLabel ?? suggestedAction}
           </button>
         </div>

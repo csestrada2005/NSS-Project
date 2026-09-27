@@ -7,7 +7,7 @@ import { Topbar } from '@/components/Topbar';
 import SetupPage from '@/pages/SetupPage';
 import RoleSelectionPage from '@/pages/RoleSelectionPage';
 import PendingApprovalPage from '@/pages/PendingApprovalPage';
-import NebuLoader from '../components/brand/NebuLoader';
+import LoadingSquares from '../components/brand/LoadingSquares';
 
 export function WorkspaceLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -16,7 +16,7 @@ export function WorkspaceLayout() {
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
-        <NebuLoader size={160} />
+        <LoadingSquares size={48} />
       </div>
     );
   }

@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Users, Briefcase, DollarSign, Clock, Loader2, Flame, Zap, Globe } from "lucide-react";
+import { Users, Briefcase, DollarSign, Clock, Flame, Zap, Globe } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getAdminKPIs, getRecentSignups, getActiveProjects } from "@/services/data/supabaseData";
 import { SupabaseService } from "@/services/SupabaseService";
 import type { AdminKPIs, Profile, Project } from "@/types";
-import NebuLoader from '../../components/brand/NebuLoader';
+import LoadingSquares from '../../components/brand/LoadingSquares';
 
 const STATUS_COLORS: Record<Project["status"], string> = {
   active: "bg-emerald-500/10 text-emerald-500",
@@ -342,7 +342,7 @@ const AdminDashboard = () => {
               <kpi.icon size={15} strokeWidth={1.5} className="text-muted-foreground group-hover:text-primary transition-colors" />
             </div>
             {isLoading ? (
-              <Loader2 size={20} className="animate-spin text-[#E8E8E8]" />
+              <LoadingSquares size={20} />
             ) : (
               <p className="text-2xl font-bold text-foreground">{kpi.value}</p>
             )}
@@ -361,7 +361,7 @@ const AdminDashboard = () => {
           <div className="p-2">
             {isLoading ? (
               <div className="flex items-center justify-center py-10">
-                <NebuLoader size={96} />
+                <LoadingSquares size={32} />
               </div>
             ) : recentSignups.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
@@ -402,7 +402,7 @@ const AdminDashboard = () => {
           <div className="p-2">
             {isLoading ? (
               <div className="flex items-center justify-center py-10">
-                <NebuLoader size={96} />
+                <LoadingSquares size={32} />
               </div>
             ) : activeProjects.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
@@ -458,7 +458,7 @@ const AdminDashboard = () => {
                 <card.icon size={15} strokeWidth={1.5} className="text-muted-foreground" />
               </div>
               {forgeStatsLoading ? (
-                <Loader2 size={20} className="animate-spin text-[#E8E8E8]" />
+                <LoadingSquares size={20} />
               ) : (
                 <p className="text-2xl font-bold text-foreground">{String(card.value)}</p>
               )}
@@ -493,7 +493,7 @@ const AdminDashboard = () => {
                 <card.icon size={15} strokeWidth={1.5} className="text-muted-foreground" />
               </div>
               {creditStatsLoading ? (
-                <Loader2 size={20} className="animate-spin text-[#E8E8E8]" />
+                <LoadingSquares size={20} />
               ) : (
                 <p className="text-2xl font-bold text-foreground">{card.value}</p>
               )}
@@ -511,7 +511,7 @@ const AdminDashboard = () => {
           <div className="p-2">
             {forgeStatsLoading ? (
               <div className="flex items-center justify-center py-10">
-                <NebuLoader size={96} />
+                <LoadingSquares size={32} />
               </div>
             ) : !forgeStats?.mostActiveProjects.length ? (
               <p className="text-sm text-muted-foreground text-center py-8">No forge activity yet</p>
@@ -558,7 +558,7 @@ const AdminDashboard = () => {
               <Zap size={15} strokeWidth={1.5} className="text-muted-foreground" />
             </div>
             {platformUsageLoading ? (
-              <Loader2 size={20} className="animate-spin text-[#E8E8E8]" />
+              <LoadingSquares size={20} />
             ) : (
               <p className="text-2xl font-bold text-foreground">
                 {platformUsage?.totalAICallsMTD?.toLocaleString() ?? 0}
@@ -573,7 +573,7 @@ const AdminDashboard = () => {
               <Flame size={15} strokeWidth={1.5} className="text-muted-foreground" />
             </div>
             {platformUsageLoading ? (
-              <Loader2 size={20} className="animate-spin text-[#E8E8E8]" />
+              <LoadingSquares size={20} />
             ) : (
               <p className="text-2xl font-bold text-foreground">
                 {platformUsage?.totalActiveForgeProjects ?? 0}
@@ -592,7 +592,7 @@ const AdminDashboard = () => {
           <div className="p-2">
             {platformUsageLoading ? (
               <div className="flex items-center justify-center py-10">
-                <NebuLoader size={96} />
+                <LoadingSquares size={32} />
               </div>
             ) : !platformUsage?.topSpenders.length ? (
               <p className="text-sm text-muted-foreground text-center py-8">

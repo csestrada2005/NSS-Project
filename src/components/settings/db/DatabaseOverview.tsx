@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Database, CheckCircle, XCircle, Loader2, Activity } from 'lucide-react';
+import { Database, CheckCircle, XCircle, Activity } from 'lucide-react';
 import { SupabaseService } from '@/services/SupabaseService';
+import LoadingSquares from '../../brand/LoadingSquares';
 
 interface DatabaseOverviewProps {
   projectId: string | null;
@@ -95,7 +96,7 @@ export function DatabaseOverview({ projectId }: DatabaseOverviewProps) {
         <div className="flex items-center justify-between">
           <span className="text-xs text-muted-foreground">Status</span>
           {isLoading ? (
-            <Loader2 size={14} className="animate-spin text-[#E8E8E8]" />
+            <LoadingSquares size={14} />
           ) : connectionOk === true ? (
             <div className="flex items-center gap-1.5">
               <CheckCircle size={14} className="text-emerald-500" />
@@ -119,7 +120,7 @@ export function DatabaseOverview({ projectId }: DatabaseOverviewProps) {
               {kpi.icon}
             </div>
             {isLoading ? (
-              <Loader2 size={16} className="animate-spin text-[#E8E8E8]" />
+              <LoadingSquares size={16} />
             ) : (
               <p className="text-xl font-bold text-foreground">{kpi.value}</p>
             )}

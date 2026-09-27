@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ExternalLink, Code2, Database, Globe, Mail,
-  BarChart3, Gauge, Settings, Layers, Loader2, CheckCircle, Circle, Trash2, Sparkles
+  BarChart3, Gauge, Settings, Layers, CheckCircle, Circle, Trash2, Sparkles
 } from 'lucide-react';
 import { SupabaseService } from '@/services/SupabaseService';
 import { DatabaseOverview } from '@/components/settings/db/DatabaseOverview';
@@ -16,6 +16,7 @@ import { TrafficCharts } from '@/components/settings/analytics/TrafficCharts';
 import { LighthousePanel } from '@/components/settings/analytics/LighthousePanel';
 import { TopPagesTable } from '@/components/settings/analytics/TopPagesTable';
 import NebuLoader from '../components/brand/NebuLoader';
+import LoadingSquares from '../components/brand/LoadingSquares';
 
 interface ForgeProject {
   id: string;
@@ -347,7 +348,7 @@ export default function ProjectHubPage() {
                 disabled={isDeleting}
                 className="flex items-center gap-2 px-4 py-2 bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors"
               >
-                {isDeleting ? <Loader2 size={14} className="animate-spin text-[#E8E8E8]" /> : <Trash2 size={14} />}
+                {isDeleting ? <LoadingSquares size={14} /> : <Trash2 size={14} />}
                 {isDeleting ? 'Deleting...' : 'Delete Project'}
               </button>
             </div>
