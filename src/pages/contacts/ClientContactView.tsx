@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getMyContactRecord } from '@/services/data/supabaseData';
 import type { Contact } from '@/types';
+import NebuLoader from '../../components/brand/NebuLoader';
 
 const labels = {
   title: { en: 'My Contact Record', es: 'Mi Registro de Contacto' },
@@ -49,7 +50,7 @@ const ClientContactView = () => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <span className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin" />
+        <NebuLoader size={96} />
       </div>
     );
   }

@@ -105,7 +105,7 @@ function AvatarUpload({ userId, avatarUrl, displayName, onUpload }: AvatarUpload
           className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity disabled:cursor-not-allowed"
         >
           {uploading ? (
-            <Loader2 size={20} className="text-white animate-spin" />
+            <Loader2 size={20} className="animate-spin text-[#E8E8E8]" />
           ) : (
             <Camera size={20} className="text-white" />
           )}
@@ -255,7 +255,7 @@ const SettingsPage = () => {
                 >
                   {isSaving ? (
                     <>
-                      <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                      <span className="w-4 h-4 border-2 border-[#E8E8E8]/30 border-t-[#E8E8E8] rounded-full animate-spin" />
                       {labels.saving[lang]}
                     </>
                   ) : (

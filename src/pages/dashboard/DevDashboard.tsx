@@ -20,6 +20,7 @@ import EmptyState from "@/components/EmptyState";
 import { getRecentProjects, getDashboardKPIs } from "@/services/data/supabaseData";
 import { SupabaseService } from "@/services/SupabaseService";
 import type { Project, DashboardKPIs } from "@/types";
+import NebuLoader from '../../components/brand/NebuLoader';
 
 interface ForgeProject {
   id: string;
@@ -207,7 +208,7 @@ const DevDashboard = () => {
               />
             </div>
             {isLoading ? (
-              <Loader2 size={20} className="animate-spin text-primary" />
+              <Loader2 size={20} className="animate-spin text-[#E8E8E8]" />
             ) : (
               <p className="text-2xl font-bold text-foreground">{kpi.value}</p>
             )}
@@ -231,7 +232,7 @@ const DevDashboard = () => {
           <div className="p-2">
             {isLoading ? (
               <div className="flex items-center justify-center py-10">
-                <Loader2 size={22} className="animate-spin text-primary" />
+                <NebuLoader size={96} />
               </div>
             ) : recentProjects.length === 0 ? (
               <EmptyState
@@ -343,7 +344,7 @@ const DevDashboard = () => {
 
         {forgeLoading ? (
           <div className="flex items-center justify-center py-8">
-            <Loader2 size={22} className="animate-spin text-primary" />
+            <NebuLoader size={96} />
           </div>
         ) : forgeProjects.length === 0 ? (
           <div className="rounded-xl bg-card border border-border p-8 flex flex-col items-center gap-3">

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { AnimatePresence } from "framer-motion";
-import { Layers, Flame, Plus, Search, Trash2, Loader2, LayoutDashboard, Share2, ChevronLeft } from "lucide-react";
+import { Layers, Flame, Plus, Search, Trash2, LayoutDashboard, Share2, ChevronLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { SupabaseService } from "@/services/SupabaseService";
 import { useAuth } from "@/contexts/AuthContext";
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import EmptyState from "@/components/EmptyState";
 import NewProjectModal from "@/components/forge/NewProjectModal";
+import NebuLoader from '../components/brand/NebuLoader';
 
 interface ForgeProject {
   id: string;
@@ -224,8 +225,8 @@ const ForgeDashboard = () => {
         </div>
 
         {isLoadingProjects ? (
-          <div className="flex items-center justify-center h-48 text-muted-foreground gap-3">
-            <Loader2 size={22} className="animate-spin" />
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-5">
+            <NebuLoader size={140} />
             <span>Loading projects...</span>
           </div>
         ) : filteredProjects.length === 0 && !searchQuery ? (

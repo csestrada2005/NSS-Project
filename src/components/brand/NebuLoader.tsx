@@ -7,7 +7,7 @@ import { useEffect, useId, useState, type CSSProperties } from "react";
  *  size      ancho en px o cualquier unidad CSS (default 64). El alto se ajusta solo.
  *  color     color del trazo (default blanco de marca #E8E8E8; antes heredaba el color del
  *            texto y salía de un rojo/gris distinto en cada pantalla).
- *  duration  duración de un ciclo completo en segundos (default 1.8).
+ *  duration  duración de un ciclo completo en segundos (default 2.8; más pausado que el 1.8 original).
  *  delay     ms antes de mostrarse; evita el parpadeo en cargas rápidas (default 300, usa 0 para splash).
  *  label     texto para lectores de pantalla (default "Cargando").
  *
@@ -47,7 +47,7 @@ export interface NebuLoaderProps {
 export default function NebuLoader({
   size = 64,
   color = NEBU_LOADER_COLOR,
-  duration = 1.8,
+  duration = 2.8,
   delay = 300,
   label = "Cargando",
   className = "",

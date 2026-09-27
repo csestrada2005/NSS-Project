@@ -71,7 +71,7 @@ export function UsagePanel({ projectId }: UsagePanelProps) {
               {kpi.icon}
             </div>
             {isLoading ? (
-              <Loader2 size={16} className="animate-spin text-muted-foreground" />
+              <Loader2 size={16} className="animate-spin text-[#E8E8E8]" />
             ) : (
               <p className="text-2xl font-bold text-foreground">
                 {kpi.value !== undefined && kpi.value !== null ? kpi.value.toLocaleString() : '--'}

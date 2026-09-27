@@ -243,7 +243,7 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
               disabled={isSettingUp || !sendingDomain.trim()}
               className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
             >
-              {isSettingUp ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+              {isSettingUp ? <Loader2 size={14} className="animate-spin text-[#E8E8E8]" /> : <Plus size={14} />}
               Setup
             </button>
           </div>
@@ -262,7 +262,7 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
                   disabled={isCheckingStatus}
                   className="ml-auto text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
                 >
-                  {isCheckingStatus ? <Loader2 size={11} className="animate-spin" /> : null}
+                  {isCheckingStatus ? <Loader2 size={11} className="animate-spin text-[#E8E8E8]" /> : null}
                   Check verification
                 </button>
               )}
@@ -387,7 +387,7 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
               disabled={isSending || !testEmail || !testTemplate}
               className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
             >
-              {isSending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+              {isSending ? <Loader2 size={14} className="animate-spin text-[#E8E8E8]" /> : <Send size={14} />}
               {isSending ? 'Sending...' : 'Send Test'}
             </button>
           </div>

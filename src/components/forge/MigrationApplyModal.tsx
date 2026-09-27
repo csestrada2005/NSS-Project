@@ -214,7 +214,7 @@ export function MigrationApplyModal({
                   isDestructive ? 'bg-amber-500 hover:bg-amber-400 text-black font-semibold' : 'bg-primary hover:bg-primary/90 text-white'
                 }`}
               >
-                {isApplying && <Loader2 className="w-4 h-4 animate-spin" />}
+                {isApplying && <Loader2 className="w-4 h-4 animate-spin text-[#E8E8E8]" />}
                 {isApplying ? 'Aplicando…' : isDestructive ? 'Destruir y aplicar' : 'Aplicar'}
               </button>
             )}

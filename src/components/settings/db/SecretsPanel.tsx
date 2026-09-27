@@ -137,7 +137,7 @@ export function SecretsPanel({ projectId }: SecretsPanelProps) {
         <h3 className="text-sm font-semibold text-foreground mb-3">Platform Services</h3>
         {loadingPlatform ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Loader2 size={12} className="animate-spin" />
+            <Loader2 size={12} className="animate-spin text-[#E8E8E8]" />
             Checking platform services...
           </div>
         ) : (

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Loader2 } from 'lucide-react';
 import { motion, useMotionValue, useSpring, useReducedMotion } from 'framer-motion';
+import NebuLoader from '../brand/NebuLoader';
 
 // Botón Magnético para Google Auth
 const MagneticLoginBtn = ({ onClick }: { onClick: () => void }) => {
@@ -88,7 +88,7 @@ export const Login = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen w-screen bg-[#0A0A0A] text-white">
-        <Loader2 className="animate-spin h-8 w-8 text-[#E60000]" />
+        <NebuLoader size={160} />
       </div>
     );
   }

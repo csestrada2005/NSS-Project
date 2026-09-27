@@ -1,6 +1,6 @@
 import { Outlet, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Loader2 } from 'lucide-react';
+import NebuLoader from '../components/brand/NebuLoader';
 
 export function StudioLayout() {
   const { user, loading } = useAuth();
@@ -8,7 +8,7 @@ export function StudioLayout() {
   if (loading) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-background">
-        <Loader2 className="animate-spin h-8 w-8 text-primary" />
+        <NebuLoader size={160} />
       </div>
     );
   }

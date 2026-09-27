@@ -185,7 +185,7 @@ const PaymentDetailPanel = ({
                       className="w-full mt-2"
                     >
                       {isLoading ? (
-                        <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                        <span className="w-4 h-4 border-2 border-[#E8E8E8]/30 border-t-[#E8E8E8] rounded-full animate-spin" />
                       ) : labels.markPaid[lang]}
                     </Button>
                   )}
@@ -214,7 +214,7 @@ const PaymentDetailPanel = ({
                       className="flex-1"
                     >
                       {isLoading ? (
-                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <span className="w-4 h-4 border-2 border-[#E8E8E8]/30 border-t-[#E8E8E8] rounded-full animate-spin" />
                       ) : labels.confirm[lang]}
                     </Button>
                     <Button

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, CheckCircle, XCircle, Shield, Loader2 } from 'lucide-react';
 import { SupabaseService } from '@/services/SupabaseService';
 import { toast } from 'sonner';
+import NebuLoader from '../brand/NebuLoader';
 
 interface PendingProfile {
   id: string;
@@ -142,7 +143,7 @@ export function UserApprovalPanel({ open, onClose }: UserApprovalPanelProps) {
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {loading ? (
             <div className="flex items-center justify-center py-16">
-              <Loader2 size={24} className="animate-spin text-primary" />
+              <NebuLoader size={96} />
             </div>
           ) : pendingUsers.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
@@ -198,7 +199,7 @@ export function UserApprovalPanel({ open, onClose }: UserApprovalPanelProps) {
                         className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {isProcessing ? (
-                          <Loader2 size={12} className="animate-spin" />
+                          <Loader2 size={12} className="animate-spin text-[#E8E8E8]" />
                         ) : (
                           <CheckCircle size={12} />
                         )}
@@ -210,7 +211,7 @@ export function UserApprovalPanel({ open, onClose }: UserApprovalPanelProps) {
                         className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {isProcessing ? (
-                          <Loader2 size={12} className="animate-spin" />
+                          <Loader2 size={12} className="animate-spin text-[#E8E8E8]" />
                         ) : (
                           <XCircle size={12} />
                         )}

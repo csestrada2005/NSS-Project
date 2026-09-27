@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, Clock, RotateCcw, Tag, Loader2, GitBranch, ChevronDown, ChevronRight } from 'lucide-react';
 import type { FileSystemTree } from '@webcontainer/api';
 import { SupabaseService } from '@/services/SupabaseService';
+import NebuLoader from './brand/NebuLoader';
 
 // CAMBIO 3 — el listado del drawer NO baja file_tree (puede pesar MBs por fila,
 // x50 filas). El árbol se descarga sólo al ejecutar un restore (select por id).
@@ -203,7 +204,7 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
               className="flex items-center gap-1 px-2.5 py-1 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-xs rounded transition-colors"
             >
               {restoringId === snap.id
-                ? <Loader2 size={11} className="animate-spin" />
+                ? <Loader2 size={11} className="animate-spin text-[#E8E8E8]" />
                 : <RotateCcw size={11} />}
               Restaurar
             </button>
@@ -269,7 +270,7 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
                 disabled={!labelValue.trim() || isSaving}
                 className="px-3 py-1.5 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-xs rounded transition-colors"
               >
-                {isSaving ? <Loader2 size={12} className="animate-spin" /> : 'Save'}
+                {isSaving ? <Loader2 size={12} className="animate-spin text-[#E8E8E8]" /> : 'Save'}
               </button>
               <button
                 onClick={() => { setShowLabelInput(false); setLabelValue(''); }}
@@ -293,7 +294,7 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
         <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
           {isLoading ? (
             <div className="flex items-center justify-center py-10">
-              <Loader2 size={22} className="animate-spin text-gray-500" />
+              <NebuLoader size={96} />
             </div>
           ) : snapshots.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">

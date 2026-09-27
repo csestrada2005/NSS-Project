@@ -5,7 +5,6 @@ import {
   Info,
   UserPlus,
   AlertCircle,
-  Loader2,
   Shield,
   CheckCircle,
   XCircle,
@@ -20,6 +19,7 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { SupabaseService } from '@/services/SupabaseService';
 import { toast } from 'sonner';
 import type { Notification } from '@/services/NotificationService';
+import NebuLoader from '../components/brand/NebuLoader';
 
 function notificationIcon(type: string) {
   switch (type) {
@@ -153,7 +153,7 @@ const NotificationsPage = () => {
       {/* List */}
       {loading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 size={24} className="animate-spin text-primary" />
+          <NebuLoader size={140} />
         </div>
       ) : notifications.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center gap-3">

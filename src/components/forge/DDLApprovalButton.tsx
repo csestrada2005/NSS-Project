@@ -364,7 +364,7 @@ export function DDLApprovalButton({
         style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
       >
         {busy ? (
-          <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
+          <Loader2 className="w-4 h-4 shrink-0 animate-spin text-[#E8E8E8]" />
         ) : (
           <Database className="w-4 h-4 shrink-0" />
         )}

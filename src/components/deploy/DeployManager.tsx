@@ -86,7 +86,7 @@ export function DeployManager({ files, projectId: propProjectId }: DeployManager
         {/* Progress indicator */}
         {isDeploying && (
           <div className="mb-4 flex items-center gap-3 p-3 bg-muted border border-border rounded-lg">
-            <Loader2 size={16} className="animate-spin text-foreground shrink-0" />
+            <Loader2 size={16} className="animate-spin shrink-0 text-[#E8E8E8]" />
             <span className="text-sm text-foreground">{STAGE_MESSAGES[stage]}</span>
           </div>
         )}
@@ -111,7 +111,7 @@ export function DeployManager({ files, projectId: propProjectId }: DeployManager
             className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
           >
             {isDeploying
-              ? <Loader2 className="animate-spin" size={16} />
+              ? <Loader2 className="animate-spin text-[#E8E8E8]" size={16} />
               : stage === 'error'
               ? <RefreshCw size={16} />
               : <Rocket size={16} />}

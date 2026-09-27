@@ -2060,7 +2060,7 @@ export function StudioEngine() {
               {isLoading ? (
                 <div className="relative h-full w-full">
                   <ColdStartOverlay>
-                    <NebuLoader size={72} delay={0} />
+                    <NebuLoader size={160} delay={0} />
                     <div className="text-sm font-medium text-foreground">Cargando tu proyecto…</div>
                   </ColdStartOverlay>
                 </div>
@@ -2118,7 +2118,7 @@ export function StudioEngine() {
 
                   {isIndexing && (
                     <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center gap-3">
-                      <NebuLoader size={72} delay={0} />
+                      <NebuLoader size={160} delay={0} />
                       <p className="text-sm text-gray-400 font-mono">Analyzing project structure...</p>
                     </div>
                   )}
@@ -2218,7 +2218,7 @@ export function StudioEngine() {
                    2026-09-23). Mismo overlay para que la espera se sienta continua. */
                 <div className="relative h-full w-full">
                   <ColdStartOverlay>
-                    <NebuLoader size={72} delay={0} />
+                    <NebuLoader size={160} delay={0} />
                   </ColdStartOverlay>
                 </div>
               )}
@@ -2231,7 +2231,7 @@ export function StudioEngine() {
                 <ColdStartOverlay
                   progress={generationProgress ? generationProgress.step / generationProgress.total : undefined}
                 >
-                  <NebuLoader size={72} delay={0} />
+                  <NebuLoader size={160} delay={0} />
                   <div className="text-sm font-medium text-foreground">Generando tu proyecto…</div>
                   {generationProgress && (
                     <div className="text-xs text-muted-foreground font-mono max-w-[80%] truncate">
@@ -2249,7 +2249,7 @@ export function StudioEngine() {
                       className="mt-2 flex items-center gap-1.5 bg-destructive/90 text-white px-4 py-2 rounded-md hover:bg-destructive disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
                     >
                       {isCancelling
-                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                        ? <Loader2 className="w-4 h-4 animate-spin text-[#E8E8E8]" />
                         : <XIcon className="w-4 h-4" />}
                       <span>{isCancelling ? 'Cancelando…' : 'Cancelar'}</span>
                     </button>

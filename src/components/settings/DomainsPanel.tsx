@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Globe, Plus, Trash2, Loader2, CheckCircle, Clock, AlertCircle, Info, Copy } from 'lucide-react';
 import { SupabaseService } from '@/services/SupabaseService';
+import NebuLoader from '../brand/NebuLoader';
 
 interface Domain {
   id: string;
@@ -158,7 +159,7 @@ export function DomainsPanel({ projectId }: DomainsPanelProps) {
             disabled={isConnecting || !newDomain.trim()}
             className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
           >
-            {isConnecting ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+            {isConnecting ? <Loader2 size={14} className="animate-spin text-[#E8E8E8]" /> : <Plus size={14} />}
             Connect
           </button>
         </div>
@@ -172,8 +173,8 @@ export function DomainsPanel({ projectId }: DomainsPanelProps) {
 
       {/* Domain list */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-8 text-zinc-500 gap-2 text-sm">
-          <Loader2 size={16} className="animate-spin" />
+        <div className="flex flex-col items-center justify-center py-8 text-zinc-500 gap-3 text-sm">
+          <NebuLoader size={96} />
           Loading domains...
         </div>
       ) : domains.length === 0 ? (

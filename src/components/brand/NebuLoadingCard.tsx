@@ -30,8 +30,8 @@ export default function NebuLoadingCard({
 
   return (
     <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/40 pointer-events-none">
-      <div className="flex flex-col items-center gap-4 bg-[#0D0D0D]/90 border border-[#2A2A2A] px-10 py-8">
-        <NebuLoader size={96} delay={0} label={label} />
+      <div className="flex flex-col items-center gap-5 bg-[#0D0D0D]/90 border border-[#2A2A2A] px-14 py-10">
+        <NebuLoader size={160} delay={0} label={label} />
         <div className="text-sm font-medium text-[#E8E8E8]">{label}</div>
       </div>
     </div>

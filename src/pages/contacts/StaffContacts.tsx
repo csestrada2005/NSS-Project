@@ -20,6 +20,7 @@ import { usePagination } from '@/hooks/usePagination';
 import type { Contact } from '@/types';
 import ContactDetailPanel from './ContactDetailPanel';
 import ContactForm from './ContactForm';
+import NebuLoader from '../../components/brand/NebuLoader';
 
 const labels = {
   title: { en: 'Contacts', es: 'Contactos' },
@@ -140,7 +141,7 @@ const StaffContacts = () => {
       <div className="rounded-xl bg-card border border-border overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
-            <span className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin" />
+            <NebuLoader size={96} />
           </div>
         ) : contacts.length === 0 ? (
           <EmptyState

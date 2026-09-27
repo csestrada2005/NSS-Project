@@ -1,6 +1,7 @@
 import { useAuth } from '@/contexts/AuthContext';
 import StaffFinance from './finance/StaffFinance';
 import ClientFinance from './finance/ClientFinance';
+import NebuLoader from '../components/brand/NebuLoader';
 
 const FinancePage = () => {
   const { isCliente, loading } = useAuth();
@@ -8,7 +9,7 @@ const FinancePage = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-32">
-        <span className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin" />
+        <NebuLoader size={140} />
       </div>
     );
   }

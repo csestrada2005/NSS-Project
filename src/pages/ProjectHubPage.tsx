@@ -15,6 +15,7 @@ import { EmailPanel } from '@/components/settings/EmailPanel';
 import { TrafficCharts } from '@/components/settings/analytics/TrafficCharts';
 import { LighthousePanel } from '@/components/settings/analytics/LighthousePanel';
 import { TopPagesTable } from '@/components/settings/analytics/TopPagesTable';
+import NebuLoader from '../components/brand/NebuLoader';
 
 interface ForgeProject {
   id: string;
@@ -129,8 +130,8 @@ export default function ProjectHubPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-950 text-gray-500 gap-3">
-        <Loader2 size={22} className="animate-spin" />
+      <div className="flex flex-col items-center justify-center h-screen bg-gray-950 text-gray-500 gap-5">
+        <NebuLoader size={160} />
         <span>Loading project hub...</span>
       </div>
     );
@@ -346,7 +347,7 @@ export default function ProjectHubPage() {
                 disabled={isDeleting}
                 className="flex items-center gap-2 px-4 py-2 bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors"
               >
-                {isDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                {isDeleting ? <Loader2 size={14} className="animate-spin text-[#E8E8E8]" /> : <Trash2 size={14} />}
                 {isDeleting ? 'Deleting...' : 'Delete Project'}
               </button>
             </div>

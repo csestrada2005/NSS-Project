@@ -4,10 +4,10 @@ import { LanguageProvider } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import AppSidebar from '@/components/AppSidebar';
 import { Topbar } from '@/components/Topbar';
-import { Loader2 } from 'lucide-react';
 import SetupPage from '@/pages/SetupPage';
 import RoleSelectionPage from '@/pages/RoleSelectionPage';
 import PendingApprovalPage from '@/pages/PendingApprovalPage';
+import NebuLoader from '../components/brand/NebuLoader';
 
 export function WorkspaceLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -16,7 +16,7 @@ export function WorkspaceLayout() {
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
-        <Loader2 size={28} className="animate-spin text-primary" />
+        <NebuLoader size={160} />
       </div>
     );
   }

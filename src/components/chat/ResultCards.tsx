@@ -308,7 +308,7 @@ export function ErrorCard({
             disabled={isLoading}
             onClick={() => onSuggestedAction(suggestedAction)}
           >
-            {isLoading ? <Loader2 size={14} className="animate-spin" style={{ display: 'inline', marginRight: 6 }} /> : null}
+            {isLoading ? <Loader2 size={14} className="animate-spin text-[#E8E8E8]" style={{ display: 'inline', marginRight: 6 }} /> : null}
             {actionLabel ?? suggestedAction}
           </button>
         </div>

@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { SupabaseService } from '@/services/SupabaseService';
 import type { Report } from '@/types';
+import NebuLoader from '../../components/brand/NebuLoader';
 
 const supabase = SupabaseService.getInstance().client;
 
@@ -305,14 +306,14 @@ const AIReports = () => {
 
         {selectedReport && selectedReport.status === 'generating' && (
           <div className="h-full flex flex-col items-center justify-center gap-4">
-            <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+            <NebuLoader size={96} />
             <p className="text-zinc-400 text-sm">{l('generatingMsg')}</p>
           </div>
         )}
 
         {selectedReport && selectedReport.status === 'pending' && (
           <div className="h-full flex flex-col items-center justify-center gap-4">
-            <div className="w-8 h-8 border-2 border-zinc-500 border-t-transparent rounded-full animate-spin" />
+            <NebuLoader size={96} />
             <p className="text-zinc-400 text-sm">{l('generatingMsg')}</p>
           </div>
         )}

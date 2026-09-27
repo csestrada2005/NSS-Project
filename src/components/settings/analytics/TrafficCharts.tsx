@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Users, Eye, Layers, TrendingDown, Loader2 } from 'lucide-react';
+import { Users, Eye, Layers, TrendingDown } from 'lucide-react';
 import {
   ResponsiveContainer,
   LineChart,
@@ -12,6 +12,7 @@ import {
   Legend,
 } from 'recharts';
 import { SupabaseService } from '@/services/SupabaseService';
+import NebuLoader from '../../brand/NebuLoader';
 
 interface TrafficChartsProps {
   projectId: string | null;
@@ -78,7 +79,7 @@ export function TrafficCharts({ projectId, dateRange }: TrafficChartsProps) {
   ];
 
   if (isLoading) {
-    return <div className="flex items-center justify-center py-10"><Loader2 size={22} className="animate-spin text-zinc-500" /></div>;
+    return <div className="flex items-center justify-center py-10"><NebuLoader size={96} /></div>;
   }
 
   if (rows.length === 0) {

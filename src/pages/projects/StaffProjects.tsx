@@ -24,6 +24,7 @@ import {
 import { usePagination } from '@/hooks/usePagination';
 import type { Project } from '@/types';
 import ProjectDetailPanel from './ProjectDetailPanel';
+import NebuLoader from '../../components/brand/NebuLoader';
 
 type ProjectWithClient = Project & { contacts: { name: string } | null };
 
@@ -135,7 +136,7 @@ const StaffProjects = () => {
       <div className="rounded-xl bg-card border border-border overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
-            <span className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin" />
+            <NebuLoader size={96} />
           </div>
         ) : projects.length === 0 ? (
           searchQuery === '' ? (

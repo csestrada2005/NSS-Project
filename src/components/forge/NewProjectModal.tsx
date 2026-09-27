@@ -8,6 +8,7 @@ import { suggestPalettes, type SuggestedPalette } from '@/utils/colorPaletteSugg
 import { hexToHslString } from '@/utils/colorConversion.js';
 import type { DesignHints, BrandColor } from '@/services/DesignBriefService';
 import { modalBackdropMotion, modalPanelMotion } from '@/components/ui/modalMotion';
+import NebuLoader from '../brand/NebuLoader';
 
 interface NewProjectModalProps {
   onClose: () => void;
@@ -292,8 +293,8 @@ export default function NewProjectModal({ onClose, onCreated }: NewProjectModalP
               {colorMode === 'suggested' && (
                 <div className="flex gap-3">
                   {isLoadingPalettes && (
-                    <div className="flex-grow flex items-center justify-center py-6 text-muted-foreground text-xs gap-2">
-                      <Loader2 size={14} className="animate-spin" /> Matching your description…
+                    <div className="flex-grow flex flex-col items-center justify-center py-6 text-muted-foreground text-xs gap-3">
+                      <NebuLoader size={64} /> Matching your description…
                     </div>
                   )}
                   {!isLoadingPalettes && suggestedPalettes.length === 0 && (
@@ -340,7 +341,7 @@ export default function NewProjectModal({ onClose, onCreated }: NewProjectModalP
                 ← Back
               </Button>
               <Button onClick={handleSubmit} disabled={isCreating} className="nebu-cta">
-                {isCreating && <Loader2 size={14} className="animate-spin mr-1" />}
+                {isCreating && <Loader2 size={14} className="animate-spin mr-1 text-[#E8E8E8]" />}
                 Start Building →
               </Button>
             </div>

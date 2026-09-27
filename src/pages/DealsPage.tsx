@@ -11,6 +11,7 @@ import Pagination from '@/components/Pagination';
 import { SupabaseService } from '@/services/SupabaseService';
 import { useNavigate } from 'react-router-dom';
 import type { Deal } from '@/types';
+import NebuLoader from '../components/brand/NebuLoader';
 
 type ClientProfile = { id: string; full_name: string | null; email: string | null };
 type CollaboratorEntry = { id: string; full_name: string | null; email: string | null; role: 'read' | 'edit' };
@@ -105,7 +106,7 @@ const DealHistoryPanel = ({ deal, onClose }: { deal: DealWithContact; onClose: (
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <span className="w-5 h-5 border-2 border-muted border-t-primary rounded-full animate-spin" />
+              <NebuLoader size={96} />
             </div>
           ) : revisions.length === 0 ? (
             <p className="text-sm text-muted-foreground">No revisions yet.</p>
@@ -451,7 +452,7 @@ const DealsPage = () => {
       <div className="rounded-xl bg-card border border-border overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
-            <span className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin" />
+            <NebuLoader size={96} />
           </div>
         ) : deals.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
@@ -728,7 +729,7 @@ const DealsPage = () => {
 
             <div className="flex gap-2 pt-2">
               <Button onClick={handleSubmit} disabled={isSubmitting || !formTitle.trim() || !formValue} className="flex-1">
-                {isSubmitting ? <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" /> : lang === 'es' ? 'Guardar' : 'Save'}
+                {isSubmitting ? <span className="w-4 h-4 border-2 border-[#E8E8E8]/30 border-t-[#E8E8E8] rounded-full animate-spin" /> : lang === 'es' ? 'Guardar' : 'Save'}
               </Button>
               <Button variant="outline" onClick={() => setShowModal(false)} disabled={isSubmitting} className="flex-1">
                 {lang === 'es' ? 'Cancelar' : 'Cancel'}
