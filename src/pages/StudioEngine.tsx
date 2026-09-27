@@ -51,6 +51,8 @@ import { ShareProjectModal } from '../components/forge/ShareProjectModal';
 import { CodePanel } from '../components/studio/CodePanel';
 import { PreviewNavbar } from '../components/studio/PreviewNavbar';
 import { ColdStartOverlay } from '../components/studio/ColdStartOverlay';
+import NebuLoader from '../components/brand/NebuLoader';
+import NebuLoadingCard from '../components/brand/NebuLoadingCard';
 import type { ViewportMode, PanelMode } from '../components/studio/types';
 
 // Navbar del preview (bucket 5 ítem 3, 2026-09-20): Visual/Código/Navegar se
@@ -2058,7 +2060,7 @@ export function StudioEngine() {
               {isLoading ? (
                 <div className="relative h-full w-full">
                   <ColdStartOverlay>
-                    <Loader2 className="animate-spin w-8 h-8 text-primary" />
+                    <NebuLoader size={72} delay={0} />
                     <div className="text-sm font-medium text-foreground">Cargando tu proyecto…</div>
                   </ColdStartOverlay>
                 </div>
@@ -2105,23 +2107,18 @@ export function StudioEngine() {
                     />
                   ) : (
                   <>
-                  {/* Compiling indicator */}
-                  {isCompiling && (
-                    <div className="absolute bottom-4 right-4 z-40 flex items-center gap-2 bg-card/90 border border-border text-muted-foreground text-xs px-3 py-1.5 rounded-full">
-                      <Loader2 size={12} className="animate-spin" />
-                      Compiling…
-                    </div>
-                  )}
+                  {/* Compiling indicator — antes un pill chico abajo a la derecha;
+                      desde 2026-09-27 (pedido de Samuel) tarjeta grande con el búho.
+                      Sólo aparece si la compilación pasa de 300 ms, para que las
+                      ediciones rápidas no hagan parpadear nada. */}
+                  {isCompiling && <NebuLoadingCard label="Compiling…" />}
                   {!isCompiling && !hasValidPreview && compiledHtml !== '' && (
-                    <div className="absolute bottom-4 right-4 z-40 flex items-center gap-2 bg-card/90 border border-border text-muted-foreground text-xs px-3 py-1.5 rounded-full">
-                      <Loader2 size={12} className="animate-spin" />
-                      Compiling preview...
-                    </div>
+                    <NebuLoadingCard label="Compiling preview..." />
                   )}
 
                   {isIndexing && (
                     <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center gap-3">
-                      <Loader2 className="animate-spin text-red-500" size={28} />
+                      <NebuLoader size={72} delay={0} />
                       <p className="text-sm text-gray-400 font-mono">Analyzing project structure...</p>
                     </div>
                   )}
@@ -2221,7 +2218,7 @@ export function StudioEngine() {
                    2026-09-23). Mismo overlay para que la espera se sienta continua. */
                 <div className="relative h-full w-full">
                   <ColdStartOverlay>
-                    <Loader2 className="animate-spin w-8 h-8 text-primary" />
+                    <NebuLoader size={72} delay={0} />
                   </ColdStartOverlay>
                 </div>
               )}
@@ -2234,7 +2231,7 @@ export function StudioEngine() {
                 <ColdStartOverlay
                   progress={generationProgress ? generationProgress.step / generationProgress.total : undefined}
                 >
-                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                  <NebuLoader size={72} delay={0} />
                   <div className="text-sm font-medium text-foreground">Generando tu proyecto…</div>
                   {generationProgress && (
                     <div className="text-xs text-muted-foreground font-mono max-w-[80%] truncate">
