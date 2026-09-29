@@ -313,7 +313,17 @@ chat esté trabado. Cuando se arregle el modal (ver 5.0 abajo), repetir en este 
    errores` → el hilo de la revisión MUERE en Render, la revisión queda "no disponible" (fail-open,
    `[TYPECHECK_OFF]` en el log) y la revisión previa a publicar no frena nada. **Bug del bucket 6, no del
    modal.** Causa del crash sin confirmar (sin evento `error` registrado): memoria de la instancia, versión
-   de Node de Render, o typeenv no instalado. Falta el log de BUILD de Render (postinstall + versión de Node).
+   de Node de Render, o typeenv no instalado.
+   **Evidencia build de Render (commit `0fbcdad`):** postinstall OK (`added 248 packages`) → typeenv SÍ
+   instalado (descartado). `Node.js 20.11.0 via NODE_VERSION` (Vite advierte que pide 20.19+). Instancia
+   free: 512 MB RAM, CPU mínima — esbuild tarda 9.2 s para 89 archivos (~1 s en local).
+   **Hipótesis más fuerte (sin medir):** el hilo no muere solo — lo mata el timeout de 60 s de
+   `server/typecheckPool.js` (`terminate()` da exactamente `exit code 1` sin evento `error`). En la CPU del
+   plan free una revisión en frío puede pasar de 60 s, y al matarlo pierde la caché: nunca "calienta".
+   **Decisiones de Samuel (2026-09-29):** (1) comprar Render **Starter** al terminar lo pendiente y medir
+   ahí; (2) cambiar `NODE_VERSION` a `22.12.0` en Render (lo hace Samuel). **Pendiente de diseño tras medir
+   en Starter:** calentar el hilo al arrancar el servidor y/o alargar el límite, para que un timeout no
+   borre la caché — sin tocar código hasta tener la medición.
 2. **Segunda puerta de tipos en el chat (bucket 6 B2/B3):** pedir un cambio chico → si quedan errores,
    tarjeta "Aún no se puede publicar"; "Arreglar ahora" → la lista baja o desaparece.
 3. **Volver a publicar** → debe llegar a Vercel y construir; revisar los dos mundos pendientes del ítem 4
@@ -2083,6 +2093,9 @@ resolver con `ui-ux-pro-max` qué encaja mejor para portar el estilo brutalista 
 buenos resultados la primera vez que se usó en este ítem (ver Bloque 1, "Hallazgo del skill, con matiz").
 
 ## ANTES DE LANZAR (público)
+- Render en plan **Starter** (decisión de Samuel, 2026-09-29) y medir la revisión de tipos ahí (ver
+  "Chequeo después de arreglar el modal", paso 1). `NODE_VERSION=22.12.0` en Render: verificar en el log de
+  build `Using Node.js version 22.12.0` sin la advertencia de Vite.
 - Quitar los botones "Próximamente" que no hacen nada (chat: Adjuntar, Dictar, Editar el plan; créditos:
   Comprar créditos). Decisión de Samuel (2026-09-29): se quedan mientras él sea el único usuario, porque le
   sirven como recordatorio de lo que falta.
