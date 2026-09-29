@@ -10,6 +10,7 @@ import CreditBalance from "@/components/forge/CreditBalance";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import EmptyState from "@/components/EmptyState";
+import { LangToggle } from "@/components/forge/LangToggle";
 import NewProjectModal from "@/components/forge/NewProjectModal";
 import NebuLoader from '../components/brand/NebuLoader';
 
@@ -183,6 +184,7 @@ const ForgeDashboard = () => {
             {projects.length} project{projects.length !== 1 ? "s" : ""}
           </span>
           <CreditBalance />
+          <LangToggle className="inline-flex items-center gap-1.5 h-8 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors" />
           <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
             <ChevronLeft size={16} />
             Back to Nebu

@@ -2,6 +2,7 @@ import type { RefObject } from 'react';
 import { Menu, Eye, Edit3, Code, Settings, MessageSquare } from 'lucide-react';
 import { PageDropdown } from './PageDropdown';
 import { ViewportToggle } from './ViewportToggle';
+import { LangToggle } from '../forge/LangToggle';
 import type { ViewportMode, PanelMode } from './types';
 import './previewNavbar.css';
 
@@ -106,6 +107,7 @@ export function PreviewNavbar({
           <ViewportToggle mode={viewportMode} onChange={onViewportChange} />
         )}
         <div className="wf-divider" />
+        <LangToggle className="wf-btn" />
         <button
           type="button"
           className={`wf-btn ${panelMode === 'code' ? 'wf-active' : ''}`}

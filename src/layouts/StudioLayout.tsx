@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Outlet, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import NebuLoader from '../components/brand/NebuLoader';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
 
 export function StudioLayout() {
   const { user, loading } = useAuth();
@@ -10,6 +11,13 @@ export function StudioLayout() {
   useEffect(() => {
     document.title = 'Wyrd Forge';
   }, []);
+
+  // `lang` del documento = idioma elegido en Wyrd (lectores de pantalla,
+  // corrector del navegador, traducción automática).
+  const { lang } = useForgeLang();
+  useEffect(() => {
+    document.documentElement.lang = lang;
+  }, [lang]);
 
   if (loading) {
     return (
