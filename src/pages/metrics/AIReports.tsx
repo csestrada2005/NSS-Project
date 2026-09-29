@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { SupabaseService } from '@/services/SupabaseService';
 import type { Report } from '@/types';
+import LoadingSquares from '../../components/brand/LoadingSquares';
 
 const supabase = SupabaseService.getInstance().client;
 
@@ -26,7 +27,7 @@ const renderMarkdown = (text: string) => {
   const flushUl = () => {
     if (ulBuffer.length > 0) {
       elements.push(
-        <ul key={key++} className="list-disc list-inside space-y-1 my-2 text-zinc-300">
+        <ul key={key++} className="list-disc list-inside space-y-1 my-2 text-neutral-300">
           {ulBuffer.map((item, i) => (
             <li key={i} className="text-sm leading-relaxed">{item}</li>
           ))}
@@ -46,7 +47,7 @@ const renderMarkdown = (text: string) => {
       if (match.index > last) {
         parts.push(raw.slice(last, match.index));
       }
-      parts.push(<strong key={idx++} className="font-semibold text-zinc-100">{match[1]}</strong>);
+      parts.push(<strong key={idx++} className="font-semibold text-neutral-100">{match[1]}</strong>);
       last = boldRegex.lastIndex;
     }
     if (last < raw.length) parts.push(raw.slice(last));
@@ -57,14 +58,14 @@ const renderMarkdown = (text: string) => {
     if (line.startsWith('## ')) {
       flushUl();
       elements.push(
-        <h2 key={key++} className="text-lg font-bold text-zinc-100 mt-5 mb-2 border-b border-zinc-700 pb-1">
+        <h2 key={key++} className="text-lg font-bold text-neutral-100 mt-5 mb-2 border-b border-neutral-700 pb-1">
           {renderInline(line.slice(3))}
         </h2>
       );
     } else if (line.startsWith('# ')) {
       flushUl();
       elements.push(
-        <h1 key={key++} className="text-xl font-bold text-zinc-100 mt-6 mb-2">
+        <h1 key={key++} className="text-lg font-bold text-neutral-100 mt-6 mb-2">
           {renderInline(line.slice(2))}
         </h1>
       );
@@ -76,7 +77,7 @@ const renderMarkdown = (text: string) => {
     } else {
       flushUl();
       elements.push(
-        <p key={key++} className="text-sm text-zinc-300 leading-relaxed">
+        <p key={key++} className="text-sm text-neutral-300 leading-relaxed">
           {renderInline(line)}
         </p>
       );
@@ -114,10 +115,10 @@ const labels = {
 // ── Badge helpers ─────────────────────────────────────────────────────────────
 
 const statusBadgeClass: Record<Report['status'], string> = {
-  pending: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
-  generating: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+  pending: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20',
+  generating: 'bg-neutral-500/10 text-neutral-500 border-neutral-500/20',
   done: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
-  error: 'bg-rose-500/10 text-rose-500 border-rose-500/20',
+  error: 'bg-red-500/10 text-red-500 border-red-500/20',
 };
 
 const statusBadgeLabel: Record<Report['status'], { en: string; es: string }> = {
@@ -258,7 +259,7 @@ const AIReports = () => {
           {loadingList && (
             <div className="space-y-2 p-2">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="h-14 bg-zinc-700/40 rounded-lg animate-pulse" />
+                <div key={i} className="h-14 bg-neutral-700/40 rounded-lg animate-pulse" />
               ))}
             </div>
           )}
@@ -285,35 +286,35 @@ const AIReports = () => {
                   {statusBadgeLabel[report.status][lang]}
                 </Badge>
               </div>
-              <p className="text-xs text-zinc-500 mt-1">{fmtDate(report.created_at)}</p>
+              <p className="text-xs text-neutral-500 mt-1">{fmtDate(report.created_at)}</p>
             </button>
           ))}
         </div>
       </div>
 
       {/* Right panel — report content */}
-      <div className="flex-1 bg-zinc-800 rounded-xl overflow-hidden">
+      <div className="flex-1 bg-neutral-800 rounded-xl overflow-hidden">
         {!selectedReport && (
           <div className="h-full flex flex-col items-center justify-center gap-4 p-12 text-center">
-            <div className="bg-zinc-700 rounded-full p-4">
-              <Bot size={28} className="text-zinc-400" />
+            <div className="bg-neutral-700 rounded-full p-4">
+              <Bot size={28} className="text-neutral-400" />
             </div>
-            <p className="text-zinc-200 font-semibold">{l('emptyTitle')}</p>
-            <p className="text-zinc-500 text-sm max-w-xs leading-relaxed">{l('emptySubtitle')}</p>
+            <p className="text-neutral-200 font-semibold">{l('emptyTitle')}</p>
+            <p className="text-neutral-500 text-sm max-w-xs leading-relaxed">{l('emptySubtitle')}</p>
           </div>
         )}
 
         {selectedReport && selectedReport.status === 'generating' && (
           <div className="h-full flex flex-col items-center justify-center gap-4">
-            <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-zinc-400 text-sm">{l('generatingMsg')}</p>
+            <LoadingSquares size={32} />
+            <p className="text-neutral-400 text-sm">{l('generatingMsg')}</p>
           </div>
         )}
 
         {selectedReport && selectedReport.status === 'pending' && (
           <div className="h-full flex flex-col items-center justify-center gap-4">
-            <div className="w-8 h-8 border-2 border-zinc-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-zinc-400 text-sm">{l('generatingMsg')}</p>
+            <LoadingSquares size={32} />
+            <p className="text-neutral-400 text-sm">{l('generatingMsg')}</p>
           </div>
         )}
 
@@ -327,10 +328,10 @@ const AIReports = () => {
 
         {selectedReport && selectedReport.status === 'done' && selectedReport.content && (
           <div className="p-6 overflow-y-auto h-full">
-            <div className="flex items-center gap-2 mb-5 pb-4 border-b border-zinc-700">
+            <div className="flex items-center gap-2 mb-5 pb-4 border-b border-neutral-700">
               <FileText size={16} className="text-emerald-400 shrink-0" />
-              <h2 className="text-base font-semibold text-zinc-100">{selectedReport.title}</h2>
-              <span className="text-zinc-500 text-xs ml-auto">{fmtDate(selectedReport.created_at)}</span>
+              <h2 className="text-sm font-semibold text-neutral-100">{selectedReport.title}</h2>
+              <span className="text-neutral-500 text-xs ml-auto">{fmtDate(selectedReport.created_at)}</span>
             </div>
             <div className="space-y-1 leading-relaxed">
               {renderMarkdown(selectedReport.content)}
@@ -342,8 +343,8 @@ const AIReports = () => {
       {/* New Report Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="bg-zinc-800 rounded-xl border border-zinc-700 p-6 w-full max-w-md shadow-2xl">
-            <h3 className="text-base font-semibold text-zinc-100 mb-4">{l('modalTitle')}</h3>
+          <div className="bg-neutral-800 rounded-xl border border-neutral-700 p-6 w-full max-w-md shadow-2xl">
+            <h3 className="text-sm font-semibold text-neutral-100 mb-4">{l('modalTitle')}</h3>
             <form onSubmit={handleSubmit} className="space-y-4">
               {formError && (
                 <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg px-4 py-2.5 text-sm">
@@ -351,32 +352,32 @@ const AIReports = () => {
                 </div>
               )}
               <div>
-                <label className="text-xs font-medium text-zinc-400 block mb-1.5">{l('titleLabel')}</label>
+                <label className="text-xs font-medium text-neutral-400 block mb-1.5">{l('titleLabel')}</label>
                 <input
                   type="text"
                   value={formTitle}
                   onChange={(e) => setFormTitle(e.target.value)}
                   placeholder={l('titlePlaceholder')}
                   required
-                  className="w-full bg-zinc-700 text-zinc-200 text-sm rounded-lg px-3 py-2 border border-zinc-600 focus:outline-none focus:border-emerald-500 placeholder:text-zinc-500"
+                  className="w-full bg-neutral-700 text-neutral-200 text-sm rounded-lg px-3 py-2 border border-neutral-600 focus:outline-none focus:border-emerald-500 placeholder:text-neutral-500"
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-zinc-400 block mb-1.5">{l('promptLabel')}</label>
+                <label className="text-xs font-medium text-neutral-400 block mb-1.5">{l('promptLabel')}</label>
                 <textarea
                   value={formPrompt}
                   onChange={(e) => setFormPrompt(e.target.value)}
                   placeholder={l('promptPlaceholder')}
                   required
                   rows={3}
-                  className="w-full bg-zinc-700 text-zinc-200 text-sm rounded-lg px-3 py-2 border border-zinc-600 focus:outline-none focus:border-emerald-500 placeholder:text-zinc-500 resize-none"
+                  className="w-full bg-neutral-700 text-neutral-200 text-sm rounded-lg px-3 py-2 border border-neutral-600 focus:outline-none focus:border-emerald-500 placeholder:text-neutral-500 resize-none"
                 />
               </div>
               <div className="flex justify-end gap-2 pt-1">
                 <button
                   type="button"
                   onClick={() => { setShowModal(false); setFormError(null); }}
-                  className="bg-zinc-700 hover:bg-zinc-600 text-zinc-300 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                  className="bg-neutral-700 hover:bg-neutral-600 text-neutral-300 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
                 >
                   {l('cancelBtn')}
                 </button>

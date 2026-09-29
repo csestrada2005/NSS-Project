@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import type { Contact } from '@/types';
 import ContactForm from './ContactForm';
+import LoadingSquares from '../../components/brand/LoadingSquares';
 
 interface ContactDetailPanelProps {
   contact: Contact | null;
@@ -31,7 +32,7 @@ const labels = {
 const typeBadgeClass: Record<Contact['type'], string> = {
   lead: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
   client: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
-  partner: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+  partner: 'bg-neutral-500/10 text-neutral-500 border-neutral-500/20',
 };
 
 const ContactDetailPanel = ({ contact, onClose, onUpdate, onDelete, lang }: ContactDetailPanelProps) => {
@@ -80,7 +81,7 @@ const ContactDetailPanel = ({ contact, onClose, onUpdate, onDelete, lang }: Cont
           <>
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-              <h2 className="text-base font-semibold text-foreground truncate pr-2">{contact.name}</h2>
+              <h2 className="text-sm font-semibold text-foreground truncate pr-2">{contact.name}</h2>
               <button
                 onClick={onClose}
                 className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -147,7 +148,7 @@ const ContactDetailPanel = ({ contact, onClose, onUpdate, onDelete, lang }: Cont
                       className="flex-1"
                     >
                       {isLoading ? (
-                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <LoadingSquares size={16} />
                       ) : labels.confirm[lang]}
                     </Button>
                     <Button
@@ -172,7 +173,7 @@ const ContactDetailPanel = ({ contact, onClose, onUpdate, onDelete, lang }: Cont
                 <Button
                   variant="outline"
                   onClick={() => setMode('delete')}
-                  className="flex-1 text-rose-500 border-rose-500/30 hover:bg-rose-500/10"
+                  className="flex-1 text-red-500 border-red-500/30 hover:bg-red-500/10"
                 >
                   {labels.delete[lang]}
                 </Button>

@@ -64,16 +64,6 @@
     --sidebar-accent-foreground: 0 0% 95%;
     --sidebar-border: 240 6% 14%;
     --sidebar-ring: 355 78% 56%;
-
-    --nebu-bg: #0a0a0f;
-    --nebu-surface: #111116;
-    --nebu-card: #16161d;
-    --nebu-accent: #E54D5B;
-    --nebu-accent-soft: #E54D5B22;
-    --nebu-text: #F0F0F5;
-    --nebu-text-secondary: #71717A;
-    --nebu-border: rgba(255, 255, 255, 0.06);
-    --nebu-active-bg: #1a1a24;
   }
 
   * { border-color: hsl(var(--border)); }
@@ -113,41 +103,117 @@ button, [role="button"], a { cursor: pointer; }
 ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground)); }
 
 /*
- * Brandbook oficial Nebu Studio (2026-09-20) para las "superficies de marca"
- * de Wyrd Forge: los 4 modales administrativos (New Project, Settings,
- * Share, confirmación de migración) y el dashboard. El área de TRABAJO
- * (Command Palette: Chat/Visual/Código/Navegar) se queda oscura a propósito
- * — es el lienzo donde se programa, no una superficie de marca — por eso NO
- * tiene esta clase.
+ * REVERSIÓN explícita del brandbook claro (2026-09-20, mismo día): Samuel
+ * probó el resultado y el contraste crema/blanco (estos 4 modales + dashboard)
+ * contra el área de trabajo, que se queda SIEMPRE oscura (Command Palette:
+ * Chat/Visual/Código/Navegar — es el lienzo donde se programa, no una
+ * superficie de marca), se sentía "muy rudo". Decisión: eliminar el crema/
+ * blanco aunque esté en el brandbook oficial — unificar todo a oscuro, con el
+ * rojo como único acento. El brandbook define negro profundo/carbón/gris
+ * claro/rojo pero NUNCA los combinó en un esquema oscuro; los tonos de
+ * carbón/gris intermedio de abajo son derivados (mismo criterio de "derivado,
+ * no inventado de la nada" que ya se usaba para el gris intermedio de texto).
  *
  * Sobrescribe el namespace --color-* (el que Tailwind v4 lee para fabricar
  * bg-card/border-border/bg-muted/etc., ver @theme arriba) SÓLO dentro de
  * .nebu-modal y sus descendientes — regla sin @layer, a propósito, para que
  * gane sobre @layer theme (mismo truco que select/scrollbar de arriba).
  *
- * Proporción del brandbook: 60% crema/blanco (background/card), 30%
- * negro/carbón (texto, sólo como color, no como fondo dominante aquí), 10%
- * rojo (--color-primary, único acento). --color-destructive NO se toca a
- * propósito: es la alarma de "esto borra datos para siempre" en la
- * confirmación de migración destructiva, y usar el mismo rojo para eso y
- * para un botón normal le quitaría la señal de peligro.
+ * --color-destructive NO se toca acá (nunca se leyó desde este archivo — la
+ * alarma de "esto borra datos para siempre" en MigrationApplyModal.tsx usa
+ * clases Tailwind sueltas, no este token; se recoloreó de rojo a ámbar aparte,
+ * ver ese archivo, para que el rojo quede libre para los recuadros normales
+ * sin diluir la señal de la única confirmación irreversible de la plataforma).
  */
-.nebu-modal {
-  --color-background: #F5F0EB;         /* crema */
-  --color-card: #FFFFFF;               /* blanco */
-  --color-card-foreground: #0D0D0D;    /* negro profundo */
-  --color-foreground: #0D0D0D;
-  --color-muted: #F5F0EB;              /* crema */
-  --color-muted-foreground: #5C5C5C;   /* gris intermedio: el brandbook no da un tono de texto secundario, derivado para mantener contraste AA sobre blanco/crema */
-  --color-secondary: #E8E8E8;          /* gris claro */
-  --color-secondary-foreground: #0D0D0D;
-  --color-accent: #E8E8E8;             /* gris claro (hover) */
-  --color-accent-foreground: #0D0D0D;
-  --color-border: #E8E8E8;             /* gris claro: "líneas y divisores" */
-  --color-input: #E8E8E8;
-  --color-primary: #D62828;            /* rojo primario oficial */
+.nebu-modal,
+.wyrd-root,
+.nebu-crm {
+  --color-background: #0D0D0D;         /* negro profundo */
+  --color-card: #1A1A1A;               /* carbón */
+  --color-card-foreground: #E8E8E8;    /* gris claro */
+  --color-foreground: #E8E8E8;
+  --color-muted: #1A1A1A;              /* carbón */
+  --color-muted-foreground: #9A9A9A;   /* derivado: gris intermedio para texto secundario, contraste AA sobre negro/carbón */
+  --color-secondary: #242424;          /* derivado: carbón un poco más claro, para distinguir superficies secundarias */
+  --color-secondary-foreground: #E8E8E8;
+  --color-accent: #242424;             /* derivado (hover) */
+  --color-accent-foreground: #E8E8E8;
+  --color-border: #2A2A2A;             /* derivado: línea sutil sobre negro/carbón */
+  --color-input: #2A2A2A;
+  --color-primary: #D62828;            /* rojo primario oficial — sin cambios */
   --color-primary-foreground: #FFFFFF;
   --color-ring: #D62828;
+}
+
+/*
+ * Bucket 5, ítem 3, "paso 3" (2026-09-23): estética Nebu para los popups —
+ * lenguaje brutalista destilado sobre .nebu-modal (radius casi cero, bordes
+ * con peso real, labels en mayúsculas), adaptado para fondo oscuro. Dos
+ * ajustes deliberados sobre el markup de referencia que dio Samuel, avisados
+ * por él mismo antes de portar: la sombra dura de su ejemplo funciona sobre
+ * el papel crema del sitio público, pero un rojo sólido/opaco sobre este
+ * fondo casi negro se vería como un bloque flotante, no como profundidad —
+ * .nebu-cta usa un rojo TRANSLÚCIDO en vez de opaco, para que lea como un
+ * acento/glow y no como una sombra sólida fuera de lugar. Escopado con dos
+ * clases (no @layer) por el mismo motivo que el bloque de arriba: ganar por
+ * especificidad sobre las utilidades sueltas de Tailwind sin usar !important.
+ *
+ * .nebu-cta se agrega a mano sólo al botón principal de cada modal
+ * (NewProjectModal "Start Building", ShareProjectModal "Send Invitations")
+ * — deliberadamente NO en MigrationApplyModal (su ámbar/rojo ya codifica
+ * severidad, ver la nota de arriba y el propio archivo) ni en los botones
+ * de cada pestaña de SettingsModal (7 pestañas con su propio CTA — queda
+ * como residuo explícito para una pasada aparte, no un olvido).
+ */
+.nebu-modal .rounded-2xl,
+.nebu-modal .rounded-xl,
+.nebu-modal .rounded-lg,
+.nebu-modal .rounded-md {
+  border-radius: 4px;
+}
+.nebu-modal .border {
+  border-width: 2px;
+}
+.nebu-modal h1,
+.nebu-modal h2,
+.nebu-modal h3 {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+/* "Paso 4" (2026-09-23): tarjeta con el mismo lenguaje de .nebu-cta pero para
+   un contenedor clickeable completo, no un botón — usada en las tarjetas de
+   proyecto del Dashboard (ForgeDashboard.tsx). Sin sombra/desplazamiento en
+   reposo (a diferencia de .nebu-cta): en una cuadrícula de varias tarjetas,
+   la sombra dura permanente en TODAS a la vez se habría visto recargada;
+   sólo aparece en la que se está mirando. */
+.nebu-modal .nebu-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.nebu-modal .nebu-card:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 4px 4px 0 rgba(214, 40, 40, 0.35);
+}
+@media (prefers-reduced-motion: reduce) {
+  .nebu-modal .nebu-card:hover { transform: none; }
+}
+.nebu-modal .nebu-cta {
+  border-radius: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  box-shadow: 3px 3px 0 rgba(214, 40, 40, 0.4);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+.nebu-modal .nebu-cta:hover:not(:disabled) {
+  transform: translate(-2px, -2px);
+  box-shadow: 5px 5px 0 rgba(214, 40, 40, 0.55);
+}
+.nebu-modal .nebu-cta:active:not(:disabled) {
+  transform: translate(0, 0);
+  box-shadow: 1px 1px 0 rgba(214, 40, 40, 0.55);
+}
+@media (prefers-reduced-motion: reduce) {
+  .nebu-modal .nebu-cta:hover:not(:disabled) { transform: none; }
 }
 
 @keyframes fadeIn {
@@ -156,4 +222,50 @@ button, [role="button"], a { cursor: pointer; }
 }
 .animate-fade-in { animation: fadeIn 200ms ease-out; }
 *:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+
+/*
+ * Sistema visual de Wyrd Forge (bucket 5, ítem 5.5, 2026-09-29). Todo Wyrd
+ * cuelga de .wyrd-root (StudioLayout): mismos tokens de marca que .nebu-modal
+ * (arriba), UNA esquina (4px; los círculos —rounded-full— se quedan) y los
+ * títulos en Outfit, la fuente display del brandbook. Escala de texto de la
+ * plataforma: 12 / 14 / 18 / 24 px (text-xs / sm / lg / 2xl). Grises: una
+ * sola escala (neutral), del mismo tono que los tokens. Color: rojo de marca
+ * + emerald/amber/red como estados; nada decorativo fuera de eso.
+ */
+:is(.wyrd-root, .nebu-crm) :is(.rounded, .rounded-sm, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl) {
+  border-radius: 4px;
+}
+:is(.wyrd-root, .nebu-crm) :is(.rounded-t, .rounded-t-lg) {
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+}
+:is(.wyrd-root, .nebu-crm) :is(h1, h2, h3) {
+  font-family: var(--font-display);
+}
+
+/*
+ * CRM (Nebu Studio, 5.5 fase 2): mismo sistema que Wyrd (.nebu-crm en
+ * WorkspaceLayout) y, pedido de Samuel, los CONTENEDORES del área de
+ * contenido sólo se dibujan al pasar el mouse — en reposo se ve el texto.
+ * Contenedor = .bg-card (tarjetas, paneles, Card de shadcn). Se excluyen
+ * campos de formulario, menús y popups (fixed/absolute/dialog), que deben
+ * verse siempre. :focus-within los revela también con teclado. Sólo en
+ * dispositivos con hover real: en táctil no hay forma de "pasar encima", así
+ * que ahí se siguen viendo (si no, nada indicaría qué se puede tocar).
+ */
+@media (hover: hover) {
+  .nebu-crm-main .bg-card:not(input, textarea, select, .absolute, .fixed, .fixed *, [role="dialog"], [role="dialog"] *, [role="menu"], [role="menu"] *) {
+    background-color: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    transition: background-color 150ms ease, border-color 150ms ease;
+  }
+  .nebu-crm-main .bg-card:not(input, textarea, select, .absolute, .fixed, .fixed *, [role="dialog"], [role="dialog"] *, [role="menu"], [role="menu"] *):is(:hover, :focus-within) {
+    background-color: var(--color-card);
+    border-color: var(--color-border);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nebu-crm-main .bg-card { transition: none; }
+}
 ::selection { background: hsl(var(--primary) / 0.25); color: hsl(var(--foreground)); }

@@ -1,9 +1,9 @@
-import { Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useViewMode } from "@/contexts/ViewModeContext";
 import AdminDashboard from "@/pages/dashboard/AdminDashboard";
 import DevDashboard from "@/pages/dashboard/DevDashboard";
 import ClientDashboard from "@/pages/dashboard/ClientDashboard";
+import NebuLoader from '../components/brand/NebuLoader';
 
 const DashboardPage = () => {
   const { loading, isAdmin, isDev, isVendedor, isCliente } = useAuth();
@@ -12,7 +12,7 @@ const DashboardPage = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 size={28} className="animate-spin text-primary" />
+        <NebuLoader size={140} />
       </div>
     );
   }

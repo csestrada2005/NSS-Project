@@ -10,7 +10,6 @@ import {
   Activity,
   Bot,
   ArrowRight,
-  Loader2,
   Code,
   Globe,
 } from "lucide-react";
@@ -20,6 +19,7 @@ import EmptyState from "@/components/EmptyState";
 import { getRecentProjects, getDashboardKPIs } from "@/services/data/supabaseData";
 import { SupabaseService } from "@/services/SupabaseService";
 import type { Project, DashboardKPIs } from "@/types";
+import LoadingSquares from '../../components/brand/LoadingSquares';
 
 interface ForgeProject {
   id: string;
@@ -48,9 +48,9 @@ const STATUS_LABELS: Record<Project["status"], { es: string; en: string }> = {
 
 const STATUS_COLORS: Record<Project["status"], string> = {
   active: "bg-emerald-500/10 text-emerald-500",
-  completed: "bg-blue-500/10 text-blue-500",
+  completed: "bg-neutral-500/10 text-neutral-500",
   paused: "bg-amber-500/10 text-amber-500",
-  cancelled: "bg-rose-500/10 text-rose-500",
+  cancelled: "bg-red-500/10 text-red-500",
 };
 
 const formatCurrency = (amount: number, locale: string) =>
@@ -183,7 +183,7 @@ const DevDashboard = () => {
     <div className="space-y-8 max-w-6xl">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-semibold text-foreground">{greeting} 👋</h1>
+        <h1 className="text-lg font-semibold text-foreground">{greeting} 👋</h1>
         <p className="text-sm mt-0.5 text-muted-foreground capitalize">
           {dateStr}
         </p>
@@ -197,7 +197,7 @@ const DevDashboard = () => {
             className="rounded-xl p-5 bg-card border border-border group hover:border-primary/20 transition-colors"
           >
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 {kpi.label[lang]}
               </span>
               <kpi.icon
@@ -207,7 +207,7 @@ const DevDashboard = () => {
               />
             </div>
             {isLoading ? (
-              <Loader2 size={20} className="animate-spin text-primary" />
+              <LoadingSquares size={20} />
             ) : (
               <p className="text-2xl font-bold text-foreground">{kpi.value}</p>
             )}
@@ -231,7 +231,7 @@ const DevDashboard = () => {
           <div className="p-2">
             {isLoading ? (
               <div className="flex items-center justify-center py-10">
-                <Loader2 size={22} className="animate-spin text-primary" />
+                <LoadingSquares size={32} />
               </div>
             ) : recentProjects.length === 0 ? (
               <EmptyState
@@ -253,7 +253,7 @@ const DevDashboard = () => {
                       <p className="text-sm font-medium text-foreground truncate">
                         {project.title}
                       </p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                      <p className="text-xs text-muted-foreground mt-0.5">
                         {new Date(project.created_at).toLocaleDateString(
                           lang === "es" ? "es-MX" : "en-US",
                           { day: "numeric", month: "short", year: "numeric" }
@@ -261,7 +261,7 @@ const DevDashboard = () => {
                       </p>
                     </div>
                     <span
-                      className={`ml-3 shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[project.status]}`}
+                      className={`ml-3 shrink-0 text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[project.status]}`}
                     >
                       {STATUS_LABELS[project.status][lang]}
                     </span>
@@ -282,7 +282,7 @@ const DevDashboard = () => {
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-foreground">Wyrd Forge</h3>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {lang === "es" ? "Web Builder" : "Web Builder"}
                 </p>
               </div>
@@ -306,7 +306,7 @@ const DevDashboard = () => {
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-foreground">NOVY</h3>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {lang === "es" ? "Tu asistente IA" : "Your AI assistant"}
                 </p>
               </div>
@@ -329,7 +329,7 @@ const DevDashboard = () => {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Code size={16} className="text-red-500" />
-            <h2 className="text-base font-semibold text-foreground">
+            <h2 className="text-sm font-semibold text-foreground">
               {lang === "es" ? "Proyectos Forge recientes" : "Recent Forge Projects"}
             </h2>
           </div>
@@ -343,7 +343,7 @@ const DevDashboard = () => {
 
         {forgeLoading ? (
           <div className="flex items-center justify-center py-8">
-            <Loader2 size={22} className="animate-spin text-primary" />
+            <LoadingSquares size={32} />
           </div>
         ) : forgeProjects.length === 0 ? (
           <div className="rounded-xl bg-card border border-border p-8 flex flex-col items-center gap-3">
@@ -368,11 +368,11 @@ const DevDashboard = () => {
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-sm font-semibold text-foreground truncate">{fp.name}</p>
                   <span
-                    className={`shrink-0 w-2 h-2 rounded-full mt-1.5 ${fp.deployment_url ? 'bg-emerald-500' : 'bg-gray-500'}`}
+                    className={`shrink-0 w-2 h-2 rounded-full mt-1.5 ${fp.deployment_url ? 'bg-emerald-500' : 'bg-neutral-500'}`}
                     title={fp.deployment_url ? 'Deployed' : 'Not deployed'}
                   />
                 </div>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {lang === "es" ? "Actualizado" : "Updated"} {relativeTime(fp.updated_at)}
                 </p>
                 <button

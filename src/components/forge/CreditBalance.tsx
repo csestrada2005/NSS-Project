@@ -3,12 +3,11 @@ import { Zap, Infinity as InfinityIcon } from 'lucide-react';
 import { CreditService } from '../../services/CreditService';
 import { formatCredits } from '../../lib/creditDisplay';
 import { useAuth } from '../../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
 
 export default function CreditBalance() {
   const { user } = useAuth();
-  const navigate = useNavigate();
+  const { t } = useForgeLang();
   const [balance, setBalance] = useState<number>(0);
   const [freePromptUsed, setFreePromptUsed] = useState<boolean>(false);
   const [unlimited, setUnlimited] = useState<boolean>(false);
@@ -45,7 +44,7 @@ export default function CreditBalance() {
     return (
       <div className="flex items-center gap-1.5 bg-amber-950/80 border border-amber-600/50 rounded-full px-3 py-1.5 text-xs text-amber-400 font-medium">
         <InfinityIcon size={12} className="shrink-0" />
-        <span>Admin — Unlimited</span>
+        <span>{t('credits.unlimited')}</span>
       </div>
     );
   }
@@ -58,27 +57,32 @@ export default function CreditBalance() {
       {/* Credit pill */}
       <div className="flex items-center gap-2">
         {showFreePrompt ? (
-          <div className="flex items-center gap-1.5 bg-background/90 border border-border rounded-full px-3 py-1.5 text-xs text-yellow-400 font-medium">
+          <div className="flex items-center gap-1.5 bg-background/90 border border-border rounded-full px-3 py-1.5 text-xs text-amber-400 font-medium">
             <Zap size={12} className="shrink-0" />
-            <span>1 free build remaining</span>
+            <span>{t('credits.freeBuild')}</span>
           </div>
         ) : isOutOfCredits ? (
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5 bg-background/90 border border-primary/50 rounded-full px-3 py-1.5 text-xs text-primary font-medium">
               <Zap size={12} className="shrink-0" />
-              <span>{formatCredits(0)} créditos</span>
+              <span>{t('credits.amount', { amount: formatCredits(0) })}</span>
             </div>
+            {/* Bloque 4 (5.4): todavía no hay paquetes de créditos. Antes el botón
+                mostraba un toast y saltaba a /forge (callejón sin salida); ahora
+                se ve apagado con "Próximamente", sin acción. */}
             <button
-              onClick={() => { toast('Credit packages coming soon'); navigate('/forge'); }}
-              className="text-xs text-primary hover:underline"
+              type="button"
+              disabled
+              className="text-xs text-muted-foreground cursor-not-allowed"
+              title={t('common.comingSoon')}
             >
-              Buy credits
+              {t('credits.buy')} · {t('common.comingSoon')}
             </button>
           </div>
         ) : (
           <div className="flex items-center gap-1.5 bg-background/90 border border-border rounded-full px-3 py-1.5 text-xs text-foreground font-medium">
-            <Zap size={12} className="shrink-0 text-yellow-400" />
-            <span>{formatCredits(balance)} créditos</span>
+            <Zap size={12} className="shrink-0 text-amber-400" />
+            <span>{t('credits.amount', { amount: formatCredits(balance) })}</span>
           </div>
         )}
       </div>

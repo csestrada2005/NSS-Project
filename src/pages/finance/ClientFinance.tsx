@@ -16,6 +16,7 @@ import { getClientFinanceKPIs } from '@/services/data/supabaseData';
 import { SupabaseService } from '@/services/SupabaseService';
 import { toast } from 'sonner';
 import type { Payment } from '@/types';
+import LoadingSquares from '../../components/brand/LoadingSquares';
 
 type PaymentWithProject = Payment & { projects: { title: string } | null; user_id?: string | null };
 
@@ -43,7 +44,7 @@ const labels = {
 const statusBadgeClass: Record<Payment['status'], string> = {
   paid: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20',
   pending: 'bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20',
-  overdue: 'bg-rose-500/10 text-rose-500 border-rose-500/20 hover:bg-rose-500/20',
+  overdue: 'bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20',
 };
 
 const formatCurrency = (amount: number) =>
@@ -170,7 +171,7 @@ const ClientFinance = () => {
             <CardTitle className="text-sm font-medium text-muted-foreground">
               {labels.kpiTotalBilled[lang]}
             </CardTitle>
-            <DollarSign className="h-4 w-4 text-blue-500" />
+            <DollarSign className="h-4 w-4 text-neutral-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-foreground">
@@ -210,7 +211,7 @@ const ClientFinance = () => {
       <div className="rounded-xl bg-card border border-border overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
-            <span className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin" />
+            <LoadingSquares size={32} />
           </div>
         ) : payments.length === 0 ? (
           <EmptyState

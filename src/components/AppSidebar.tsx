@@ -21,7 +21,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useViewMode } from "@/contexts/ViewModeContext";
 import { UserApprovalPanel } from "@/components/admin/UserApprovalPanel";
-import { SupabaseService } from "@/services/SupabaseService";
+import { AdminService } from "@/services/AdminService";
 
 export type Page =
   | "dashboard"
@@ -128,15 +128,13 @@ const AppSidebar = ({ open, onClose }: AppSidebarProps) => {
   // Fetch pending approval count for admins
   useEffect(() => {
     if (!isAdmin) return;
-    const supabase = SupabaseService.getInstance().client;
+    // Por el servidor: un admin sólo puede leer su propia fila de profiles.
     const fetchCount = async () => {
-      const { count } = await supabase
-        .from('profiles')
-        .select('id', { count: 'exact', head: true })
-        .not('pending_role', 'is', null)
-        .is('role', null)
-        .eq('role_approved', false);
-      setPendingApprovalCount(count ?? 0);
+      try {
+        setPendingApprovalCount((await AdminService.getPendingUsers()).length);
+      } catch (e) {
+        console.error('[AppSidebar] pending count error:', e);
+      }
     };
     fetchCount();
     const interval = setInterval(fetchCount, 30000);
@@ -230,7 +228,7 @@ const AppSidebar = ({ open, onClose }: AppSidebarProps) => {
                   </span>
                 )}
                 {!collapsed && showBadge && (
-                  <span className="ml-auto min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded-full bg-primary text-primary-foreground px-1">
+                  <span className="ml-auto min-w-[18px] h-[18px] flex items-center justify-center text-xs font-bold rounded-full bg-primary text-primary-foreground px-1">
                     {unreadCount > 99 ? "99+" : unreadCount}
                   </span>
                 )}
@@ -253,7 +251,7 @@ const AppSidebar = ({ open, onClose }: AppSidebarProps) => {
               </div>
               {!collapsed && <span className="flex-1 text-left">Approvals</span>}
               {!collapsed && pendingApprovalCount > 0 && (
-                <span className="ml-auto min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded-full bg-red-500 text-white px-1">
+                <span className="ml-auto min-w-[18px] h-[18px] flex items-center justify-center text-xs font-bold rounded-full bg-red-500 text-white px-1">
                   {pendingApprovalCount > 99 ? "99+" : pendingApprovalCount}
                 </span>
               )}
@@ -267,7 +265,7 @@ const AppSidebar = ({ open, onClose }: AppSidebarProps) => {
             className="px-3 py-3 shrink-0"
             style={{ borderTop: "1px solid hsl(var(--border))" }}
           >
-            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-2 px-1">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2 px-1">
               View as
             </p>
             <div className="flex rounded-lg overflow-hidden border border-border">
@@ -320,7 +318,7 @@ const AppSidebar = ({ open, onClose }: AppSidebarProps) => {
                   <p className="text-xs font-medium truncate text-foreground">
                     {displayName}
                   </p>
-                  <span className="text-[10px] font-medium text-muted-foreground">
+                  <span className="text-xs font-medium text-muted-foreground">
                     {roleLabel}
                   </span>
                 </div>
@@ -351,14 +349,9 @@ const AppSidebar = ({ open, onClose }: AppSidebarProps) => {
           onClose={() => {
             setApprovalPanelOpen(false);
             // Refresh count after panel closes
-            const supabase = SupabaseService.getInstance().client;
-            supabase
-              .from('profiles')
-              .select('id', { count: 'exact', head: true })
-              .not('pending_role', 'is', null)
-              .is('role', null)
-              .eq('role_approved', false)
-              .then(({ count }) => setPendingApprovalCount(count ?? 0));
+            AdminService.getPendingUsers()
+              .then((users) => setPendingApprovalCount(users.length))
+              .catch((e) => console.error('[AppSidebar] pending count error:', e));
           }}
         />
       )}

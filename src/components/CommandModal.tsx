@@ -1,101 +1,47 @@
 import { motion } from "framer-motion";
-import { X, MessageSquare, MousePointer2, Edit3, Code, Map } from "lucide-react";
 import { modalBackdropMotion, bottomSheetMotion } from "@/components/ui/modalMotion";
 
-type TabType = "chat" | "visual" | "code" | "navigate";
-
+// CommandModal ya sólo es el chat (2026-09-21: se quitó Terminal, que era la
+// última otra pestaña — ver QUEUE.md ítem 12). Visual/Código/Navegar se
+// habían promovido antes a PreviewNavbar (ítem 11). Sin pestañas que
+// conmutar, el modal flota translúcido con blur sobre el preview en vivo
+// SIEMPRE, mismo look del mockup
+// (https://claude.ai/artifact/HYr28WtZvQhstgWGEwMwWX) — ya no hay una rama
+// "pestaña sólida" que mantener. El riesgo conocido es backdrop-filter sobre
+// el iframe del preview mientras recompila; si se siente pesado, el primer
+// candidato a quitar es el blur del historial (HistoryOverlay), no esta capa
+// base.
 interface CommandModalProps {
-  onClose: () => void;
-  visualEditMode: boolean;
-  onToggleVisualEdit: (active: boolean) => void;
   children: React.ReactNode;
-  activeTab: TabType;
-  setActiveTab: (tab: TabType) => void;
+  /**
+   * "Peek" (Ctrl+Espacio con el chat ya abierto, QUEUE.md ítem 5.3 Bloque 6):
+   * ChatInterface esconde su typebar/tarjetas para revelar el preview
+   * completo, pero este backdrop (invisible) seguía cubriendo toda la
+   * pantalla y bloqueando el scroll/click del preview aunque no se viera
+   * nada encima. Con `peeking`, tanto el backdrop como el contenedor del
+   * bottom sheet dejan pasar el puntero.
+   */
+  peeking?: boolean;
 }
 
-export const CommandModal = ({ onClose, visualEditMode, onToggleVisualEdit, children, activeTab, setActiveTab }: CommandModalProps) => {
-
+// Sin botón X ni cierre al hacer click fuera (pedido explícito de Samuel,
+// 2026-09-23): el chat sólo se cierra con Ctrl+Espacio o haciendo click en
+// "Chat" del navbar (StudioEngine.tsx, handleOpenChat) — un único par de
+// vías documentado, no tres. El backdrop se queda (sigue bloqueando clicks
+// sobre el preview mientras el chat está visible), sólo perdió el onClick.
+export const CommandModal = ({ children, peeking = false }: CommandModalProps) => {
   return (
     <>
       <motion.div
         {...modalBackdropMotion}
-        className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm"
-        onClick={onClose}
+        className={`fixed inset-0 z-[60] ${peeking ? 'pointer-events-none' : ''}`}
       />
-      <div className="fixed z-[70] inset-x-4 bottom-4 h-[88vh] max-h-[920px]">
+      <div className={`fixed z-[70] inset-x-4 bottom-4 h-[88vh] max-h-[920px] ${peeking ? 'pointer-events-none' : ''}`}>
       <motion.div
         {...bottomSheetMotion}
-        className="h-full rounded-2xl border border-border flex flex-col bg-card shadow-2xl overflow-hidden"
+        className="h-full rounded-2xl flex flex-col overflow-hidden border-0 bg-transparent shadow-none"
       >
-        {/* Header Tabs */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-background/50 shrink-0">
-          <div className="flex items-center gap-1 p-1 rounded-lg bg-accent/50 border border-border">
-             <button
-               onClick={() => setActiveTab('chat')}
-               className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'chat' ? 'bg-primary text-white shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-accent'}`}
-             >
-               <MessageSquare size={16} />
-               Chat
-             </button>
-             <button
-               onClick={() => setActiveTab('visual')}
-               className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'visual' ? 'bg-primary text-white shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-accent'}`}
-             >
-               <MousePointer2 size={16} />
-               Visual
-             </button>
-             <button
-               onClick={() => setActiveTab('code')}
-               className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'code' ? 'bg-primary text-white shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-accent'}`}
-             >
-               <Code size={16} />
-               Code
-             </button>
-             <button
-               onClick={() => setActiveTab('navigate')}
-               className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'navigate' ? 'bg-primary text-white shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-accent'}`}
-             >
-               <Map size={16} />
-               Navigate
-             </button>
-          </div>
-          <button onClick={onClose} className="p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-full transition-colors">
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Content Area */}
-        <div className="flex-1 overflow-hidden relative flex flex-col bg-card">
-          {activeTab === 'visual' && (
-             <div className="p-4 border-b border-border bg-background shrink-0">
-               <div className="flex items-center justify-between">
-                 <div>
-                    <h3 className="text-sm font-medium text-foreground">Visual Edit Mode</h3>
-                    <p className="text-xs text-muted-foreground mt-1">Select elements on the canvas to change their text, color, and properties directly.</p>
-                 </div>
-                 <button
-                    onClick={() => onToggleVisualEdit(!visualEditMode)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${visualEditMode ? 'bg-primary' : 'bg-muted'}`}
-                 >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${visualEditMode ? 'translate-x-6' : 'translate-x-1'}`} />
-                 </button>
-               </div>
-               {visualEditMode && (
-                   <div className="mt-4 p-3 bg-primary/10 border border-primary/30 rounded-lg flex items-start gap-2 text-xs text-primary">
-                      <Edit3 size={14} className="mt-0.5 shrink-0 text-primary" />
-                      <p>Visual Mode is active. Click anywhere on the preview to select an element, or hold Shift to drag it. Press Esc to select its parent.</p>
-                   </div>
-               )}
-             </div>
-          )}
-
-          {activeTab === 'code' && (
-            <div className="p-3 border-b border-border bg-background shrink-0 flex items-start gap-2 text-xs text-muted-foreground">
-              <Code size={13} className="mt-0.5 shrink-0 text-muted-foreground" />
-              <p>Browse and edit your project files. Click <span className="text-white font-medium">Save &amp; Run</span> to apply changes to the preview.</p>
-            </div>
-          )}
-
+        <div className="flex-1 overflow-hidden relative flex flex-col bg-transparent">
           <div className="flex-1 overflow-hidden">
              {children}
           </div>

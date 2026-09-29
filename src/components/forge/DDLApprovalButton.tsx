@@ -43,7 +43,6 @@ import {
   Database,
   Eye,
   History,
-  Loader2,
   XCircle,
 } from 'lucide-react';
 import { MigrationRunner } from '@/services/MigrationRunner';
@@ -63,6 +62,8 @@ import {
   type ProposalSourceMessage,
 } from '@/utils/ddlProposalState.js';
 import { MigrationApplyModal, type FlaggedStatement } from './MigrationApplyModal';
+import LoadingSquares from '../brand/LoadingSquares';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
 
 interface Props {
   /** La propuesta que este mensaje anunció, ya resuelta a un estado. */
@@ -113,6 +114,7 @@ export function DDLApprovalButton({
   disabled = false,
 }: Props) {
   const [phase, setPhase] = useState<'idle' | 'reading' | 'confirming' | 'applying'>('idle');
+  const { lang, t } = useForgeLang();
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, setPending] = useState<{
     flagged: FlaggedStatement[];
@@ -130,7 +132,7 @@ export function DDLApprovalButton({
         <StatusRow
           icon={<History className="w-3.5 h-3.5" />}
           tone="text-muted-foreground"
-          text={`${names} quedó reemplazada por una propuesta más reciente. Aplica la última.`}
+          text={t('ddl.superseded', { names })}
         />
       </div>
     );
@@ -141,8 +143,8 @@ export function DDLApprovalButton({
       <div className="mt-2 pt-2 border-t border-border/50">
         <StatusRow
           icon={<CheckCircle2 className="w-3.5 h-3.5" />}
-          tone="text-green-400"
-          text={`${names} está aplicada: el schema del proyecto lo confirma.`}
+          tone="text-emerald-400"
+          text={t('ddl.applied', { names })}
         />
       </div>
     );
@@ -161,8 +163,8 @@ export function DDLApprovalButton({
           tone={unverified ? 'text-amber-400' : 'text-red-400'}
           text={
             unverified
-              ? `${names} se ejecutó sin poder confirmarse. Revísala en tu base antes de pedir nada más sobre ella.`
-              : `${names} no se aplicó. Pídeme aquí la corrección y generaré una propuesta nueva.`
+              ? t('ddl.unverified', { names })
+              : t('ddl.failed', { names })
           }
         />
       </div>
@@ -175,7 +177,7 @@ export function DDLApprovalButton({
         <StatusRow
           icon={<Database className="w-3.5 h-3.5" />}
           tone="text-muted-foreground"
-          text={`${names} no se ejecutó: el proyecto no tiene base de datos. Conecta una y vuelve a pedírmelo.`}
+          text={t('ddl.skipped', { names })}
         />
       </div>
     );
@@ -201,16 +203,13 @@ export function DDLApprovalButton({
     setNotice(null);
 
     if (!projectId) {
-      abort('No sé contra qué proyecto aplicarla. Vuelve a abrir el proyecto e inténtalo de nuevo.');
+      abort(t('ddl.abort.noProject'));
       return;
     }
 
     // RE-VERIFICACIÓN. Con el historial de AHORA, no con el del render.
     if (!isStillExecutable(getMessages(), proposal)) {
-      abort(
-        'Esta propuesta ya no es la vigente: llegó otra más reciente, o ya se ejecutó. No he ' +
-        'aplicado nada. Usa la última propuesta del chat.'
-      );
+      abort(t('ddl.abort.stale'));
       return;
     }
 
@@ -223,7 +222,7 @@ export function DDLApprovalButton({
     for (const path of proposal.paths) {
       const { sql, error } = await MigrationRunner.readMigrationSql(projectId, path);
       if (error) {
-        abort(`No pude leer ${fileName(path)} del proyecto (${error}). No he aplicado nada.`);
+        abort(t('ddl.abort.readFailed', { file: fileName(path), error: String(error) }));
         return;
       }
       sqlByPath.set(path, sql);
@@ -249,10 +248,7 @@ export function DDLApprovalButton({
     // confirmar toma tiempo real del usuario, y en ese tiempo cabe otra
     // propuesta igual que antes del modal.
     if (!isStillExecutable(getMessages(), proposal)) {
-      abort(
-        'Mientras confirmabas llegó una propuesta más reciente. No he aplicado nada: revisa la ' +
-        'última del chat.'
-      );
+      abort(t('ddl.abort.newerWhileConfirming'));
       return;
     }
 
@@ -268,10 +264,7 @@ export function DDLApprovalButton({
     for (const path of proposal.paths) {
       const current = await MigrationRunner.readMigrationSql(projectId, path);
       if (current.error || current.sql !== pending.sqlByPath.get(path)) {
-        abort(
-          `${fileName(path)} cambió desde que revisé su SQL, así que no he aplicado nada. ` +
-          'Vuelve a pulsar para revisar la versión actual.'
-        );
+        abort(t('ddl.abort.changed', { file: fileName(path) }));
         return;
       }
     }
@@ -330,7 +323,7 @@ export function DDLApprovalButton({
       tables,
       reason: reason ?? null,
       failedPath,
-    });
+    }, lang);
 
     setPending(null);
     setPhase('idle');
@@ -340,43 +333,48 @@ export function DDLApprovalButton({
       // Inalcanzable con un veredicto del runner y paths ya validados, pero un
       // veredicto que no se escribe es una propuesta que sigue viva tras haber
       // ejecutado: se dice, en vez de dejarlo en silencio.
-      setNotice(
-        'La migración se ejecutó pero no pude registrar el resultado en el chat. Revisa el estado ' +
-        'de tu base de datos antes de volver a pulsar.'
-      );
+      setNotice(t('ddl.notRecorded'));
     }
   };
 
+  // display:contents — este componente vive como UN ítem más dentro de la fila
+  // de botones de DDLCard (.fc-accion-fila, un flex row); "contents" deja que
+  // el botón se comporte como hijo directo de esa fila (mismo alto/alineación
+  // que "Ver el SQL"/"Ver historial completo") mientras que el texto de ayuda,
+  // el aviso y el modal — que SÍ necesitan su propia línea — se lo piden al
+  // flex-wrap de la fila con flexBasis:'100%', en vez de forzar un contenedor
+  // en bloque que rompería la fila.
   return (
-    <div className="mt-2 pt-2 border-t border-border/50 space-y-2">
+    <div style={{ display: 'contents' }}>
       <button
         onClick={handleClick}
         disabled={disabled || busy || !projectId}
-        title={`Aplicar ${names} contra la base de datos del proyecto`}
-        className="w-full text-left flex items-center gap-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-md px-3 py-2 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        title={t('ddl.button.title', { names })}
+        className="fc-accion-btn"
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
       >
         {busy ? (
-          <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
+          <LoadingSquares size={16} />
         ) : (
           <Database className="w-4 h-4 shrink-0" />
         )}
         <span className="line-clamp-2">
           {phase === 'reading'
-            ? 'Revisando el SQL…'
+            ? t('ddl.button.reviewing')
             : phase === 'applying'
-            ? 'Aplicando…'
+            ? t('ddl.button.applying')
             : proposal.paths.length === 1
-            ? `Aplicar ${names} a la base de datos`
-            : `Aplicar ${proposal.paths.length} migraciones a la base de datos`}
+            ? t('ddl.button.applyOne', { names })
+            : t('ddl.button.applyMany', { count: proposal.paths.length })}
         </span>
       </button>
 
-      <p className="text-[10px] text-muted-foreground">
-        Todavía no se ha ejecutado nada contra tu base de datos.
+      <p className="fc-accion-cuerpo" style={{ flexBasis: '100%', fontSize: 11, margin: '6px 0 0' }}>
+        {t('ddl.nothingYet')}
       </p>
 
       {notice && (
-        <div className="flex items-start gap-2 text-xs text-amber-400">
+        <div className="fc-accion-cuerpo" style={{ flexBasis: '100%', display: 'flex', alignItems: 'flex-start', gap: 8, color: '#fbbf24', fontSize: 12, margin: '6px 0 0' }}>
           <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
           <span>{notice}</span>
         </div>

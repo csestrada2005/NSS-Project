@@ -13,7 +13,7 @@ const PendingApprovalPage = () => {
   const pendingRole = profile?.pending_role;
 
   return (
-    <section className="relative h-screen w-screen flex flex-col items-center justify-center bg-[#0A0A0A] overflow-hidden">
+    <section className="relative h-screen w-screen flex flex-col items-center justify-center bg-[#0D0D0D] overflow-hidden">
       {/* Background */}
       <div className="absolute inset-0 bg-black/40 pointer-events-none" />
       <div className="absolute inset-0 opacity-[0.04] bg-[linear-gradient(rgba(255,255,255,0.4)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.4)_1px,transparent_1px)] bg-[size:60px_60px]" />
@@ -37,7 +37,7 @@ const PendingApprovalPage = () => {
           transition={{ delay: 0.2, duration: 0.5, type: 'spring' }}
           className="flex justify-center mb-8"
         >
-          <Clock size={56} className="text-[#E60000] drop-shadow-[0_0_15px_rgba(230,0,0,0.5)]" />
+          <Clock size={56} className="text-[#D62828] drop-shadow-[0_0_15px_rgba(214,40,40,0.5)]" />
         </motion.div>
 
         {/* Text */}
@@ -50,14 +50,14 @@ const PendingApprovalPage = () => {
           <h1 className="font-display text-3xl sm:text-4xl tracking-tighter text-white uppercase">
             Pending Approval
           </h1>
-          <p className="text-white/60 font-light text-sm sm:text-base leading-relaxed max-w-sm mx-auto">
+          <p className="text-white/60 font-light text-sm sm:text-sm leading-relaxed max-w-sm mx-auto">
             Your account is pending approval. An admin will review your request shortly.
           </p>
 
           {/* Role badge */}
           {pendingRole && (
             <div className="flex justify-center pt-2">
-              <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#E60000]/40 bg-[#E60000]/10 text-[#E60000] text-xs font-medium uppercase tracking-wider">
+              <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border-2 border-[#D62828]/40 bg-[#D62828]/10 text-[#D62828] text-xs font-medium uppercase tracking-wider">
                 Requested: {ROLE_LABELS[pendingRole] ?? pendingRole}
               </span>
             </div>
@@ -70,16 +70,16 @@ const PendingApprovalPage = () => {
           animate={{ opacity: 1 }}
           transition={{ delay: 0.6, duration: 0.5 }}
           onClick={signOut}
-          className="group relative flex items-center justify-center gap-3 px-8 py-3 text-sm font-medium tracking-widest uppercase text-[#E60000] transition-all hover:text-white overflow-hidden border border-[#E60000] bg-transparent"
+          className="group relative flex items-center justify-center gap-3 px-8 py-3 text-sm font-medium tracking-widest uppercase text-[#D62828] transition-all hover:text-white overflow-hidden border-2 border-[#D62828] bg-transparent"
         >
-          <div className="absolute inset-0 bg-[#E60000] -translate-x-full transition-transform duration-300 ease-out group-hover:translate-x-0" />
+          <div className="absolute inset-0 bg-[#D62828] -translate-x-full transition-transform duration-300 ease-out group-hover:translate-x-0" />
           <LogOut size={18} className="relative z-10" />
           <span className="relative z-10">Sign out</span>
         </motion.button>
       </div>
 
       {/* Bottom accent */}
-      <div className="absolute bottom-0 left-0 right-0 h-[4px] bg-[#E60000] shadow-[0_0_16px_rgba(230,0,0,0.5)]" />
+      <div className="absolute bottom-0 left-0 right-0 h-[4px] bg-[#D62828] shadow-[0_0_16px_rgba(214,40,40,0.5)]" />
     </section>
   );
 };

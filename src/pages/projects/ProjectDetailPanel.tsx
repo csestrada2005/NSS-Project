@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import type { Project } from '@/types';
 import ProjectForm from './ProjectForm';
+import LoadingSquares from '../../components/brand/LoadingSquares';
 
 type ProjectWithClient = Project & { contacts: { name: string } | null };
 
@@ -32,9 +33,9 @@ const labels = {
 
 const statusBadgeClass: Record<Project['status'], string> = {
   active: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
-  completed: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+  completed: 'bg-neutral-500/10 text-neutral-500 border-neutral-500/20',
   paused: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
-  cancelled: 'bg-rose-500/10 text-rose-500 border-rose-500/20',
+  cancelled: 'bg-red-500/10 text-red-500 border-red-500/20',
 };
 
 const ProjectDetailPanel = ({ project, contacts, onClose, onUpdate, onDelete, lang }: ProjectDetailPanelProps) => {
@@ -88,7 +89,7 @@ const ProjectDetailPanel = ({ project, contacts, onClose, onUpdate, onDelete, la
           <>
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-              <h2 className="text-base font-semibold text-foreground truncate pr-2">{project.title}</h2>
+              <h2 className="text-sm font-semibold text-foreground truncate pr-2">{project.title}</h2>
               <button
                 onClick={onClose}
                 className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -150,7 +151,7 @@ const ProjectDetailPanel = ({ project, contacts, onClose, onUpdate, onDelete, la
                       className="flex-1"
                     >
                       {isLoading ? (
-                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <LoadingSquares size={16} />
                       ) : labels.confirm[lang]}
                     </Button>
                     <Button
@@ -175,7 +176,7 @@ const ProjectDetailPanel = ({ project, contacts, onClose, onUpdate, onDelete, la
                 <Button
                   variant="outline"
                   onClick={() => setMode('delete')}
-                  className="flex-1 text-rose-500 border-rose-500/30 hover:bg-rose-500/10"
+                  className="flex-1 text-red-500 border-red-500/30 hover:bg-red-500/10"
                 >
                   {labels.delete[lang]}
                 </Button>

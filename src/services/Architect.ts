@@ -8,6 +8,7 @@ import type { Intent } from './IntentClassifier';
 // ---------------------------------------------------------------------------
 
 import { trimPlan, TRIM_MAX_STEPS } from '../utils/planTrim.js';
+import { getForgeLang } from '../i18n/forge/lang';
 
 export interface BuildStep {
   order: number;
@@ -15,6 +16,12 @@ export interface BuildStep {
   file_path: string;
   action: 'create' | 'modify' | 'delete';
   requires_steps: number[];
+  /**
+   * Resumen corto para el usuario, en el idioma de la interfaz (i18n, ítem
+   * 5.4). Sólo se MUESTRA (tarjeta del plan, líneas de progreso): el
+   * Implementer lee `description`, que sigue en inglés.
+   */
+  summary?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -120,6 +127,7 @@ description: string (what the file will DO after the change, not what action you
 file_path: string (exact path e.g. "src/components/Foo.tsx")
 action: "create" | "modify" | "delete"
 requires_steps: number[] (empty array if no dependencies)
+summary: string (ONE short plain-language sentence, max ~12 words, telling a non-technical user what this step does — written in the USER-FACING LANGUAGE given in the user message. No code, no file paths. It is only shown to the user; description stays in English and is what gets built)
 
 PLANNING RULES — follow these exactly:
 
@@ -223,6 +231,9 @@ OUTPUT FORMAT — return ONLY a valid JSON object with exactly these two keys, n
           : '') +
         `\n` +
         repairSection +
+        // i18n (ítem 5.4): el idioma del `summary` va en el user message, no en
+        // el system (cacheado): así el prefijo no se parte por idioma.
+        `USER-FACING LANGUAGE (only for each step's "summary"): ${getForgeLang() === 'es' ? 'Spanish' : 'English'}\n\n` +
         `Plan the implementation as a JSON array of BuildStep objects:`;
 
       const response = await platformService.callForgeChat({
@@ -284,6 +295,9 @@ OUTPUT FORMAT — return ONLY a valid JSON object with exactly these two keys, n
             requires_steps: Array.isArray(s.requires_steps)
               ? s.requires_steps.map(Number)
               : [],
+            ...(typeof s.summary === 'string' && s.summary.trim() !== ''
+              ? { summary: s.summary.trim() }
+              : {}),
           };
         });
 

@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react';
-import { X, Clock, RotateCcw, Tag, Loader2, GitBranch, ChevronDown, ChevronRight } from 'lucide-react';
+import { X, Clock, RotateCcw, Tag, GitBranch, ChevronDown, ChevronRight } from 'lucide-react';
 import type { FileSystemTree } from '@webcontainer/api';
 import { SupabaseService } from '@/services/SupabaseService';
+import NebuLoader from './brand/NebuLoader';
+import LoadingSquares from './brand/LoadingSquares';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
+import type { ForgeKey } from '@/i18n/forge/en';
 
 // CAMBIO 3 — el listado del drawer NO baja file_tree (puede pesar MBs por fila,
 // x50 filas). El árbol se descarga sólo al ejecutar un restore (select por id).
@@ -29,25 +33,27 @@ interface HistoryDrawerProps {
 }
 
 const TRIGGER_COLORS: Record<string, string> = {
-  ai_action: 'bg-red-600/20 text-red-400 border-red-600/30',
-  manual: 'bg-blue-600/20 text-blue-400 border-blue-600/30',
-  zip_upload: 'bg-purple-600/20 text-purple-400 border-purple-600/30',
-  template_load: 'bg-green-600/20 text-green-400 border-green-600/30',
-  manual_save: 'bg-amber-600/20 text-amber-400 border-amber-600/30',
-  pre_restore: 'bg-slate-600/20 text-slate-300 border-slate-600/30',
+  // Sistema (5.5): rojo de marca sólo para lo que hizo la IA; el resto neutro.
+  ai_action: 'bg-primary/15 text-primary border-primary/30',
+  manual: 'bg-neutral-800 text-neutral-300 border-neutral-700',
+  zip_upload: 'bg-neutral-800 text-neutral-300 border-neutral-700',
+  template_load: 'bg-neutral-800 text-neutral-300 border-neutral-700',
+  manual_save: 'bg-neutral-800 text-neutral-300 border-neutral-700',
+  pre_restore: 'bg-neutral-800 text-neutral-400 border-neutral-700',
 };
 
-const TRIGGER_LABELS: Record<string, string> = {
-  ai_action: 'AI',
-  manual: 'Checkpoint',
-  zip_upload: 'Upload',
-  template_load: 'Template',
-  manual_save: 'Saved',
-  pre_restore: 'Pre-restore',
+const TRIGGER_LABELS: Record<string, ForgeKey> = {
+  ai_action: 'history.trigger.ai',
+  manual: 'history.trigger.manual',
+  zip_upload: 'history.trigger.upload',
+  template_load: 'history.trigger.template',
+  manual_save: 'history.trigger.saved',
+  pre_restore: 'history.trigger.preRestore',
 };
 
 export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTree }: HistoryDrawerProps) {
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const { lang, t } = useForgeLang();
   const [isLoading, setIsLoading] = useState(false);
   const [showLabelInput, setShowLabelInput] = useState(false);
   const [labelValue, setLabelValue] = useState('');
@@ -151,7 +157,7 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
-    return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    return `${d.toLocaleDateString(lang)} ${d.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' })}`;
   };
 
   // El listado ya llega ordenado por created_at desc. Separamos los pre_restore
@@ -170,8 +176,8 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${TRIGGER_COLORS[snap.trigger] ?? 'bg-gray-700 text-gray-400 border-gray-600'}`}>
-              {TRIGGER_LABELS[snap.trigger] ?? snap.trigger}
+            <span className={`text-xs font-medium px-1.5 py-0.5 rounded border ${TRIGGER_COLORS[snap.trigger] ?? 'bg-neutral-700 text-neutral-400 border-neutral-600'}`}>
+              {TRIGGER_LABELS[snap.trigger] ? t(TRIGGER_LABELS[snap.trigger]) : snap.trigger}
             </span>
           </div>
           {snap.label && (
@@ -185,7 +191,7 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
           className="flex items-center gap-1 px-2 py-1 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-xs rounded transition-colors shrink-0"
         >
           <RotateCcw size={11} />
-          Restore
+          {t('history.restore')}
         </button>
       </div>
 
@@ -194,7 +200,7 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
       {confirmingId === snap.id && (
         <div className="mt-3 pt-3 border-t border-border">
           <p className="text-xs text-muted-foreground mb-2">
-            ¿Restaurar a esta versión? Se guardará un checkpoint del estado actual.
+            {t('history.confirm')}
           </p>
           <div className="flex items-center gap-2">
             <button
@@ -203,16 +209,16 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
               className="flex items-center gap-1 px-2.5 py-1 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-xs rounded transition-colors"
             >
               {restoringId === snap.id
-                ? <Loader2 size={11} className="animate-spin" />
+                ? <LoadingSquares size={11} />
                 : <RotateCcw size={11} />}
-              Restaurar
+              {t('history.restore')}
             </button>
             <button
               onClick={() => setConfirmingId(null)}
               disabled={restoringId !== null}
               className="px-2.5 py-1 text-muted-foreground hover:text-foreground text-xs rounded transition-colors"
             >
-              Cancelar
+              {t('common.cancel')}
             </button>
           </div>
         </div>
@@ -238,11 +244,12 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2">
             <GitBranch size={18} className="text-red-400" />
-            <span className="text-white font-semibold">Version History</span>
+            <span className="text-white font-semibold">{t('studio.menu.history')}</span>
           </div>
           <button
             onClick={onClose}
             className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-full transition-colors"
+            aria-label={t('common.close')}
           >
             <X size={16} />
           </button>
@@ -256,7 +263,7 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
                 type="text"
                 value={labelValue}
                 onChange={(e) => setLabelValue(e.target.value)}
-                placeholder="Checkpoint name..."
+                placeholder={t('history.checkpointName')}
                 autoFocus
                 className="flex-1 bg-accent border border-border rounded px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-primary"
                 onKeyDown={(e) => {
@@ -269,13 +276,13 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
                 disabled={!labelValue.trim() || isSaving}
                 className="px-3 py-1.5 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-xs rounded transition-colors"
               >
-                {isSaving ? <Loader2 size={12} className="animate-spin" /> : 'Save'}
+                {isSaving ? <LoadingSquares size={12} /> : t('common.save')}
               </button>
               <button
                 onClick={() => { setShowLabelInput(false); setLabelValue(''); }}
-                className="px-2 py-1.5 text-gray-400 hover:text-white text-xs rounded transition-colors"
+                className="px-2 py-1.5 text-neutral-400 hover:text-white text-xs rounded transition-colors"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
             </div>
           ) : (
@@ -284,7 +291,7 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
               className="w-full flex items-center justify-center gap-2 py-2 bg-accent hover:bg-accent/80 border border-border text-sm text-muted-foreground hover:text-foreground rounded-lg transition-colors"
             >
               <Tag size={14} />
-              Save checkpoint
+              {t('history.saveCheckpoint')}
             </button>
           )}
         </div>
@@ -293,13 +300,13 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
         <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
           {isLoading ? (
             <div className="flex items-center justify-center py-10">
-              <Loader2 size={22} className="animate-spin text-gray-500" />
+              <NebuLoader size={96} />
             </div>
           ) : snapshots.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
-              <Clock size={32} className="text-gray-600" />
-              <p className="text-gray-400 font-medium">No history yet</p>
-              <p className="text-gray-600 text-sm">Actions are auto-saved as you build</p>
+              <Clock size={32} className="text-neutral-600" />
+              <p className="text-neutral-400 font-medium">{t('history.empty')}</p>
+              <p className="text-neutral-600 text-sm">{t('history.emptyHint')}</p>
             </div>
           ) : (
             <>
@@ -314,7 +321,7 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
                     className="w-full flex items-center gap-1.5 px-1 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
                   >
                     {showPreRestore ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                    Punto de restauración
+                    {t('history.restorePoint')}
                   </button>
                   {showPreRestore && (
                     <div className="mt-2">

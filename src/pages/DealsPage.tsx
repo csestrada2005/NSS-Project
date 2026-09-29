@@ -11,6 +11,7 @@ import Pagination from '@/components/Pagination';
 import { SupabaseService } from '@/services/SupabaseService';
 import { useNavigate } from 'react-router-dom';
 import type { Deal } from '@/types';
+import LoadingSquares from '../components/brand/LoadingSquares';
 
 type ClientProfile = { id: string; full_name: string | null; email: string | null };
 type CollaboratorEntry = { id: string; full_name: string | null; email: string | null; role: 'read' | 'edit' };
@@ -35,12 +36,12 @@ type DealRevision = {
 const STAGES: Deal['stage'][] = ['prospecting', 'qualification', 'proposal', 'negotiation', 'closed_won', 'closed_lost'];
 
 const stageBadgeClass: Record<Deal['stage'], string> = {
-  prospecting: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
-  qualification: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+  prospecting: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20',
+  qualification: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20',
   proposal: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  negotiation: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+  negotiation: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20',
   closed_won: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  closed_lost: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+  closed_lost: 'bg-red-500/10 text-red-400 border-red-500/20',
 };
 
 const stageLabel: Record<Deal['stage'], { en: string; es: string }> = {
@@ -53,10 +54,10 @@ const stageLabel: Record<Deal['stage'], { en: string; es: string }> = {
 };
 
 const statusBadgeClass: Record<string, string> = {
-  draft: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
-  sent_to_client: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+  draft: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20',
+  sent_to_client: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20',
   client_revised: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  developer_reviewing: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+  developer_reviewing: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20',
   accepted: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
   closed_won: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
 };
@@ -88,24 +89,24 @@ const DealHistoryPanel = ({ deal, onClose }: { deal: DealWithContact; onClose: (
   }, [deal.id]);
 
   const revisionStatusClass: Record<string, string> = {
-    pending: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+    pending: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20',
     accepted: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-    superseded: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
+    superseded: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20',
   };
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex justify-end">
-      <div className="bg-zinc-800 border-l border-zinc-700 w-full max-w-md flex flex-col h-full">
+      <div className="bg-neutral-800 border-l border-neutral-700 w-full max-w-md flex flex-col h-full">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 className="text-sm font-semibold text-foreground">
             Deal History — {deal.title}
           </h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xl">&times;</button>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-lg">&times;</button>
         </div>
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <span className="w-5 h-5 border-2 border-muted border-t-primary rounded-full animate-spin" />
+              <LoadingSquares size={32} />
             </div>
           ) : revisions.length === 0 ? (
             <p className="text-sm text-muted-foreground">No revisions yet.</p>
@@ -420,22 +421,22 @@ const DealsPage = () => {
       {/* KPI cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="rounded-xl p-5 bg-card border border-border">
-          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-2">
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">
             {lang === 'es' ? 'Pipeline ponderado' : 'Weighted Pipeline'}
           </p>
           <p className="text-2xl font-bold text-emerald-400">{fmtCurrency(weightedPipeline)}</p>
         </div>
         <div className="rounded-xl p-5 bg-card border border-border">
-          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-2">
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">
             {lang === 'es' ? 'Valor total abierto' : 'Total Open Value'}
           </p>
           <p className="text-2xl font-bold text-foreground">{fmtCurrency(totalValue)}</p>
         </div>
         <div className="rounded-xl p-5 bg-card border border-border">
-          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-2">
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">
             {lang === 'es' ? 'Cerrado ganado' : 'Closed Won'}
           </p>
-          <p className="text-2xl font-bold text-blue-400">{fmtCurrency(wonValue)}</p>
+          <p className="text-2xl font-bold text-neutral-400">{fmtCurrency(wonValue)}</p>
         </div>
       </div>
 
@@ -451,7 +452,7 @@ const DealsPage = () => {
       <div className="rounded-xl bg-card border border-border overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
-            <span className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin" />
+            <LoadingSquares size={32} />
           </div>
         ) : deals.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
@@ -511,7 +512,7 @@ const DealsPage = () => {
                         <button
                           onClick={() => handleSendToClient(deal)}
                           disabled={actionLoading === deal.id + '-send'}
-                          className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors px-2 py-1 rounded hover:bg-blue-500/10 disabled:opacity-50"
+                          className="flex items-center gap-1 text-xs text-neutral-400 hover:text-neutral-300 transition-colors px-2 py-1 rounded hover:bg-neutral-500/10 disabled:opacity-50"
                         >
                           <Send className="w-3 h-3" />
                           {lang === 'es' ? 'Enviar' : 'Send'}
@@ -539,7 +540,7 @@ const DealsPage = () => {
                       </button>
                       <button
                         onClick={() => handleDelete(deal.id)}
-                        className="text-xs text-rose-500 hover:text-rose-400 transition-colors px-2 py-1 rounded hover:bg-rose-500/10"
+                        className="text-xs text-red-500 hover:text-red-400 transition-colors px-2 py-1 rounded hover:bg-red-500/10"
                       >
                         {lang === 'es' ? 'Eliminar' : 'Delete'}
                       </button>
@@ -557,8 +558,8 @@ const DealsPage = () => {
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-800 border border-zinc-700 rounded-xl shadow-xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-base font-semibold text-foreground">
+          <div className="bg-neutral-800 border border-neutral-700 rounded-xl shadow-xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-sm font-semibold text-foreground">
               {editingDeal ? (lang === 'es' ? 'Editar / Revisar deal' : 'Edit / Revise deal') : (lang === 'es' ? 'Nuevo deal' : 'New deal')}
             </h2>
 
@@ -728,7 +729,7 @@ const DealsPage = () => {
 
             <div className="flex gap-2 pt-2">
               <Button onClick={handleSubmit} disabled={isSubmitting || !formTitle.trim() || !formValue} className="flex-1">
-                {isSubmitting ? <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" /> : lang === 'es' ? 'Guardar' : 'Save'}
+                {isSubmitting ? <LoadingSquares size={16} /> : lang === 'es' ? 'Guardar' : 'Save'}
               </Button>
               <Button variant="outline" onClick={() => setShowModal(false)} disabled={isSubmitting} className="flex-1">
                 {lang === 'es' ? 'Cancelar' : 'Cancel'}

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { AnimatePresence } from "framer-motion";
-import { Layers, Flame, Plus, Search, Trash2, Loader2, LayoutDashboard, Share2, ChevronLeft } from "lucide-react";
+import { Layers, Flame, Plus, Search, Trash2, LayoutDashboard, Share2, ChevronLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { SupabaseService } from "@/services/SupabaseService";
 import { useAuth } from "@/contexts/AuthContext";
@@ -10,7 +10,13 @@ import CreditBalance from "@/components/forge/CreditBalance";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import EmptyState from "@/components/EmptyState";
+import { LangToggle } from "@/components/forge/LangToggle";
 import NewProjectModal from "@/components/forge/NewProjectModal";
+import NebuLoader from '../components/brand/NebuLoader';
+import { useForgeLang } from "@/i18n/forge/useForgeLang";
+import { t as tNow } from "@/i18n/forge/lang";
+import { formatRelativeDate } from "@/i18n/forge/format";
+import { useIsPhone } from "@/hooks/useIsPhone";
 
 interface ForgeProject {
   id: string;
@@ -19,6 +25,7 @@ interface ForgeProject {
   created_at: string;
   updated_at: string;
   deployment_url: string | null;
+  preview_html: string | null;
 }
 
 const ForgeDashboard = () => {
@@ -35,6 +42,10 @@ const ForgeDashboard = () => {
   } | null>>(new Map());
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
+  const { lang, t, tn } = useForgeLang();
+  // En teléfono no se crea proyecto: el pedido inicial viaja sólo en la
+  // navegación al editor, y el editor muestra el aviso de computadora (5.4).
+  const isPhone = useIsPhone();
 
   const supabase = SupabaseService.getInstance().client;
 
@@ -45,7 +56,7 @@ const ForgeDashboard = () => {
     try {
       const { data, error: fetchError } = await supabase
         .from("forge_projects")
-        .select("id, name, description, created_at, updated_at, deployment_url")
+        .select("id, name, description, created_at, updated_at, deployment_url, preview_html")
         .eq("user_id", user.id)
         .order("updated_at", { ascending: false });
       if (fetchError) throw fetchError;
@@ -53,7 +64,7 @@ const ForgeDashboard = () => {
         setProjects(data as ForgeProject[]);
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to load projects';
+      const msg = err instanceof Error ? err.message : tNow('dashboard.loadFailed');
       setError(msg);
     } finally {
       setIsLoadingProjects(false);
@@ -63,7 +74,7 @@ const ForgeDashboard = () => {
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
-      setError('User not authenticated');
+      setError(tNow('dashboard.notAuthenticated'));
       setIsLoadingProjects(false);
       return;
     }
@@ -98,7 +109,7 @@ const ForgeDashboard = () => {
 
   const deleteProject = async (e: React.MouseEvent, projectId: string) => {
     e.stopPropagation();
-    if (!window.confirm("Delete this project? This cannot be undone.")) return;
+    if (!window.confirm(t('dashboard.deleteConfirm'))) return;
     const { error } = await supabase
       .from("forge_projects")
       .delete()
@@ -113,34 +124,23 @@ const ForgeDashboard = () => {
     setShareProject(project);
   };
 
-  const formatDate = (iso: string) => {
-    const d = new Date(iso);
-    const now = new Date();
-    const diffMs = now.getTime() - d.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    if (diffMins < 60) return `${diffMins}m ago`;
-    const diffHrs = Math.floor(diffMins / 60);
-    if (diffHrs < 24) return `${diffHrs}h ago`;
-    const diffDays = Math.floor(diffHrs / 24);
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return d.toLocaleDateString();
-  };
+  const formatDate = (iso: string) => formatRelativeDate(iso, lang);
 
   if (error) {
     return (
       <div className="nebu-modal flex flex-col h-screen bg-background items-center justify-center p-6">
-        <div className="bg-red-100 border border-red-300 text-red-800 rounded-xl px-5 py-4 text-sm max-w-md w-full text-center">
-          <p className="font-semibold mb-1">Failed to load projects</p>
+        <div className="bg-red-500/10 border border-red-500/30 text-red-300 rounded-xl px-5 py-4 text-sm max-w-md w-full text-center">
+          <p className="font-semibold mb-1">{t('dashboard.loadFailed')}</p>
           <p>{error}</p>
           <Button
             variant="outline"
-            className="mt-4 border-red-300 hover:bg-red-100 text-red-800"
+            className="mt-4 border-red-500/30 hover:bg-red-500/10 text-red-300"
             onClick={() => {
               setError(null);
               loadProjects();
             }}
           >
-            Retry
+            {t('common.retry')}
           </Button>
         </div>
       </div>
@@ -171,35 +171,38 @@ const ForgeDashboard = () => {
       </AnimatePresence>
 
       {/* Top header bar */}
-      <header className="h-14 border-b border-border bg-background flex items-center justify-between px-6 shrink-0">
+      <header className="h-14 border-b border-border bg-background flex items-center justify-between gap-2 px-4 sm:px-6 shrink-0">
         <div className="flex items-center gap-2">
           <Flame size={20} className="text-primary" />
           <span className="font-bold text-foreground">Wyrd Forge</span>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-muted-foreground">
-            {projects.length} project{projects.length !== 1 ? "s" : ""}
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <span className="hidden sm:inline text-xs text-muted-foreground">
+            {tn('dashboard.projectCount', projects.length)}
           </span>
-          <CreditBalance />
-          <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
+          <div className="hidden sm:block">
+            <CreditBalance />
+          </div>
+          <LangToggle className="inline-flex items-center gap-1.5 h-8 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors" />
+          <Button variant="ghost" size="sm" onClick={() => navigate('/')} aria-label={t('dashboard.backToNebu')}>
             <ChevronLeft size={16} />
-            Back to Nebu
+            <span className="hidden sm:inline">{t('dashboard.backToNebu')}</span>
           </Button>
         </div>
       </header>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto p-6">
+      <main className="flex-1 overflow-auto p-4 sm:p-6">
         {/* Header row */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">Projects</h1>
+            <h1 className="text-2xl font-semibold text-foreground">{t('dashboard.title')}</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              {filteredProjects.length} project{filteredProjects.length !== 1 ? "s" : ""}
+              {tn('dashboard.projectCount', filteredProjects.length)}
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="relative">
+            <div className="relative flex-1 sm:flex-none">
               <Search
                 size={16}
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
@@ -207,92 +210,125 @@ const ForgeDashboard = () => {
               <Input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search projects..."
-                className="pl-9 w-56"
+                placeholder={t('dashboard.searchPlaceholder')}
+                className="pl-9 w-full sm:w-56"
               />
             </div>
             <Button
               onClick={() => setShowNewProjectModal(true)}
               size="sm"
+              className="nebu-cta shrink-0"
+              disabled={isPhone}
+              title={isPhone ? t('phone.createDisabled') : undefined}
             >
               <Plus size={16} />
-              New Project
+              {t('dashboard.newProject')}
             </Button>
           </div>
         </div>
 
+        {isPhone && (
+          <p className="mb-4 text-xs text-muted-foreground border border-border rounded-md px-3 py-2">
+            {t('phone.createDisabled')}
+          </p>
+        )}
+
         {isLoadingProjects ? (
-          <div className="flex items-center justify-center h-48 text-muted-foreground gap-3">
-            <Loader2 size={22} className="animate-spin" />
-            <span>Loading projects...</span>
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-5">
+            <NebuLoader size={140} />
+            <span>{t('dashboard.loading')}</span>
           </div>
         ) : filteredProjects.length === 0 && !searchQuery ? (
           <EmptyState
             icon={Layers}
-            title={{ en: 'No projects yet', es: 'Sin proyectos aún' }}
-            subtitle={{ en: 'Create your first project to start building with AI.', es: 'Crea tu primer proyecto para empezar a construir con IA.' }}
-            ctaLabel={{ en: 'New Project', es: 'Nuevo Proyecto' }}
-            onCta={() => setShowNewProjectModal(true)}
+            title={t('dashboard.empty.title')}
+            subtitle={isPhone ? t('phone.createDisabled') : t('dashboard.empty.subtitle')}
+            ctaLabel={isPhone ? undefined : t('dashboard.newProject')}
+            onCta={isPhone ? undefined : () => setShowNewProjectModal(true)}
           />
         ) : filteredProjects.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-center text-muted-foreground gap-3">
             <Layers size={32} className="text-muted-foreground/40" />
-            <p className="text-sm">No projects match your search.</p>
+            <p className="text-sm">{t('dashboard.noMatches')}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredProjects.map((project, i) => (
               <div
                 key={project.id}
-                className="relative text-left rounded-xl border border-border bg-card p-5 transition-colors duration-200 hover:border-primary group cursor-pointer"
+                className="nebu-card relative text-left rounded-xl border border-border bg-card overflow-hidden transition-colors duration-200 hover:border-primary group cursor-pointer"
                 onClick={() => openProject(project)}
                 style={{ animationDelay: `${i * 60}ms` }}
               >
                 {/* Delete button */}
                 <button
                   onClick={(e) => deleteProject(e, project.id)}
-                  className="absolute top-3 right-3 p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all"
-                  title="Delete project"
+                  className="absolute top-3 right-3 z-10 p-1.5 rounded-md bg-background/80 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 focus-visible:opacity-100 transition-all"
+                  title={t('dashboard.deleteProject')}
+                  aria-label={t('dashboard.deleteProject')}
                 >
                   <Trash2 size={14} />
                 </button>
 
-                <h3 className="text-sm font-semibold text-foreground truncate pr-8">{project.name}</h3>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Updated {formatDate(project.updated_at)}
-                </p>
-                {(() => {
-                  const summary = projectSummaries.get(project.id);
-                  if (!summary) return <div className="h-4 mt-1" />;
-                  return (
-                    <p className="text-xs text-muted-foreground font-mono mt-1">
-                      {summary.componentCount} components · {summary.routeCount} routes
-                    </p>
-                  );
-                })()}
+                {/* Thumbnail — última foto del preview compilado (guardada
+                    automáticamente desde StudioEngine.tsx en cada compile
+                    exitoso, sin depender de haber publicado el proyecto). */}
+                <div className="relative w-full aspect-video bg-muted overflow-hidden border-b border-border">
+                  {project.preview_html ? (
+                    <iframe
+                      srcDoc={project.preview_html}
+                      sandbox="allow-scripts"
+                      tabIndex={-1}
+                      title={t('dashboard.previewOf', { name: project.name })}
+                      className="absolute top-0 left-0 origin-top-left pointer-events-none"
+                      style={{ width: '400%', height: '400%', transform: 'scale(0.25)' }}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-muted-foreground/30">
+                      <Layers size={28} />
+                    </div>
+                  )}
+                </div>
 
-                {/* Action buttons */}
-                <div className="flex gap-2 mt-4 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); openProject(project); }}
-                    className="flex-1 py-1.5 text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors"
-                  >
-                    Open
-                  </button>
-                  <button
-                    onClick={(e) => openHub(e, project)}
-                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-accent text-muted-foreground hover:text-foreground rounded-lg transition-colors"
-                  >
-                    <LayoutDashboard size={11} />
-                    Hub
-                  </button>
-                  <button
-                    onClick={(e) => shareProjectFn(e, project)}
-                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-accent text-muted-foreground hover:text-foreground rounded-lg transition-colors"
-                    title="Share project"
-                  >
-                    <Share2 size={11} />
-                  </button>
+                <div className="p-5">
+                  <h3 className="text-sm font-semibold text-foreground truncate pr-8">{project.name}</h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t('dashboard.updated', { when: formatDate(project.updated_at) })}
+                  </p>
+                  {(() => {
+                    const summary = projectSummaries.get(project.id);
+                    if (!summary) return <div className="h-4 mt-1" />;
+                    return (
+                      <p className="text-xs text-muted-foreground font-mono mt-1">
+                        {tn('dashboard.componentCount', summary.componentCount)} · {tn('dashboard.routeCount', summary.routeCount)}
+                      </p>
+                    );
+                  })()}
+
+                  {/* Action buttons */}
+                  <div className="flex gap-2 mt-4 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); openProject(project); }}
+                      className="flex-1 py-1.5 text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors"
+                    >
+                      {t('dashboard.open')}
+                    </button>
+                    <button
+                      onClick={(e) => openHub(e, project)}
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-accent text-muted-foreground hover:text-foreground rounded-lg transition-colors"
+                    >
+                      <LayoutDashboard size={11} />
+                      Hub
+                    </button>
+                    <button
+                      onClick={(e) => shareProjectFn(e, project)}
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-accent text-muted-foreground hover:text-foreground rounded-lg transition-colors"
+                      title={t('dashboard.shareProject')}
+                      aria-label={t('dashboard.shareProject')}
+                    >
+                      <Share2 size={11} />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}

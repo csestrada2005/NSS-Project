@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Globe,
-  Loader2,
   Plus,
   ChevronDown,
   ChevronRight,
@@ -14,6 +13,7 @@ import { SupabaseService } from '@/services/SupabaseService';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjectAccess } from '@/hooks/useProjectAccess';
 import { toast } from 'sonner';
+import LoadingSquares from '../components/brand/LoadingSquares';
 
 interface ProjectDetails {
   id: string;
@@ -47,7 +47,7 @@ const STATUS_CONFIG: Record<
   { label: string; color: string; dot: string }
 > = {
   pending: { label: 'Pending', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20', dot: 'bg-amber-400' },
-  in_progress: { label: 'In Progress', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20', dot: 'bg-blue-400' },
+  in_progress: { label: 'In Progress', color: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20', dot: 'bg-neutral-400' },
   completed: { label: 'Completed', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', dot: 'bg-emerald-400' },
   blocked: { label: 'Blocked', color: 'bg-red-500/10 text-red-400 border-red-500/20', dot: 'bg-red-400' },
 };
@@ -87,14 +87,14 @@ function MilestoneCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
             <h3 className="text-sm font-semibold text-foreground">{milestone.title}</h3>
-            <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${status.color}`}>
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${status.color}`}>
               {status.label}
             </span>
           </div>
           {milestone.description && (
             <p className="text-xs text-muted-foreground mt-0.5">{milestone.description}</p>
           )}
-          <div className="flex gap-4 mt-1 text-[11px] text-muted-foreground">
+          <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
             {milestone.due_date && (
               <span>Due: {new Date(milestone.due_date).toLocaleDateString()}</span>
             )}
@@ -141,7 +141,7 @@ function MilestoneCard({
             <div className="space-y-3 mb-4">
               {notes.map((note) => (
                 <div key={note.id} className="flex gap-2.5">
-                  <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-semibold text-primary shrink-0">
+                  <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary shrink-0">
                     {(note.author?.full_name ?? '?')[0].toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -149,7 +149,7 @@ function MilestoneCard({
                       <span className="text-xs font-medium text-foreground">
                         {note.author?.full_name ?? 'Unknown'}
                       </span>
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         {formatDistanceToNow(new Date(note.created_at), { addSuffix: true })}
                       </span>
                     </div>
@@ -177,7 +177,7 @@ function MilestoneCard({
               disabled={!noteText.trim() || submittingNote}
               className="px-3 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {submittingNote ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+              {submittingNote ? <LoadingSquares size={13} /> : <Send size={13} />}
             </button>
           </div>
         </div>
@@ -339,7 +339,7 @@ const ClientProjectPage = () => {
   if (accessLoading || loadingProject) {
     return (
       <div className="flex items-center justify-center h-full py-20">
-        <Loader2 size={28} className="animate-spin text-primary" />
+        <LoadingSquares size={40} />
       </div>
     );
   }
@@ -369,10 +369,10 @@ const ClientProjectPage = () => {
                 </span>
               )}
               <span
-                className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${
+                className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
                   project.deployment_url
                     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                    : 'bg-gray-500/10 text-gray-400 border-gray-500/20'
+                    : 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20'
                 }`}
               >
                 {project.deployment_url ? 'Deployed' : 'Not deployed'}
@@ -413,7 +413,7 @@ const ClientProjectPage = () => {
       {/* Milestones */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-foreground">Milestones</h2>
+          <h2 className="text-sm font-semibold text-foreground">Milestones</h2>
           {canEdit && (
             <button
               onClick={() => setShowAddMilestone((p) => !p)}
@@ -481,7 +481,7 @@ const ClientProjectPage = () => {
                 disabled={!newMilestone.title.trim() || addingMilestone}
                 className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {addingMilestone && <Loader2 size={12} className="animate-spin" />}
+                {addingMilestone && <LoadingSquares size={12} />}
                 Add Milestone
               </button>
             </div>

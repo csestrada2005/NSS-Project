@@ -16,6 +16,11 @@ describe('getPlainEnglish', () => {
     expect(getPlainEnglish(lines, false)).toBe('Figuring out what to build...');
   });
 
+  it('recognizes the planning line by its kind, whatever language its text is in', () => {
+    const lines: ProgressLine[] = [{ text: 'Planeando...', status: 'pending', kind: 'planning' }];
+    expect(getPlainEnglish(lines, false)).toBe('Figuring out what to build...');
+  });
+
   it('returns the creating message for a pending line with currentAction "create"', () => {
     const lines: ProgressLine[] = [{ text: 'Creating Hero.tsx', status: 'pending' }];
     expect(getPlainEnglish(lines, false, 'create')).toBe('Writing new components...');

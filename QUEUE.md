@@ -68,7 +68,7 @@ Notas de G-4 ya decididas:
 - `projectId: none`: si no se resolvió en G-4, va como sub-bullet del bucket 5.
 - La bomba de `deployGeneratedFunctions` se documenta como comentario en código, no como ítem.
 
-## 3. HECHO (pendiente CHECK MANUAL) — Guard de código bajo `src/` (G-6, 2026-09-19)
+## 3. HECHO Y CONFIRMADO — Guard de código bajo `src/` (G-6, 2026-09-19)
 
 **El agujero:** el Verifier (`src/services/Verifier.ts`) compila y repara errores de compilación —
 nunca inspecciona el CONTENIDO por reglas de seguridad. `BACKEND_RULES` (`src/services/promptRules.ts`)
@@ -185,7 +185,7 @@ inesperado — no hubo que reencuadrar nada.
 
 ---
 
-## 4. BLOQUEADO (falta VERCEL_TOKEN) — Hueco conceptual RLS ↔ Edge Function (G-7, 2026-09-19)
+## 4. EN PAUSA (espera bucket 6: código sin errores de tipos) — Hueco conceptual RLS ↔ Edge Function (G-7, 2026-09-19)
 
 **Resumen para quien llegue después:** Bloque 1 (plomería de deploy) HECHO y commiteado, verificación
 automática en verde, SIN check manual porque publicar no está configurado en producción. **Bloque 2
@@ -275,6 +275,26 @@ Mundos pre-registrados:
 - **Falla real (si aparece, SÍ es bug):** `persistSession` (o `autoRefreshToken`/el `lock` no-op) sigue
   apareciendo en el bundle publicado, o el preview del builder se rompe/tira SecurityError donde antes no
   lo hacía.
+
+**Actualización 2026-09-29 — desbloqueo de Vercel y nuevo bloqueo:**
+- Samuel compró Vercel Pro (cuenta = Team) y configuró en Render `NEBU_STUDIO_VERCEL_TOKEN` y `VERCEL_TEAM_ID`.
+  `6a0e5ee`: `server.js` lee ese nombre (respaldo `VERCEL_TOKEN`) y añade `?teamId=` a crear/consultar la
+  publicación; `SecretsPanel` los trata como claves de plataforma.
+- Publicación real de Vertigo → `Vercel deployment failed during build`. **Evidencia (Build Logs):** instala
+  bien, corre `npm run build` = `tsc -b && vite build` y `tsc -b` sale con 12 errores de tipos del código
+  generado (imports sin usar en Footer/StatsAndCTASection/AdminClientCheckPanel; dos `AppUser` distintos y
+  `.error` inexistente en AdminUsersTable/InviteUserForm; props no aceptadas `staggerDelay`, `onCancel`,
+  `onRefresh`/`onRoleChange`/`onDeactivate`). El preview compila con esbuild SIN revisar tipos, por eso
+  funciona en el editor y no se puede publicar. Varios errores son bugs reales (p. ej. `onCancel` ignorado,
+  `.error` siempre undefined).
+- Opciones presentadas: A publicar con sólo `vite build` (paridad con el preview), B que el Verifier
+  revise tipos y la IA genere código limpio, C aflojar tsconfig (no alcanza). **Decisión de Samuel: B.**
+  El check del Bloque 1 se retoma DESPUÉS del ítem de tipos del bucket 6 (ver ahí).
+- Mundo aún sin probar, pre-registrado: aunque compile, `framework: null` sin `outputDirectory` puede hacer
+  que Vercel publique la raíz en vez de `dist/` (página en blanco). Otro posible: Deployment Protection del
+  Team pide login en la URL única de la publicación.
+- Mejora anotada: el servidor sólo devuelve "failed during build"; debería devolver también el enlace al
+  log de Vercel (`inspectorUrl`).
 
 ## 5. BUCKET Producto y UX
 Una sola sesión de decisión, con mockup delante. Orden acordado con Samuel (2026-09-19): 1 (Panel Cloud) →
@@ -739,6 +759,485 @@ Mundos pre-registrados:
   `AnimatePresence`), o `MigrationApplyModal` deja aplicar sin pedir la frase de confirmación en el caso
   destructivo.
 
+**Bloque 5 (2026-09-20, mismo día) — REVERSIÓN del crema/blanco a negro, recuadros rojos, ámbar para la
+alerta destructiva, azul eliminado (G-5.3 sigue abierto, este es el bloque más reciente):**
+
+Samuel probó el Bloque 4 en caliente y reportó que el contraste entre los 4 modales/dashboard (crema/
+blanco, brandbook oficial) y el Command Palette (siempre oscuro) se sentía "muy rudo". Decisión explícita
+de Samuel: **eliminar el crema/blanco aunque esté en el brandbook oficial** — unificar toda la plataforma
+a oscuro, con el rojo como único acento de marca. Reencuadre aceptado sin objeción (el usuario final manda
+sobre el documento del brandbook).
+
+**Hecho — `src/index.css`, `.nebu-modal`:** los 4 modales administrativos + dashboard pasan de
+crema/blanco a negro profundo `#0D0D0D` / carbón `#1A1A1A`, texto gris claro `#E8E8E8`. El rojo oficial
+`#D62828` NO cambia. Verificado con build real (`npx vite build`): `F5F0EB` ya no aparece en ningún lado
+del CSS compilado; `.nebu-modal` trae los valores oscuros nuevos.
+
+**Hecho — alerta de migración destructiva (`MigrationApplyModal.tsx`), de rojo a ámbar:** como el rojo
+ahora se usa también en recuadros normales (ver abajo), se reserva ámbar para la única alerta realmente
+grave de la plataforma, para que se siga notando que es distinta. **La lógica de la frase de confirmación
+tecleada NO se tocó en absoluto** — sólo clases de color.
+
+**Hecho — recuadros a rojo con texto negro (contraste ~4.2:1, aceptable para texto grande/semibold; el
+propio Samuel pidió "letras negras" explícitamente), en los "recuadros" tipo tarjeta-resumen — NO en
+listas/tablas de datos completas (schema browser, editor SQL, lista de edge functions: pintarlas enteras
+de rojo las habría hecho ilegibles a escala; sólo se les quitó el azul si lo tenían):**
+- `SecretsPanel.tsx`: "Platform Services" y "Project secrets" (los dos que Samuel nombró explícitamente).
+- `EmailPanel.tsx`: "Sending Domain", editor de templates, "Test Send".
+- `DomainsPanel.tsx`: "Connect a custom domain" y el recuadro de instrucciones DNS manuales.
+- `LighthousePanel.tsx` (Analytics): los 2 gauges + Core Web Vitals. Nota: `scoreColor()` tenía rojo para
+  "puntaje malo" — sobre fondo rojo se volvía ilegible (rojo sobre rojo), así que "malo" pasa a negro.
+- `DatabaseOverview.tsx`: tarjeta de Conexión + las 3 tarjetas KPI (Tables/Active Users/Snapshots).
+- `UsagePanel.tsx`: las 4 tarjetas KPI (REST/Auth/Storage/Realtime Requests).
+- `DeployManager.tsx` (tab Deploy): la tarjeta "Deploy to Vercel" completa — de paso perdió el morado
+  (`purple-*`) que no es color de marca, y el gris frío (`gray-900/800`, mismo problema que el ítem
+  siguiente) que tenía sin relación con el resto de la plataforma (que usa `zinc-*`/tokens).
+
+**Hecho — azul eliminado de toda la plataforma (no sólo lo que Samuel señaló, se hizo un barrido
+completo tras encontrar la causa):**
+- `FileExplorer.tsx` (el recuadro de archivos dentro del modal de Código — esto fue lo que Samuel señaló
+  literalmente: "el fondo es azul por alguna razón"): la causa real no era ningún azul puesto a propósito
+  — es que este archivo, solo, seguía usando la paleta `gray-*` de Tailwind (que tiene un matiz frío/
+  azulado, p. ej. `gray-900` = `#111827`) en vez de `zinc-*`/tokens como el resto de la plataforma. Migrado
+  a los tokens del sistema (`bg-background`, `border-border`, `text-muted-foreground`, `bg-accent`), y el
+  ícono de carpeta de `red-400` a `text-primary` (rojo de marca). De paso, foco visible explícito en el
+  botón de "+" (antes sin `focus:outline-none` propio, quedaba a merced del foco azul por defecto del
+  navegador).
+- Todos los `focus:border-blue-500`/`focus:ring-blue-500` sueltos en los archivos de arriba (Secrets,
+  Email, Domains, Analytics, Schema, Users) → `focus:border-primary` o negro (dentro de los recuadros ya
+  rojos).
+- `SecretsPanel.tsx`: nombre de secreto guardado, de `text-blue-400` a `text-foreground`.
+- `EmailPanel.tsx`: link "New template", de `text-blue-400` a `text-primary`.
+- `DomainsPanel.tsx`: ícono y código CNAME del recuadro de instrucciones, ya cubiertos por el punto de
+  arriba (recuadro completo a rojo/negro).
+- `LogsViewer.tsx`: nivel de log "INFO" tenía `text-blue-400` (semántico: Info/Warn/Error) → `text-zinc-400`
+  (neutral; Warn sigue ámbar, Error sigue rojo).
+- `ShareProjectModal.tsx`: el rol "dev" en las insignias de colaboradores era `bg-blue-100 text-blue-700`
+  — literal, no token, pensado para el fondo claro del Bloque 4. Con el modal de vuelta a oscuro esa
+  insignia además se habría visto como un parche pastel roto, así que se recolorearon las 4 insignias de
+  rol (admin/dev/vendedor/cliente) a su equivalente translúcido de fondo oscuro y "dev" pasó de azul a
+  ámbar (los otros tres conservan su matiz: rojo/púrpura/esmeralda, no se tocaron por gusto, sólo por
+  necesidad).
+- `AIHistoryPanel.tsx`: etiqueta "new_feature" en el historial de intents era `bg-blue-900/40
+  text-blue-400` → `bg-pink-900/40 text-pink-400` (color libre en ese set de 7, no colisiona con ninguno).
+
+**Hallazgo de paso, mismo motivo que el azul (literales pensados para el fondo claro del Bloque 4, rotos
+al volver a oscuro) — corregido aunque no fue pedido explícitamente, porque de lo contrario esos 3 puntos
+se habrían visto como parches claros flotando sobre negro:**
+- `ForgeDashboard.tsx`: banner de error "Failed to load projects" (`bg-red-100 text-red-800` →
+  `bg-red-500/10 text-red-300`).
+- `SettingsModal.tsx`: resultado de push a GitHub (`bg-green-100`/`bg-red-100` → translúcidos oscuros).
+
+**NO tocado, deliberadamente (recuadros nombrados por Samuel como "etc" pero que en realidad son listas/
+herramientas de trabajo, no tarjetas-resumen — pintarlas de rojo entero las habría hecho ilegibles a
+escala; si esto no es lo que Samuel quería, decirlo y se ajusta):** `SchemaViewer.tsx` (lista de tablas,
+sólo se le quitó el azul del buscador), `SQLEditor.tsx` (editor + tabla de resultados, sin azul, sin
+tocar), `EdgeFunctionsPanel.tsx` (lista de funciones, sin azul, sin tocar), `UsersManager.tsx` (tabla de
+usuarios, sólo se le quitó el azul de un select), `LogsViewer.tsx` (lista de logs, sólo el color semántico
+de nivel). El modal de Chat (`ChatInterface.tsx`, `text-blue-400` en una línea) tampoco se tocó — Samuel lo
+señaló como el que YA estaba bien, no pidió cambiarlo.
+
+**Verificación:** `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 653/653.
+`npx vitest run` → 48/48. `npx vite build` real (no sólo tsc): confirmado en el CSS compilado que `F5F0EB`
+no aparece en ningún lado y que `.nebu-modal` trae los valores oscuros nuevos + `#D62828` intacto.
+`graphify update .` corrido. `dist/` del build de verificación borrado (no se commitea).
+
+**CHECK MANUAL — PENDIENTE.** Cómo reproducirlo (dev server local o rama desplegada):
+1. Abrir New Project, Settings, Share, History, y una migración destructiva de prueba: los 4 modales +
+   dashboard deben verse negros/carbón con acentos rojos — YA NO crema ni blanco.
+2. La alerta de "esto borra datos para siempre" debe verse en ámbar (no rojo), y debe seguir pidiendo la
+   frase de confirmación exacta antes de dejar aplicar (esto no debía cambiar).
+3. Settings → Secrets: "Platform Services" y "Project secrets" en rojo sólido con letras negras.
+4. Settings → Email, Analytics, Database (Overview/Usage), y la pestaña Deploy: sus recuadros principales
+   también en rojo/negro.
+5. Abrir el modal de Código (pestaña Code del panel inferior): el recuadro de archivos (Explorer) ya NO se
+   ve azul.
+6. El Command Palette (Chat/Visual/Código/Navegar) debe verse EXACTAMENTE igual que antes — oscuro, sin
+   cambios, no se tocó nada ahí en este bloque.
+
+Mundos pre-registrados:
+- **Esperado:** todo lo de arriba se cumple tal cual. Cero crema, cero blanco, cero azul, alerta destructiva
+  en ámbar con la frase intacta.
+- **Residuo conocido, no bug:** el contenido de SchemaViewer/SQLEditor/EdgeFunctionsPanel/UsersManager/
+  LogsViewer NO se pintó de rojo (son listas de trabajo, no tarjetas — ver arriba "NO tocado"); si Samuel
+  esperaba rojo ahí también, es un ajuste de alcance, no un bug.
+- **Falla real (si aparece, SÍ es bug):** cualquier crema/blanco/azul restante en las superficies de marca,
+  texto negro sobre fondo oscuro o viceversa en cualquier recuadro tocado, o `MigrationApplyModal` deja
+  aplicar sin pedir la frase.
+
+### "Paso 4" (continuación) — Dashboard de proyectos (2026-09-23)
+
+Confirmado con Samuel que "paso 4" es el resto del rediseño brutalista: Dashboard de proyectos +
+onboarding. Empezado por Dashboard (`ForgeDashboard.tsx`) — es exclusivamente Wyrd Forge, sin ambigüedad
+de alcance (a diferencia del onboarding, ver el bloque BLOQUEADO justo abajo).
+
+**Hecho:** `ForgeDashboard.tsx` YA llevaba la clase `.nebu-modal` desde el Bloque 4 (brandbook oficial) —
+las reglas nuevas de "paso 3"/`.nebu-cta` (radius, bordes, mayúsculas) ya le llegaban automáticamente, sin
+tocar el archivo. Encima de eso:
+- `src/index.css`: la regla de mayúsculas ganó `h1` (antes sólo `h2`/`h3` — los popups no usan `h1`, pero
+  el título "Projects" del Dashboard sí).
+- Nueva clase `.nebu-card` — mismo lenguaje que `.nebu-cta` pero para un CONTENEDOR clickeable completo,
+  no un botón: al pasar el mouse se desplaza un poco y gana una sombra roja. A propósito SIN sombra en
+  reposo (a diferencia de `.nebu-cta`) — con varias tarjetas en una cuadrícula, todas con sombra dura
+  permanente se habría visto recargado; sólo la que se está mirando la muestra.
+- `nebu-cta` en el botón "New Project" (la CTA principal de la página) y `nebu-card` en cada tarjeta de
+  proyecto de la cuadrícula.
+- `EmptyState.tsx` (el estado vacío "No projects yet") NO se tocó — es un componente COMPARTIDO con Nebu
+  Studio (usado en `StaffProjects`, `ClientProjects`, `StaffFinance`, etc., confirmado por grep antes de
+  tocar nada). Ya recibe el tratamiento automáticamente cuando se renderiza dentro de `.nebu-modal`
+  (Dashboard), sin filtrar a los usos de Nebu Studio (que no están envueltos en esa clase).
+
+**Verificación:** `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 671/671 (sin
+cambios). `npx vitest run` → 48/48. `npx vite build` real: confirmado que `.nebu-card` compila.
+
+**CHECK MANUAL — PENDIENTE.** Dashboard: el título "Projects" en mayúsculas, las tarjetas con esquinas
+casi rectas, y al pasar el mouse sobre una tarjeta debe desplazarse levemente con una sombra roja (sin
+sombra en las demás tarjetas al mismo tiempo). "New Project" con el mismo tratamiento que "Start
+Building"/"Send Invitations".
+
+**BLOQUEADO — Onboarding (Login, selección de rol, setup, pendiente de aprobación): NO se tocó, hallazgo
+que hay que resolver con Samuel antes de seguir.** Al investigar estas 4 pantallas para aplicarles el
+mismo estilo, `Login.tsx` resultó traer literal el texto "NEBU STUDIO" como marca central (animación de
+pincel de tinta sobre ese texto) — confirmado con `graphify` que estas 4 páginas viven en la misma
+comunidad que páginas explícitamente de Nebu Studio (`DealsPage`, `ProposalsPage`, `ContactsPage`,
+`FinancePage`, `DashboardPage`, etc.), no en la comunidad de Wyrd Forge. Es decir: estas pantallas NO son
+"onboarding de Wyrd Forge" — son el login/onboarding de NEBU STUDIO como plataforma completa (el usuario
+entra por ahí antes de elegir/llegar a Wyrd Forge). `CLAUDE.md` es explícito: "Deben seguir
+arquitectónicamente separados", y el propio Bloque 4 de este ítem ya había dejado esto fuera con la misma
+razón ("Alcance de hoy: sólo Wyrd Forge. Nebu Studio... es su propia sesión"). Aplicar el estilo aquí en
+una sesión de Wyrd Forge cruzaría esa frontera a propósito, no por descuido — se detuvo el trabajo aquí
+para confirmar con Samuel si de verdad quiere tocar estas 4 pantallas desde esta sesión, o si esto se queda
+para "su propia sesión" como ya estaba anotado.
+
+### Animación de carga — v2, reactiva por celda + progreso real (2026-09-23)
+
+Samuel probó el check manual del lote anterior: todo bien EXCEPTO la animación de carga (v1, ítem "Bloque
+2" de arriba) — "no me acaba de encantar, quiero algo más interactivo". Se le propusieron 3 direcciones
+(rejilla reactiva por celda / partículas al click / progreso real en vez de decorativo) — eligió una
+combinación: la rejilla reactiva por celda como base, MÁS que las celdas se enciendan según el progreso
+real cuando se genera un proyecto nuevo.
+
+**Hecho — `ColdStartOverlay.tsx`/`coldStartOverlay.css` reescritos (v2):**
+- Antes: un único `radial-gradient` sobre toda la cuadrícula, seguía al mouse vía 2 variables CSS
+  (`--cso-mx`/`--cso-my`) en el contenedor. Ahora: CADA celda tiene su propia variable `--cso-t` (0–1,
+  qué tan cerca está del cursor), calculada en cada `mousemove` (un solo `requestAnimationFrame` por
+  movimiento, nunca más de uno en vuelo) y escrita directo a esa celda por `ref` — sigue sin pasar por
+  `useState`/re-render de React. Cada celda reacciona sola: se agranda (`scale`), gana fondo rojo y brillo
+  (`box-shadow`) en proporción a `--cso-t` — efecto tipo dock de macOS / teclado mecánico, no un solo
+  reflector suave.
+- Nuevo prop `progress?: number` (0–1): una fracción de celdas queda "encendida" de forma PERSISTENTE
+  (clase `.cso-lit`, independiente del mouse), en un orden fijo pero no lineal (`LIGHT_ORDER`, un shuffle
+  con semilla fija — mismo orden en cada carga, para que no "salte" al re-renderizar cuando cambia el
+  progreso, y para que no se vea mecánico encendiéndose fila por fila). Conectado en `StudioEngine.tsx`
+  SÓLO en `showGeneratingOverlay` (generación de proyecto nuevo): `progress={generationProgress.step /
+  generationProgress.total}`. El caso de abrir un proyecto existente (`isLoading`) y el de "esperando el
+  primer compile" NO reciben `progress` (no hay un conteo de pasos real que mostrar ahí) — se quedan sólo
+  con la reactividad al mouse.
+- Las otras dos direcciones que se ofrecieron (partículas al click, o reemplazar del todo la reactividad al
+  mouse por progreso) NO se hicieron — quedan descartadas, no pendientes.
+
+**Verificación:** `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 671/671 (sin
+cambios). `npx vitest run` → 48/48. `npx vite build` real: confirmado que `--cso-t` y `.cso-lit` compilan
+con los valores nuevos.
+
+**CHECK MANUAL — PENDIENTE.** Abrir un proyecto: la cuadrícula debe reaccionar celda por celda al mover el
+mouse (cada recuadro cercano al cursor se agranda/ilumina, no un solo reflector difuso). Generar un
+proyecto nuevo: además de esa reactividad, las celdas deben irse "encendiendo" de forma permanente,
+repartidas (no en una fila prolija), a medida que avanzan los pasos reales — para cuando termine la
+generación, buena parte de la cuadrícula debe quedar encendida.
+
+### Toasts (pop ups de aviso) — blanco sólido con rojo (2026-09-23)
+
+Pedido de Samuel, a media sesión: los toasts (avisos flotantes tipo "Ve a preview primero para abrir
+chat") "me siguen sin gustar, hay que hacerlos full blancos con rojo todos".
+
+**Hallazgo antes de tocar nada:** `<Toaster>` (sonner) es UNO SOLO para todo el monorepo, montado en
+`main.tsx` — compartido con Nebu Studio/CRM (`StaffProjects`, `DealsPage`, `ProposalsPage`, etc., 11
+archivos más además de los 5 de Wyrd Forge). Restylearlo ahí habría pintado también los toasts del CRM,
+cruzando la separación de `CLAUDE.md` sin necesidad (a diferencia del onboarding de arriba, aquí SÍ hay
+una forma de aislarlo sin cruzar la frontera).
+
+**Hecho:** `src/utils/wyrdToast.ts` (nuevo) — wrapper de `sonner` que pasa un `style` inline (fondo
+`#FFFFFF`, texto `#0D0D0D`, borde `2px solid #D62828`, radius `4px`) en cada llamada; el inline style gana
+sobre las variables CSS que usa `sonner` por dentro, sin pelear especificidad ni tocar el `<Toaster>`
+global. Se reemplazó `import { toast } from 'sonner'` por `import { wyrdToast as toast } from
+'@/utils/wyrdToast'` en los 5 archivos que son EXCLUSIVOS de Wyrd Forge: `StudioEngine.tsx`,
+`ShareProjectModal.tsx`, `SecretsPanel.tsx`, `PlatformService.ts`, `CreditBalance.tsx` — confirmado uno
+por uno contra los otros 11 archivos con `toast` de sonner (todos Nebu Studio/CRM), que NO se tocaron.
+`RoleSelectionPage.tsx` (que sí se toca más abajo para el estilo visual del onboarding) usa `toast` para
+errores genéricos de cuenta, no para avisos de Wyrd Forge — se dejó con el `toast` normal de sonner a
+propósito.
+
+**Alcance, avisado explícito:** "todos" se interpretó como los tres tipos (`error`/`success`/`message`)
+disparados desde Wyrd Forge — no sólo el de "Ve a preview primero". Esto pierde la distinción semántica
+habitual (verde=éxito, rojo=error): ahora todos se ven igual (blanco+rojo). Si Samuel prefiere conservar
+algo de esa distinción (p. ej. un ícono verde en success sobre el mismo fondo blanco), es un ajuste rápido
+sobre el mismo wrapper.
+
+**Verificación:** `npx tsc -b --force` → 0 errores (un `toast('...')` suelto en `CreditBalance.tsx` no
+tenía firma compatible con el wrapper — cambiado a `toast.message('...')`, mismo comportamiento). `node
+--test "server/*.test.js"` → 671/671. `npx vitest run` → 48/48. `npx vite build` real: confirmado
+`background:"#FFFFFF",color:"#0D0D0D",border:"2px solid #D62828"` en el bundle.
+
+**CHECK MANUAL — PENDIENTE.** Disparar cualquier aviso de Wyrd Forge (por ejemplo, intentar abrir Chat con
+Código/Ajustes abierto) y confirmar que se ve blanco sólido con borde rojo, texto oscuro legible — y que
+un toast disparado desde una pantalla de Nebu Studio (CRM) sigue viéndose exactamente como antes (sin
+tocar).
+
+### Miniaturas de proyecto en el Dashboard (2026-09-23)
+
+Pedido de Samuel al ver `/forge` desplegado (rama `continuacion-sesion-g5` en Render): las tarjetas de
+proyecto eran sólo un recuadro gris con el título, quería ver una imagen real del preview. Se descartaron
+dos opciones porque dependían de haber publicado el proyecto (servicio externo sobre `deployment_url`, o
+captura al momento de publicar) — en el flujo real de Samuel, publicar es lo ÚLTIMO que pasa, así que la
+tarjeta se hubiera quedado sin imagen durante toda la vida útil del proyecto. Se optó por guardar la
+ÚLTIMA versión compilada dentro del editor (no depende de publicar nada).
+
+**Duda de Samuel, resuelta por diseño antes de escribir código:** ¿se acumulan versiones viejas en la
+base? No — es una sola columna que un `UPDATE` sobrescribe cada vez (nunca un `INSERT`), así que sólo
+existe la más reciente; no hay nada que limpiar.
+
+**DDL — DB principal de Wyrd, aditivo (sin frase de confirmación, no es destructivo).** `forge_projects`
+verificado antes de tocarla vía `information_schema.columns` (lo pegó Samuel, no adivinado): sin columna
+`preview_html` previa. SQL entregado a Samuel para correr él mismo en el SQL Editor de Supabase:
+```sql
+alter table public.forge_projects add column preview_html text;
+```
+**Estado del DDL: entregado, sin confirmar si ya se corrió** — el código de abajo asume que la columna ya
+existe; si Samuel todavía no la corrió, los `UPDATE`/`SELECT` a esa columna van a fallar en silencio
+(Supabase devuelve error, capturado y sólo logueado a consola, no rompe nada más) hasta que exista.
+
+**Hecho:**
+- `StudioEngine.tsx`: nuevo `useEffect` que escucha `compiledHtml`/`hasValidPreview` (no se enganchó a un
+  callsite de compile en particular — hay varios que no pasan por `applyPreviewHtml`, y este patrón los
+  cubre todos sin duplicar lógica) y guarda `compiledHtml` en `forge_projects.preview_html` 3s después del
+  último compile exitoso (debounce: varios compiles seguidos sólo guardan el último). Se salta si
+  `isReadOnly` (un colaborador de sólo lectura no debe escribir en el proyecto).
+- `ForgeDashboard.tsx`: la tarjeta de cada proyecto ahora tiene un recuadro de miniatura (16:9) arriba del
+  título — si hay `preview_html`, un `<iframe sandbox="allow-scripts" pointer-events:none>` con el mismo
+  truco que ya usa la industria para miniaturas (el iframe renderiza a 4× el tamaño real y se encoge con
+  `transform: scale(0.25)`, para que se vea como una versión "desktop" del sitio, no una versión móvil
+  aplastada); si no hay preview guardado aún, un ícono placeholder. `preview_html` se agrega al `select`
+  que ya hacía `loadProjects()`.
+
+**Costo real, avisado, no resuelto hoy:** cada carga del Dashboard descarga el HTML compilado completo de
+CADA proyecto visible (puede ser cientos de KB por proyecto) — con pocos proyectos no se nota; si la lista
+crece mucho, esto se vuelve una optimización pendiente (cargar la miniatura sólo cuando la tarjeta entra en
+pantalla, o una versión recortada/comprimida en vez del HTML completo). No se intentó resolver hoy, para no
+sobreconstruir algo que no se sabe si hace falta todavía.
+
+**Verificación:** `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 671/671 (sin
+cambios). `npx vitest run` → 48/48. `npx vite build` real: confirmado que `preview_html` aparece tanto en
+el lado que guarda (StudioEngine) como en el que lee (ForgeDashboard) del bundle.
+
+**CHECK MANUAL — PENDIENTE, en dos partes:**
+1. Confirmar que el `ALTER TABLE` de arriba ya se corrió en Supabase.
+2. Abrir un proyecto existente en el editor, esperar a que compile sin errores, volver al Dashboard: la
+   tarjeta de ese proyecto debe mostrar ahora una miniatura real del sitio (no el ícono placeholder). Las
+   demás tarjetas (proyectos no abiertos desde este cambio) siguen con el placeholder hasta que se abran
+   una vez.
+
+### "Paso 4" (continuación) — onboarding de Nebu Studio (Login/rol/setup/aprobación) (2026-09-23)
+
+Samuel confirmó explícito cruzar la frontera Wyrd/Nebu para esto (ver el bloque BLOQUEADO de arriba,
+ahora resuelto): "Sí, tócalas ahora (son la marca Nebu, tiene sentido)". Toque ligero — estas 4 pantallas
+ya tenían bastante lenguaje brutalista de fábrica (sin radius en los botones de wipe-fill, `uppercase
+tracking-widest`), así que el ajuste fue sobre todo grosor de borde + un par de detalles sueltos, NO un
+rediseño desde cero (ese sigue siendo el "diseño nuevo" que quedó anotado como pendiente en el Bloque 4
+original, sobre todo si algún día se quiere el crema/blanco del brandbook oficial en vez de negro).
+
+**Hecho:**
+- `Login.tsx`: el botón "Log in with Google" (`MagneticLoginBtn`) pasa de `rounded-full` con sombra suave
+  a `rounded-sm` con sombra dura desplazada (`3px 3px 0 rgba(230,0,0,.5)`) + `uppercase tracking-wider`.
+  El efecto "magnético" (el botón sigue al mouse dentro de un rango chico, ya existía) se dejó intacto —
+  mezclarlo con el desplazamiento diagonal de `.nebu-cta` se veía redundante/conflictivo (dos transforms
+  peleando).
+- `RoleSelectionPage.tsx`: las 3 tarjetas de rol pasan de `rounded-xl border` (1px) a `rounded-sm
+  border-2`, con desplazamiento diagonal + sombra dura al hover (vía utilidades de Tailwind directas,
+  `hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[...]` — esta página no importa CSS propio,
+  así que no hizo falta un archivo nuevo). Título de cada rol ("Admin", "Developer", "Client") en
+  mayúsculas. El botón "Continue" (ya tenía el efecto de relleno tipo wipe al hover, sin radius) sólo ganó
+  `border-2`.
+- `SetupPage.tsx` / `PendingApprovalPage.tsx`: mismo ajuste de `border` a `border-2` en el botón de
+  "Sign out" (mismo patrón wipe-fill que ya traían). `PendingApprovalPage.tsx` además en la píldora
+  "Requested: {rol}".
+- El ícono circular de cada tarjeta de rol (`rounded-full`) y las píldoras existentes se quedaron
+  redondas — mismo criterio de "no tocar lo que ya es un círculo de verdad" del resto de este ítem.
+
+**Deliberadamente NO tocado:** el color `#E60000` (el rojo VIEJO pre-brandbook, ya documentado como
+incorrecto desde el Bloque 4) se dejó tal cual — cambiarlo a `#D62828` es un cambio de paleta que ya había
+quedado anotado como "su propia sesión, es diseño nuevo" y no era lo que se pidió hoy (sólo el lenguaje
+brutalista: radius/bordes/sombra/mayúsculas). Si se quiere corregir el color de paso, es un hallazgo
+aparte a confirmar.
+
+**Verificación:** `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 671/671 (sin
+cambios). `npx vitest run` → 48/48. `npx vite build` real verificado.
+
+**CHECK MANUAL — PENDIENTE.** Cerrar sesión (o abrir en una ventana privada) para ver Login: el botón de
+Google debe verse con esquinas casi rectas, mayúsculas, y una sombra roja dura fija (no un halo difuso) —
+el movimiento "magnético" al mover el mouse cerca del botón debe seguir funcionando igual que antes. En
+selección de rol: las 3 tarjetas deben desplazarse un poco y ganar sombra roja al pasar el mouse, con
+bordes más gruesos; el botón "Continue" sigue con su efecto de relleno de siempre. Setup/Pending
+Approval: el botón de salir con el mismo borde más grueso, sin cambios de comportamiento.
+
+### Pantallas de carga — búho Nebu, barra por etapas, cuadritos (2026-09-27, rama `continuacion-sesion-g5`)
+
+Registrado a posteriori (sesión 2026-09-29): la sesión del 27 no actualizó esta cola. Cuatro commits sobre
+la v2 de la animación (`6d3c85f`, ya documentada arriba), último `f2db4c0`:
+- `5f3846a` — `NebuLoader` (búho, `src/components/brand/`) + `NebuLoadingCard`: el pill "Compiling…" pasa
+  a tarjeta grande con retraso de 300 ms; el spinner rojo de carga/generación/indexado pasa al búho.
+- `a5be40b` — búho en todas las cargas grandes (tamaños 160/140/96/64 px); spinners chicos en blanco `#E8E8E8`.
+- `84a6405` — `StudioLoadOverlay`: barra y porcentaje por etapas reales al cargar un proyecto (descarga
+  0-60 %, preparación 60-95 %, nunca 100 % antes de terminar). `LoadingSquares` (tres cuadritos)
+  reemplaza a todos los spinners chicos; Nebu Studio usa cuadritos y el búho queda para Wyrd Forge.
+- `f2db4c0` — `StudioProgressOverlay`: la generación usa la MISMA pantalla que la carga (cada paso real
+  ocupa su tramo de 5-95 %, 95-99 % esperando el primer compile, la barra nunca retrocede). Se quita la
+  reacción al mouse de la rejilla. Entrada a Nebu Studio vuelve al búho.
+
+**CHECK MANUAL — CONFIRMADO (2026-09-29, Samuel).** Estado previo: la rama `continuacion-sesion-g5` lleva 28 commits que NO están en `main` (verificado
+2026-09-29 contra `origin/main` = `eceb398`). **CHECK MANUAL — PENDIENTE**, se hace junto con el del
+pulido completo (ítem 5.4).
+
+**Hallazgo de paso, sin tocar:** `5f3846a` agregó `graphifyy` a `package.json` (dependencia de la app, +3k
+líneas en el lockfile). Es una herramienta del agente, no de la app: probablemente debería ser
+devDependency o no estar ahí (Render la instala en cada deploy). Ver "SIN CONFIRMAR".
+
+### 5.4 HECHO Y CONFIRMADO — Pulido completo de UI/UX (sesión 2026-09-29)
+
+Rama `continuacion-sesion-g5`, 10 commits sobre `f2db4c0` (`779e59d` … `dce6d2e`), SIN push todavía.
+
+Decidido con Samuel (opción "pulido completo", todas las recomendaciones aceptadas):
+- Idioma: Wyrd Forge bilingüe en/es DE VERDAD, con interruptor PROPIO (separado del `LanguageContext`
+  de Nebu Studio), guardado en el navegador, primera vez = idioma del navegador.
+- Chat: la IA responde SIEMPRE en el idioma de la interfaz, sin importar en qué idioma escriba el
+  usuario. El contenido de la app generada NO se ve afectado (sigue lo que pida el prompt).
+- Pasos del plan: "resumen aparte" — el Architect agrega `summary` (en el idioma de la interfaz) a cada
+  paso; `description` sigue en inglés y es lo único que lee el Implementer.
+- Botón de comprar créditos: deshabilitado con etiqueta "Próximamente".
+- Celular: editor detrás de `PhoneGate` (aviso "necesita computadora"); dashboard y Hub adaptados;
+  "Nuevo proyecto" apagado en teléfono (el pedido inicial viaja sólo en `location.state` y se perdería).
+- Test roto por la traducción (`migrationDirNormalization.test.js`, ancla de "dos avisos separados"):
+  se re-ancló a las claves del diccionario, misma protección.
+- Nombre en la pestaña: "Wyrd Forge" en `/forge` y `/studio`, "Nebu Studio" en el CRM.
+
+**Hecho, por bloque:**
+- B0 `779e59d` — `index.html`: fondo `#0d0d0d` desde el primer pintado (el blanco venía del html/body
+  por defecto mientras el búho está transparente sus primeros 300 ms), búho a 160 px, título por zona.
+- B1 `e716c21` — `src/i18n/forge/` (en.ts = forma de referencia; es.ts tipado contra sus claves: una
+  clave faltante rompe `tsc`), store fuera de React (`getForgeLang`/`t`/`tn`), `useForgeLang`,
+  `LangToggle` en dashboard y navbar del editor, `<html lang>` sincronizado. ~540 claves al cierre.
+- B2a+B4 `ee30c54` — dashboard, nuevo proyecto, compartir, Hub, créditos, pantallas de carga.
+- B2b `91d12f8` — StudioEngine, navbar, código, propiedades, historial de versiones.
+  `hasReportedRuntimeError` reconoce el aviso de runtime en los dos idiomas.
+- B2c `2f18964` — chat completo + aprobación de migraciones. `ProgressLine.kind: 'planning'`.
+- B2d `0b5a5d2` — Ajustes (7 pestañas + 7 paneles de DB) + `.nebu-cta` en sus botones principales.
+  Commit por defecto de GitHub: "Update from Wyrd Forge" (decía "Open Lovable Builder").
+- B3a/b `1d3d706` — guards (RLS, código de cliente), recorte de plan y resultado de migración con `lang`
+  opcional (sin él, idioma histórico: los tests viejos no cambian). La marca de cierre es idéntica en los
+  dos idiomas. Mensajes fijos del orquestador al diccionario. `server/forgeMessagesI18n.test.js` (4).
+- B3c `35177c7` — idioma de la IA: question lane y aclaraciones del simple lane; `summary` del Architect.
+  El idioma viaja en el user message para no partir el prefijo cacheado.
+- B5 `37e3a8c` — `useIsPhone` (<768 px Y puntero táctil), `PhoneGate`, dashboard/Hub responsive.
+- B6 `dce6d2e` — teclado. **Corrección de mi diagnóstico inicial:** el marco de foco global YA existía
+  (`index.css`, `*:focus-visible`); los huecos reales eran controles que sólo aparecen con hover, filas
+  clicables sin teclado (árbol de archivos, historial de IA) y botones de ícono sin nombre.
+
+**Verificación:** `npx tsc -b --force` 0 errores · `node --test "server/*.test.js"` 675/675 (671 + 4
+nuevos) · `npx vitest run` 56/56 (54 + test de `kind: 'planning'` + 2 de PhoneGate) · `npx vite build` OK.
+
+**CHECK MANUAL — CONFIRMADO (2026-09-29)** (junto con el de las pantallas de carga). Mundos pre-registrados:
+- Esperado: búho sobre negro sin destello al abrir cualquier URL; pestaña "Wyrd Forge"/"Nebu Studio".
+- Esperado: EN/ES en dashboard y navbar; cambia TODO Wyrd (toasts incluidos) y sobrevive a recargar;
+  primera vez con navegador en español → ES. El CRM NO cambia de idioma.
+- Esperado: con ES, una pregunta en inglés se responde en español (y al revés); la tarjeta del plan
+  muestra los pasos en el idioma elegido; avisos de guards y resultado de migración en ese idioma.
+- Esperado: la app generada sigue el idioma del PROMPT, no el de la interfaz.
+- Esperado: "Comprar créditos · Próximamente" apagado. En teléfono: aviso en `/studio/...`, dashboard
+  usable, "Nuevo proyecto" apagado con explicación. Ventana angosta con mouse: editor normal.
+- Esperado: con Tab, Abrir/Hub/Compartir aparecen al enfocar la tarjeta; el árbol de archivos se abre
+  con Enter.
+- Residuos conocidos (no bugs): mensajes viejos del chat quedan en el idioma en que se escribieron;
+  nombres/notas de paletas sugeridas vienen de la tabla `colors` en inglés; los loaders compartidos con
+  Nebu (`NebuLoader`, `LoadingSquares`) dicen "Cargando" a lectores de pantalla; Login/rol/setup/
+  aprobación son onboarding de Nebu y no se tradujeron; el prompt interno de "Corregir con IA" sigue en
+  español (es instrucción al modelo); pasos del plan sin `summary` (modelo que lo omita) caen a
+  `description` en inglés.
+- Fallo: un texto en el idioma equivocado; la IA ignora el idioma en alguna ruta; el idioma se cuela en
+  la app generada; aviso de celular en una ventana de escritorio.
+
+**Hallazgos de paso, SIN tocar (decisión de Samuel pendiente):**
+- **Seguridad/alcance — Ajustes → Base de datos → Usuarios (`UsersManager`)** lee `profiles` de la DB
+  PRINCIPAL de Wyrd/Nebu (usuarios de la plataforma, no los de la app del cliente) y ofrece un selector
+  para CAMBIARLES EL ROL (admin/dev/vendedor/cliente). `DatabaseOverview` también muestra la URL y cuenta
+  `profiles` de la DB principal. Si RLS lo permite, un dueño de proyecto podría cambiar roles de la
+  plataforma. Verificar contra la DB principal qué deja hacer RLS en `profiles` antes de decidir.
+- `ProjectHubPage` sigue con el estilo viejo (gris/azul `blue-600`), fuera del brutalista Nebu; las
+  gráficas de Analíticas usan azul/índigo (el azul se retiró de la plataforma).
+- `PreviewOverlay.tsx`, `InspectorPanel.tsx`, `ElementEditPopover.tsx`: no se montan en ningún lado
+  (código muerto); no se tradujeron.
+
+**Higiene:** scripts de reemplazo en el scratchpad de la sesión (fuera del repo), nada que borrar en el
+repo. `graphify-out/` se regeneró con `graphify update .` (no commiteado, igual que las sesiones previas).
+
+### 5.5 HECHO Y CONFIRMADO — Sistema visual minimalista: Wyrd + CRM (sesión 2026-09-29)
+
+Análisis previo (con Samuel): la idea era minimalista pero el sistema no — 3 escalas de gris, 7 radios,
+8 tamaños de texto, colores decorativos (morado/rosa/índigo/azul), Outfit cargada pero sin usar en Wyrd,
+Archivo Black descargada sin uso, IBM Plex Mono referenciada sin cargar. Samuel eligió la opción A
+("pasada de sistema") sin mockup, y después aplicarla al CRM con contenedores visibles sólo en hover.
+
+- `f6d3c44` Wyrd: `.wyrd-root` en StudioLayout con los tokens de marca de `.nebu-modal`; 4 px en todo
+  `rounded*` (círculos intactos); zinc/gray/slate → neutral; sólo rojo + emerald/amber/red de estado;
+  escala 12/14/18/24 (chat y navbar incluidos, triángulos de 9 px = íconos); títulos en Outfit; fuera
+  Archivo Black; mono del sistema; Hub con el contenedor Nebu.
+- (commit siguiente) CRM: `.nebu-crm` en WorkspaceLayout con el mismo sistema; `#E60000` → `#D62828`;
+  títulos display del onboarding (3xl/4xl) se quedan a propósito. Contenedores `.bg-card` del área de
+  contenido transparentes en reposo, visibles con hover o `:focus-within`; excluidos campos, menús y
+  popups; sólo con `@media (hover: hover)` (en táctil siguen visibles).
+- Verificación: tsc 0 errores · server 675/675 · vitest 56/56 · vite build OK · reglas presentes en el CSS
+  final.
+
+**CHECK MANUAL — CONFIRMADO (2026-09-29).** Esperado: Wyrd y CRM con el mismo negro/carbón/gris neutro, esquinas iguales,
+títulos en Outfit, sin azul/morado; en el CRM (computadora) tarjetas y paneles como texto suelto hasta pasar
+el mouse; formularios, menús y popups siempre visibles; en celular los contenedores se ven. Fallo: algún
+contenedor imprescindible (p. ej. un formulario dentro de una tarjeta) queda sin marco y se vuelve confuso;
+un estado que sólo se distinguía por color azul (p. ej. "completado" vs "en progreso") ahora sólo por texto.
+Residuo: las pantallas de carga (búho, rejilla, barra, cuadritos) no se tocaron.
+
+### 5.6 HECHO Y CONFIRMADO — Escalada de rol en `profiles` (seguridad, 2026-09-29)
+
+**Evidencia (DB principal de Wyrd, consultas de Samuel):** RLS encendido; políticas UPDATE `auth.uid() = id`
+sin `WITH CHECK` ni restricción de columnas; `authenticated` con UPDATE sobre toda la tabla; triggers sólo
+`AFTER` (ninguno frena `role`); `set_admin_unlimited_credits` (no SECURITY DEFINER) pone `unlimited = true`
+al pasar a admin; `server.js` confía en `profiles.role`. → **Cualquier usuario podía cambiarse `role`
+(dev seguro; admin si RLS de wallets lo permite) desde la consola del navegador.** Además, la aprobación de
+roles no podía funcionar: un admin sólo lee/edita su propia fila.
+
+**Decisión (Samuel): opción A — aprobación por el servidor.**
+- `supabase/migrations/20240110000000_protect_profile_privileges.sql` (aditiva): trigger `BEFORE UPDATE`
+  que rechaza cambios de `role`/`role_approved` salvo servidor (service_role), sesión sin JWT (SQL Editor)
+  u onboarding propio (rol vacío → `cliente`). **NO APLICADA TODAVÍA** — la aplica Samuel en la DB principal.
+- `server/roleDecision.js` (+ 5 tests): quién decide (role === admin, mismo criterio que getCreditContext)
+  y qué se escribe (sólo peticiones vivas; se asigna exactamente el rol pedido).
+- `server.js`: `GET /api/admin/pending-users`, `POST /api/admin/users/:userId/role-decision` (llave de
+  servidor, notificación al usuario incluida).
+- `AdminService.ts`; `UserApprovalPanel` y el contador de `AppSidebar` pasan por el servidor.
+- Pestaña "Usuarios" quitada de Ajustes y del Hub del proyecto; `UsersManager.tsx` borrado (mostraba
+  usuarios de la PLATAFORMA dentro de un proyecto y ofrecía cambiarles el rol).
+
+Verificación automática: tsc 0 · server 680/680 · vitest 56/56 · vite build OK.
+
+**SQL aplicado por Samuel en la DB principal (2026-09-29) y verificado** con 4 transacciones simuladas
+(`set local role` + `request.jwt.claims`, todas con `rollback`, sin rastro): (1) usuario `authenticated` se
+cambia `role` → `ERROR 42501 role and role_approved can only be changed by the server` (esperado); (2)
+onboarding rol vacío → cliente, (3) pedir `pending_role`, (4) `service_role` cambia `role` → sin error
+(esperado). El editor no muestra conteos de UPDATE; el mismo id disparó el candado en (1), así que la fila
+existe.
+
+**CHECK MANUAL — CONFIRMADO (2026-09-29, Samuel, software desplegado desde `continuacion-sesion-g5`):**
+cuenta nueva pide Developer → queda pendiente; el admin ve "1 pendiente" en el sidebar, la ve en el panel y
+la aprueba; la cuenta entra como Developer con la notificación "Access granted". Coincide con el mundo esperado.
+
 ### Resto del bucket (sin tocar esta sesión)
 - RAG de UI/UX: PatternRetriever da `direct: 0 | vector: 0`. Primera pregunta: ¿pasa igual en producción?
 - Catálogo de componentes, con auditoría de licencia por componente.
@@ -752,6 +1251,12 @@ Mundos pre-registrados:
   como están o hay una decisión de producto pendiente ahí?
 
 ## 6. BUCKET Calidad del modelo
+- **(PRIMERO — desbloquea ítem 4) El código generado no pasa `tsc -b`.** El Verifier sólo compila con
+  esbuild (no revisa tipos), así que la IA entrega imports sin usar, tipos duplicados que no coinciden y
+  props que el componente no acepta — varios son bugs reales visibles en la app (botón que no hace nada,
+  errores que nunca se muestran). Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4).
+  Decisión de Samuel (2026-09-29): que el Verifier revise tipos y la IA los corrija antes de terminar. Al
+  cerrarlo, re-publicar Vertigo y retomar el check del Bloque 1 del ítem 4.
 - Bug de recomendaciones: no muestra filas que SÍ están en la DB; la IA respondió dos veces "compila y no encuentro errores".
 - Reglas duras incumplidas: tocó `package.json` pese a prohibición explícita; añadió comportamiento no pedido dos veces.
 - Detectar que lo pedido YA EXISTE y responder "ya está construido". OJO: rompe la batería de regresión sobre fixtures ya construidos → necesita plan de checkpoints con fixtures vírgenes.
@@ -777,7 +1282,7 @@ no opcionales, nacidos del diseño del ítem 4:
 
 Pendiente: escribir el tutorial (sesión de producto, bucket 5, con mockup) una vez cerrado el ítem 4.
 
-## 8. HECHO (pendiente merge a main) — infra: ruta duplicada `C:\C:\` en Windows (2026-09-20)
+## 8. HECHO Y EN MAIN — infra: ruta duplicada `C:\C:\` en Windows (2026-09-20)
 
 **Cirugía aparte, fuera de los buckets de producto** — el entorno de desarrollo se acaba de mover de
 GitHub Codespaces a Windows nativo, y esto expuso un bug que siempre estuvo ahí.
@@ -808,10 +1313,712 @@ errores.
 **Higiene:** un script de reproducción aislado (`server/_pathtest.mjs`) se creó para confirmar la causa
 raíz y se borró antes de tocar el código real — no llegó a commitearse.
 
-**Estado:** commiteado en rama `sesion-g5` (`3f08d3f`), empujado a origin. **NO mergeado a main todavía**
-— pendiente que Samuel abra el PR o pida el merge. Push inicial bloqueado por permisos (credenciales de
+**Estado:** commiteado en rama `sesion-g5` (`3f08d3f`) y mergeado a main en el PR #328 (`eceb398`). Push inicial bloqueado por permisos (credenciales de
 git en la máquina apuntaban a otra cuenta sin acceso de escritura al repo); resuelto re-logueando
 `gh auth login` como `csestrada2005`.
+
+## 9. HECHO — infra: graphify no arrancaba en Windows nativo + hook de Caveman roto (2026-09-20)
+
+**Cirugía aparte, mismo motivo que el ítem 8** (entorno movido de Codespaces a Windows nativo, expone
+supuestos que sólo valían en Linux). Encontrado de paso, a pedido de Samuel ("veo que graphify falla,
+por qué?"), mientras se preparaba la sesión de colores (ítem 5.3 Bloque 5, ver abajo).
+
+**Causa 1 — graphify nunca quedó instalado:** `scripts/setup-agent-tools.sh` lo instala con
+`pip install graphifyy --break-system-packages --quiet`, pero en este Windows `pip` a secas no está en el
+PATH (sólo `python3 -m pip` lo es) — el `command -v graphify` de guarda nunca se cumplía y el paso se
+saltaba en falso. Aparte, incluso corriendo el install bien (`python3 -m pip install ...`, sí funciona),
+pip deja `graphify.exe` en la carpeta Scripts de Python, que tampoco está en el PATH que ven Git Bash ni
+PowerShell — a diferencia de Codespaces/Linux, donde sí quedaba usable solo. `graphify-out/` tenía datos
+viejos de cuando corría en Codespaces; el comando llevaba tiempo ausente sin que nadie lo notara hasta
+ahora.
+
+**Causa 2 (hallazgo colateral, no pedido, encontrado investigando la 1):** el hook de Caveman
+(`~/.claude/settings.json`, PreToolUse sobre la tool "Bash") tenía
+`& 'C:/.../caveman.CMD' shrink-hook` — sintaxis de operador de PowerShell — pero esa tool ejecuta sus
+hooks vía Git Bash, que revienta con "syntax error near unexpected token `&'" en cada comando Bash. Esto
+bloqueaba el tool Bash por completo (no sólo caveman), incluidos los primeros intentos de diagnosticar la
+Causa 1.
+
+**Hecho:**
+- `~/.claude/settings.json` (fuera del repo, config de usuario): comando del hook corregido a
+  `caveman shrink-hook` (sin el operador `&`, portable). Verificado que es durable: se volvió a correr
+  `caveman hooks install claude` (el mismo paso que ya corre en cada sesión, línea 14 del script) y NO
+  reescribió el hook — lo detectó ya instalado y lo dejó intacto.
+- `scripts/setup-agent-tools.sh`: el paso de graphify ahora instala con `python3 -m pip` (no `pip` a
+  secas) y, si el comando `graphify` sigue sin aparecer después (caso Windows), crea dos shims en la
+  carpeta global de npm (`npm prefix -g` — la misma carpeta donde ya viven caveman/codegraph, siempre en
+  PATH): `graphify.cmd` (`python -m graphify %*`, lo resuelve PowerShell/cmd.exe) y `graphify` sin
+  extensión (`exec python -m graphify "$@"`, lo resuelve Git Bash — mismo patrón de shim que npm ya deja
+  junto a caveman/codegraph). En Codespaces/Linux, donde el pip install ya deja `graphify` usable solo,
+  este bloque no se activa (la guarda `command -v graphify` ya se cumple antes de llegar ahí).
+- Aplicado también a esta sesión en caliente (no sólo al script, para no esperar al próximo arranque):
+  shims creados, `graphify --version` y `graphify update .` verificados en Bash y PowerShell. Grafo
+  reconstruido (4405 nodos, 10624 edges, 282 comunidades).
+
+**Higiene:** un backup temporal de `~/.claude/settings.json` (`.bak-check`, para probar si
+`caveman hooks install claude` iba a romper el fix) se creó y se borró en la misma sesión — no llegó a
+quedar rastro.
+
+**Sin verificar (queda para quien lo note primero):** si `tree_sitter_sql` no está instalado, graphify
+avisa que los `.sql` no aportan nada al grafo (`pip install "graphifyy[sql]"` lo arregla) — no se instaló
+hoy, fuera de alcance de esta cirugía, sólo anotado.
+
+## 10. HECHO Y CONFIRMADO — Rediseño completo del modal de chat (2026-09-20)
+
+**CHECK MANUAL — CONFIRMADO (dato indirecto, no paso a paso):** el propio ítem 13 (abajo) registra que
+"Samuel confirmó el check manual de los ítems 10-12" antes de pasar a esa cirugía. No hay evidencia cruda
+paso-a-paso archivada aquí para este ítem en particular (los 8 pasos de la lista de abajo no fueron
+confirmados uno por uno por separado) — se deja anotado así, sin inventar detalle que no se dio.
+
+**Alcance confirmado con Samuel: sólo UI del modal de chat** — no se tocó ningún productor de datos
+(`ddlProposedMark`, `rlsPolicyGuard`/`clientCodeGuard`, el gate de plan `shouldGatePlan`/`requestPlanDecision`,
+el orquestador). Especificación completa + mockup navegable
+(https://claude.ai/artifact/HYr28WtZvQhstgWGEwMwWX, leído con el tool de Artifact — es la fuente de verdad de
+layout/animación/copy) dados por Samuel en un solo mensaje. Máquina de estados declarada:
+`type ForgeChatState = 'reposo' | 'pensando' | 'listo'`.
+
+**Investigación previa (antes de tocar código), por instrucción explícita de "PARA y repórtalo" si el modo
+plan se decidía server-side:** confirmado que NO es así — `planModeEnabled` es un booleano 100% cliente
+(`src/pages/StudioEngine.tsx`, `useState` + `sessionStorage['forge_plan_mode']`), y `src/utils/planGate.js`
+(`shouldGatePlan`) es una función pura que recibe ese booleano como parámetro. El checkbox viejo en
+`ChatInterface.tsx` (CIRUGÍA B3) fue SUSTITUIDO por el dropdown nuevo, mismo par valor/setter — no hay
+segundo camino hacia el pipeline. No hubo que parar.
+
+**Tres decisiones confirmadas con Samuel antes de escribir código** (el mockup no las cubre exactamente):
+1. El modal de Chat (y sólo Chat — Visual/Código/Navegar se quedan sólidos como estaban) flota translúcido
+   con blur sobre el preview en vivo, como en el mockup. Esto tocó `CommandModal.tsx` (compartido por las 4
+   pestañas): fondo/borde/backdrop condicionales a `activeTab==='chat'`.
+2. El chip de modo ("automático"/"plan") en cada turno del historial va escondido en el contenido
+   persistido (`[MODE:auto|plan]`, mismo truco que `[DDL_PROPOSED:...]`) — `forge_chat_messages` no tiene
+   columna de modo y esta sesión no toca schema. Turnos de antes de hoy no traen chip.
+3. La tarjeta de Plan SÍ lleva un botón "Rechazar" explícito (el mockup no lo tenía — Samuel lo pidió),
+   además de Construir/Editar el plan (disabled, "Próximamente")/Ver historial completo.
+
+**Hecho — archivos nuevos:**
+- `src/utils/chatModeMark.js` + `.d.ts` — `appendModeMark`/`parseModeMark`, puro, con
+  `server/chatModeMark.test.js` (6 tests). La marca se añade SÓLO al eco local/persistido del mensaje del
+  usuario — `onSendMessage` (lo que de verdad llega al pipeline/modelo) sigue recibiendo el texto pelado.
+- `src/components/chat/` (nuevo, 12 archivos): `types.ts` (tipos compartidos `ChatPlanStep`/`Message`,
+  separados de ChatInterface.tsx para evitar un ciclo de módulos con las tarjetas), `forgeChat.css` (port
+  casi literal del CSS del mockup, escopado bajo `.forge-chat` en vez de `body[data-estado]`; SIN el
+  navegador falso ni el panel de control del propio mockup, que eran andamiaje de demo — SIN media queries
+  de breakpoint, CON `prefers-reduced-motion`), `LiveNode.tsx` (Bloque 1.2, el nodo vivo — sin props de
+  estado, todo vía CSS contra `data-estado` del wrapper), `ModeSelector.tsx` (1.3, sustituye el checkbox
+  viejo), `CreditsHint.tsx` (1.4, mismo `CreditService.getBalance` + evento `forge:credits-updated` que ya
+  usaba `CreditBalance.tsx` — SIN endpoint nuevo, sólo otro render del mismo dato), `Typebar.tsx` (compone
+  1.1-1.5; adjuntar/dictar pintados inertes con tooltip "Próximamente" — no existe esa capacidad hoy),
+  `ProcessCard.tsx` (Bloque 2, reusa el `ProgressLine[]` que ya mantenía `sendMessage`, sin modelo nuevo),
+  `StepsCollapse.tsx` (el colapsable compartido de las 5 tarjetas de resultado), `useSqlPreview.ts` (el "Ver
+  el SQL" del DDL, nuevo — de sólo lectura, reusa `MigrationRunner.readMigrationSql`, el mismo método que ya
+  usaba `DDLApprovalButton`), `ResultCards.tsx` (las 5 variantes 3.1-3.5 + una sexta, `ErrorCard`, que el
+  mockup no cubre pero que ya existía en el chat viejo — saldo insuficiente / no se pudo arreglar el error de
+  compilar tras 3 intentos — quitarla habría sido una regresión real, no una limpieza), `HistoryOverlay.tsx`
+  (Bloque 4 — lee el `messages` que ChatInterface YA tiene en memoria, no repite la consulta a
+  `forge_chat_messages`).
+- `src/components/ChatInterface.tsx` — reescrito. Conserva TODA la lógica vieja sin tocar (rehidratación de
+  `chatHistory`, `sendMessage`, `buildAssistantMessage`, el gate de plan, la re-verificación de
+  `DDLApprovalButton`, la persistencia): sólo cambió qué renderiza y qué campos nuevos añade al `Message` de
+  sesión (`filesModifiedCount`, `durationSeconds`, `cancelled`, `stepsSnapshot`, `stepsCompletedSnapshot` —
+  ninguno se persiste, mismo trato que `planSteps`/`suggestedAction` de siempre). Regla dura verificada por
+  construcción: el render de la tarjeta de 'listo' es un único `? :` en cascada, nunca dos JSX a la vez.
+
+**Decisión de diseño no trivial — la propuesta DDL ejecutable se busca en TODO el historial, no sólo en el
+último turno** (`findExecutableProposal(messages)`, ya existía en `ddlProposalState.js`): como sólo puede
+haber UNA propuesta ejecutable a la vez y sigue viva hasta resolverse, una migración pendiente no debe
+"perderse de vista" sólo porque el usuario pidió otra cosa mientras tanto — sigue apareciendo como tarjeta
+DDL aunque hayan pasado turnos, usando las estadísticas (archivos/segundos/pasos) del turno que la propuso,
+no del último.
+
+**Decisión de diseño — el gate de plan (`pendingPlanSteps` no nulo) se trata como parte de 'pensando', no de
+'listo'**, aunque la tarjeta de Plan se vea como una tarjeta de resultado: verificado en
+`requestPlanDecision`/`handleSendMessage` que `isGenerating` sigue en `true` durante TODA la pausa de
+aprobación (la Promise del gate vive dentro del mismo `await` del pipeline) — mostrar el botón de enviar
+(en vez de cancelar) durante esa pausa habría permitido mandar un segundo turno mientras el primero sigue
+colgado. Cancelar (Esc o el botón de la barra) sigue funcionando igual que antes durante la pausa
+(aborta → `onAbort` dentro de `requestPlanDecision` resuelve 'rejected' → el orquestador lo trata como
+cancelación, no como rechazo — mecanismo ya existente, sin tocar).
+
+**Límite aceptado, documentado, no resuelto hoy — campos "ricos" del `Message` son sólo de sesión**:
+`appendMessage` sólo persiste `content` en `forge_chat_messages` (ya era así antes de hoy, mismo trato que
+`planSteps`/`suggestedAction`). Tras un refresh de página, el último turno rehidratado no trae
+`filesModifiedCount`/`warning`/`cancelled`/etc., y por diseño eso cae a `'reposo'` (typebar sola, sin
+tarjeta) en vez de inventar una tarjeta con datos que no están. La propuesta DDL SÍ sobrevive a un refresh
+(vive en el contenido, vía `[DDL_PROPOSED:...]`).
+
+**Límite aceptado — tras aplicar una migración desde `DDLApprovalButton`, la tarjeta siguiente puede quedar
+en blanco.** `onOutcome` anexa un mensaje nuevo con el veredicto (p.ej. "Migración aplicada correctamente")
+que no trae `filesModifiedCount` (aplicar una migración no modifica archivos del proyecto, modifica la base)
+— ese mensaje no cae en ninguna de las 5 tarjetas y el modal vuelve a `'reposo'`. El veredicto SÍ queda en
+"Ver historial completo". No es un olvido: es la esquina que quedó sin resolver por el alcance de hoy —
+antes de este rediseño, ese mismo veredicto se pintaba inline como burbuja de chat (ya no hay burbujas).
+
+**"Ver qué cambió" (SEGURIDAD, 3.3) no es un visor de diff dedicado** — no existía ninguno antes de hoy;
+expande el mismo colapsable de pasos ("N pasos completados"), que es lo más cercano a "qué se tocó" sin
+inventar una vista nueva fuera de alcance.
+
+**Restyle sin tocar lógica — `src/components/forge/DDLApprovalButton.tsx`:** el wrapper pasó a
+`display:contents` para que el botón viva como un ítem más de la fila de acciones de la tarjeta DDL (junto a
+"Ver el SQL"/"Ver historial completo"), con el texto de ayuda/aviso pidiendo su propia línea vía
+`flexBasis:'100%'` en vez de un contenedor en bloque que rompería la fila. Cero cambios en `handleClick`,
+`handleConfirm`, las re-verificaciones o `MigrationApplyModal`.
+
+**Wiring adicional en `src/pages/StudioEngine.tsx` (plomería, no pipeline):**
+- `handleSendMessage` ya calculaba `cancelled` localmente y lo descartaba antes de devolver el resultado al
+  chat — ahora viaja en el objeto de retorno (los dos `return`, el normal y el de la red de seguridad del
+  `catch`). Sin esto, CANCELADO (3.5) no tenía forma de saberse cancelado.
+- `persistChatMessage('user', ...)` ahora envuelve el mensaje con `appendModeMark` antes de guardarlo —
+  mismo valor de modo que el eco local en `ChatInterface.tsx` (ambos lo calculan independientemente a partir
+  del mismo estado, no se pasan el string ya marcado entre sí), así que el historial rehidratado desde la
+  DB y la sesión en vivo muestran el mismo chip.
+- Prop nueva `projectName` a `<ChatInterface>` (ya existía `currentProjectName` en el propio componente) —
+  sólo para el subtítulo del historial.
+
+**Verificación:** `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 659/659 (653 previos
++ 6 de `chatModeMark.test.js`). `npx vitest run` → 48/48. `npx vite build` real: confirmado que
+`forgeChat.css` compiló al bundle (`.forge-chat[data-estado=...]` presente en el CSS final). `dist/` de
+verificación borrado (no se commitea).
+
+**CHECK MANUAL — PENDIENTE.** Cómo reproducirlo (dev server local o rama desplegada), contra un proyecto
+con chat funcional:
+1. Abrir el Command Palette en la pestaña Chat: debe verse el preview en vivo DETRÁS, borroso, con sólo la
+   typebar flotando abajo (reposo — nada más en pantalla). Visual/Código/Navegar deben verse EXACTAMENTE
+   igual que antes (sólidos, sin cambios).
+2. Escribir un prompt normal y mandarlo: la typebar cambia a modo cancelar (■, borde rojo), el nodo late,
+   sube la tarjeta de proceso con los pasos en vivo y la barra de progreso. Al terminar: tarjeta de resumen
+   ("N archivos modificados · compiló sin errores · Ns"), colapsable de pasos, "Ver historial completo".
+3. Probar el selector de modo (dropdown que abre hacia arriba): cambiar a "Plan", mandar un prompt que
+   dispare el gate — debe aparecer la tarjeta Plan (Construir/Editar el plan deshabilitado/Ver historial/
+   Rechazar), la typebar sigue en modo cancelar durante la espera. "Construir" retoma la ejecución; "Rechazar"
+   o cancelar (Esc/■) cierra el turno sin aplicar nada.
+4. Mandar un prompt que dispare una migración: tarjeta DDL con borde rojo, "Aplicar cambio" (el botón real
+   de `DDLApprovalButton`, con su modal de confirmación si es destructivo), "Ver el SQL" (nuevo, de sólo
+   lectura), "Ver historial completo". Nunca debe decir "DDL"/"migración"/"RLS" en el texto visible.
+5. Cancelar una corrida a mitad de camino (Esc o el botón ■): tarjeta gris neutra "Detenido por ti", "X de N
+   pasos completados" con los no ejecutados en gris apagado, botón único "Retomar desde aquí".
+6. Abrir el historial (desde cualquier "Ver historial completo"): overlay a pantalla completa con blur sobre
+   el preview, cada turno de usuario con su chip de modo, cierra con ✕/clic en el fondo/Esc, el foco vuelve
+   al input al cerrar.
+7. Ctrl+Espacio: la typebar y las tarjetas se desvanecen (0.75s) revelando el preview completo; Ctrl+Espacio
+   de nuevo las regresa.
+8. Con `prefers-reduced-motion` activado en el SO: todas las animaciones deben colapsar a casi-instantáneas.
+
+Mundos pre-registrados:
+- **Esperado:** todo lo de arriba se cumple tal cual. En cualquier momento, EXACTAMENTE una tarjeta en
+  pantalla (nunca dos apiladas), o ninguna en reposo.
+- **Residuo conocido, no bug:** tras un refresh de página, el último turno puede aparecer sin tarjeta
+  (reposo) aunque haya sido una corrida normal — los campos ricos no sobreviven al refresh (ver arriba). Tras
+  aplicar una migración con éxito, el modal puede quedar en reposo en vez de mostrar una confirmación (ver
+  arriba, "límite aceptado"). El historial de antes de hoy no trae chip de modo.
+- **Falla real (si aparece, SÍ es bug):** dos tarjetas visibles a la vez, la frase de confirmación de
+  `MigrationApplyModal` saltada, el pipeline recibiendo literalmente el texto `[MODE:...]` en el prompt (se
+  vería en la respuesta del modelo o en los logs del servidor), Visual/Código/Navegar con su chrome
+  visualmente afectado por este cambio, o `git blame` mostrando que se tocó `ddlProposedMark`/
+  `rlsPolicyGuard`/`clientCodeGuard`/`shouldGatePlan`/`requestPlanDecision`.
+
+**Nota tardía (mismo día, ítem 11 de abajo): el mundo "Visual/Código/Navegar sin cambios" de arriba quedó
+SUPERADO a propósito** — esas tres pestañas de `CommandModal` se promovieron al navbar nuevo del preview,
+ítem 11. No es una regresión de esta sección; es el bloque siguiente moviendo algo a propósito.
+
+## 11. HECHO Y CONFIRMADO — Navbar del preview: sustituye la píldora flotante (2026-09-20)
+
+**CHECK MANUAL — CONFIRMADO (mismo dato indirecto que el ítem 10, ver esa nota).**
+
+**Alcance confirmado con Samuel, mismo día que el ítem 10** — retoma el "DISEÑADO PERO NO CONSTRUIDO" del
+bucket 5 ítem 3 (más arriba en este archivo), con tres decisiones nuevas que faltaban:
+
+1. **Botón Chat: el preview sigue visible y borroso detrás** (NO desaparece, a diferencia de lo que decía
+   la nota vieja, escrita antes de que existiera el modal de chat rediseñado en el ítem 10). Código y
+   Settings SÍ hacen que el preview desaparezca (in-place).
+2. **Contenedor del preview: "chrome de navegador"**, no marco de dispositivo. Se decidió NO duplicar una
+   segunda barra de direcciones bajo el navbar — el propio dropdown de páginas ya cumple ese papel; sólo
+   tres puntos decorativos a la izquierda quedan como la referencia visual a "chrome".
+3. **El dropdown de páginas NO necesitaba parser nuevo** — Samuel señaló que `CommandModal` ya tenía una
+   pestaña "Navigate" (`NavigatePanel.tsx`) que hacía exactamente esto: deriva rutas de los nombres de
+   archivo en `src/pages/` (no parsea `<Route>` de `App.tsx`, esa convención de nombre ya es la fuente de
+   verdad real del generador). La sesión había investigado mal y estuvo a punto de reconstruir algo que ya
+   existía — corregido antes de escribir código, no después.
+
+**Hecho:**
+- `src/utils/projectRoutes.js` + `.d.ts` — `deriveProjectRoutes(files)`, la misma derivación que tenía
+  `NavigatePanel.tsx`, extraída a módulo puro para que el dropdown nuevo la reuse sin duplicar lógica.
+  `server/projectRoutes.test.js`: 7 tests.
+- `src/components/studio/PageDropdown.tsx` (nuevo) — dropdown compacto tipo barra de direcciones, mismo
+  mecanismo de navegación que `NavigatePanel` (`postMessage({type:'navigate', path})` al iframe).
+  `NavigatePanel.tsx` quedó sin ningún caller tras este cambio y se borró (no se dejó muerto en el repo).
+- `src/components/studio/ViewportToggle.tsx` (nuevo) — un solo botón que cicla
+  desktop→tablet→móvil→desktop, reemplaza los 3 botones separados que había.
+- `src/components/studio/PreviewNavbar.tsx` (nuevo) — el navbar persistente en sí (ya no
+  `absolute top-4 left-1/2 -translate-x-1/2`, ahora un `<div>` normal que empuja el contenido, arriba del
+  todo): Preview/Visual (el toggle `editMode` de siempre, renombrado "Interaction"→"Preview" para lenguaje
+  llano) + PageDropdown + ViewportToggle (sólo visible con `panelMode==='preview'`) + Código/Settings/Chat.
+- `src/pages/StudioEngine.tsx` — nuevo estado `panelMode: 'preview' | 'code' | 'settings'` (sustituye a
+  `showSettings`, que sólo abría/cerraba un modal centrado). El área del preview ahora es
+  `flex flex-col` con `PreviewNavbar` arriba y, debajo, el iframe/`CodePanel`/`SettingsModal` según
+  `panelMode` — Código y Settings reemplazan al preview por completo (in-place, "el preview desaparece y se
+  ve todo el panel"), no flotan encima como antes. `CommandModal` se abre sólo para Chat/Terminal ahora
+  (ver abajo); su prop `visualEditMode`/`onToggleVisualEdit` se quitó (el toggle vive sólo en el navbar
+  nuevo, un único camino, no dos).
+- `src/components/CommandModal.tsx` — de 4 pestañas (Chat/Visual/Código/Navegar) a 2 (Chat/Terminal).
+  "Visual" se renombró a "Terminal": lo que de verdad vivía en esa pestaña era la consola de compilación
+  (`<Terminal ref={terminalRef}/>`, logs con colores ANSI) detrás de un toggle de modo visual que ya era
+  redundante con el del navbar nuevo — se quitó el toggle, se quedó la consola, que es la parte real.
+- `src/components/settings/SettingsModal.tsx` — de modal centrado flotante
+  (`fixed inset-0 ... bg-black/50 backdrop-blur-sm`, con animación de entrada/salida) a panel in-place
+  (`w-full h-full`, sin backdrop ni animación — mismo trato instantáneo que `CodePanel`, que ya intercambiaba
+  así). Sólo se usa desde `StudioEngine.tsx`, confirmado antes de tocarlo — ningún otro caller dependía del
+  modo flotante. Contenido interno (las 7 pestañas: Secrets/GitHub/Deploy/Domains/Database/Email/Analytics)
+  sin cambios.
+
+**NO tocado, deliberadamente:** `CommandBubble.tsx` (el botón flotante arrastrable que también abre
+`CommandModal`) se queda — es redundante con el botón Chat del navbar nuevo pero es una segunda vía
+funcional que nadie pidió quitar, y quitarla no estaba en el pedido de hoy.
+
+**Verificación:** `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 666/666 (659
+previos + 7 de `projectRoutes.test.js`). `npx vitest run` → 48/48. `npx vite build` real: sin errores,
+`dist/` de verificación borrado (no se commitea).
+
+**CHECK MANUAL — PENDIENTE.** Cómo reproducirlo (dev server local o rama desplegada), contra un proyecto
+con preview funcional:
+1. El navbar debe verse arriba del preview, SIEMPRE visible (no flotando encima) — no una píldora centrada.
+2. Preview/Visual: mismo comportamiento de siempre (click para seleccionar elementos en modo Visual).
+3. El dropdown de páginas debe listar las páginas reales del proyecto (`src/pages/*.tsx`) y navegar el
+   preview al hacer click en una.
+4. El botón de viewport debe ciclar desktop→tablet→móvil→desktop con UN solo click repetido, sin 3 botones
+   separados.
+5. "Código": el preview desaparece POR COMPLETO, se ve `CodePanel` a pantalla completa in-place. Volver a
+   "Preview" debe traer de vuelta el iframe.
+6. "Settings": mismo trato — el preview desaparece, se ve Settings a pantalla completa, con sus 7 pestañas
+   intactas. "Close" (o "Preview" en el navbar) regresa al preview.
+7. "Chat": abre el modal de chat de siempre (ítem 10) — el preview debe seguir visible, borroso, detrás.
+   `CommandModal` ahora sólo tiene 2 pestañas (Chat/Terminal, ya no Visual/Código/Navegar).
+8. `CommandBubble` (el botón flotante arrastrable) debe seguir abriendo el mismo modal — no se tocó.
+
+Mundos pre-registrados:
+- **Esperado:** todo lo de arriba se cumple tal cual. El navbar nunca se superpone al contenido, Código/
+  Settings reemplazan el preview por completo, Chat lo deja visible detrás.
+- **Residuo conocido, no bug:** `CommandBubble` sigue siendo una segunda vía para abrir Chat, redundante con
+  el botón del navbar — a propósito, no se quitó.
+- **Falla real (si aparece, SÍ es bug):** el navbar flota/se superpone en vez de empujar el contenido, el
+  dropdown de páginas muestra rutas inventadas o vacías con un proyecto que sí tiene páginas, Código/
+  Settings dejan el preview visible detrás (deberían reemplazarlo), o el modo Visual dejó de poder
+  seleccionar elementos en el preview.
+
+## 12. HECHO Y CONFIRMADO — Limpieza de "modos": Terminal fuera, tipos consolidados, una sola fuente de verdad (2026-09-21)
+
+**CHECK MANUAL — CONFIRMADO (mismo dato indirecto que el ítem 10, ver esa nota).**
+
+Samuel pidió un inventario completo de los "modos" del sistema (ítem 10+11 dejaron seis: `ChatSendMode`,
+el estado del chat reposo/pensando/listo, `editMode`, `ViewportMode`, `PanelMode`, `TabType`). Del
+inventario salieron 4 puntos; los primeros 3 se hicieron hoy, el 4° (rediseño visual del navbar, demo con
+decisiones ya tomadas) se deja para después de que éstos se verifiquen manualmente — explícito, no se tocó
+nada del navbar hoy más allá de qué tipos importa.
+
+**1. Terminal eliminado por completo.** No era sólo una pestaña muerta: `terminalRef` alimentaba una
+consola con logs de compilación en color ANSI (`\x1b[33m⚡ Starting build...`, etc.) en 13 sitios de
+`StudioEngine.tsx`. Los 13 se borraron (no se dejaron como no-ops silenciosos), junto con `terminalRef`,
+el import de `Terminal`/`TerminalRef`, `TabType`, `activeBottomTab` y el archivo `src/components/
+Terminal.tsx` en sí (sin otro caller, confirmado antes de borrar). `CommandModal.tsx` perdió toda su
+maquinaria de pestañas — ya sólo es el chat, así que el fondo translúcido+blur (antes condicional a
+`activeTab==='chat'`) ahora es incondicional. **Costo real, dicho explícito:** esos logs de build/cancelación
+no se ven en NINGÚN lado de la UI ahora — antes vivían sólo en esa consola. Si hacía falta para debug,
+es una pérdida real, no cosmética.
+
+**2. `ViewportMode`/`PanelMode` consolidados.** Antes: `ViewportMode` declarado 3 veces
+(`StudioEngine.tsx`, `PreviewNavbar.tsx`, `ViewportToggle.tsx`), `PanelMode` 2 veces (`StudioEngine.tsx`,
+`PreviewNavbar.tsx`) — mismas tres/dos definiciones, sin importarse entre sí. Ahora viven una sola vez en
+`src/components/studio/types.ts`, importados donde hacen falta. Cero cambios de comportamiento.
+
+**3. Una sola fuente de verdad para el modo de envío del chat.** Se explicó el trade-off a Samuel antes de
+tocar nada (dos opciones: el padre manda vs. el hijo manda) — elegida la Opción A: `StudioEngine` sigue
+siendo el único dueño de `planModeEnabled` (booleano, sessionStorage, sin cambios ahí), y `ChatInterface`
+perdió su `useState` local — `mode` ahora es una constante derivada del prop en cada render
+(`const mode = planModeEnabled ? 'plan' : 'auto'`), no una copia que se pueda desalinear. El dropdown llama
+directo a `onPlanModeChange`. El `data-modo` huérfano de `ChatInterface.tsx:456` (nunca lo leía ningún
+selector de `forgeChat.css`) se borró en el mismo movimiento.
+
+**Verificación:** `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 666/666 (sin
+cambios — esta cirugía no tocó nada con tests propios). `npx vitest run` → 48/48. `npx vite build` real:
+sin errores, y el bundle JS bajó de ~5.57MB a ~5.23MB (consistente con quitar Terminal + su dependencia de
+render de terminal). `dist/` de verificación borrado.
+
+**CHECK MANUAL — PENDIENTE.**
+1. Abrir el Command Palette: debe abrir directo al chat, sin ninguna pestaña visible arriba (ni Chat/
+   Terminal, ni Visual/Código/Navegar — todo eso ya no existe en este modal).
+2. El chat debe seguir flotando translúcido con blur sobre el preview exactamente igual que en el ítem 10
+   — nada debe verse distinto ahí.
+3. Cambiar el modo (dropdown automático/plan) varias veces seguidas, rápido: el dropdown y la pista de
+   "Modo plan..." (si sigue existiendo en pantalla en ese momento) nunca deben mostrar un modo distinto al
+   que el sistema está usando de verdad — confirma con un prompt real en modo Plan que el gate se dispare
+   cuando el dropdown dice "Plan" y NO cuando dice "Automático".
+4. Cancelar una generación en curso: debe seguir funcionando exactamente igual (el botón ■/Esc, la tarjeta
+   CANCELADO) aunque ya no haya ninguna consola visible mostrando el "Cancelando…".
+
+Mundos pre-registrados:
+- **Esperado:** todo lo de arriba se cumple tal cual. Sin pestañas en CommandModal, sin desincronización
+  visible del modo del chat, cancelación funcionando igual que siempre.
+- **Residuo conocido, no bug:** no hay ningún lugar en la UI que muestre logs de build/cancelación en vivo
+  — se quitó a propósito junto con Terminal. Si Samuel lo extraña, es una decisión de producto para abrir
+  aparte (traerlo de vuelta en otro lado), no un bug de esta cirugía.
+- **Falla real (si aparece, SÍ es bug):** cualquier pestaña visible en CommandModal, el modal de chat
+  perdiendo el efecto de blur sobre el preview, el dropdown de modo mostrando un valor que el pipeline no
+  respeta, o la cancelación dejando de funcionar.
+
+## 13. HECHO Y CONFIRMADO — Rediseño visual del navbar del preview (ítem 4, 2026-09-21)
+
+**CHECK MANUAL — CONFIRMADO (2026-09-23).** Evidencia cruda (Samuel, palabras textuales): "Item 13
+funcionando, la navbar se ve bien y funcional." Confirmación general, no verificada paso a paso contra los
+6 pasos ni contra la falla-real registrados abajo — se deja anotado así (no se marca cada paso individual
+como probado porque no se reportó a ese nivel de detalle).
+
+Samuel confirmó el check manual de los ítems 10-12 y pasó un HTML de referencia (título "Wyrd Forge —
+navbar") con las decisiones de diseño ya tomadas: chrome negro opaco (no translúcido), tres zonas
+(navegación+modo a la izquierda, página al centro, salidas+acciones a la derecha), tres niveles de color
+para todo interactivo (gris claro en reposo / blanco en hover / blanco+fondo activo — nunca rojo salvo en
+"Publicar"), selector de página con nombre legible + ruta como dato secundario, toggle Preview/Editor con
+texto siempre visible, viewport como único ícono sin texto. Resumen textual: "nuestros usuarios no son
+desarrolladores... elige obvio".
+
+**Aclarado antes de tocar código:** el HTML incluía una barra de escritura fija abajo, siempre visible —
+contradecía "el chat sigue siendo el modal flotante y eso no se toca". Confirmado con Samuel: es sólo un
+botón chico en la navbar que abre el mismo modal de siempre (ítem 10); la barra del HTML era ilustración
+del atajo Ctrl+Espacio, no algo a construir literal.
+
+**Dos correcciones deliberadas sobre el HTML, no transcripción literal (avisadas antes de implementar):**
+- `--nebu` en el HTML era `#E54D5B` — el rojo VIEJO pre-brandbook (mismo error que tenía `index.css` antes
+  del Bloque 5). Se usó el oficial `#D62828`. De paso se encontraron y borraron `--nebu-accent`/
+  `--nebu-accent-soft` en `index.css` (el resto del bloque `--nebu-*` — 7 variables más — ya estaba
+  confirmado muerto desde la sesión de colores; sin consumidor en ningún `.tsx`/`.css`, verificado antes de
+  borrar).
+- `.wf-page` (el selector de página) tenía `align-items: baseline` mezclando dos tamaños de texto y un
+  ícono SVG sin baseline propio — el texto se leía empujado hacia arriba (el bug que Samuel señaló).
+  Corregido a `center`.
+
+**Hecho:**
+- `src/utils/projectRoutes.js`: nueva función `derivePageEntries(files)` — deriva `{name, route}` en vez
+  de sólo la ruta (`deriveProjectRoutes` se conserva, construida sobre la nueva). El nombre sale del
+  archivo con espacios insertados antes de cada mayúscula ("AboutUs" → "About Us") — NO se traduce, no hay
+  forma determinista de adivinar una traducción; "/" es el único caso especial ("Inicio"), para que esa
+  ruta lea igual sin importar si el archivo se llama `Index.tsx` o `Home.tsx`. 6 tests nuevos en
+  `server/projectRoutes.test.js`.
+- `src/components/studio/previewNavbar.css` (nuevo) — port del HTML, escopado bajo `.wf-navbar`, con las
+  dos correcciones de arriba.
+- `src/components/studio/PageDropdown.tsx` — reescrito: nombre + ruta en vez de sólo ruta, dropdown
+  centrado bajo el botón (antes alineado a la izquierda).
+- `src/components/studio/PreviewNavbar.tsx` — reescrito: tres zonas de verdad (`flex:1 1 0` en los
+  extremos, `flex:0 0 auto` al centro, no un spacer suelto), el menú hamburguesa RELOCALIZADO aquí desde
+  su posición flotante vieja (`absolute top-4 left-4` en `StudioEngine.tsx`, misma funcionalidad —
+  Back to Nebu/Version History/Export/Share/Invite sin cambios), "Visual" renombrado a "Editor" en el
+  texto visible (el valor interno `editMode` sigue siendo `'visual'`, no se tocó nada del pipeline), botón
+  Chat nuevo (sustituye a `CommandBubble`), botón Publicar nuevo (rojo, único de la barra).
+- `src/components/settings/SettingsModal.tsx`: prop nueva `initialTab` (default `'secrets'`, sin cambio de
+  comportamiento existente) — Publicar la usa para abrir directo en `'deploy'`, reusando `DeployManager.tsx`
+  tal cual en vez de reimplementar el flujo de deploy inline en la navbar.
+- `src/pages/StudioEngine.tsx`: `CommandBubble` (el botón rojo flotante arrastrable) se QUITÓ — confirmado
+  con Samuel que sí se iba esta vez (a diferencia del ítem 11, donde se había dejado a propósito). El
+  archivo `CommandBubble.tsx` se borró (sin otro caller). Nuevo estado `settingsInitialTab`.
+
+**Verificación:** `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 671/671 (666
+previos + 5 de `derivePageEntries`). `npx vitest run` → 48/48.
+`npx vite build` real: confirmado en el CSS compilado que `#D62828` está y `#E54D5B` YA NO aparece en
+ningún lado (antes de borrar `--nebu-accent`/`-accent-soft` sí aparecía 2 veces, aunque sin consumidor).
+`dist/` de verificación borrado.
+
+**CHECK MANUAL — PENDIENTE.**
+1. La navbar debe verse negra opaca (no gris translúcido) — línea de corte clara contra el sitio del
+   cliente detrás.
+2. Los botones en reposo deben leerse en gris claro (nunca "apagados"/deshabilitados); al pasar el mouse,
+   blanco; el que está activo (Preview o Editor, Código o Ajustes si están abiertos), blanco con fondo —
+   NUNCA rojo, salvo el botón Publicar.
+3. El selector de página, al centro: nombre legible arriba/junto, ruta chica al lado — el texto debe verse
+   centrado verticalmente en su recuadro, ya NO empujado hacia arriba.
+4. El menú hamburguesa (esquina izquierda de la navbar) debe abrir el mismo panel deslizante de siempre
+   (Back to Nebu, Version History, Export Zip, Visual Graph, Share, Invite) — nada de eso cambió.
+5. El botón Chat (zona derecha) debe abrir el mismo modal flotante con blur del ítem 10 — no debe quedar
+   ningún botón rojo flotante arrastrable sobre el preview.
+6. El botón Publicar debe abrir Settings directo en la pestaña Deploy (no en Secrets).
+
+Mundos pre-registrados:
+- **Esperado:** todo lo de arriba se cumple tal cual. Cero rojo fuera del botón Publicar. Cero texto
+  desalineado en el selector de página.
+- **Residuo conocido, no bug:** el botón Chat no se oculta en modo lectura (`isReadOnly`) — igual que
+  Código/Ajustes ya no se ocultaban ahí tampoco; sólo `CommandBubble` (ya borrado) tenía esa guarda. No es
+  una regresión nueva, es consistente con cómo ya se comportaban los otros botones.
+- **Falla real (si aparece, SÍ es bug):** cualquier rojo fuera de "Publicar", el selector de página con
+  texto desalineado, el menú hamburguesa roto, Publicar abriendo una pestaña que no es Deploy, o cualquier
+  botón rojo flotante todavía visible sobre el preview.
+
+### 5.3 Bloque 6 (PENDIENTE, sin empezar) — Bugs de chat/navbar + segunda pasada de estética (pedido de Samuel, 2026-09-23)
+
+Pedido en un solo mensaje tras confirmar el ítem 13. Aún NO se ha diseñado en frío ni tocado código —
+queda registrado aquí para no perderlo, pendiente de acordar orden y bloques atómicos con Samuel.
+
+**Bugs (candidatos a un solo bloque, misma zona de código — apertura/cierre del chat vía navbar/Ctrl+Espacio):**
+- El atajo Ctrl+Espacio para abrir el chat sólo funciona si antes se le dio click al botón Chat al menos
+  una vez en la sesión; si nunca se hizo click, el atajo no abre nada.
+- Al cerrar el chat con Ctrl+Espacio, el preview deja de poder hacer scroll.
+- Si Código o Ajustes están abiertos (reemplazando el preview), intentar abrir Chat (por click o por
+  Ctrl+Espacio) debe mostrar un aviso "Ve a preview primero para abrir chat" en vez de fallar en silencio o
+  abrir en un estado raro.
+
+**Limpieza de menú:**
+- Quitar del menú hamburguesa (izquierda del navbar) las opciones "Visual Graph" y "Share".
+
+**Copy:**
+- Quitar el mensaje "The AI will auto fix this" (premisa falsa) y reemplazarlo por algo tipo "Debes
+  arreglar esto en el Chat".
+
+**Color:**
+- Los contenedores en rojo sólido de Settings (Bloque 5 de este mismo ítem 5.3) resultaron demasiado
+  agresivos a la vista. Samuel pide otro approach, similar al que ya se ve bien en la pestaña "GitHub" de
+  Settings — revisar esa pestaña como referencia antes de proponer alternativa.
+
+**Estado de "compilando"/generación de proyecto nuevo:**
+- Reemplazar el indicador actual (spinner circular chico) por una animación a pantalla completa, estilo la
+  pantalla de "cold start" de Render en el plan free (recuadros del lado derecho que reaccionan al mouse).
+  Aplica tanto al compilar como a la generación inicial de un proyecto nuevo.
+
+**Rediseño visual — segunda pasada, dirección "brutalista Nebu" (la pieza más grande, con criterio explícito
+de Samuel para decidir alcance):**
+- Diagnóstico de Samuel: los contenedores de la plataforma se ven genéricos (radius uniforme suave, bordes
+  de 1px casi invisibles, "shadcn de fábrica", ninguna decisión de marca tomada).
+- Referencia: el sitio público de Nebu Studio usa lenguaje brutalista — sombra dura desplazada en rojo,
+  bordes con peso real, radius mínimo, labels en mayúsculas con tracking, hover que desplaza el elemento en
+  diagonal. Samuel pasó el markup de un botón de ese sitio como muestra exacta.
+- Regla de alcance que Samuel dio explícita (no inventar dónde aplica cada intensidad):
+  - **Superficies de marca** (onboarding, tutorial, login, estados vacíos, modales administrativos,
+    dashboard): lenguaje brutalista completo, sin diluir.
+  - **Superficies de trabajo** (navbar del preview, chat, panel de código, property panel — las que
+    `CLAUDE.md` ya fija como oscuras a propósito): versión destilada, mismo ADN sin el volumen — radius casi
+    cero, bordes que se leen como estructura, un solo acento rojo por pantalla, hover de COLOR en vez de
+    desplazamiento (no la sombra dura ni el desplazamiento diagonal ahí).
+  - Dos ajustes que Samuel ya avisó que NO se portan tal cual: la sombra dura funciona sobre el papel crema
+    del sitio público, pero sobre fondo oscuro se ve como bloque flotante — hay que repensarla si se usa en
+    oscuro; y el hover con desplazamiento diagonal es correcto en un botón que aparece una vez, pero en un
+    menú de varios ítems es movimiento constante y cansa — no aplicarlo ahí tal cual.
+  - Instrucción explícita de Samuel: cuando una superficie sea ambigua entre marca/trabajo, preguntar antes
+    de decidir, no adivinar.
+- Corolario del mismo pedido: rediseñar toda la estética de los popups/modales con este lenguaje Nebu (una
+  sola pieza de trabajo, pero conviene resolverla como parte de la auditoría de superficies de marca de
+  arriba, no aparte, porque los modales administrativos SON superficie de marca).
+
+**Hecho (2026-09-23) — bugs de chat/navbar + menú + copy + color, con dos hallazgos resueltos con Samuel:**
+- Los tres bugs de chat (Ctrl+Espacio no abría si nunca se había hecho click, el preview dejaba de
+  scrollear al "peekear" con Ctrl+Espacio, y faltaba el aviso al intentar abrir chat con Código/Ajustes
+  abiertos) — resueltos moviendo el estado de "peek" (`chatPeeking`) y el listener global de Ctrl+Espacio de
+  `ChatInterface.tsx` a `StudioEngine.tsx` (antes sólo existía mientras el modal estaba montado), y pasando
+  `peeking` a `CommandModal.tsx` para que su backdrop invisible deje de bloquear el scroll cuando está
+  "peekeado". Nuevo `handleOpenChat` único (botón + atajo) con el guard de panelMode.
+- Menú hamburguesa: quitados "Visual Graph" y "Share".
+  - **"Share" resultó ser más que un ítem de menú**: era el único botón en toda la UI para activar/
+    desactivar el link público de preview (`togglePublicAccess`, escribe `is_public` en `forge_projects`,
+    ruta `/preview/:projectId`). Se quitó (única forma de que compilara sin la función huérfana bajo
+    `noUnusedLocals`). **Decisión de Samuel: no reconstruir esto ahora — se revisará cuando se trabaje el
+    flujo de "Publish" (ligado al ítem 4/tutorial de arriba, y a `DeployManager`/"Publicar" del navbar,
+    ítem 13). Anotado aquí para no perderlo.**
+  - "Visual Graph" (`StateGraph`, debug de dependencias): Samuel confirmó borrarlo por completo, no sólo
+    el botón. Borrado `src/components/debug/StateGraph.tsx`, su import, el estado `showGraph`/`setShowGraph`
+    y el punto de montaje en `StudioEngine.tsx`.
+- Copy: "The AI will auto-fix this..." (mentira — no hay tal mecanismo) → "Debes arreglar esto en el Chat."
+  en `generateErrorHTML` (`src/services/BrowserCompiler.ts`), la página de error que se ve DENTRO del
+  iframe del preview cuando falla la compilación.
+- Color de Ajustes: los ~18 recuadros rojo-sólido-con-texto-negro de Bloque 5 (Secrets, Email, Domains,
+  Analytics, Database Overview, Usage, Deploy) pasan a fondo neutro oscuro (`bg-background/50`) + borde
+  normal + una franja roja gruesa a la izquierda (`border-l-4 border-l-primary`), decisión de Samuel entre
+  3 opciones presentadas (ganó "neutro + borde lateral" sobre "igual que GitHub" y "rojo translúcido").
+  Texto vuelve a los tokens semánticos normales (`text-foreground`/`text-muted-foreground`), ya no negro.
+  De paso, en `LighthousePanel.tsx` los colores hardcodeados de `scoreColor()`/el aro base de los gauges
+  (ajustados en Bloque 5 para leerse sobre rojo) vuelven a una paleta semáforo normal sobre fondo oscuro
+  (verde/ámbar/`#ef4444`, aro `rgba(255,255,255,.12)`).
+- `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 671/671 (sin cambios — nada de esto
+  toca servidor). `npx vitest run` → 48/48. `npx vite build` real: confirmado que `border-l-primary`
+  compila, `#0D0D0D` (color "malo" viejo de los gauges) ya no aparece, `#ef4444` (nuevo) sí.
+
+**CHECK MANUAL — PENDIENTE.** Ver mensaje de cierre de la sesión para el detalle paso a paso.
+
+**Hecho (2026-09-23, mismo día) — dos ajustes de chat pedidos al confirmar lo de arriba:**
+- `CommandModal.tsx` perdió el botón X y el cierre al hacer click en el backdrop — el chat ahora sólo se
+  cierra con Ctrl+Espacio (alterna el "peek") o haciendo click en "Chat" del navbar, que ahora es un toggle
+  real (`handleOpenChat` en `StudioEngine.tsx`: si ya está abierto, cierra del todo; si no, abre con el
+  mismo guard de `panelMode==='preview'` de antes).
+- `.fc-creditos.fc-ilimitado` (el pill "Créditos ilimitados" del chat) tenía fondo casi transparente
+  (`rgba(214,40,40,.1)`) — pasa a `var(--carbon)` (sólido), el rojo se queda sólo en texto/borde/ícono.
+- Se quitó `<CreditBalance />` (el contador "Admin — Unlimited") de la esquina del editor en
+  `StudioEngine.tsx` — quedaba redundante con el pill nuevo del chat. `ForgeDashboard.tsx` conserva el
+  suyo sin tocar (contexto distinto, sin chat).
+- `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 671/671. `npx vitest run` → 48/48.
+
+**Hecho (2026-09-23, mismo día) — pantalla de espera a pantalla completa estilo "cold start" de Render,
+para reemplazar el spinner chico en los dos momentos de espera larga real:**
+
+Pedido de Samuel: reemplazar el "circulito girando" por algo a pantalla completa, con la referencia
+explícita de la pantalla de "cold start" de Render en el plan free (cuadrícula de recuadros del lado
+derecho que reaccionan al mouse), aplicado tanto al "compiling" como a la generación de un proyecto nuevo.
+
+**Decisión de alcance (no confirmada con Samuel, a validar en el check manual):** se interpretó "compiling"
+como los dos momentos de ESPERA LARGA real — abrir un proyecto (`isLoading`, viene de `useProjectFiles()`,
+es justo el caso "volver a un proyecto después de un rato" que describe el ejemplo de Render) y generar un
+proyecto nuevo (`showGeneratingOverlay`) — NO el aviso chico "Compiling…"/"Compiling preview..." de la
+esquina inferior derecha, que sigue como pill pequeño: ese dispara en cada recompilación tras una edición
+normal (frecuente, casi siempre menos de un segundo) y ponerlo a pantalla completa cada vez se sentía como
+el tipo de interrupción distinta a la que describe el ejemplo de Render. Si Samuel quería que el pill
+chico también pasara a pantalla completa, es un ajuste rápido sobre el mismo componente nuevo.
+
+**Hecho:**
+- `src/components/studio/ColdStartOverlay.tsx` + `coldStartOverlay.css` (nuevo) — cuadrícula de recuadros
+  (14×9) con un spotlight rojo (`radial-gradient` + `mix-blend-mode: screen`) que sigue al mouse; la
+  posición se escribe directo a variables CSS por ref en cada `mousemove` (sin `useState`) para no
+  disparar un re-render de React por frame. Sin mouse (o sin hover, ej. tablet), las celdas "respiran"
+  solas vía una animación CSS con delay escalonado, así la pantalla nunca se ve estática; respeta
+  `prefers-reduced-motion`. Recibe el contenido real (spinner/texto/progreso/botón) como `children` — el
+  componente sólo pone el fondo, cero cambios a la lógica de generación/carga.
+- Conectado en dos puntos de `StudioEngine.tsx`: el estado `isLoading` (antes "Loading project..." con un
+  spinner suelto, ahora "Cargando tu proyecto…" sobre el overlay) y `showGeneratingOverlay` (antes fondo
+  plano `bg-background`, ahora el mismo overlay — el spinner, el texto de progreso por paso y el botón
+  Cancelar quedan exactamente igual, sólo cambió el fondo).
+- `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 671/671 (sin cambios, nada de esto
+  toca servidor). `npx vitest run` → 48/48. `npx vite build` real: confirmado que `cso-grid`/`cso-cell` y
+  la variable `--cso-mx` compilan.
+
+**CHECK MANUAL — CONFIRMADO en su mayoría (2026-09-23), con un bug encontrado y corregido en el
+overlay:** Samuel probó todo lo de arriba (chat sin X, no cierra al hacer click fuera, créditos con fondo
+sólido, contador viejo fuera del editor y presente en el Dashboard) — confirmado sin residuos. La duda
+sobre el alcance de "compiling" (sólo carga/generación, no el pill chico) se confirmó correcta, sin ajuste.
+
+**Bug encontrado — la animación se cortaba a la mitad:** entre `isLoading` (ColdStartOverlay) y el
+primer compile listo (`hasPreview`/`compiledHtml`) había una brecha — el bloque "Waiting / auto-loading
+state" (`compiledHtml === '' && !hasPreview`, ya existía desde antes de este ítem) mostraba un spinner
+gris SUELTO, sin el overlay, dando la sensación de "una segunda pantalla distinta" justo después de que la
+animación arrancaba. **Corregido:** ese bloque ahora también usa `ColdStartOverlay`, mismo componente que
+`isLoading`/`showGeneratingOverlay` — la espera se ve continua de principio a fin, sin corte.
+`npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 671/671. `npx vitest run` → 48/48.
+`npx vite build` real verificado.
+
+**CHECK MANUAL — CONFIRMADO.** Samuel probó el fix: la animación ya no se corta, sin residuos.
+
+### "Paso 3" — estética Nebu de los popups (2026-09-23)
+
+Aclarado con Samuel antes de tocar código (el pedido original mezclaba dos cosas de tamaño muy distinto):
+"paso 3" es sólo la estética de los **popups/modales administrativos** (`NewProjectModal`,
+`ShareProjectModal`, `MigrationApplyModal`, `SettingsModal` — los mismos 4 que ya llevan la clase
+`.nebu-modal` desde el Bloque 3/5 de este ítem), NO el rediseño brutalista completo de toda la plataforma
+(dashboard, onboarding, etc.) que describe el mensaje largo de Samuel — eso se queda como pieza aparte,
+más grande, para después.
+
+**Hecho — `src/index.css`, reglas nuevas debajo de `.nebu-modal` (mismo truco de especificidad sin
+`@layer` que ya usaba ese bloque, para ganarle a las utilidades de Tailwind sin `!important`):**
+- Radius casi cero: `.rounded-2xl/-xl/-lg/-md` dentro de `.nebu-modal` bajan a `4px`. Deliberadamente NO
+  se tocó `.rounded-full` — eso son avatares/badges/el botón X, círculos de verdad, no "esquinas suaves de
+  más" (el reclamo de Samuel era sobre contenedores/botones rectangulares, no sobre lo que ya es redondo a
+  propósito).
+- Bordes con peso real: `.border` (la utilidad base de Tailwind) pasa de 1px a 2px dentro de `.nebu-modal`.
+- Labels en mayúsculas: `h2`/`h3` dentro de `.nebu-modal` (los títulos de cada modal/sección) en
+  `uppercase` con tracking.
+- Nueva clase `.nebu-cta` (radius 2px, mayúsculas, negrita, sombra dura + desplazamiento diagonal al
+  hover/active) — agregada A MANO sólo al botón principal de dos modales: "Start Building →"
+  (`NewProjectModal.tsx`) y "Send Invitations" (`ShareProjectModal.tsx`).
+
+**Adaptación deliberada, avisada por el propio Samuel antes de portar el markup de referencia:** la sombra
+dura de su ejemplo (`box-shadow: 0.3rem 0.3rem 0 var(--nebu)`) es un rojo SÓLIDO/opaco, pensado para el
+papel crema del sitio público — sobre este fondo casi negro un rojo opaco se vería como un bloque flotante,
+no como profundidad (advertencia textual de Samuel). `.nebu-cta` usa el mismo desplazamiento diagonal pero
+con el rojo TRANSLÚCIDO (`rgba(214,40,40,.4)`, sube a `.55` en hover), para que lea como un acento/glow y
+no como una sombra sólida fuera de lugar — juicio de diseño mío, sin confirmar visualmente por Samuel
+todavía, a validar en el check manual.
+
+**Deliberadamente NO tocado, con motivo explícito:**
+- `MigrationApplyModal.tsx` — su botón de confirmación ya usa ámbar (destructivo) o rojo (no destructivo)
+  para codificar severidad, con una nota extensa en el propio archivo sobre por qué esas dos puertas
+  existen. Añadirle `.nebu-cta` encima habría diluido esa señal sin necesidad; el modal SÍ hereda el
+  radius/border/mayúsculas parejos con los otros tres (efecto del CSS de arriba, automático), pero su
+  botón de acción se queda exactamente como estaba.
+- Los botones de acción dentro de las 7 pestañas de `SettingsModal` (Save Secrets, Push Changes, Deploy,
+  Connect domain, Send Test, etc.) — son muchos botones repartidos en varios archivos ya tocados en el
+  Bloque 4 de color; aplicarles `.nebu-cta` uno por uno es su propia pasada, no incluida aquí. El MARCO de
+  Settings (fondo, radius, bordes, títulos de pestaña) sí recibe el tratamiento parejo vía el CSS de arriba.
+
+**Verificación:** `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 671/671 (sin
+cambios). `npx vitest run` → 48/48. `npx vite build` real: confirmado que `.nebu-modal .nebu-cta`,
+`.nebu-modal .rounded-*` y `.nebu-modal .border` compilan, y que la clase `nebu-cta` aparece exactamente 2
+veces en el bundle (los dos botones tocados).
+
+**CHECK MANUAL — PENDIENTE.** Cómo reproducirlo: abrir New Project (avanzar a "Start Building"), Share,
+Settings, y una migración de prueba (destructiva y no destructiva):
+1. Los 4 modales deben verse con esquinas casi rectas (no muy redondeadas) y bordes/líneas divisorias más
+   gruesos que antes — pero los círculos de verdad (avatares, el botón X, badges/píldoras) siguen redondos.
+2. Los títulos de cada modal/sección ("New Project", "Share Project", etc.) deben verse en MAYÚSCULAS.
+3. "Start Building →" (New Project) y "Send Invitations" (Share) deben verse en mayúsculas, con un borde/
+   sombra roja dura — y al pasar el mouse, desplazarse un poco hacia arriba-izquierda con la sombra
+   creciendo (efecto "botón físico").
+4. El botón de confirmación de una migración (ámbar si destruye datos, rojo si no) debe verse EXACTAMENTE
+   igual que antes — sin el efecto de desplazamiento/sombra nuevo — y debe seguir pidiendo la frase de
+   confirmación exacta en el caso destructivo.
+5. Dentro de Settings, el contenido de cada pestaña (Secrets, Email, etc.) puede seguir viéndose con botones
+   "normales" (sin el efecto de mayúsculas/sombra) — residuo conocido, anotado arriba, no un olvido.
+
+Mundos pre-registrados:
+- **Esperado:** todo lo de arriba se cumple tal cual. El sombreado rojo del `.nebu-cta` se lee como un
+  acento, no como un bloque sólido fuera de lugar.
+- **Residuo conocido, no bug:** los botones dentro de las pestañas de Settings y el botón de confirmar
+  migración se quedan con su estilo actual, sin el tratamiento `.nebu-cta` — decisión explícita, no olvido.
+- **Falla real (si aparece, SÍ es bug):** avatares/badges/el botón X perdiendo su forma circular, la frase
+  de confirmación de `MigrationApplyModal` saltada, o el efecto de `.nebu-cta` viéndose roto/ilegible.
+
+### "Paso 4" — mismo estilo en el modal de chat (2026-09-23)
+
+Aclarado con Samuel antes de tocar código: el chat estaba clasificado como "superficie de trabajo" en su
+propio mensaje de diseño (se queda oscuro, versión destilada, sin desplazamiento diagonal) — Samuel
+confirmó que esta vez quiere el tratamiento IDÉNTICO al de los popups (radius, bordes, mayúsculas y el
+desplazamiento diagonal del botón principal), no la versión destilada. El chat NO usa `.nebu-modal`/
+Tailwind (tiene su propio sistema, `forgeChat.css`, con clases `.fc-*` y valores literales) — así que el
+mismo look se portó editando los valores directo en ese archivo, no reutilizando las reglas de
+`.nebu-modal`/`.nebu-cta` de `index.css` (no habrían alcanzado estas clases).
+
+**Hecho — `src/components/chat/forgeChat.css`:**
+- Radius casi cero en los contenedores rectangulares: `.typebar` 14px→4px, `.fc-icon-btn`/`.fc-modo-btn`
+  9px→4px, `.fc-modo-menu` 12px→4px, `.fc-modo-opt` 9px→4px, `.fc-pieza` (las tarjetas de resultado) 14px→
+  4px, `.fc-accion-btn` 10px→4px. Deliberadamente SIN tocar lo que ya es una píldora/círculo de verdad:
+  `.fc-creditos`, `.fc-pill`, `.fc-turno-modo` (píldoras, radius 999px) y los indicadores circulares
+  (`.fc-nodo`, `.fc-marca`, los glifos del selector de modo) — mismo criterio que en los popups.
+- Bordes con más peso: de 1px a 2px en `.typebar`, `.fc-icon-btn`, `.fc-modo-btn`, `.fc-modo-menu`,
+  `.fc-pieza`, `.fc-pill`, `.fc-creditos`, `.fc-accion-btn`.
+- Mayúsculas: `.fc-marcador` (las etiquetas cortas tipo "Cambio en base de datos", "Plan listo") y el `h2`
+  de `.fc-historial-head` ("Historial de la conversación").
+- **Desviación deliberada, no aplicada tal cual pese al pedido de "idéntico":** `.fc-pieza-titulo` (el
+  título grande de cada tarjeta) NO se puso en mayúsculas — a diferencia de los títulos cortos de los
+  popups ("New Project"), aquí el texto es una ORACIÓN completa ("Hay que aprobar esto antes de
+  aplicarlo", "Wyrd corrigió un permiso abierto") — ponerla en mayúsculas la habría hecho notablemente más
+  difícil de leer, en contra de la regla permanente de este archivo de explicar todo en términos simples.
+  Juicio de diseño mío, a confirmar con Samuel si prefiere consistencia literal por encima de legibilidad
+  aquí.
+- Desplazamiento diagonal + sombra dura translúcida (mismo `.nebu-cta` adaptado a rojo translúcido sobre
+  fondo oscuro, ver nota del "paso 3"): en `.fc-enviar` (el botón de enviar, NO en su variante
+  `.fc-cancelar`) y en `.fc-accion-btn` sólido (NO en sus variantes `.fc-secundario`/`.fc-rechazar`, que
+  ya son de bajo énfasis a propósito).
+- `prefers-reduced-motion`: el desplazamiento nuevo también se anula ahí, mismo trato que el resto del
+  archivo.
+
+**Verificación:** `npx tsc -b --force` → 0 errores. `node --test "server/*.test.js"` → 671/671 (sin
+cambios). `npx vitest run` → 48/48. `npx vite build` real: confirmado que `.fc-pieza`/`.fc-marcador`/
+`.fc-enviar:not(.fc-cancelar):hover` compilan con los valores nuevos.
+
+**CHECK MANUAL — PENDIENTE.** Abrir el chat y revisar: la typebar y las tarjetas de resultado deben verse
+con esquinas casi rectas y bordes más gruesos; las etiquetas cortas ("Plan listo", etc.) y el título del
+historial en mayúsculas; el botón de enviar y el de "Aplicar cambio"/similar deben desplazarse un poco
+hacia arriba-izquierda con la sombra roja creciendo al pasar el mouse. Los títulos largos de cada tarjeta
+("Hay que aprobar esto...") NO deben estar en mayúsculas (desviación explicada arriba — avisar si se
+prefiere lo contrario). El nodo vivo, los círculos de estado y las píldoras (créditos, "Ver historial
+completo") siguen redondos.
+
+**Siguiente paso real, antes de escribir código:** diseño en frío con Samuel — decidir orden de bloques
+(los bugs primero, por ser acotados y de bajo riesgo, parece lo obvio; el rediseño brutalista es la pieza
+más grande y probablemente necesita su propia sesión con mockup, como ya pasó con el resto de 5.3) y
+resolver con `ui-ux-pro-max` qué encaja mejor para portar el estilo brutalista dado que el skill no dio
+buenos resultados la primera vez que se usó en este ítem (ver Bloque 1, "Hallazgo del skill, con matiz").
+
+## ANTES DE LANZAR (público)
+- Quitar los botones "Próximamente" que no hacen nada (chat: Adjuntar, Dictar, Editar el plan; créditos:
+  Comprar créditos). Decisión de Samuel (2026-09-29): se quedan mientras él sea el único usuario, porque le
+  sirven como recordatorio de lo que falta.
 
 ## APARCADO hasta después de lanzar
 - **A+**: quitar el botón de aprobación cuando el guard no pudo inspeccionar. Aparcado: `unparseable` no tiene causa conocida tras G-3; sólo verificable con SQL fabricado a mano (choca con medir por comportamiento).
@@ -826,6 +2033,9 @@ git en la máquina apuntaban a otra cuenta sin acceso de escritura al repo); res
 - Aprobación de Unsplash en producción (hoy en modo demo, 50 req/h). Prerrequisito antes de añadir cualquier proveedor de imágenes con IA.
 - Ruta `/api/admin/bootstrap-db` con comentario "TEMPORAL": se decidió conservarla y quitar el comentario en una cirugía de servidor.
 - Decisión sobre `graphify-out/cache/ast/` y archivos `.sig`: ¿se commitean o van a `.gitignore`?
+- `graphifyy` en `dependencies` de `package.json` (entró en `5f3846a`): ¿moverlo a devDependencies o quitarlo?
+- (CERRADO en 5.6) `UsersManager` quitado; escalada de rol en `profiles` → ver 5.6. Pendiente menor: `DatabaseOverview` sigue mostrando la URL y el conteo de `profiles` de la DB principal dentro de un proyecto.
+- Políticas duplicadas en `profiles` (DB principal): dos UPDATE y dos SELECT idénticas (`auth.uid() = id`). Limpiarlas es DDL destructivo (DROP POLICY): frase tecleada.
 
 ## Decisión de arquitectura permanente
 - **D-1 (preview)**: el endgame es la Opción C (sandboxes server-side efímeros, estilo Lovable). Se ejecuta sólo cuando el software esté casi completo. Hoy: vendoring curado (Opción A).

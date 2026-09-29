@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getMyContactRecord } from '@/services/data/supabaseData';
 import type { Contact } from '@/types';
+import LoadingSquares from '../../components/brand/LoadingSquares';
 
 const labels = {
   title: { en: 'My Contact Record', es: 'Mi Registro de Contacto' },
@@ -25,7 +26,7 @@ const labels = {
 const typeBadgeClass: Record<Contact['type'], string> = {
   lead: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
   client: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
-  partner: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+  partner: 'bg-neutral-500/10 text-neutral-500 border-neutral-500/20',
 };
 
 const ClientContactView = () => {
@@ -49,7 +50,7 @@ const ClientContactView = () => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <span className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin" />
+        <LoadingSquares size={32} />
       </div>
     );
   }

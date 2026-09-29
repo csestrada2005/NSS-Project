@@ -343,16 +343,26 @@ test('el aviso de la auditoría de dependencias no se mezcla con el de reparaci�
     /const extras = diffPaths\.filter\(p => !planPaths\.has\(p\) && p !== auditedPath\)/,
     'package.json de la auditoría debe quedar FUERA de extras'
   );
+  // i18n de Wyrd (ítem 5.4): los dos textos viven ahora en el diccionario
+  // (src/i18n/forge/{es,en}.ts). Lo que se fija sigue siendo lo mismo: dos
+  // claves distintas en la fuente, cada una con su propia causa en los dos
+  // idiomas.
   assert.match(
     source,
-    /Añadí \$\{auditedDeps\.join\(', '\)\} a package\.json porque el código nuevo/,
+    /trn\('orch\.addedDeps', auditedDeps\.length, \{ deps: auditedDeps\.join\(', '\) \}\)/,
     'la auditoría dice su propia causa'
   );
   assert.match(
     source,
-    /Reparé además un error preexistente en: \$\{extras\.join\(', '\)\}/,
+    /tr\('orch\.alsoRepaired', \{ files: extras\.join\(', '\) \}\)/,
     'y la reparación real conserva la suya'
   );
+  const es = fs.readFileSync(path.join(ROOT, 'src', 'i18n', 'forge', 'es.ts'), 'utf8');
+  const en = fs.readFileSync(path.join(ROOT, 'src', 'i18n', 'forge', 'en.ts'), 'utf8');
+  assert.match(es, /'orch\.addedDeps_one': 'Añadí \{deps\} a package\.json porque el código nuevo lo importa\.'/);
+  assert.match(es, /'orch\.alsoRepaired': 'Reparé además un error preexistente en: \{files\}'/);
+  assert.match(en, /'orch\.addedDeps_one': 'I added \{deps\} to package\.json because the new code imports it\.'/);
+  assert.match(en, /'orch\.alsoRepaired': 'I also repaired a pre-existing error in: \{files\}'/);
 });
 
 // ---------------------------------------------------------------------------

@@ -1,16 +1,17 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Users, Briefcase, DollarSign, Clock, Loader2, Flame, Zap, Globe } from "lucide-react";
+import { Users, Briefcase, DollarSign, Clock, Flame, Zap, Globe } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getAdminKPIs, getRecentSignups, getActiveProjects } from "@/services/data/supabaseData";
 import { SupabaseService } from "@/services/SupabaseService";
 import type { AdminKPIs, Profile, Project } from "@/types";
+import LoadingSquares from '../../components/brand/LoadingSquares';
 
 const STATUS_COLORS: Record<Project["status"], string> = {
   active: "bg-emerald-500/10 text-emerald-500",
-  completed: "bg-blue-500/10 text-blue-500",
+  completed: "bg-neutral-500/10 text-neutral-500",
   paused: "bg-amber-500/10 text-amber-500",
-  cancelled: "bg-rose-500/10 text-rose-500",
+  cancelled: "bg-red-500/10 text-red-500",
 };
 
 const STATUS_LABELS: Record<Project["status"], { es: string; en: string }> = {
@@ -319,7 +320,7 @@ const AdminDashboard = () => {
     <div className="space-y-8 max-w-6xl">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-semibold text-foreground">
+        <h1 className="text-lg font-semibold text-foreground">
           {lang === "es" ? "Panel de Administración" : "Admin Dashboard"}
         </h1>
         <p className="text-sm mt-0.5 text-muted-foreground">
@@ -335,13 +336,13 @@ const AdminDashboard = () => {
             className="rounded-xl p-5 bg-card border border-border group hover:border-primary/20 transition-colors"
           >
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 {kpi.label[lang]}
               </span>
               <kpi.icon size={15} strokeWidth={1.5} className="text-muted-foreground group-hover:text-primary transition-colors" />
             </div>
             {isLoading ? (
-              <Loader2 size={20} className="animate-spin text-primary" />
+              <LoadingSquares size={20} />
             ) : (
               <p className="text-2xl font-bold text-foreground">{kpi.value}</p>
             )}
@@ -360,7 +361,7 @@ const AdminDashboard = () => {
           <div className="p-2">
             {isLoading ? (
               <div className="flex items-center justify-center py-10">
-                <Loader2 size={22} className="animate-spin text-primary" />
+                <LoadingSquares size={32} />
               </div>
             ) : recentSignups.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
@@ -401,7 +402,7 @@ const AdminDashboard = () => {
           <div className="p-2">
             {isLoading ? (
               <div className="flex items-center justify-center py-10">
-                <Loader2 size={22} className="animate-spin text-primary" />
+                <LoadingSquares size={32} />
               </div>
             ) : activeProjects.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
@@ -417,11 +418,11 @@ const AdminDashboard = () => {
                   >
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">{project.title}</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                      <p className="text-xs text-muted-foreground mt-0.5">
                         {new Date(project.created_at).toLocaleDateString(lang === "es" ? "es-MX" : "en-US", { day: "numeric", month: "short", year: "numeric" })}
                       </p>
                     </div>
-                    <span className={`ml-3 shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[project.status]}`}>
+                    <span className={`ml-3 shrink-0 text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[project.status]}`}>
                       {STATUS_LABELS[project.status][lang]}
                     </span>
                   </li>
@@ -436,7 +437,7 @@ const AdminDashboard = () => {
       <div>
         <div className="flex items-center gap-2 mb-4">
           <Flame size={16} className="text-red-500" />
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 className="text-sm font-semibold text-foreground">
             {lang === "es" ? "Plataforma Wyrd Forge" : "Wyrd Forge Platform"}
           </h2>
         </div>
@@ -451,13 +452,13 @@ const AdminDashboard = () => {
           ].map((card) => (
             <div key={card.label.es} className="rounded-xl p-5 bg-card border border-border">
               <div className="flex items-center justify-between mb-3">
-                <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   {card.label[lang]}
                 </span>
                 <card.icon size={15} strokeWidth={1.5} className="text-muted-foreground" />
               </div>
               {forgeStatsLoading ? (
-                <Loader2 size={20} className="animate-spin text-primary" />
+                <LoadingSquares size={20} />
               ) : (
                 <p className="text-2xl font-bold text-foreground">{String(card.value)}</p>
               )}
@@ -486,13 +487,13 @@ const AdminDashboard = () => {
           ].map((card) => (
             <div key={card.label.es} className="rounded-xl p-5 bg-card border border-border">
               <div className="flex items-center justify-between mb-3">
-                <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   {card.label[lang]}
                 </span>
                 <card.icon size={15} strokeWidth={1.5} className="text-muted-foreground" />
               </div>
               {creditStatsLoading ? (
-                <Loader2 size={20} className="animate-spin text-primary" />
+                <LoadingSquares size={20} />
               ) : (
                 <p className="text-2xl font-bold text-foreground">{card.value}</p>
               )}
@@ -510,7 +511,7 @@ const AdminDashboard = () => {
           <div className="p-2">
             {forgeStatsLoading ? (
               <div className="flex items-center justify-center py-10">
-                <Loader2 size={22} className="animate-spin text-primary" />
+                <LoadingSquares size={32} />
               </div>
             ) : !forgeStats?.mostActiveProjects.length ? (
               <p className="text-sm text-muted-foreground text-center py-8">No forge activity yet</p>
@@ -542,7 +543,7 @@ const AdminDashboard = () => {
       <div>
         <div className="flex items-center gap-2 mb-4">
           <Zap size={16} className="text-amber-500" />
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 className="text-sm font-semibold text-foreground">
             {lang === "es" ? "Uso de la plataforma (mes)" : "Platform Usage (MTD)"}
           </h2>
         </div>
@@ -551,13 +552,13 @@ const AdminDashboard = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
           <div className="rounded-xl p-5 bg-card border border-border">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 {lang === "es" ? "Llamadas IA (mes)" : "AI Calls (MTD)"}
               </span>
               <Zap size={15} strokeWidth={1.5} className="text-muted-foreground" />
             </div>
             {platformUsageLoading ? (
-              <Loader2 size={20} className="animate-spin text-primary" />
+              <LoadingSquares size={20} />
             ) : (
               <p className="text-2xl font-bold text-foreground">
                 {platformUsage?.totalAICallsMTD?.toLocaleString() ?? 0}
@@ -566,13 +567,13 @@ const AdminDashboard = () => {
           </div>
           <div className="rounded-xl p-5 bg-card border border-border">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 {lang === "es" ? "Proyectos Forge activos" : "Active Forge Projects"}
               </span>
               <Flame size={15} strokeWidth={1.5} className="text-muted-foreground" />
             </div>
             {platformUsageLoading ? (
-              <Loader2 size={20} className="animate-spin text-primary" />
+              <LoadingSquares size={20} />
             ) : (
               <p className="text-2xl font-bold text-foreground">
                 {platformUsage?.totalActiveForgeProjects ?? 0}
@@ -591,7 +592,7 @@ const AdminDashboard = () => {
           <div className="p-2">
             {platformUsageLoading ? (
               <div className="flex items-center justify-center py-10">
-                <Loader2 size={22} className="animate-spin text-primary" />
+                <LoadingSquares size={32} />
               </div>
             ) : !platformUsage?.topSpenders.length ? (
               <p className="text-sm text-muted-foreground text-center py-8">

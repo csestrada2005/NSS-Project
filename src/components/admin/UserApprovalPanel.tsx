@@ -1,15 +1,8 @@
 import { useState, useEffect } from 'react';
-import { X, CheckCircle, XCircle, Shield, Loader2 } from 'lucide-react';
-import { SupabaseService } from '@/services/SupabaseService';
+import { X, CheckCircle, XCircle, Shield } from 'lucide-react';
+import { AdminService, type PendingProfile } from '@/services/AdminService';
 import { toast } from 'sonner';
-
-interface PendingProfile {
-  id: string;
-  full_name: string | null;
-  email: string | null;
-  pending_role: 'admin' | 'dev' | 'cliente' | null;
-  avatar_url: string | null;
-}
+import LoadingSquares from '../brand/LoadingSquares';
 
 interface UserApprovalPanelProps {
   open: boolean;
@@ -18,7 +11,7 @@ interface UserApprovalPanelProps {
 
 const ROLE_BADGE: Record<string, string> = {
   admin: 'bg-red-500/15 text-red-400 border-red-500/20',
-  dev: 'bg-blue-500/15 text-blue-400 border-blue-500/20',
+  dev: 'bg-neutral-500/15 text-neutral-400 border-neutral-500/20',
   cliente: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20',
 };
 
@@ -32,20 +25,15 @@ export function UserApprovalPanel({ open, onClose }: UserApprovalPanelProps) {
   const [loading, setLoading] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
-  const supabase = SupabaseService.getInstance().client;
-
+  // Todo por el servidor (AdminService): la base ya no deja escribir `role`
+  // desde el navegador, y un admin sólo puede leer su propia fila de profiles.
   const fetchPendingUsers = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase
-        .from('profiles')
-        .select('id, full_name, email, pending_role, avatar_url')
-        .not('pending_role', 'is', null)
-        .is('role', null)
-        .eq('role_approved', false);
-      setPendingUsers((data as PendingProfile[]) ?? []);
+      setPendingUsers(await AdminService.getPendingUsers());
     } catch (e) {
       console.error('[UserApprovalPanel] fetch error:', e);
+      toast.error('Failed to load pending users');
     } finally {
       setLoading(false);
     }
@@ -57,58 +45,27 @@ export function UserApprovalPanel({ open, onClose }: UserApprovalPanelProps) {
     }
   }, [open]);
 
-  const handleApprove = async (user: PendingProfile) => {
-    if (!user.pending_role) return;
+  const decide = async (user: PendingProfile, decision: 'approve' | 'reject') => {
+    if (decision === 'approve' && !user.pending_role) return;
     setProcessingId(user.id);
     try {
-      await supabase
-        .from('profiles')
-        .update({ role: user.pending_role, role_approved: true, pending_role: null })
-        .eq('id', user.id);
-
-      await supabase.from('notifications').insert({
-        user_id: user.id,
-        type: 'role_approved',
-        title: 'Access granted',
-        body: `Your account has been approved. You now have ${user.pending_role} access.`,
-        read: false,
-      });
-
+      await AdminService.decideRole(user.id, decision);
       setPendingUsers((prev) => prev.filter((u) => u.id !== user.id));
-      toast.success(`Approved ${user.full_name ?? 'user'} as ${user.pending_role}`);
+      toast.success(
+        decision === 'approve'
+          ? `Approved ${user.full_name ?? 'user'} as ${user.pending_role}`
+          : `Rejected ${user.full_name ?? 'user'}'s request`
+      );
     } catch (e) {
-      console.error('[UserApprovalPanel] approve error:', e);
-      toast.error('Failed to approve user');
+      console.error(`[UserApprovalPanel] ${decision} error:`, e);
+      toast.error(decision === 'approve' ? 'Failed to approve user' : 'Failed to reject user');
     } finally {
       setProcessingId(null);
     }
   };
 
-  const handleReject = async (user: PendingProfile) => {
-    setProcessingId(user.id);
-    try {
-      await supabase
-        .from('profiles')
-        .update({ pending_role: null, role_approved: false })
-        .eq('id', user.id);
-
-      await supabase.from('notifications').insert({
-        user_id: user.id,
-        type: 'role_rejected',
-        title: 'Access request declined',
-        body: 'Your access request was reviewed. Please contact your administrator.',
-        read: false,
-      });
-
-      setPendingUsers((prev) => prev.filter((u) => u.id !== user.id));
-      toast.success(`Rejected ${user.full_name ?? 'user'}'s request`);
-    } catch (e) {
-      console.error('[UserApprovalPanel] reject error:', e);
-      toast.error('Failed to reject user');
-    } finally {
-      setProcessingId(null);
-    }
-  };
+  const handleApprove = (user: PendingProfile) => decide(user, 'approve');
+  const handleReject = (user: PendingProfile) => decide(user, 'reject');
 
   return (
     <>
@@ -117,13 +74,13 @@ export function UserApprovalPanel({ open, onClose }: UserApprovalPanelProps) {
       )}
 
       <div
-        className={`fixed top-0 right-0 h-full w-[380px] bg-zinc-800 border-l border-zinc-700 z-40 flex flex-col shadow-xl transition-transform duration-300 ${open ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`fixed top-0 right-0 h-full w-[380px] bg-neutral-800 border-l border-neutral-700 z-40 flex flex-col shadow-xl transition-transform duration-300 ${open ? 'translate-x-0' : 'translate-x-full'}`}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
           <div className="flex items-center gap-2">
             <Shield size={16} className="text-primary" />
-            <h2 className="text-base font-semibold text-foreground">User Approvals</h2>
+            <h2 className="text-sm font-semibold text-foreground">User Approvals</h2>
             {pendingUsers.length > 0 && (
               <span className="min-w-[20px] h-5 flex items-center justify-center text-[10px] font-bold rounded-full bg-red-500 text-white px-1.5">
                 {pendingUsers.length}
@@ -142,7 +99,7 @@ export function UserApprovalPanel({ open, onClose }: UserApprovalPanelProps) {
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {loading ? (
             <div className="flex items-center justify-center py-16">
-              <Loader2 size={24} className="animate-spin text-primary" />
+              <LoadingSquares size={32} />
             </div>
           ) : pendingUsers.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
@@ -162,7 +119,7 @@ export function UserApprovalPanel({ open, onClose }: UserApprovalPanelProps) {
                 return (
                   <div
                     key={user.id}
-                    className="p-4 rounded-xl border border-zinc-700 bg-zinc-800 space-y-3"
+                    className="p-4 rounded-xl border border-neutral-700 bg-neutral-800 space-y-3"
                   >
                     {/* User info */}
                     <div className="flex items-center gap-3">
@@ -198,7 +155,7 @@ export function UserApprovalPanel({ open, onClose }: UserApprovalPanelProps) {
                         className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {isProcessing ? (
-                          <Loader2 size={12} className="animate-spin" />
+                          <LoadingSquares size={12} />
                         ) : (
                           <CheckCircle size={12} />
                         )}
@@ -210,7 +167,7 @@ export function UserApprovalPanel({ open, onClose }: UserApprovalPanelProps) {
                         className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {isProcessing ? (
-                          <Loader2 size={12} className="animate-spin" />
+                          <LoadingSquares size={12} />
                         ) : (
                           <XCircle size={12} />
                         )}

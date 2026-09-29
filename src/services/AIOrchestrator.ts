@@ -61,6 +61,7 @@ import { canEnterFastLane, isSimpleEditIntent } from '../utils/laneRouting.js';
 import { promptNeedsServer } from '../utils/serverLogicSignals.js';
 import { touchesMigrations } from '../utils/migrationGate.js';
 import { shouldGatePlan, planRejectedTelemetry } from '../utils/planGate.js';
+import { t as tr, tn as trn, getForgeLang } from '../i18n/forge/lang';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -972,9 +973,13 @@ export class AIOrchestrator {
     if (/^\s*Corrige este error de runtime/i.test(input)) return true;
     const lastAssistant = [...(chatHistory ?? [])].reverse().find((m) => m.role === 'assistant');
     const content = lastAssistant?.content ?? '';
+    // Los dos idiomas del aviso (i18n de Wyrd, ítem 5.4): el historial puede
+    // traer cualquiera de los dos según el idioma elegido al mostrarse.
     return (
       content.includes('Error de runtime en el preview') ||
-      content.includes('El código falló al cargar')
+      content.includes('El código falló al cargar') ||
+      content.includes('Runtime error in the preview') ||
+      content.includes('The code failed to load')
     );
   }
 
@@ -1062,6 +1067,11 @@ export class AIOrchestrator {
    * independientes) y da a NO_PROJECT_DB su propio texto, porque con el
    * Bloque 2 activo va a ser el caso FRECUENTE, no la excepción.
    */
+  /** Idioma en que la IA le habla al usuario: el de la interfaz de Wyrd. */
+  private static replyLanguage(): 'Spanish' | 'English' {
+    return getForgeLang() === 'es' ? 'Spanish' : 'English';
+  }
+
   private static functionDeployFailureWarning(
     failed: { slug: string; reason: string; code?: string }[]
   ): string | undefined {
@@ -1069,9 +1079,8 @@ export class AIOrchestrator {
     return failed
       .map(({ slug, reason, code }) =>
         code === 'NO_PROJECT_DB'
-          ? `Escribí la función \`${slug}\` pero no pude desplegarla: este proyecto necesita ` +
-            `su base de datos provisionada antes de poder desplegar funciones.`
-          : `Escribí la función \`${slug}\` pero no pude desplegarla: ${reason}`
+          ? tr('orch.fnDeploy.noDb', { slug })
+          : tr('orch.fnDeploy.failed', { slug, reason })
       )
       .join(' ');
   }
@@ -1177,7 +1186,7 @@ export class AIOrchestrator {
     return {
       modifiedFiles: writtenPaths,
       outcome: 'cancelled',
-      chatResponse: `Generación cancelada — se conservaron ${n} archivo${n === 1 ? '' : 's'} completado${n === 1 ? '' : 's'}.`,
+      chatResponse: trn('orch.cancelled.kept', n),
     };
   }
 
@@ -1355,8 +1364,7 @@ export class AIOrchestrator {
         return {
           modifiedFiles: [],
           outcome: 'success',
-          chatResponse:
-            'El proyecto compila y no encuentro errores activos — ¿qué comportamiento ves mal?',
+          chatResponse: tr('orch.noActiveError'),
         };
       }
     }
@@ -1675,7 +1683,7 @@ export class AIOrchestrator {
         // cierto pero desorientador: aquí no se conservó nada porque nada llegó
         // a escribirse. El resto del resultado —outcome, modifiedFiles— se
         // respeta tal cual lo dejó finalizeCancelled.
-        return { ...rejected, chatResponse: 'Plan rechazado — no se modificó nada.' };
+        return { ...rejected, chatResponse: tr('orch.planRejected') };
       }
       // 'approved' → el pipeline sigue de largo, idéntico al de siempre.
     }
@@ -1878,10 +1886,10 @@ export class AIOrchestrator {
       const hasPartial = partialSteps.length > 0;
       const partialOrders = partialSteps.map(s => s.order).sort((a, b) => a - b);
       const describeStep = (s: BuildStep): string =>
-        s.file_path || s.description?.slice(0, 60) || `paso ${s.order}`;
+        s.file_path || s.description?.slice(0, 60) || tr('orch.step', { order: s.order });
       const firstFailedStep = failedSteps[0]?.step ?? skippedSteps[0];
       const suggestedAction = hasPartial && firstFailedStep
-        ? `Completa lo que faltó: ${firstFailedStep.description}`
+        ? tr('orch.completeMissing', { description: firstFailedStep.description })
         : undefined;
 
       // ----------------------------------------------------------------
@@ -2105,7 +2113,7 @@ export class AIOrchestrator {
       // tomada, no se retira el botón de aprobación), pero ahora queda
       // marcada en el log y avisada en el chat.
       const rlsUnreadableMark = rlsUnreadableTelemetry(rlsVerdict.findings);
-      const rlsWarnings = rlsPolicyWarnings(rlsVerdict.findings);
+      const rlsWarnings = rlsPolicyWarnings(rlsVerdict.findings, getForgeLang());
 
       // ----------------------------------------------------------------
       // G-6 — clientCodeGuard: el Verifier compila y repara, nunca inspecciona
@@ -2131,7 +2139,7 @@ export class AIOrchestrator {
       const clientCodeVerdict = evaluateClientCode(clientFilesForGuard, clientRoleTables);
       const clientSecretMark = clientSecretTelemetry(clientCodeVerdict.findings);
       const clientRoleWriteMark = clientRoleWriteTelemetry(clientCodeVerdict.findings);
-      const clientCodeWarningsList = clientCodeWarnings(clientCodeVerdict.findings);
+      const clientCodeWarningsList = clientCodeWarnings(clientCodeVerdict.findings, getForgeLang());
 
       // ----------------------------------------------------------------
       // BLOQUE 1 (A+B) — el pipeline principal (Architect → Implementer →
@@ -2406,35 +2414,28 @@ export class AIOrchestrator {
         // TRIM_MAX_STEPS. El texto anterior estaba fosilizado dos veces: decía
         // "the first 6" con el tope real en 8 desde f5e99dc, y "the first"
         // cuando el corte ya no es por posición sino por `order`.
-        const trimWarning = buildTrimWarning(originalCount, trimmedCount);
+        const trimWarning = buildTrimWarning(originalCount, trimmedCount, getForgeLang());
         if (trimWarning) warnings.push(trimWarning);
       }
       if (extras.length > 0) {
-        warnings.push(`Reparé además un error preexistente en: ${extras.join(', ')}`);
+        warnings.push(tr('orch.alsoRepaired', { files: extras.join(', ') }));
       }
       if (auditedDeps.length > 0) {
         // No es una reparación: el código nuevo importa estos paquetes y sin
         // declararlos el zip exportado no instalaría. Decir "reparé un error
         // preexistente en package.json" describía la causa equivocada.
-        warnings.push(
-          `Añadí ${auditedDeps.join(', ')} a package.json porque el código nuevo ` +
-          `${auditedDeps.length === 1 ? 'lo importa' : 'los importa'}.`
-        );
+        warnings.push(trn('orch.addedDeps', auditedDeps.length, { deps: auditedDeps.join(', ') }));
       }
       if (erasedPaths.length > 0) {
-        warnings.push(`Eliminé del proyecto: ${erasedPaths.join(', ')}`);
+        warnings.push(tr('orch.erased', { files: erasedPaths.join(', ') }));
       }
       if (revertedDeletes.length > 0) {
-        warnings.push(
-          `Restauré ${revertedDeletes.join(', ')}: el plan lo borró pero seguía en uso.`
-        );
+        warnings.push(tr('orch.restoredDeletes', { files: revertedDeletes.join(', ') }));
       }
       if (diffPaths.length === 0 && verifyResult.attempts > 1) {
         // Caso raro: hubo reparación durante el verify pero el resultado neto no
         // difiere del original. No lo reportamos como éxito plano.
-        warnings.push(
-          'Detecté y corregí errores de compilación durante la verificación.'
-        );
+        warnings.push(tr('orch.fixedDuringVerify'));
       }
       // C-D' — el aviso cambia de tiempo verbal. Antes esto sólo podía decir
       // "está fuera de sitio, pídeme que la vuelva a crear": la máquina veía el
@@ -2442,11 +2443,7 @@ export class AIOrchestrator {
       // lo que se reporta es dónde quedó — el path final es lo que el usuario
       // necesita para reconocerla en el explorador y en el botón de aprobación.
       if (recoveredMigrations.length > 0) {
-        warnings.push(
-          `Moví ${recoveredMigrations.map(([from, to]) => `${from} → ${to}`).join(', ')}: ` +
-          `fuera de supabase/migrations/ el sistema no la reconocía como migración ` +
-          `y no podía ofrecerte aplicarla desde el chat.`
-        );
+        warnings.push(tr('orch.movedMigrations', { moves: recoveredMigrations.map(([from, to]) => `${from} → ${to}`).join(', ') }));
       }
       // Lo que sobrevive a la recuperación ya no debería existir para un
       // database_change (todo .sql del lote acaba bajo el prefijo). Se queda
@@ -2454,10 +2451,7 @@ export class AIOrchestrator {
       // de que la normalización dejó de cubrir un caso, y decirlo sigue siendo
       // mejor que el silencio de antes.
       if (misplacedSql.length > 0) {
-        warnings.push(
-          `${misplacedSql.join(', ')} está fuera de supabase/migrations/, así que no puedo ` +
-          `ofrecerte aplicarla desde el chat. Pídeme que la vuelva a crear y la escribiré en su sitio.`
-        );
+        warnings.push(tr('orch.misplacedSql', { files: misplacedSql.join(', ') }));
       }
       // BLOQUE 1 (cirugía G-2) — el aviso NO es opcional: un guard que actúa
       // sin rastro visible es el mismo patrón de fallo que esta cirugía viene
@@ -2478,10 +2472,7 @@ export class AIOrchestrator {
         const total = steps.length;
         const completedCount = total - partialSteps.length;
         const failedList = partialSteps.map(describeStep).join(', ');
-        warnings.push(
-          `Generé ${completedCount} de ${total} pasos. Falló: ${failedList} ` +
-          `por sobrecarga temporal del modelo. Puedes pedirme completar lo que falta.`
-        );
+        warnings.push(tr('orch.partial', { done: completedCount, total, failed: failedList }));
       }
       // PIEZA 4 del deploy — "se escribió" y "se desplegó" son dos verdades
       // independientes, y un deploy fallido no revierte los archivos escritos.
@@ -2798,7 +2789,7 @@ export class AIOrchestrator {
         return {
           modifiedFiles: [],
           outcome: 'cancelled',
-          chatResponse: 'Generación cancelada — se conservaron 0 archivos completados.',
+          chatResponse: trn('orch.cancelled.kept', 0),
         };
       }
       console.error('[AIOrchestrator] Simple lane error:', e);
@@ -2965,7 +2956,7 @@ export class AIOrchestrator {
             'AMBIGUITY ESCAPE: if two or more candidates are genuinely defensible AND would ' +
             'produce visibly different results (e.g. "change the background" in a page with ' +
             'several sections that each paint their own), do NOT guess. Respond instead with ' +
-            '{"reasoning": ..., "clarify": "<ONE short question in the user\'s language, naming ' +
+            `{"reasoning": ..., "clarify": "<ONE short question written in ${this.replyLanguage()} (the user's interface language, whatever language the request is in), naming ` +
             'the concrete options, e.g. ¿El fondo de qué sección: el hero, los productos, o el ' +
             'contacto?>"}. Use this ONLY for genuine ambiguity — if a reasonable person looking ' +
             'at the page would know what to change, decide. Asking when you could know is a ' +
@@ -3046,8 +3037,9 @@ export class AIOrchestrator {
 
     const systemPrompt =
       "You are Wyrd Forge's AI assistant inside a web-builder IDE. The user is " +
-      'asking a question about their project — answer it helpfully, in the same ' +
-      'language the user wrote in. You have the project structure and the most ' +
+      'asking a question about their project — answer it helpfully, in the REPLY ' +
+      'LANGUAGE stated at the end of the user message (even if the question or earlier ' +
+      'messages are in another language). You have the project structure and the most ' +
       'relevant file contents below for context.\n\n' +
       AVAILABLE_RUNTIME_CONTEXT + '\n\n' +
       'FORMAT RULES:\n' +
@@ -3061,7 +3053,7 @@ export class AIOrchestrator {
       '  SUGGESTED_ACTION line is the only call to action.\n\n' +
       'After your answer, if the question implies something that could be built or ' +
       'changed, end with one final line in this exact format:\n' +
-      'SUGGESTED_ACTION: <a short imperative prompt in the user\'s language that ' +
+      'SUGGESTED_ACTION: <a short imperative prompt in the REPLY LANGUAGE that ' +
       'would implement it>\n' +
       'If nothing actionable applies, omit that line entirely.';
 
@@ -3069,7 +3061,11 @@ export class AIOrchestrator {
       `PROJECT STRUCTURE:\n${blueprint}\n\n` +
       (memorySummary ? `PROJECT MEMORY:\n${memorySummary}\n\n` : '') +
       (fileContext ? `RELEVANT FILES:\n${fileContext}\n\n` : '') +
-      `USER QUESTION:\n${input}`;
+      `USER QUESTION:\n${input}\n\n` +
+      // i18n de Wyrd (ítem 5.4): la IA responde en el idioma de la interfaz,
+      // no en el de la pregunta. Va aquí y no en el system para no partir el
+      // prefijo cacheado en dos.
+      `REPLY LANGUAGE: ${this.replyLanguage()}`;
 
     const priorMessages = (chatHistory ?? []).map(msg => ({
       role: msg.role === 'assistant' ? ('assistant' as const) : ('user' as const),
@@ -3149,7 +3145,7 @@ export class AIOrchestrator {
         return {
           modifiedFiles: [],
           outcome: 'cancelled',
-          chatResponse: 'Generación cancelada.',
+          chatResponse: tr('orch.cancelled.plain'),
         };
       }
       console.error('[AIOrchestrator] Question lane error:', e);

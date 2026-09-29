@@ -212,14 +212,25 @@ export function trimTelemetry(originalCount, keptCount) {
  *
  * @param {unknown} originalCount
  * @param {unknown} keptCount
+ * @param {'es' | 'en'} [lang] idioma del aviso (i18n de Wyrd); sin él, inglés.
  * @returns {string} '' cuando no hubo recorte.
  */
-export function buildTrimWarning(originalCount, keptCount) {
+export function buildTrimWarning(originalCount, keptCount, lang = 'en') {
   if (trimTelemetry(originalCount, keptCount) === '') return '';
   const n = Math.floor(Number(originalCount));
   const m = Math.floor(Number(keptCount));
   // Los protegidos pueden empujar el plan POR ENCIMA del tope; decir entonces
   // "limit: 8" junto a "9 were built" sería incoherente para quien lo lee.
+  if (lang === 'es') {
+    const presupuesto =
+      m > TRIM_MAX_STEPS
+        ? `el tope de ${TRIM_MAX_STEPS} pasos se amplió para conservar todos los archivos protegidos`
+        : `tope: ${TRIM_MAX_STEPS} pasos por pedido`;
+    return (
+      `Este pedido necesitaba ${n} pasos. Sólo se construyeron ${m} (${presupuesto}). ` +
+      'Envía otro mensaje para continuar.'
+    );
+  }
   const budget =
     m > TRIM_MAX_STEPS
       ? `the ${TRIM_MAX_STEPS}-step limit was raised to keep every protected file`

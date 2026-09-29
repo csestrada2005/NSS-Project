@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Database, CheckCircle, XCircle, Loader2, Activity } from 'lucide-react';
+import { Database, CheckCircle, XCircle, Activity } from 'lucide-react';
 import { SupabaseService } from '@/services/SupabaseService';
+import LoadingSquares from '../../brand/LoadingSquares';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
 
 interface DatabaseOverviewProps {
   projectId: string | null;
@@ -15,6 +17,7 @@ interface KPI {
 export function DatabaseOverview({ projectId }: DatabaseOverviewProps) {
   const [connectionOk, setConnectionOk] = useState<boolean | null>(null);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
+  const { t } = useForgeLang();
   const [tableCount, setTableCount] = useState<number | null>(null);
   const [userCount, setUserCount] = useState<number | null>(null);
   const [snapshotCount, setSnapshotCount] = useState<number | null>(null);
@@ -75,36 +78,36 @@ export function DatabaseOverview({ projectId }: DatabaseOverviewProps) {
   }, [projectId]);
 
   const kpis: KPI[] = [
-    { label: 'Tables', value: tableCount !== null ? tableCount : '--', icon: <Database size={16} className="text-zinc-400" /> },
-    { label: 'Active Users', value: userCount !== null ? userCount : '--', icon: <Activity size={16} className="text-zinc-400" /> },
-    { label: 'Snapshots', value: snapshotCount !== null ? snapshotCount : '--', icon: <Database size={16} className="text-zinc-400" /> },
+    { label: t('dbOverview.tables'), value: tableCount !== null ? tableCount : '--', icon: <Database size={16} className="text-muted-foreground" /> },
+    { label: t('dbOverview.activeUsers'), value: userCount !== null ? userCount : '--', icon: <Activity size={16} className="text-muted-foreground" /> },
+    { label: t('dbOverview.snapshots'), value: snapshotCount !== null ? snapshotCount : '--', icon: <Database size={16} className="text-muted-foreground" /> },
   ];
 
   return (
     <div className="space-y-4">
       {/* Connection Card */}
-      <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-4 space-y-3">
+      <div className="bg-background/50 border border-border border-l-4 border-l-primary rounded-xl p-4 space-y-3">
         <div className="flex items-center gap-2">
-          <Database size={16} className="text-zinc-400" />
-          <h3 className="text-sm font-medium text-zinc-200">Connection</h3>
+          <Database size={16} className="text-muted-foreground" />
+          <h3 className="text-sm font-medium text-foreground">{t('dbOverview.connection')}</h3>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-xs text-zinc-500">Project URL</span>
-          <span className="text-xs font-mono text-zinc-300">{maskedUrl}</span>
+          <span className="text-xs text-muted-foreground">{t('dbOverview.projectUrl')}</span>
+          <span className="text-xs font-mono text-foreground">{maskedUrl}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-xs text-zinc-500">Status</span>
+          <span className="text-xs text-muted-foreground">{t('dbOverview.status')}</span>
           {isLoading ? (
-            <Loader2 size={14} className="animate-spin text-zinc-500" />
+            <LoadingSquares size={14} />
           ) : connectionOk === true ? (
             <div className="flex items-center gap-1.5">
               <CheckCircle size={14} className="text-emerald-500" />
-              <span className="text-xs text-emerald-400">{latencyMs}ms</span>
+              <span className="text-xs text-emerald-500">{latencyMs}ms</span>
             </div>
           ) : (
             <div className="flex items-center gap-1.5">
-              <XCircle size={14} className="text-red-500" />
-              <span className="text-xs text-red-400">Error</span>
+              <XCircle size={14} className="text-red-400" />
+              <span className="text-xs text-red-400">{t('domains.status.error')}</span>
             </div>
           )}
         </div>
@@ -113,15 +116,15 @@ export function DatabaseOverview({ projectId }: DatabaseOverviewProps) {
       {/* KPI Cards */}
       <div className="grid grid-cols-3 gap-3">
         {kpis.map((kpi) => (
-          <div key={kpi.label} className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-4">
+          <div key={kpi.label} className="bg-background/50 border border-border border-l-4 border-l-primary rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-zinc-500">{kpi.label}</span>
+              <span className="text-xs text-muted-foreground">{kpi.label}</span>
               {kpi.icon}
             </div>
             {isLoading ? (
-              <Loader2 size={16} className="animate-spin text-zinc-500" />
+              <LoadingSquares size={16} />
             ) : (
-              <p className="text-xl font-bold text-zinc-200">{kpi.value}</p>
+              <p className="text-lg font-bold text-foreground">{kpi.value}</p>
             )}
           </div>
         ))}

@@ -369,10 +369,14 @@ export function clientRoleWriteTelemetry(findings) {
  * seguridad: ... No la corregí automáticamente — ...". Nunca menciona el
  * valor del literal.
  *
+ * `lang` elige el idioma (i18n de Wyrd, ítem 5.4); sin él, español.
+ *
  * @param {Iterable<{ path: string, reason: string, identifier: string | null, table: string | null, method: string | null }>} findings
+ * @param {'es' | 'en'} [lang]
  * @returns {string[]}
  */
-export function clientCodeWarnings(findings) {
+export function clientCodeWarnings(findings, lang = 'es') {
+  const en = lang === 'en';
   const credentialKeys = new Set();
   const roleWriteKeys = new Set();
   for (const f of findings ?? []) {
@@ -387,6 +391,14 @@ export function clientCodeWarnings(findings) {
   const warnings = [];
   for (const key of [...credentialKeys].sort()) {
     const [path, identifier] = key.split('\u0000');
+    if (en) {
+      warnings.push(
+        `Security guard: I found a credential ("${identifier}") written directly in ` +
+        `${path}. Anyone who opens the browser console can see it. I did not fix it ` +
+        `automatically — move it to a server function and review the file before publishing.`
+      );
+      continue;
+    }
     warnings.push(
       `Guard de seguridad: encontré una credencial ("${identifier}") escrita directamente en ` +
       `${path}. Cualquiera que abra la consola del navegador puede verla. No la corregí ` +
@@ -395,6 +407,14 @@ export function clientCodeWarnings(findings) {
   }
   for (const key of [...roleWriteKeys].sort()) {
     const [path, table, method] = key.split('\u0000');
+    if (en) {
+      warnings.push(
+        `Security guard: ${path} writes directly (${method}) to "${table}", a roles/permissions ` +
+        `table that this same change created. Any visitor could modify it from the browser ` +
+        `console. I did not fix it automatically — move this write to a server function.`
+      );
+      continue;
+    }
     warnings.push(
       `Guard de seguridad: ${path} escribe directamente (${method}) en "${table}", una tabla de ` +
       `roles/permisos que este mismo cambio creó. Cualquier visitante podría modificarla desde la ` +

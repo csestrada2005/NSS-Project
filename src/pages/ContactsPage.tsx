@@ -1,6 +1,7 @@
 import { useAuth } from '@/contexts/AuthContext';
 import StaffContacts from './contacts/StaffContacts';
 import ClientContactView from './contacts/ClientContactView';
+import LoadingSquares from '../components/brand/LoadingSquares';
 
 const ContactsPage = () => {
   const { isCliente, loading } = useAuth();
@@ -8,7 +9,7 @@ const ContactsPage = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <span className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin" />
+        <LoadingSquares size={40} />
       </div>
     );
   }

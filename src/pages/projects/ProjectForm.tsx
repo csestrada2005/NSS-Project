@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { Project } from '@/types';
+import LoadingSquares from '../../components/brand/LoadingSquares';
 
 interface ProjectFormProps {
   initialData?: Partial<Project & { client_id?: string | null }>;
@@ -61,11 +62,11 @@ const ProjectForm = ({ initialData, contacts, onSubmit, onCancel, isLoading, lan
           value={title}
           onChange={(e) => { setTitle(e.target.value); setTitleError(false); }}
           placeholder={labels.title[lang]}
-          className={titleError ? 'border-rose-500' : ''}
+          className={titleError ? 'border-red-500' : ''}
           disabled={isLoading}
         />
         {titleError && (
-          <p className="text-xs text-rose-500">{labels.titleRequired[lang]}</p>
+          <p className="text-xs text-red-500">{labels.titleRequired[lang]}</p>
         )}
       </div>
 
@@ -115,7 +116,7 @@ const ProjectForm = ({ initialData, contacts, onSubmit, onCancel, isLoading, lan
         <Button onClick={handleSubmit} disabled={isLoading} className="flex-1">
           {isLoading ? (
             <span className="flex items-center gap-2">
-              <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+              <LoadingSquares size={16} />
               {labels.submit[lang]}
             </span>
           ) : labels.submit[lang]}

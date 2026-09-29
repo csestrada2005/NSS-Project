@@ -13,6 +13,7 @@ import EmptyState from '@/components/EmptyState';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getProjectsForClient } from '@/services/data/supabaseData';
 import type { Project } from '@/types';
+import LoadingSquares from '../../components/brand/LoadingSquares';
 
 type ProjectWithClient = Project & { contacts: { name: string } | null };
 
@@ -30,9 +31,9 @@ const labels = {
 
 const statusBadgeClass: Record<Project['status'], string> = {
   active: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
-  completed: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+  completed: 'bg-neutral-500/10 text-neutral-500 border-neutral-500/20',
   paused: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
-  cancelled: 'bg-rose-500/10 text-rose-500 border-rose-500/20',
+  cancelled: 'bg-red-500/10 text-red-500 border-red-500/20',
 };
 
 const ClientProjects = () => {
@@ -59,7 +60,7 @@ const ClientProjects = () => {
       <div className="rounded-xl bg-card border border-border overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
-            <span className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin" />
+            <LoadingSquares size={32} />
           </div>
         ) : projects.length === 0 ? (
           <EmptyState

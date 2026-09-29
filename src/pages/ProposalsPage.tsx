@@ -8,6 +8,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { SupabaseService } from '@/services/SupabaseService';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import LoadingSquares from '../components/brand/LoadingSquares';
 
 type DealRevisionSummary = {
   id: string;
@@ -38,10 +39,10 @@ const fmtCurrency = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 
 const statusBadgeClass: Record<string, string> = {
-  draft: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
-  sent_to_client: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+  draft: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20',
+  sent_to_client: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20',
   client_revised: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  developer_reviewing: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+  developer_reviewing: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20',
   accepted: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
   closed_won: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
 };
@@ -173,7 +174,7 @@ const ProposalsPage = () => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-24">
-        <span className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin" />
+        <LoadingSquares size={40} />
       </div>
     );
   }
@@ -218,8 +219,8 @@ const ProposalsPage = () => {
               {/* Card Header */}
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-base font-semibold text-foreground">{deal.title}</h2>
-                  <p className="text-xl font-bold text-emerald-400 mt-1">{fmtCurrency(deal.value)}</p>
+                  <h2 className="text-sm font-semibold text-foreground">{deal.title}</h2>
+                  <p className="text-lg font-bold text-emerald-400 mt-1">{fmtCurrency(deal.value)}</p>
                   {deal.timeline && (
                     <p className="text-xs text-muted-foreground mt-1">{lang === 'es' ? 'Timeline' : 'Timeline'}: {deal.timeline}</p>
                   )}
@@ -319,7 +320,7 @@ const ProposalsPage = () => {
                       className="flex-1"
                     >
                       {actionLoading === 'revise-' + deal.id ? (
-                        <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                        <LoadingSquares size={16} />
                       ) : (lang === 'es' ? 'Enviar Cambios' : 'Send Changes')}
                     </Button>
                     <Button variant="outline" onClick={() => setReviseOpenDeal(null)} className="flex-1">
@@ -397,7 +398,7 @@ const ProposalsPage = () => {
       {confirmAcceptDeal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
-            <h2 className="text-base font-semibold text-foreground">
+            <h2 className="text-sm font-semibold text-foreground">
               {lang === 'es' ? 'Confirmar Aceptación' : 'Confirm Acceptance'}
             </h2>
             <p className="text-sm text-muted-foreground">
@@ -412,7 +413,7 @@ const ProposalsPage = () => {
                 className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
               >
                 {actionLoading === 'accept-' + confirmAcceptDeal.id ? (
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <LoadingSquares size={16} />
                 ) : (lang === 'es' ? 'Confirmar y Pagar' : 'Confirm & Pay')}
               </Button>
               <Button variant="outline" onClick={() => setConfirmAcceptDeal(null)} className="flex-1">

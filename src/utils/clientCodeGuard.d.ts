@@ -75,4 +75,4 @@ export function clientRoleWriteTelemetry(
  * reasons. Never mentions the literal's value. Detect-and-warn only: this
  * guard never rewrites the offending file.
  */
-export function clientCodeWarnings(findings: Iterable<ClientCodeFinding>): string[];
+export function clientCodeWarnings(findings: Iterable<ClientCodeFinding>, lang?: 'es' | 'en'): string[];

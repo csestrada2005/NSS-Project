@@ -63,17 +63,17 @@ interface PerformanceData {
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
 const SkeletonCard = () => (
-  <div className="bg-zinc-800 rounded-xl p-5 animate-pulse">
-    <div className="h-3 w-24 bg-zinc-700 rounded mb-3" />
-    <div className="h-7 w-32 bg-zinc-700 rounded mb-2" />
-    <div className="h-3 w-16 bg-zinc-700 rounded" />
+  <div className="bg-neutral-800 rounded-xl p-5 animate-pulse">
+    <div className="h-3 w-24 bg-neutral-700 rounded mb-3" />
+    <div className="h-7 w-32 bg-neutral-700 rounded mb-2" />
+    <div className="h-3 w-16 bg-neutral-700 rounded" />
   </div>
 );
 
 const SkeletonChart = () => (
-  <div className="bg-zinc-800 rounded-xl p-5 animate-pulse">
-    <div className="h-4 w-40 bg-zinc-700 rounded mb-4" />
-    <div className="h-48 bg-zinc-700 rounded" />
+  <div className="bg-neutral-800 rounded-xl p-5 animate-pulse">
+    <div className="h-4 w-40 bg-neutral-700 rounded mb-4" />
+    <div className="h-48 bg-neutral-700 rounded" />
   </div>
 );
 
@@ -108,9 +108,9 @@ const labels = {
 
 const milestoneBadgeClass: Record<Milestone['status'], string> = {
   pending: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
-  in_progress: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+  in_progress: 'bg-neutral-500/10 text-neutral-500 border-neutral-500/20',
   completed: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
-  blocked: 'bg-rose-500/10 text-rose-500 border-rose-500/20',
+  blocked: 'bg-red-500/10 text-red-500 border-red-500/20',
 };
 
 const milestoneBadgeLabel: Record<Milestone['status'], { en: string; es: string }> = {
@@ -123,7 +123,7 @@ const milestoneBadgeLabel: Record<Milestone['status'], { en: string; es: string 
 const npsScoreBadgeClass = (score: number): string => {
   if (score >= 9) return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
   if (score >= 7) return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
-  return 'bg-rose-500/10 text-rose-500 border-rose-500/20';
+  return 'bg-red-500/10 text-red-500 border-red-500/20';
 };
 
 // ── Main Component ─────────────────────────────────────────────────────────────
@@ -183,10 +183,10 @@ const Performance = () => {
 
   // ── NPS helpers ──
   const npsColor = (nps: number | null): string => {
-    if (nps === null) return 'text-zinc-400';
+    if (nps === null) return 'text-neutral-400';
     if (nps >= 50) return 'text-emerald-400';
     if (nps >= 0) return 'text-amber-400';
-    return 'text-rose-400';
+    return 'text-red-400';
   };
 
   const npsCategory = (nps: number | null): string => {
@@ -212,9 +212,9 @@ const Performance = () => {
   return (
     <div className="space-y-6">
       {/* Date range bar */}
-      <div className="bg-zinc-800 rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
+      <div className="bg-neutral-800 rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
         <div className="flex items-center gap-2 flex-1">
-          <span className="text-zinc-400 text-sm font-medium">{l('title')}</span>
+          <span className="text-neutral-400 text-sm font-medium">{l('title')}</span>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <input
@@ -222,15 +222,15 @@ const Performance = () => {
             value={pendingRange.start}
             max={pendingRange.end}
             onChange={(e) => setPendingRange((p) => ({ ...p, start: e.target.value }))}
-            className="bg-zinc-700 text-zinc-200 text-xs rounded-lg px-3 py-1.5 border border-zinc-600 focus:outline-none focus:border-emerald-500"
+            className="bg-neutral-700 text-neutral-200 text-xs rounded-lg px-3 py-1.5 border border-neutral-600 focus:outline-none focus:border-emerald-500"
           />
-          <span className="text-zinc-500 text-xs">{l('toLabel')}</span>
+          <span className="text-neutral-500 text-xs">{l('toLabel')}</span>
           <input
             type="date"
             value={pendingRange.end}
             min={pendingRange.start}
             onChange={(e) => setPendingRange((p) => ({ ...p, end: e.target.value }))}
-            className="bg-zinc-700 text-zinc-200 text-xs rounded-lg px-3 py-1.5 border border-zinc-600 focus:outline-none focus:border-emerald-500"
+            className="bg-neutral-700 text-neutral-200 text-xs rounded-lg px-3 py-1.5 border border-neutral-600 focus:outline-none focus:border-emerald-500"
           />
           <button
             onClick={handleApplyRange}
@@ -257,39 +257,39 @@ const Performance = () => {
           {/* KPI Cards */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             {/* NPS Score */}
-            <div className="bg-zinc-800 rounded-xl p-5">
-              <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-1">{l('npsScore')}</p>
+            <div className="bg-neutral-800 rounded-xl p-5">
+              <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide mb-1">{l('npsScore')}</p>
               <p className={`text-2xl font-bold ${npsColor(data.nps)}`}>
                 {data.nps !== null ? data.nps : '—'}
               </p>
             </div>
             {/* Total Responses */}
-            <div className="bg-zinc-800 rounded-xl p-5">
-              <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-1">{l('totalResponses')}</p>
-              <p className="text-2xl font-bold text-blue-400">{data.total_responses}</p>
+            <div className="bg-neutral-800 rounded-xl p-5">
+              <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide mb-1">{l('totalResponses')}</p>
+              <p className="text-2xl font-bold text-neutral-400">{data.total_responses}</p>
             </div>
             {/* Promoters */}
-            <div className="bg-zinc-800 rounded-xl p-5">
-              <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-1">{l('promoters')}</p>
+            <div className="bg-neutral-800 rounded-xl p-5">
+              <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide mb-1">{l('promoters')}</p>
               <p className="text-2xl font-bold text-emerald-400">{data.promoters}</p>
             </div>
             {/* Detractors */}
-            <div className="bg-zinc-800 rounded-xl p-5">
-              <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-1">{l('detractors')}</p>
-              <p className="text-2xl font-bold text-rose-400">{data.detractors}</p>
+            <div className="bg-neutral-800 rounded-xl p-5">
+              <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide mb-1">{l('detractors')}</p>
+              <p className="text-2xl font-bold text-red-400">{data.detractors}</p>
             </div>
           </div>
 
           {/* NPS Gauge (centered text display) */}
-          <div className="bg-zinc-800 rounded-xl p-8 flex flex-col items-center justify-center gap-2">
+          <div className="bg-neutral-800 rounded-xl p-8 flex flex-col items-center justify-center gap-2">
             <p className={`text-7xl font-black tracking-tight ${npsColor(data.nps)}`}>
               {data.nps !== null ? data.nps : '—'}
             </p>
-            <p className="text-zinc-400 text-sm font-medium mt-1">{npsCategory(data.nps)}</p>
-            <div className="flex items-center gap-6 mt-4 text-xs text-zinc-500">
+            <p className="text-neutral-400 text-sm font-medium mt-1">{npsCategory(data.nps)}</p>
+            <div className="flex items-center gap-6 mt-4 text-xs text-neutral-500">
               <span>-100</span>
               <div className="flex gap-1">
-                <span className="inline-block w-8 h-1.5 rounded bg-rose-500/60" />
+                <span className="inline-block w-8 h-1.5 rounded bg-red-500/60" />
                 <span className="inline-block w-8 h-1.5 rounded bg-amber-500/60" />
                 <span className="inline-block w-8 h-1.5 rounded bg-emerald-500/60" />
               </div>
@@ -298,26 +298,26 @@ const Performance = () => {
           </div>
 
           {/* Milestones Table */}
-          <div className="bg-zinc-800 rounded-xl p-5">
-            <p className="text-sm font-semibold text-zinc-200 mb-4">{l('milestones')}</p>
+          <div className="bg-neutral-800 rounded-xl p-5">
+            <p className="text-sm font-semibold text-neutral-200 mb-4">{l('milestones')}</p>
             {data.milestones.length === 0 ? (
-              <p className="text-zinc-500 text-sm text-center py-8">{l('noMilestones')}</p>
+              <p className="text-neutral-500 text-sm text-center py-8">{l('noMilestones')}</p>
             ) : (
               <Table>
                 <TableHeader>
-                  <TableRow className="border-zinc-700 hover:bg-transparent">
-                    <TableHead className="text-zinc-400 text-xs">{l('colTitle')}</TableHead>
-                    <TableHead className="text-zinc-400 text-xs">{l('colProject')}</TableHead>
-                    <TableHead className="text-zinc-400 text-xs">{l('colStatus')}</TableHead>
-                    <TableHead className="text-zinc-400 text-xs">{l('colDueDate')}</TableHead>
-                    <TableHead className="text-zinc-400 text-xs">{l('colCompleted')}</TableHead>
+                  <TableRow className="border-neutral-700 hover:bg-transparent">
+                    <TableHead className="text-neutral-400 text-xs">{l('colTitle')}</TableHead>
+                    <TableHead className="text-neutral-400 text-xs">{l('colProject')}</TableHead>
+                    <TableHead className="text-neutral-400 text-xs">{l('colStatus')}</TableHead>
+                    <TableHead className="text-neutral-400 text-xs">{l('colDueDate')}</TableHead>
+                    <TableHead className="text-neutral-400 text-xs">{l('colCompleted')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {data.milestones.map((m) => (
-                    <TableRow key={m.id} className="border-zinc-700 hover:bg-zinc-700/30">
-                      <TableCell className="text-zinc-200 text-sm font-medium">{m.title}</TableCell>
-                      <TableCell className="text-zinc-400 text-sm">
+                    <TableRow key={m.id} className="border-neutral-700 hover:bg-neutral-700/30">
+                      <TableCell className="text-neutral-200 text-sm font-medium">{m.title}</TableCell>
+                      <TableCell className="text-neutral-400 text-sm">
                         {m.projects?.title ?? '—'}
                       </TableCell>
                       <TableCell>
@@ -325,10 +325,10 @@ const Performance = () => {
                           {milestoneBadgeLabel[m.status][lang]}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-zinc-400 text-sm">
+                      <TableCell className="text-neutral-400 text-sm">
                         {m.due_date ? fmtDate(m.due_date) : '—'}
                       </TableCell>
-                      <TableCell className="text-zinc-400 text-sm">
+                      <TableCell className="text-neutral-400 text-sm">
                         {m.completed_at ? fmtDate(m.completed_at) : '—'}
                       </TableCell>
                     </TableRow>
@@ -339,28 +339,28 @@ const Performance = () => {
           </div>
 
           {/* NPS Responses */}
-          <div className="bg-zinc-800 rounded-xl p-5">
-            <p className="text-sm font-semibold text-zinc-200 mb-4">{l('npsResponses')}</p>
+          <div className="bg-neutral-800 rounded-xl p-5">
+            <p className="text-sm font-semibold text-neutral-200 mb-4">{l('npsResponses')}</p>
             {data.nps_rows.length === 0 ? (
-              <p className="text-zinc-500 text-sm text-center py-8">{l('noResponses')}</p>
+              <p className="text-neutral-500 text-sm text-center py-8">{l('noResponses')}</p>
             ) : (
               <div className="space-y-2">
                 {data.nps_rows.map((row, idx) => (
                   <div
                     key={idx}
-                    className="flex items-start gap-3 py-2.5 border-b border-zinc-700 last:border-0"
+                    className="flex items-start gap-3 py-2.5 border-b border-neutral-700 last:border-0"
                   >
                     <Badge className={`text-xs border shrink-0 ${npsScoreBadgeClass(row.score)}`}>
                       {row.score}
                     </Badge>
-                    <p className="text-zinc-300 text-sm flex-1">
+                    <p className="text-neutral-300 text-sm flex-1">
                       {row.comment
                         ? row.comment.length > 80
                           ? row.comment.slice(0, 80) + '…'
                           : row.comment
-                        : <span className="text-zinc-600">—</span>}
+                        : <span className="text-neutral-600">—</span>}
                     </p>
-                    <span className="text-zinc-500 text-xs shrink-0">
+                    <span className="text-neutral-500 text-xs shrink-0">
                       {fmtDate(row.responded_at)}
                     </span>
                   </div>

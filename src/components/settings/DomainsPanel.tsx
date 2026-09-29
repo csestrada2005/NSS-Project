@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { Globe, Plus, Trash2, Loader2, CheckCircle, Clock, AlertCircle, Info, Copy } from 'lucide-react';
+import { Globe, Plus, Trash2, CheckCircle, Clock, AlertCircle, Info, Copy } from 'lucide-react';
 import { SupabaseService } from '@/services/SupabaseService';
+import NebuLoader from '../brand/NebuLoader';
+import LoadingSquares from '../brand/LoadingSquares';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
 
 interface Domain {
   id: string;
@@ -20,6 +23,7 @@ async function getAuthHeader() {
 
 export function DomainsPanel({ projectId }: DomainsPanelProps) {
   const [domains, setDomains] = useState<Domain[]>([]);
+  const { t } = useForgeLang();
   const [newDomain, setNewDomain] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -61,7 +65,7 @@ export function DomainsPanel({ projectId }: DomainsPanelProps) {
       const data = await response.json();
       setDomains(Array.isArray(data) ? data : []);
     } catch (e: any) {
-      setError(e?.message || 'Failed to load domains');
+      setError(e?.message || t('domains.loadFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -80,13 +84,13 @@ export function DomainsPanel({ projectId }: DomainsPanelProps) {
       });
       const data = await response.json();
       if (!response.ok) {
-        setError(data.error || 'Failed to connect domain');
+        setError(data.error || t('domains.connectFailed'));
         return;
       }
       setNewDomain('');
       await loadDomains();
     } catch (e: any) {
-      setError(e?.message || 'Failed to connect domain');
+      setError(e?.message || t('domains.connectFailed'));
     } finally {
       setIsConnecting(false);
     }
@@ -99,14 +103,14 @@ export function DomainsPanel({ projectId }: DomainsPanelProps) {
       await fetch(`/api/domains/${domainId}`, { method: 'DELETE', headers });
       setDomains(prev => prev.filter(d => d.id !== domainId));
     } catch (e: any) {
-      setError(e?.message || 'Failed to remove domain');
+      setError(e?.message || t('domains.removeFailed'));
     }
   };
 
   if (!projectId) {
     return (
-      <div className="text-center text-zinc-500 py-8 text-sm">
-        Save your project to manage custom domains.
+      <div className="text-center text-neutral-500 py-8 text-sm">
+        {t('domains.needProject')}
       </div>
     );
   }
@@ -116,7 +120,7 @@ export function DomainsPanel({ projectId }: DomainsPanelProps) {
       return (
         <span className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full">
           <CheckCircle size={10} />
-          Active
+          {t('domains.status.active')}
         </span>
       );
     }
@@ -124,14 +128,14 @@ export function DomainsPanel({ projectId }: DomainsPanelProps) {
       return (
         <span className="flex items-center gap-1.5 text-xs text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full animate-pulse">
           <Clock size={10} />
-          Pending DNS
+          {t('domains.status.pending')}
         </span>
       );
     }
     return (
       <span className="flex items-center gap-1.5 text-xs text-red-400 bg-red-400/10 px-2 py-0.5 rounded-full">
         <AlertCircle size={10} />
-        Error
+        {t('domains.status.error')}
       </span>
     );
   };
@@ -139,27 +143,27 @@ export function DomainsPanel({ projectId }: DomainsPanelProps) {
   return (
     <div className="space-y-6">
       {/* Add domain */}
-      <div className="bg-zinc-800/50 rounded-lg p-4 border border-zinc-700">
-        <h3 className="text-sm font-semibold text-zinc-200 mb-3 flex items-center gap-2">
+      <div className="bg-background/50 rounded-lg p-4 border border-border border-l-4 border-l-primary">
+        <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
           <Globe size={14} />
-          Connect a custom domain
+          {t('domains.title')}
         </h3>
         <div className="flex gap-2">
           <input
             type="text"
-            placeholder="e.g. myapp.com or app.mycompany.com"
+            placeholder={t('domains.placeholder')}
             value={newDomain}
             onChange={(e) => setNewDomain(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && connectDomain()}
-            className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none placeholder-zinc-600"
+            className="flex-1 bg-muted border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
           />
           <button
             onClick={connectDomain}
             disabled={isConnecting || !newDomain.trim()}
-            className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
+            className="nebu-cta px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
           >
-            {isConnecting ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-            Connect
+            {isConnecting ? <LoadingSquares size={14} /> : <Plus size={14} />}
+            {t('domains.connect')}
           </button>
         </div>
       </div>
@@ -172,25 +176,26 @@ export function DomainsPanel({ projectId }: DomainsPanelProps) {
 
       {/* Domain list */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-8 text-zinc-500 gap-2 text-sm">
-          <Loader2 size={16} className="animate-spin" />
-          Loading domains...
+        <div className="flex flex-col items-center justify-center py-8 text-neutral-500 gap-3 text-sm">
+          <NebuLoader size={96} />
+          {t('domains.loading')}
         </div>
       ) : domains.length === 0 ? (
-        <div className="text-center text-zinc-500 py-6 text-sm">
-          No domains connected yet.
+        <div className="text-center text-neutral-500 py-6 text-sm">
+          {t('domains.empty')}
         </div>
       ) : (
         <div className="space-y-2">
           {domains.map((domain) => (
-            <div key={domain.id} className="flex items-center gap-3 bg-zinc-800/50 p-3 rounded border border-zinc-700 group">
-              <Globe size={14} className="text-zinc-500 shrink-0" />
-              <span className="flex-1 font-mono text-sm text-zinc-200">{domain.domain}</span>
+            <div key={domain.id} className="flex items-center gap-3 bg-neutral-800/50 p-3 rounded border border-neutral-700 group">
+              <Globe size={14} className="text-neutral-500 shrink-0" />
+              <span className="flex-1 font-mono text-sm text-neutral-200">{domain.domain}</span>
               <StatusBadge status={domain.status} />
               <button
                 onClick={() => deleteDomain(domain.id)}
-                className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
-                title="Remove domain"
+                className="p-1.5 text-neutral-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                title={t('domains.remove')}
+                aria-label={t('domains.remove')}
               >
                 <Trash2 size={14} />
               </button>
@@ -201,20 +206,21 @@ export function DomainsPanel({ projectId }: DomainsPanelProps) {
 
       {/* Info box for manual DNS */}
       {deploymentUrl && (
-        <div className="bg-zinc-800/30 border border-zinc-700 rounded-lg p-4">
+        <div className="bg-background/50 border border-border border-l-4 border-l-primary rounded-lg p-4">
           <div className="flex items-start gap-2">
-            <Info size={14} className="text-blue-400 mt-0.5 shrink-0" />
+            <Info size={14} className="text-primary mt-0.5 shrink-0" />
             <div className="space-y-1">
-              <p className="text-xs font-medium text-zinc-300">How to point your domain (if not using Cloudflare)</p>
-              <p className="text-xs text-zinc-500">Add a CNAME record pointing to your deployment:</p>
+              <p className="text-xs font-medium text-foreground">{t('domains.howTo')}</p>
+              <p className="text-xs text-muted-foreground">{t('domains.cname')}</p>
               <div className="flex items-center gap-2 mt-2">
-                <code className="text-xs font-mono text-blue-300 bg-zinc-900 px-2 py-1 rounded flex-1">
+                <code className="text-xs font-mono text-foreground bg-muted px-2 py-1 rounded flex-1">
                   CNAME → {new URL(deploymentUrl).hostname}
                 </code>
                 <button
                   onClick={() => navigator.clipboard.writeText(new URL(deploymentUrl).hostname)}
-                  className="p-1 text-zinc-500 hover:text-white transition-colors"
-                  title="Copy hostname"
+                  className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+                  title={t('domains.copyHost')}
+                  aria-label={t('domains.copyHost')}
                 >
                   <Copy size={12} />
                 </button>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { Payment } from '@/types';
+import LoadingSquares from '../../components/brand/LoadingSquares';
 
 interface PaymentFormProps {
   initialData?: Partial<Payment & { project_id?: string | null; clientEmail?: string }>;
@@ -113,10 +114,10 @@ const PaymentForm = ({
           onChange={(e) => { setClientEmail(e.target.value); setClientEmailError(false); }}
           placeholder="client@example.com"
           disabled={isLoading}
-          className={clientEmailError ? 'border-rose-500' : ''}
+          className={clientEmailError ? 'border-red-500' : ''}
         />
         {clientEmailError && (
-          <p className="text-xs text-rose-500">{labels.clientEmailRequired[lang]}</p>
+          <p className="text-xs text-red-500">{labels.clientEmailRequired[lang]}</p>
         )}
       </div>
 
@@ -142,10 +143,10 @@ const PaymentForm = ({
           onChange={(e) => { setAmount(e.target.value); setAmountError(false); }}
           placeholder="0.00"
           disabled={isLoading}
-          className={amountError ? 'border-rose-500' : ''}
+          className={amountError ? 'border-red-500' : ''}
         />
         {amountError && (
-          <p className="text-xs text-rose-500">{labels.amountRequired[lang]}</p>
+          <p className="text-xs text-red-500">{labels.amountRequired[lang]}</p>
         )}
       </div>
 
@@ -179,7 +180,7 @@ const PaymentForm = ({
           value={projectId}
           onChange={(e) => { setProjectId(e.target.value); setProjectError(false); }}
           disabled={isLoading}
-          className={`w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 ${projectError ? 'border-rose-500' : 'border-border'}`}
+          className={`w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 ${projectError ? 'border-red-500' : 'border-border'}`}
         >
           <option value="">{labels.noProject[lang]}</option>
           {projects.map((p) => (
@@ -187,7 +188,7 @@ const PaymentForm = ({
           ))}
         </select>
         {projectError && (
-          <p className="text-xs text-rose-500">{labels.projectRequired[lang]}</p>
+          <p className="text-xs text-red-500">{labels.projectRequired[lang]}</p>
         )}
       </div>
 
@@ -195,7 +196,7 @@ const PaymentForm = ({
         <Button onClick={handleSubmit} disabled={isLoading} className="flex-1">
           {isLoading ? (
             <span className="flex items-center gap-2">
-              <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+              <LoadingSquares size={16} />
               {labels.submit[lang]}
             </span>
           ) : labels.submit[lang]}

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { Contact } from '@/types';
+import LoadingSquares from '../../components/brand/LoadingSquares';
 
 interface ContactFormProps {
   initialData?: Partial<Contact>;
@@ -53,11 +54,11 @@ const ContactForm = ({ initialData, onSubmit, onCancel, isLoading, lang }: Conta
           value={name}
           onChange={(e) => { setName(e.target.value); setNameError(false); }}
           placeholder={labels.name[lang]}
-          className={nameError ? 'border-rose-500' : ''}
+          className={nameError ? 'border-red-500' : ''}
           disabled={isLoading}
         />
         {nameError && (
-          <p className="text-xs text-rose-500">{labels.nameRequired[lang]}</p>
+          <p className="text-xs text-red-500">{labels.nameRequired[lang]}</p>
         )}
       </div>
 
@@ -109,7 +110,7 @@ const ContactForm = ({ initialData, onSubmit, onCancel, isLoading, lang }: Conta
         <Button onClick={handleSubmit} disabled={isLoading} className="flex-1">
           {isLoading ? (
             <span className="flex items-center gap-2">
-              <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+              <LoadingSquares size={16} />
               {labels.submit[lang]}
             </span>
           ) : labels.submit[lang]}
