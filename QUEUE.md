@@ -1184,7 +1184,7 @@ contenedor imprescindible (p. ej. un formulario dentro de una tarjeta) queda sin
 un estado que sólo se distinguía por color azul (p. ej. "completado" vs "en progreso") ahora sólo por texto.
 Residuo: las pantallas de carga (búho, rejilla, barra, cuadritos) no se tocaron.
 
-### 5.6 HECHO EN CÓDIGO (pendiente APLICAR SQL + CHECK MANUAL) — Escalada de rol en `profiles` (seguridad, 2026-09-29)
+### 5.6 CANDADO APLICADO Y VERIFICADO EN LA DB (pendiente CHECK en software desplegado) — Escalada de rol en `profiles` (seguridad, 2026-09-29)
 
 **Evidencia (DB principal de Wyrd, consultas de Samuel):** RLS encendido; políticas UPDATE `auth.uid() = id`
 sin `WITH CHECK` ni restricción de columnas; `authenticated` con UPDATE sobre toda la tabla; triggers sólo
@@ -1206,6 +1206,14 @@ roles no podía funcionar: un admin sólo lee/edita su propia fila.
   usuarios de la PLATAFORMA dentro de un proyecto y ofrecía cambiarles el rol).
 
 Verificación automática: tsc 0 · server 680/680 · vitest 56/56 · vite build OK.
+
+**SQL aplicado por Samuel en la DB principal (2026-09-29) y verificado** con 4 transacciones simuladas
+(`set local role` + `request.jwt.claims`, todas con `rollback`, sin rastro): (1) usuario `authenticated` se
+cambia `role` → `ERROR 42501 role and role_approved can only be changed by the server` (esperado); (2)
+onboarding rol vacío → cliente, (3) pedir `pending_role`, (4) `service_role` cambia `role` → sin error
+(esperado). El editor no muestra conteos de UPDATE; el mismo id disparó el candado en (1), así que la fila
+existe. **Pendiente:** llevar la rama a `main` y comprobar en el software desplegado que el admin ve y
+aprueba a un usuario de prueba desde el panel del CRM.
 
 ### Resto del bucket (sin tocar esta sesión)
 - RAG de UI/UX: PatternRetriever da `direct: 0 | vector: 0`. Primera pregunta: ¿pasa igual en producción?
