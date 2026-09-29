@@ -114,7 +114,7 @@ export function DDLApprovalButton({
   disabled = false,
 }: Props) {
   const [phase, setPhase] = useState<'idle' | 'reading' | 'confirming' | 'applying'>('idle');
-  const { t } = useForgeLang();
+  const { lang, t } = useForgeLang();
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, setPending] = useState<{
     flagged: FlaggedStatement[];
@@ -323,7 +323,7 @@ export function DDLApprovalButton({
       tables,
       reason: reason ?? null,
       failedPath,
-    });
+    }, lang);
 
     setPending(null);
     setPhase('idle');

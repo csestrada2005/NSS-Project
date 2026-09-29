@@ -145,5 +145,7 @@ export function rlsUnreadableTelemetry(
  * hatch (only for role tables) or stays generic (any other table).
  */
 export function rlsPolicyWarnings(
-  findings: Iterable<Pick<RlsFinding, 'table' | 'command' | 'path' | 'reason' | 'roleTable'>>
+  findings: Iterable<Pick<RlsFinding, 'table' | 'command' | 'path' | 'reason' | 'roleTable'>>,
+  /** Message language; defaults to 'es'. */
+  lang?: 'es' | 'en'
 ): string[];

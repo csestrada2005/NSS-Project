@@ -566,6 +566,26 @@ export const en = {
   'users.count_other': '{count} users',
   'users.prev': 'Previous page',
   'users.next': 'Next page',
+
+  // Mensajes del orquestador (AIOrchestrator) — se escriben en el idioma elegido al momento de la corrida
+  'orch.fnDeploy.noDb': 'I wrote the function `{slug}` but could not deploy it: this project needs its database provisioned before functions can be deployed.',
+  'orch.fnDeploy.failed': 'I wrote the function `{slug}` but could not deploy it: {reason}',
+  'orch.cancelled.kept_one': 'Generation cancelled — {count} completed file was kept.',
+  'orch.cancelled.kept_other': 'Generation cancelled — {count} completed files were kept.',
+  'orch.cancelled.plain': 'Generation cancelled.',
+  'orch.noActiveError': "The project compiles and I don't see any active errors — what behavior looks wrong to you?",
+  'orch.planRejected': 'Plan rejected — nothing was changed.',
+  'orch.step': 'step {order}',
+  'orch.completeMissing': 'Complete what was missing: {description}',
+  'orch.alsoRepaired': 'I also repaired a pre-existing error in: {files}',
+  'orch.addedDeps_one': 'I added {deps} to package.json because the new code imports it.',
+  'orch.addedDeps_other': 'I added {deps} to package.json because the new code imports them.',
+  'orch.erased': 'I removed from the project: {files}',
+  'orch.restoredDeletes': 'I restored {files}: the plan deleted it but it was still in use.',
+  'orch.fixedDuringVerify': 'I detected and fixed build errors during verification.',
+  'orch.movedMigrations': "I moved {moves}: outside supabase/migrations/ the system didn't recognize it as a migration and couldn't offer to apply it from the chat.",
+  'orch.misplacedSql': "{files} is outside supabase/migrations/, so I can't offer to apply it from the chat. Ask me to create it again and I'll write it in the right place.",
+  'orch.partial': 'I built {done} of {total} steps. {failed} failed due to a temporary model overload. You can ask me to complete what is missing.',
 } as const;
 
 export type ForgeKey = keyof typeof en;

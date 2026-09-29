@@ -423,9 +423,13 @@ function executionReach(reason) {
  *   reason?: string|null,
  *   failedPath?: string|null,
  * }} result
+ * @param {'es' | 'en'} [lang] idioma del texto (i18n de Wyrd, ítem 5.4); sin
+ *   él, español. La marca de cierre es la misma en los dos: es lo único que
+ *   se relee del historial.
  * @returns {string} contenido completo del mensaje, marca incluida
  */
-export function buildOutcomeMessage(result) {
+export function buildOutcomeMessage(result, lang = 'es') {
+  const en = lang === 'en';
   const paths = normalizeProposalPaths(result?.paths);
   const outcome = result?.outcome;
   const mark = ddlOutcomeMark(outcome, paths);
@@ -450,44 +454,54 @@ export function buildOutcomeMessage(result) {
   const parts = [];
 
   if (outcome === OUTCOME_APPLIED) {
-    parts.push(`Migración aplicada: ${names}.`);
+    parts.push(en ? `Migration applied: ${names}.` : `Migración aplicada: ${names}.`);
     parts.push(
       tables.length > 0
-        ? `El schema del proyecto cambió en: ${tables.join(', ')}.`
-        : 'El schema del proyecto cambió.'
+        ? (en ? `The project's schema changed in: ${tables.join(', ')}.` : `El schema del proyecto cambió en: ${tables.join(', ')}.`)
+        : (en ? "The project's schema changed." : 'El schema del proyecto cambió.')
     );
     // Un apply real NO se degrada porque su telemetría fallara, pero tampoco se
     // calla: es exactamente el fallo que la Cirugía 1 vino a matar.
-    if (reason) parts.push(`Aviso: ${reason}.`);
+    if (reason) parts.push(en ? `Note: ${reason}.` : `Aviso: ${reason}.`);
   } else if (outcome === OUTCOME_FAILED) {
     const reach = executionReach(reason);
     const detail = reason ? `: ${reason}.` : '.';
     if (reach === 'rejected') {
-      parts.push(`La base de datos rechazó ${failed}${detail}`);
-      parts.push('No se aplicó nada de esa migración.');
+      parts.push(en ? `The database rejected ${failed}${detail}` : `La base de datos rechazó ${failed}${detail}`);
+      parts.push(en ? 'Nothing from that migration was applied.' : 'No se aplicó nada de esa migración.');
     } else if (reach === 'never_ran') {
       // Nada salió del cliente: el SQL no es el sospechoso.
-      parts.push(`No llegué a ejecutar ${failed}${detail}`);
-      parts.push('No se envió nada a tu base de datos: el SQL no llegó a intentarse.');
+      parts.push(en ? `I never got to run ${failed}${detail}` : `No llegué a ejecutar ${failed}${detail}`);
+      parts.push(en ? 'Nothing was sent to your database: the SQL was never attempted.' : 'No se envió nada a tu base de datos: el SQL no llegó a intentarse.');
     } else {
-      parts.push(`${failed} no se aplicó${detail}`);
+      parts.push(en ? `${failed} was not applied${detail}` : `${failed} no se aplicó${detail}`);
     }
     parts.push(
-      'Pídemelo de nuevo aquí y generaré una propuesta nueva; ésta ya no se puede reintentar.'
+      en
+        ? "Ask me again here and I'll generate a new proposal; this one can no longer be retried."
+        : 'Pídemelo de nuevo aquí y generaré una propuesta nueva; ésta ya no se puede reintentar.'
     );
   } else if (outcome === OUTCOME_UNVERIFIED) {
     parts.push(
-      `Ejecuté ${failed}, pero el schema no muestra ningún cambio${reason ? ` (${reason})` : ''}.`
+      en
+        ? `I ran ${failed}, but the schema shows no change${reason ? ` (${reason})` : ''}.`
+        : `Ejecuté ${failed}, pero el schema no muestra ningún cambio${reason ? ` (${reason})` : ''}.`
     );
     parts.push(
-      'Puede que se aplicara y el diff no lo vea (RLS, índices o permisos quedan fuera de lo que ' +
+      en
+        ? 'It may have applied without the diff seeing it (RLS, indexes or permissions are outside ' +
+          "what it measures), or it may have done nothing. Check it in your database before asking " +
+          "again: I won't re-run DDL that may already have run."
+        : 'Puede que se aplicara y el diff no lo vea (RLS, índices o permisos quedan fuera de lo que ' +
       'mide), o puede que no hiciera nada. Revísalo en tu base antes de volver a pedirlo: no ' +
       'reejecuto un DDL que quizá ya corrió.'
     );
   } else {
-    parts.push('Este proyecto todavía no tiene base de datos, así que no ejecuté nada.');
+    parts.push(en ? "This project doesn't have a database yet, so I didn't run anything." : 'Este proyecto todavía no tiene base de datos, así que no ejecuté nada.');
     parts.push(
-      'La migración sigue guardada en el proyecto. Conecta una base de datos y vuelve a pedírmelo ' +
+      en
+        ? 'The migration is still saved in the project. Connect a database and ask me again here.'
+        : 'La migración sigue guardada en el proyecto. Conecta una base de datos y vuelve a pedírmelo ' +
       'por aquí.'
     );
   }
@@ -496,10 +510,10 @@ export function buildOutcomeMessage(result) {
   // archivo es su propia llamada y su propia transacción— y callarlo dejaría al
   // usuario creyendo que la base sigue intacta.
   if (outcome !== OUTCOME_APPLIED && applied.length > 0) {
-    parts.push(`Sí se habían aplicado antes: ${applied.map(fileName).join(', ')}.`);
+    parts.push(en ? `These had already been applied: ${applied.map(fileName).join(', ')}.` : `Sí se habían aplicado antes: ${applied.map(fileName).join(', ')}.`);
   }
   if (untouched.length > 0) {
-    parts.push(`Y no llegué a tocar: ${untouched.map(fileName).join(', ')}.`);
+    parts.push(en ? `And I never touched: ${untouched.map(fileName).join(', ')}.` : `Y no llegué a tocar: ${untouched.map(fileName).join(', ')}.`);
   }
 
   return `${parts.join(' ')}${mark}`;

@@ -34,4 +34,4 @@ export function trimPlan<T = unknown>(plan: unknown): TrimResult<T>;
 export function trimTelemetry(originalCount: unknown, keptCount: unknown): string;
 
 /** User-facing warning naming the real cap and the real counts, '' when no trim. */
-export function buildTrimWarning(originalCount: unknown, keptCount: unknown): string;
+export function buildTrimWarning(originalCount: unknown, keptCount: unknown, lang?: 'es' | 'en'): string;

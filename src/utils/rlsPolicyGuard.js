@@ -919,10 +919,16 @@ export function rlsUnreadableTelemetry(findings) {
  * de usuarios (sigue siendo cierto para ella); una tabla cualquiera no
  * tiene esa vía que inventar, así que su aviso no la menciona.
  *
+ * Idioma (i18n de Wyrd, ítem 5.4): `lang` elige el texto; sin él, español
+ * (el texto histórico que fijan los tests). El contenido y la agrupación
+ * son idénticos en los dos idiomas.
+ *
  * @param {Iterable<{ table: string | null, command: string | null, path: string | null, reason: string, roleTable?: boolean }>} findings
+ * @param {'es' | 'en'} [lang]
  * @returns {string[]}
  */
-export function rlsPolicyWarnings(findings) {
+export function rlsPolicyWarnings(findings, lang = 'es') {
+  const en = lang === 'en';
   const order = [];
   const perTable = new Map(); // table -> { ops: Set<string>, missingRls: boolean, roleTable: boolean }
   const unreadablePaths = [];
@@ -960,6 +966,15 @@ export function rlsPolicyWarnings(findings) {
     const hasOps = ops.size > 0;
 
     if (missingRls && hasOps) {
+      if (en) {
+        return (
+          'Security guard: the generated migration was corrected. Row level security was ' +
+          `off on ${table} (a table with a role column); I turned it on and removed the public ` +
+          `${sortedOps} polic(ies) before proposing the migration. User management still goes ` +
+          'through the corresponding server function. Without policies, the table will not be ' +
+          'readable from the browser.'
+        );
+      }
       return (
         'Guard de seguridad: se corrigió la migración generada. Row level security estaba ' +
         `apagada sobre ${table} (tabla con columna de rol); la habilité, y eliminé la(s) ` +
@@ -969,6 +984,14 @@ export function rlsPolicyWarnings(findings) {
       );
     }
     if (missingRls && roleTable) {
+      if (en) {
+        return (
+          'Security guard: the generated migration was corrected. Row level security was ' +
+          `off on ${table} (a table with a role column); I turned it on before proposing the ` +
+          'migration. Without policies, the table will not be readable from the browser — access ' +
+          'still goes through the corresponding server function.'
+        );
+      }
       return (
         'Guard de seguridad: se corrigió la migración generada. Row level security estaba ' +
         `apagada sobre ${table} (tabla con columna de rol); la habilité antes de proponer la ` +
@@ -979,10 +1002,24 @@ export function rlsPolicyWarnings(findings) {
     if (missingRls) {
       // G-5 — tabla sin columna de rol: no hay función de servidor que
       // nombrar, así que el aviso no la inventa.
+      if (en) {
+        return (
+          'Security guard: the generated migration was corrected. Row level security was ' +
+          `off on ${table}; I turned it on before proposing the migration. Without policies, the ` +
+          'table will not be readable from the browser until you define who can access it.'
+        );
+      }
       return (
         'Guard de seguridad: se corrigió la migración generada. Row level security estaba ' +
         `apagada sobre ${table}; la habilité antes de proponer la migración. Sin políticas, la ` +
         'tabla no será legible desde el navegador hasta que definas quién puede acceder a ella.'
+      );
+    }
+    if (en) {
+      return (
+        'Security guard: the generated migration was corrected. Public ' +
+        `${sortedOps} polic(ies) on ${table} (a table with a role column) were removed before ` +
+        'proposing the migration. User management still goes through the corresponding server function.'
       );
     }
     return (
@@ -994,7 +1031,10 @@ export function rlsPolicyWarnings(findings) {
 
   const unreadableWarnings = unreadablePaths.map(
     (unreadablePath) =>
-      'No pude revisar la seguridad de esta migración antes de proponértela: ' +
+      en
+        ? "I couldn't check this migration's security before proposing it: " +
+          `${unreadablePath}. Review it before applying it.`
+        : 'No pude revisar la seguridad de esta migración antes de proponértela: ' +
       `${unreadablePath}. Revísala antes de aplicarla.`
   );
 
