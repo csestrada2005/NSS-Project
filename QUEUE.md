@@ -307,6 +307,13 @@ chat esté trabado. Cuando se arregle el modal (ver 5.0 abajo), repetir en este 
    instalar" (revisión apagada, fail-open)? Hipótesis sin confirmar: typeenv no instalado en Render, o build
    que falla por otra cosa (mundo pre-registrado: `dist/` no publicado porque `framework: null` sin
    `outputDirectory`).
+   **Evidencia (2026-09-29):** log de Vercel = 4 errores de tipos reales (TS2554 ×2 en CommentsSection y
+   ProfileUploadSection, TS2345 en ProfileUploadSection, TS2352 en src/lib/aiChat.ts) → no es `dist/`, es
+   tipos. Log de ejecución de Render: `[typecheck] worker exited with code 1` y ningún `[typecheck] N
+   errores` → el hilo de la revisión MUERE en Render, la revisión queda "no disponible" (fail-open,
+   `[TYPECHECK_OFF]` en el log) y la revisión previa a publicar no frena nada. **Bug del bucket 6, no del
+   modal.** Causa del crash sin confirmar (sin evento `error` registrado): memoria de la instancia, versión
+   de Node de Render, o typeenv no instalado. Falta el log de BUILD de Render (postinstall + versión de Node).
 2. **Segunda puerta de tipos en el chat (bucket 6 B2/B3):** pedir un cambio chico → si quedan errores,
    tarjeta "Aún no se puede publicar"; "Arreglar ahora" → la lista baja o desaparece.
 3. **Volver a publicar** → debe llegar a Vercel y construir; revisar los dos mundos pendientes del ítem 4
@@ -337,6 +344,12 @@ del pool: 60 s), el turno se queda en "pensando" justo en "Planeando". Distingui
   con error? ¿excepción de React en el chat?
 - Log de Render: líneas `[typecheck] ...` / `worker error`.
 Vertigo quedó inservible para pruebas por este bug.
+
+**Evidencia 2026-09-29 (Samuel):** `forge_intent_log` de 332f31d3 — los dos turnos de hoy ("cambia el título
+curated escapes…", "Cambia amazing landsights…") tienen `outcome: success` y marca `[TYPECHECK_OFF]`: el
+orquestador TERMINÓ y devolvió resultado, así que el atasco en "Planeando" ocurre del lado del navegador,
+después. Consola sin errores rojos; `/api/compile` y `/api/typecheck` en 200. → La hipótesis "la revisión de
+tipos cuelga el turno" queda DESCARTADA; apunta al modal (ítem 10), como sospechaba Samuel.
 
 ### 5.1 HECHO Y CONFIRMADO — Panel Cloud, alcance A completo (2026-09-19)
 
