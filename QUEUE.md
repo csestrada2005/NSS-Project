@@ -185,7 +185,7 @@ inesperado — no hubo que reencuadrar nada.
 
 ---
 
-## 4. BLOQUEADO (falta VERCEL_TOKEN) — Hueco conceptual RLS ↔ Edge Function (G-7, 2026-09-19)
+## 4. EN PAUSA (espera bucket 6: código sin errores de tipos) — Hueco conceptual RLS ↔ Edge Function (G-7, 2026-09-19)
 
 **Resumen para quien llegue después:** Bloque 1 (plomería de deploy) HECHO y commiteado, verificación
 automática en verde, SIN check manual porque publicar no está configurado en producción. **Bloque 2
@@ -275,6 +275,26 @@ Mundos pre-registrados:
 - **Falla real (si aparece, SÍ es bug):** `persistSession` (o `autoRefreshToken`/el `lock` no-op) sigue
   apareciendo en el bundle publicado, o el preview del builder se rompe/tira SecurityError donde antes no
   lo hacía.
+
+**Actualización 2026-09-29 — desbloqueo de Vercel y nuevo bloqueo:**
+- Samuel compró Vercel Pro (cuenta = Team) y configuró en Render `NEBU_STUDIO_VERCEL_TOKEN` y `VERCEL_TEAM_ID`.
+  `6a0e5ee`: `server.js` lee ese nombre (respaldo `VERCEL_TOKEN`) y añade `?teamId=` a crear/consultar la
+  publicación; `SecretsPanel` los trata como claves de plataforma.
+- Publicación real de Vertigo → `Vercel deployment failed during build`. **Evidencia (Build Logs):** instala
+  bien, corre `npm run build` = `tsc -b && vite build` y `tsc -b` sale con 12 errores de tipos del código
+  generado (imports sin usar en Footer/StatsAndCTASection/AdminClientCheckPanel; dos `AppUser` distintos y
+  `.error` inexistente en AdminUsersTable/InviteUserForm; props no aceptadas `staggerDelay`, `onCancel`,
+  `onRefresh`/`onRoleChange`/`onDeactivate`). El preview compila con esbuild SIN revisar tipos, por eso
+  funciona en el editor y no se puede publicar. Varios errores son bugs reales (p. ej. `onCancel` ignorado,
+  `.error` siempre undefined).
+- Opciones presentadas: A publicar con sólo `vite build` (paridad con el preview), B que el Verifier
+  revise tipos y la IA genere código limpio, C aflojar tsconfig (no alcanza). **Decisión de Samuel: B.**
+  El check del Bloque 1 se retoma DESPUÉS del ítem de tipos del bucket 6 (ver ahí).
+- Mundo aún sin probar, pre-registrado: aunque compile, `framework: null` sin `outputDirectory` puede hacer
+  que Vercel publique la raíz en vez de `dist/` (página en blanco). Otro posible: Deployment Protection del
+  Team pide login en la URL única de la publicación.
+- Mejora anotada: el servidor sólo devuelve "failed during build"; debería devolver también el enlace al
+  log de Vercel (`inspectorUrl`).
 
 ## 5. BUCKET Producto y UX
 Una sola sesión de decisión, con mockup delante. Orden acordado con Samuel (2026-09-19): 1 (Panel Cloud) →
@@ -1231,6 +1251,12 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   como están o hay una decisión de producto pendiente ahí?
 
 ## 6. BUCKET Calidad del modelo
+- **(PRIMERO — desbloquea ítem 4) El código generado no pasa `tsc -b`.** El Verifier sólo compila con
+  esbuild (no revisa tipos), así que la IA entrega imports sin usar, tipos duplicados que no coinciden y
+  props que el componente no acepta — varios son bugs reales visibles en la app (botón que no hace nada,
+  errores que nunca se muestran). Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4).
+  Decisión de Samuel (2026-09-29): que el Verifier revise tipos y la IA los corrija antes de terminar. Al
+  cerrarlo, re-publicar Vertigo y retomar el check del Bloque 1 del ítem 4.
 - Bug de recomendaciones: no muestra filas que SÍ están en la DB; la IA respondió dos veces "compila y no encuentro errores".
 - Reglas duras incumplidas: tocó `package.json` pese a prohibición explícita; añadió comportamiento no pedido dos veces.
 - Detectar que lo pedido YA EXISTE y responder "ya está construido". OJO: rompe la batería de regresión sobre fixtures ya construidos → necesita plan de checkpoints con fixtures vírgenes.
