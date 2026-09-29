@@ -4,6 +4,7 @@ import { platformService } from '../../services/PlatformService';
 import LoadingSquares from '../brand/LoadingSquares';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
 import type { ForgeKey } from '@/i18n/forge/en';
+import type { TypeIssue } from '../../services/PlatformService';
 
 interface DeployManagerProps {
   files?: Map<string, string>;
@@ -25,6 +26,8 @@ export function DeployManager({ files, projectId: propProjectId }: DeployManager
   const stageMessage = STAGE_MESSAGES[stage] ? t(STAGE_MESSAGES[stage]!) : '';
   const [deploymentUrl, setDeploymentUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [typeErrors, setTypeErrors] = useState<TypeIssue[]>([]);
+  const [inspectorUrl, setInspectorUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   const projectId = propProjectId ?? sessionStorage.getItem('forge_project_id');
@@ -38,6 +41,8 @@ export function DeployManager({ files, projectId: propProjectId }: DeployManager
 
     setStage('packaging');
     setErrorMessage(null);
+    setTypeErrors([]);
+    setInspectorUrl(null);
     setDeploymentUrl(null);
 
     try {
@@ -49,7 +54,15 @@ export function DeployManager({ files, projectId: propProjectId }: DeployManager
       const result = await platformService.deployProject(projectId, filesObj, `nebu-${projectId}`);
 
       if (result.error) {
-        setErrorMessage(result.error);
+        // Bucket 6 — la revisión previa encontró errores de tipos: no se mandó
+        // a Vercel. Se explican en lenguaje llano y se listan.
+        if (result.error === 'typecheck' && result.typeErrors?.length) {
+          setTypeErrors(result.typeErrors);
+          setErrorMessage(t('deploy.typecheckFailed'));
+        } else {
+          setErrorMessage(result.error);
+        }
+        setInspectorUrl(result.inspectorUrl ?? null);
         setStage('error');
         return;
       }
@@ -102,8 +115,22 @@ export function DeployManager({ files, projectId: propProjectId }: DeployManager
         )}
 
         {stage === 'error' && errorMessage && (
-          <div className="mb-4 p-3 bg-red-950/60 border border-red-800/40 rounded-lg text-sm text-red-300">
-            {errorMessage}
+          <div className="mb-4 p-3 bg-red-950/60 border border-red-800/40 rounded-lg text-sm text-red-300 space-y-2">
+            <p>{errorMessage}</p>
+            {typeErrors.length > 0 && (
+              <ul className="list-disc pl-5 font-mono text-xs space-y-1">
+                {typeErrors.slice(0, 8).map((e, i) => (
+                  <li key={i}>{e.file ?? '?'}{e.line ? `:${e.line}` : ''} — {e.message}</li>
+                ))}
+                {typeErrors.length > 8 && <li className="list-none">{t('chat.types.more', { count: typeErrors.length - 8 })}</li>}
+              </ul>
+            )}
+            {inspectorUrl && (
+              <a href={inspectorUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs underline">
+                <ExternalLink size={12} />
+                {t('deploy.viewLog')}
+              </a>
+            )}
           </div>
         )}
 

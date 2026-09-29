@@ -270,7 +270,15 @@ class PlatformService {
   }
 
   /** Trigger a managed Vercel deployment for the given project. */
-  async deployProject(projectId: string, files: Record<string, string>, projectName: string): Promise<{ url?: string; deploymentId?: string; error?: string }> {
+  async deployProject(projectId: string, files: Record<string, string>, projectName: string): Promise<{
+    url?: string;
+    deploymentId?: string;
+    error?: string;
+    /** Bucket 6: errores de tipos que impedirían el build en Vercel (no se publicó). */
+    typeErrors?: TypeIssue[];
+    /** Enlace al log de Vercel de esta publicación, cuando falla. */
+    inspectorUrl?: string | null;
+  }> {
     try {
       const headers = await this.getHeaders();
       const response = await fetch(`/api/deploy/${projectId}`, {

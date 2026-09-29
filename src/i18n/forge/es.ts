@@ -585,4 +585,8 @@ export const es: Record<ForgeKey, string> = {
   'chat.types.hide': 'Ocultar los errores',
   'chat.types.more': '…y {count} más',
   'chat.types.fixPrompt': "Arregla estos errores de tipos de TypeScript para que el proyecto se pueda publicar, sin quitar ninguna funcionalidad:\n{list}",
+
+  // Publicar: revisión de tipos previa y log de Vercel (bucket 6)
+  'deploy.typecheckFailed': 'Este proyecto tiene errores de tipos que harían fallar el build en Vercel, así que no se publicó nada. Arréglalos desde el chat ("Arreglar ahora") y vuelve a publicar:',
+  'deploy.viewLog': 'Ver el log de Vercel',
 };

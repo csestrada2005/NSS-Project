@@ -590,6 +590,10 @@ export const en = {
   'chat.types.hide': 'Hide the errors',
   'chat.types.more': '…and {count} more',
   'chat.types.fixPrompt': "Fix these TypeScript type errors so the project can be published, without removing any feature:\n{list}",
+
+  // Publicar: revisión de tipos previa y log de Vercel (bucket 6)
+  'deploy.typecheckFailed': 'This project has type errors that would make the build fail on Vercel, so nothing was published. Fix them from the chat ("Fix now") and publish again:',
+  'deploy.viewLog': 'View the Vercel log',
 } as const;
 
 export type ForgeKey = keyof typeof en;

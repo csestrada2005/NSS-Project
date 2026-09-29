@@ -1413,6 +1413,16 @@ app.post('/api/deploy/:projectId', async (req, res) => {
     // Ver src/utils/deploySupabaseClient.js para el porqué completo.
     const deployFiles = applyProductionSupabaseClient(files);
 
+    // Bucket 6 — revisión de tipos ANTES de publicar: Vercel corre `tsc -b` y
+    // un error de tipos lo tumba con un "failed during build" opaco. Si el
+    // proyecto tiene errores, se devuelven legibles y no se gasta un build.
+    // Fail-open: si la revisión no está disponible, se publica como antes.
+    // Sin arreglo automático: publicar nunca reescribe el proyecto.
+    const typecheck = await runTypecheck(deployFiles, { autoFix: false });
+    if (typecheck.available && typecheck.errors.length > 0) {
+      return res.status(422).json({ error: 'typecheck', typeErrors: typecheck.errors });
+    }
+
     // Build Vercel file list with base64 encoding
     const vercelFiles = Object.entries(deployFiles).map(([filePath, content]) => ({
       file: filePath,
@@ -1442,6 +1452,9 @@ app.post('/api/deploy/:projectId', async (req, res) => {
 
     const deployData = await deployResponse.json();
     const deploymentId = deployData.id;
+    // Enlace al log de Vercel de esta publicación: sin él, un fallo de build
+    // sólo decía "failed during build" y había que buscarlo a mano.
+    const inspectorUrl = typeof deployData.inspectorUrl === 'string' ? deployData.inspectorUrl : null;
 
     // Poll for deployment status (max 60s, every 3s)
     let deploymentUrl = null;
@@ -1457,12 +1470,12 @@ app.post('/api/deploy/:projectId', async (req, res) => {
         break;
       }
       if (statusData.readyState === 'ERROR') {
-        return res.status(502).json({ error: 'Vercel deployment failed during build' });
+        return res.status(502).json({ error: 'Vercel deployment failed during build', inspectorUrl });
       }
     }
 
     if (!deploymentUrl) {
-      return res.status(504).json({ error: 'Deployment timed out' });
+      return res.status(504).json({ error: 'Deployment timed out', inspectorUrl });
     }
 
     // Update forge_projects with deployment info
