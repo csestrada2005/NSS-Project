@@ -296,9 +296,47 @@ Mundos pre-registrados:
 - Mejora anotada: el servidor sólo devuelve "failed during build"; debería devolver también el enlace al
   log de Vercel (`inspectorUrl`).
 
+## CHEQUEO DESPUÉS DE ARREGLAR EL MODAL (pedido de Samuel, 2026-09-29)
+
+No se puede cerrar el check manual del bucket 6 (tipos) ni retomar el ítem 4 (Vercel) mientras el modal de
+chat esté trabado. Cuando se arregle el modal (ver 5.0 abajo), repetir en este orden:
+1. **Publicar (ítem 4 + bucket 6 B4).** Primer intento (2026-09-29, tras `0fbcdad` en `main`): Publicar dio
+   `Vercel deployment failed during build` + enlace "Ver el log de Vercel" — la revisión previa NO listó
+   errores de tipos, así que llegó a Vercel. Pendiente de evidencia: (a) log de Vercel de esa publicación,
+   (b) log del deploy de Render: ¿el postinstall de `server/typeenv` terminó bien o avisó "no se pudo
+   instalar" (revisión apagada, fail-open)? Hipótesis sin confirmar: typeenv no instalado en Render, o build
+   que falla por otra cosa (mundo pre-registrado: `dist/` no publicado porque `framework: null` sin
+   `outputDirectory`).
+2. **Segunda puerta de tipos en el chat (bucket 6 B2/B3):** pedir un cambio chico → si quedan errores,
+   tarjeta "Aún no se puede publicar"; "Arreglar ahora" → la lista baja o desaparece.
+3. **Volver a publicar** → debe llegar a Vercel y construir; revisar los dos mundos pendientes del ítem 4
+   (página en blanco por `dist/`; login de Deployment Protection en la URL).
+4. **Ctrl+Espacio:** al principio abrió el chat bien, después abrió OTRA ventana del proyecto (Samuel,
+   2026-09-29, proyecto `332f31d3-6a64-42c4-a587-4bd329f24f32`).
+5. **Proyectos antiguos:** el modal vuelve a responder (Vertigo quedó inservible para pruebas por esto; las
+   pruebas se hicieron con `332f31d3-6a64-42c4-a587-4bd329f24f32`).
+
 ## 5. BUCKET Producto y UX
 Una sola sesión de decisión, con mockup delante. Orden acordado con Samuel (2026-09-19): 1 (Panel Cloud) →
 2 (variantes de diseño) → 3 (rediseño cosmético). El resto de la lista se queda en el bucket para después.
+
+### 5.0 BUG PRIORITARIO — el modal de chat se queda en "Planeando" (reportado por Samuel, 2026-09-29)
+
+**Síntoma (literal de Samuel):** en proyectos antiguos, al mandar un mensaje el modal se queda en
+"Planeando" y ya no cambia nada — "de hecho el modal no sirve en ningún proyecto antiguo". En el proyecto
+`332f31d3-6a64-42c4-a587-4bd329f24f32` el cambio pedido SÍ se aplicó, pero el modal no dijo nada y siguió en
+"Planeando". Sospecha de Samuel: aparece cuando se debe aplicar un SQL; lo atribuye al rediseño del modal
+(ítem 10). Además: Ctrl+Espacio primero abrió el chat y después abrió otra ventana del proyecto.
+
+**Hipótesis a descartar PRIMERO (sin evidencia aún, mismo día que el bucket 6 B2):** el Verifier ahora
+espera `/api/typecheck` después de compilar; si en Render esa llamada tarda o el worker se cuelga (timeout
+del pool: 60 s), el turno se queda en "pensando" justo en "Planeando". Distinguir con evidencia:
+- DB principal de Wyrd: últimas filas de `forge_intent_log` del proyecto 332f31d3 — ¿el turno llegó a
+  escribir fila (outcome, `[TYPECHECK_OFF]`/`[TYPE_ERRORS:n]`, `[DDL_PROPOSED:...]`)?
+- Consola del navegador y pestaña Network durante el turno: ¿`/api/typecheck` o `/api/compile` pendiente o
+  con error? ¿excepción de React en el chat?
+- Log de Render: líneas `[typecheck] ...` / `worker error`.
+Vertigo quedó inservible para pruebas por este bug.
 
 ### 5.1 HECHO Y CONFIRMADO — Panel Cloud, alcance A completo (2026-09-19)
 
