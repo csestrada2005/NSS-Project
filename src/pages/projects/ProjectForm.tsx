@@ -62,11 +62,11 @@ const ProjectForm = ({ initialData, contacts, onSubmit, onCancel, isLoading, lan
           value={title}
           onChange={(e) => { setTitle(e.target.value); setTitleError(false); }}
           placeholder={labels.title[lang]}
-          className={titleError ? 'border-rose-500' : ''}
+          className={titleError ? 'border-red-500' : ''}
           disabled={isLoading}
         />
         {titleError && (
-          <p className="text-xs text-rose-500">{labels.titleRequired[lang]}</p>
+          <p className="text-xs text-red-500">{labels.titleRequired[lang]}</p>
         )}
       </div>
 

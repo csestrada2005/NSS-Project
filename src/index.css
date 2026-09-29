@@ -126,7 +126,8 @@ button, [role="button"], a { cursor: pointer; }
  * sin diluir la señal de la única confirmación irreversible de la plataforma).
  */
 .nebu-modal,
-.wyrd-root {
+.wyrd-root,
+.nebu-crm {
   --color-background: #0D0D0D;         /* negro profundo */
   --color-card: #1A1A1A;               /* carbón */
   --color-card-foreground: #E8E8E8;    /* gris claro */
@@ -231,20 +232,40 @@ button, [role="button"], a { cursor: pointer; }
  * sola escala (neutral), del mismo tono que los tokens. Color: rojo de marca
  * + emerald/amber/red como estados; nada decorativo fuera de eso.
  */
-.wyrd-root .rounded,
-.wyrd-root .rounded-sm,
-.wyrd-root .rounded-md,
-.wyrd-root .rounded-lg,
-.wyrd-root .rounded-xl,
-.wyrd-root .rounded-2xl {
+:is(.wyrd-root, .nebu-crm) :is(.rounded, .rounded-sm, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl) {
   border-radius: 4px;
 }
-.wyrd-root .rounded-t,
-.wyrd-root .rounded-t-lg {
+:is(.wyrd-root, .nebu-crm) :is(.rounded-t, .rounded-t-lg) {
   border-top-left-radius: 4px;
   border-top-right-radius: 4px;
 }
-.wyrd-root :is(h1, h2, h3) {
+:is(.wyrd-root, .nebu-crm) :is(h1, h2, h3) {
   font-family: var(--font-display);
+}
+
+/*
+ * CRM (Nebu Studio, 5.5 fase 2): mismo sistema que Wyrd (.nebu-crm en
+ * WorkspaceLayout) y, pedido de Samuel, los CONTENEDORES del área de
+ * contenido sólo se dibujan al pasar el mouse — en reposo se ve el texto.
+ * Contenedor = .bg-card (tarjetas, paneles, Card de shadcn). Se excluyen
+ * campos de formulario, menús y popups (fixed/absolute/dialog), que deben
+ * verse siempre. :focus-within los revela también con teclado. Sólo en
+ * dispositivos con hover real: en táctil no hay forma de "pasar encima", así
+ * que ahí se siguen viendo (si no, nada indicaría qué se puede tocar).
+ */
+@media (hover: hover) {
+  .nebu-crm-main .bg-card:not(input, textarea, select, .absolute, .fixed, .fixed *, [role="dialog"], [role="dialog"] *, [role="menu"], [role="menu"] *) {
+    background-color: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    transition: background-color 150ms ease, border-color 150ms ease;
+  }
+  .nebu-crm-main .bg-card:not(input, textarea, select, .absolute, .fixed, .fixed *, [role="dialog"], [role="dialog"] *, [role="menu"], [role="menu"] *):is(:hover, :focus-within) {
+    background-color: var(--color-card);
+    border-color: var(--color-border);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nebu-crm-main .bg-card { transition: none; }
 }
 ::selection { background: hsl(var(--primary) / 0.25); color: hsl(var(--foreground)); }

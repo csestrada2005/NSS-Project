@@ -41,7 +41,7 @@ const labels = {
 const statusBadgeClass: Record<Payment['status'], string> = {
   paid: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
   pending: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
-  overdue: 'bg-rose-500/10 text-rose-500 border-rose-500/20',
+  overdue: 'bg-red-500/10 text-red-500 border-red-500/20',
 };
 
 const formatCurrency = (amount: number) =>
@@ -119,7 +119,7 @@ const PaymentDetailPanel = ({
           <>
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-              <h2 className="text-base font-semibold text-foreground truncate pr-2">
+              <h2 className="text-sm font-semibold text-foreground truncate pr-2">
                 {payment.invoice_number ?? formatCurrency(payment.amount)}
               </h2>
               <button
@@ -240,7 +240,7 @@ const PaymentDetailPanel = ({
                 <Button
                   variant="outline"
                   onClick={() => setMode('delete')}
-                  className="flex-1 text-rose-500 border-rose-500/30 hover:bg-rose-500/10"
+                  className="flex-1 text-red-500 border-red-500/30 hover:bg-red-500/10"
                 >
                   {labels.delete[lang]}
                 </Button>

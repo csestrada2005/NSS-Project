@@ -138,7 +138,7 @@ const AIStudioPage = () => {
                 <div className="w-20 h-20 bg-gradient-to-br from-primary/20 to-accent/20 rounded-3xl flex items-center justify-center mb-6 border border-primary/20">
                   <Bot size={36} className="text-primary" />
                 </div>
-                <h3 className="text-xl font-semibold text-foreground mb-2">Novy</h3>
+                <h3 className="text-lg font-semibold text-foreground mb-2">Novy</h3>
                 <p className="text-sm text-muted-foreground max-w-md text-center mb-8">
                   {lang === 'es'
                     ? 'Tu asistente de negocios inteligente. Pregunta sobre tus proyectos, genera cotizaciones, analiza métricas o crea reportes.'
@@ -212,7 +212,7 @@ const AIStudioPage = () => {
             <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto">
               <Code size={32} className="text-primary" />
             </div>
-            <h3 className="text-xl font-semibold text-foreground">
+            <h3 className="text-lg font-semibold text-foreground">
               {lang === 'es' ? 'Abrir Wyrd Forge' : 'Open Wyrd Forge'}
             </h3>
             <p className="text-sm text-muted-foreground">

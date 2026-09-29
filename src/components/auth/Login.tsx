@@ -25,9 +25,9 @@ const MagneticLoginBtn = ({ onClick }: { onClick: () => void }) => {
       onClick={onClick}
       onMouseMove={handleMove}
       onMouseLeave={() => { x.set(0); y.set(0); }}
-      style={{ x: springX, y: springY, boxShadow: "3px 3px 0 rgba(230,0,0,0.5)" }}
+      style={{ x: springX, y: springY, boxShadow: "3px 3px 0 rgba(214,40,40,0.5)" }}
       whileTap={{ scale: 0.95 }}
-      className="mt-8 px-8 py-4 rounded-sm bg-[#E60000] text-white font-bold text-sm uppercase tracking-wider transition-shadow hover:bg-red-600 w-full sm:w-auto z-20 relative"
+      className="mt-8 px-8 py-4 rounded-sm bg-[#D62828] text-white font-bold text-sm uppercase tracking-wider transition-shadow hover:bg-red-600 w-full sm:w-auto z-20 relative"
     >
       Log in with Google
     </motion.button>
@@ -65,8 +65,8 @@ const SumiHeroReveal = () => {
       {/* Reduce size of red line by setting max-width to 80% of what it was, matching the 80% font size reduction */}
       <div className="w-full flex justify-center -mt-2 sm:-mt-4 z-10">
         <svg viewBox="0 0 600 22" className="w-[80%] max-w-[576px]">
-          <motion.path d={pathMain} stroke="#E60000" strokeWidth="3.8" fill="none" initial={{ pathLength: 0, opacity: 0 }} animate={phase >= 3 ? { pathLength: 1, opacity: 0.8 } : { pathLength: 0, opacity: 0 }} transition={{ duration: 0.6 }} />
-          <motion.path d={pathThin} stroke="#E60000" strokeWidth="1.6" fill="none" initial={{ pathLength: 0, opacity: 0 }} animate={phase >= 3 ? { pathLength: 1, opacity: 0.4 } : { pathLength: 0, opacity: 0 }} transition={{ duration: 0.7, delay: 0.1 }} />
+          <motion.path d={pathMain} stroke="#D62828" strokeWidth="3.8" fill="none" initial={{ pathLength: 0, opacity: 0 }} animate={phase >= 3 ? { pathLength: 1, opacity: 0.8 } : { pathLength: 0, opacity: 0 }} transition={{ duration: 0.6 }} />
+          <motion.path d={pathThin} stroke="#D62828" strokeWidth="1.6" fill="none" initial={{ pathLength: 0, opacity: 0 }} animate={phase >= 3 ? { pathLength: 1, opacity: 0.4 } : { pathLength: 0, opacity: 0 }} transition={{ duration: 0.7, delay: 0.1 }} />
         </svg>
       </div>
 
@@ -87,14 +87,14 @@ export const Login = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen w-screen bg-[#0A0A0A] text-white">
+      <div className="flex items-center justify-center h-screen w-screen bg-[#0D0D0D] text-white">
         <NebuLoader size={160} />
       </div>
     );
   }
 
   return (
-    <section className="relative h-screen w-screen flex flex-col items-center justify-center overflow-hidden bg-[#0A0A0A]">
+    <section className="relative h-screen w-screen flex flex-col items-center justify-center overflow-hidden bg-[#0D0D0D]">
       {/* Dark Scrim & Grid */}
       <div className="absolute inset-0 bg-black/40 pointer-events-none" />
       <div className="absolute inset-0 opacity-[0.04] bg-[linear-gradient(rgba(255,255,255,0.4)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.4)_1px,transparent_1px)] bg-[size:60px_60px]" />
@@ -108,7 +108,7 @@ export const Login = () => {
         <SumiHeroReveal />
 
         <motion.p
-          className="mt-8 text-base md:text-lg text-white/70 max-w-lg text-center font-light leading-relaxed"
+          className="mt-8 text-sm md:text-lg text-white/70 max-w-lg text-center font-light leading-relaxed"
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 1.5, duration: 0.6 }}
@@ -121,7 +121,7 @@ export const Login = () => {
         </motion.div>
       </div>
 
-      <div className="absolute bottom-0 left-0 right-0 h-[6px] bg-[#E60000] shadow-[0_0_16px_rgba(230,0,0,0.5),0_0_50px_rgba(230,0,0,0.15)]" />
+      <div className="absolute bottom-0 left-0 right-0 h-[6px] bg-[#D62828] shadow-[0_0_16px_rgba(214,40,40,0.5),0_0_50px_rgba(214,40,40,0.15)]" />
     </section>
   );
 };

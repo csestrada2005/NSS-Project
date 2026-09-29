@@ -79,11 +79,11 @@ function ForgeAnalyticsSummary() {
     <div className="space-y-6">
       {projects.length > 1 && (
         <div className="flex items-center gap-3">
-          <label className="text-sm text-zinc-400">Project:</label>
+          <label className="text-sm text-neutral-400">Project:</label>
           <select
             value={selectedProjectId ?? ''}
             onChange={(e) => setSelectedProjectId(e.target.value)}
-            className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm text-zinc-200 focus:outline-none"
+            className="bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-1.5 text-sm text-neutral-200 focus:outline-none"
           >
             {projects.map(p => (
               <option key={p.id} value={p.id}>{p.name}</option>
@@ -95,7 +95,7 @@ function ForgeAnalyticsSummary() {
       <TrafficCharts projectId={selectedProjectId} dateRange={dateRange} />
 
       <div className="mt-6">
-        <h3 className="text-sm font-semibold text-zinc-300 mb-4">Performance Audit</h3>
+        <h3 className="text-sm font-semibold text-neutral-300 mb-4">Performance Audit</h3>
         <LighthousePanel projectId={selectedProjectId} />
       </div>
     </div>
@@ -110,7 +110,7 @@ const MetricsPage = () => {
     <div className="space-y-6 max-w-6xl mx-auto w-full pb-10">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">
           {lang === 'es' ? 'Métricas' : 'Metrics'}
         </h1>
         <p className="text-muted-foreground mt-1">
@@ -119,7 +119,7 @@ const MetricsPage = () => {
       </div>
 
       {/* Tab bar */}
-      <div className="border-b border-zinc-800">
+      <div className="border-b border-neutral-800">
         <nav className="flex gap-1 -mb-px overflow-x-auto">
           {TABS.map((tab) => (
             <button
@@ -128,7 +128,7 @@ const MetricsPage = () => {
               className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
                 activeTab === tab.id
                   ? 'border-primary text-white'
-                  : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                  : 'border-transparent text-neutral-400 hover:text-neutral-200'
               }`}
             >
               {lang === 'es' ? tab.es : tab.en}

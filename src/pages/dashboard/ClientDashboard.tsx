@@ -8,9 +8,9 @@ import LoadingSquares from '../../components/brand/LoadingSquares';
 
 const STATUS_COLORS: Record<Project["status"], string> = {
   active: "bg-emerald-500/10 text-emerald-500",
-  completed: "bg-blue-500/10 text-blue-500",
+  completed: "bg-neutral-500/10 text-neutral-500",
   paused: "bg-amber-500/10 text-amber-500",
-  cancelled: "bg-rose-500/10 text-rose-500",
+  cancelled: "bg-red-500/10 text-red-500",
 };
 
 const STATUS_LABELS: Record<Project["status"], { es: string; en: string }> = {
@@ -23,7 +23,7 @@ const STATUS_LABELS: Record<Project["status"], { es: string; en: string }> = {
 const PAYMENT_STATUS_COLORS: Record<Payment["status"], string> = {
   paid: "bg-emerald-500/10 text-emerald-500",
   pending: "bg-amber-500/10 text-amber-500",
-  overdue: "bg-rose-500/10 text-rose-500",
+  overdue: "bg-red-500/10 text-red-500",
 };
 
 const PAYMENT_STATUS_LABELS: Record<
@@ -88,7 +88,7 @@ const ClientDashboard = () => {
         <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-muted">
           <FolderOpen size={24} className="text-muted-foreground" />
         </div>
-        <h2 className="text-base font-semibold text-foreground">
+        <h2 className="text-sm font-semibold text-foreground">
           {lang === "es" ? "Sin proyectos asignados" : "No projects assigned"}
         </h2>
         <p className="text-sm text-muted-foreground max-w-xs">
@@ -104,7 +104,7 @@ const ClientDashboard = () => {
     <div className="space-y-8 max-w-4xl">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-semibold text-foreground">
+        <h1 className="text-lg font-semibold text-foreground">
           {lang === "es" ? "Mis proyectos" : "My projects"}
         </h1>
         <p className="text-sm mt-0.5 text-muted-foreground">
@@ -127,7 +127,7 @@ const ClientDashboard = () => {
                 {project.title}
               </h3>
               <span
-                className={`shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[project.status]}`}
+                className={`shrink-0 text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[project.status]}`}
               >
                 {STATUS_LABELS[project.status][lang]}
               </span>
@@ -137,7 +137,7 @@ const ClientDashboard = () => {
                 {project.description}
               </p>
             )}
-            <p className="text-[11px] text-muted-foreground mt-3">
+            <p className="text-xs text-muted-foreground mt-3">
               {new Date(project.created_at).toLocaleDateString(
                 lang === "es" ? "es-MX" : "en-US",
                 { day: "numeric", month: "long", year: "numeric" }
@@ -172,7 +172,7 @@ const ClientDashboard = () => {
                       {formatCurrency(payment.amount, lang)}
                     </p>
                     {payment.due_date && (
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                      <p className="text-xs text-muted-foreground mt-0.5">
                         {lang === "es" ? "Vence" : "Due"}{" "}
                         {new Date(payment.due_date).toLocaleDateString(
                           lang === "es" ? "es-MX" : "en-US",
@@ -182,7 +182,7 @@ const ClientDashboard = () => {
                     )}
                   </div>
                   <span
-                    className={`ml-3 shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full ${PAYMENT_STATUS_COLORS[payment.status]}`}
+                    className={`ml-3 shrink-0 text-xs font-medium px-2 py-0.5 rounded-full ${PAYMENT_STATUS_COLORS[payment.status]}`}
                   >
                     {PAYMENT_STATUS_LABELS[payment.status][lang]}
                   </span>

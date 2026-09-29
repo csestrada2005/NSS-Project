@@ -40,7 +40,7 @@ const labels = {
 const typeBadgeClass: Record<Contact['type'], string> = {
   lead: 'bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20',
   client: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20',
-  partner: 'bg-blue-500/10 text-blue-500 border-blue-500/20 hover:bg-blue-500/20',
+  partner: 'bg-neutral-500/10 text-neutral-500 border-neutral-500/20 hover:bg-neutral-500/20',
 };
 
 const PAGE_SIZE = 20;
@@ -197,7 +197,7 @@ const StaffContacts = () => {
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-md p-6">
-            <h2 className="text-base font-semibold text-foreground mb-4">
+            <h2 className="text-sm font-semibold text-foreground mb-4">
               {labels.addContact[lang]}
             </h2>
             <ContactForm

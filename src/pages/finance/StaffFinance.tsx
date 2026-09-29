@@ -54,7 +54,7 @@ const labels = {
 const statusBadgeClass: Record<Payment['status'], string> = {
   paid: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20',
   pending: 'bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20',
-  overdue: 'bg-rose-500/10 text-rose-500 border-rose-500/20 hover:bg-rose-500/20',
+  overdue: 'bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20',
 };
 
 const formatCurrency = (amount: number) =>
@@ -283,7 +283,7 @@ const StaffFinance = () => {
             <CardTitle className="text-sm font-medium text-muted-foreground">
               {labels.kpiMonthlyRevenue[lang]}
             </CardTitle>
-            <TrendingUp className="h-4 w-4 text-blue-500" />
+            <TrendingUp className="h-4 w-4 text-neutral-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-foreground">
@@ -309,7 +309,7 @@ const StaffFinance = () => {
             <CardTitle className="text-sm font-medium text-muted-foreground">
               {labels.kpiOverdue[lang]}
             </CardTitle>
-            <AlertCircle className="h-4 w-4 text-rose-500" />
+            <AlertCircle className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-foreground">

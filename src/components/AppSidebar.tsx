@@ -230,7 +230,7 @@ const AppSidebar = ({ open, onClose }: AppSidebarProps) => {
                   </span>
                 )}
                 {!collapsed && showBadge && (
-                  <span className="ml-auto min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded-full bg-primary text-primary-foreground px-1">
+                  <span className="ml-auto min-w-[18px] h-[18px] flex items-center justify-center text-xs font-bold rounded-full bg-primary text-primary-foreground px-1">
                     {unreadCount > 99 ? "99+" : unreadCount}
                   </span>
                 )}
@@ -253,7 +253,7 @@ const AppSidebar = ({ open, onClose }: AppSidebarProps) => {
               </div>
               {!collapsed && <span className="flex-1 text-left">Approvals</span>}
               {!collapsed && pendingApprovalCount > 0 && (
-                <span className="ml-auto min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded-full bg-red-500 text-white px-1">
+                <span className="ml-auto min-w-[18px] h-[18px] flex items-center justify-center text-xs font-bold rounded-full bg-red-500 text-white px-1">
                   {pendingApprovalCount > 99 ? "99+" : pendingApprovalCount}
                 </span>
               )}
@@ -267,7 +267,7 @@ const AppSidebar = ({ open, onClose }: AppSidebarProps) => {
             className="px-3 py-3 shrink-0"
             style={{ borderTop: "1px solid hsl(var(--border))" }}
           >
-            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-2 px-1">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2 px-1">
               View as
             </p>
             <div className="flex rounded-lg overflow-hidden border border-border">
@@ -320,7 +320,7 @@ const AppSidebar = ({ open, onClose }: AppSidebarProps) => {
                   <p className="text-xs font-medium truncate text-foreground">
                     {displayName}
                   </p>
-                  <span className="text-[10px] font-medium text-muted-foreground">
+                  <span className="text-xs font-medium text-muted-foreground">
                     {roleLabel}
                   </span>
                 </div>

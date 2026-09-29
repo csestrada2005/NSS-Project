@@ -182,7 +182,7 @@ const SettingsPage = () => {
     <div className="space-y-8 max-w-6xl mx-auto w-full pb-10">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">{labels.settings[lang]}</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">{labels.settings[lang]}</h1>
         <p className="text-muted-foreground mt-1">{labels.manageAccount[lang]}</p>
       </div>
 

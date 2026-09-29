@@ -62,7 +62,7 @@ export const BottomNav = () => {
             }`}
           >
             <item.icon size={20} strokeWidth={1.5} />
-            <span className="text-[10px] font-medium">{item.label[lang]}</span>
+            <span className="text-xs font-medium">{item.label[lang]}</span>
           </button>
         );
       })}

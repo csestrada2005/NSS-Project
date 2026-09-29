@@ -19,7 +19,7 @@ interface UserApprovalPanelProps {
 
 const ROLE_BADGE: Record<string, string> = {
   admin: 'bg-red-500/15 text-red-400 border-red-500/20',
-  dev: 'bg-blue-500/15 text-blue-400 border-blue-500/20',
+  dev: 'bg-neutral-500/15 text-neutral-400 border-neutral-500/20',
   cliente: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20',
 };
 
@@ -118,13 +118,13 @@ export function UserApprovalPanel({ open, onClose }: UserApprovalPanelProps) {
       )}
 
       <div
-        className={`fixed top-0 right-0 h-full w-[380px] bg-zinc-800 border-l border-zinc-700 z-40 flex flex-col shadow-xl transition-transform duration-300 ${open ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`fixed top-0 right-0 h-full w-[380px] bg-neutral-800 border-l border-neutral-700 z-40 flex flex-col shadow-xl transition-transform duration-300 ${open ? 'translate-x-0' : 'translate-x-full'}`}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
           <div className="flex items-center gap-2">
             <Shield size={16} className="text-primary" />
-            <h2 className="text-base font-semibold text-foreground">User Approvals</h2>
+            <h2 className="text-sm font-semibold text-foreground">User Approvals</h2>
             {pendingUsers.length > 0 && (
               <span className="min-w-[20px] h-5 flex items-center justify-center text-[10px] font-bold rounded-full bg-red-500 text-white px-1.5">
                 {pendingUsers.length}
@@ -163,7 +163,7 @@ export function UserApprovalPanel({ open, onClose }: UserApprovalPanelProps) {
                 return (
                   <div
                     key={user.id}
-                    className="p-4 rounded-xl border border-zinc-700 bg-zinc-800 space-y-3"
+                    className="p-4 rounded-xl border border-neutral-700 bg-neutral-800 space-y-3"
                   >
                     {/* User info */}
                     <div className="flex items-center gap-3">

@@ -46,17 +46,17 @@ const fmtNumber = (n: number): string =>
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
 const SkeletonCard = () => (
-  <div className="bg-zinc-800 rounded-xl p-5 animate-pulse">
-    <div className="h-3 w-24 bg-zinc-700 rounded mb-3" />
-    <div className="h-7 w-32 bg-zinc-700 rounded mb-2" />
-    <div className="h-3 w-16 bg-zinc-700 rounded" />
+  <div className="bg-neutral-800 rounded-xl p-5 animate-pulse">
+    <div className="h-3 w-24 bg-neutral-700 rounded mb-3" />
+    <div className="h-7 w-32 bg-neutral-700 rounded mb-2" />
+    <div className="h-3 w-16 bg-neutral-700 rounded" />
   </div>
 );
 
 const SkeletonChart = () => (
-  <div className="bg-zinc-800 rounded-xl p-5 animate-pulse">
-    <div className="h-4 w-40 bg-zinc-700 rounded mb-4" />
-    <div className="h-48 bg-zinc-700 rounded" />
+  <div className="bg-neutral-800 rounded-xl p-5 animate-pulse">
+    <div className="h-4 w-40 bg-neutral-700 rounded mb-4" />
+    <div className="h-48 bg-neutral-700 rounded" />
   </div>
 );
 
@@ -209,15 +209,15 @@ const MetaAds = () => {
 
       {/* ── CONNECTION BANNER ── */}
       {!loading && !connection && (
-        <div className="bg-zinc-800 rounded-xl p-8 flex flex-col items-center text-center gap-4 max-w-lg mx-auto">
-          <div className="bg-zinc-700 rounded-full p-4">
+        <div className="bg-neutral-800 rounded-xl p-8 flex flex-col items-center text-center gap-4 max-w-lg mx-auto">
+          <div className="bg-neutral-700 rounded-full p-4">
             <span className="text-2xl font-bold text-white tracking-tight">Meta Ads</span>
           </div>
-          <p className="text-zinc-400 text-sm leading-relaxed">
+          <p className="text-neutral-400 text-sm leading-relaxed">
             Connect your Meta Ads account to view ad performance data including spend, impressions, CTR, and ROAS.
           </p>
           {isCliente ? (
-            <p className="text-zinc-500 text-sm italic">
+            <p className="text-neutral-500 text-sm italic">
               Your account has not been connected yet. Contact your account manager.
             </p>
           ) : (
@@ -234,13 +234,13 @@ const MetaAds = () => {
 
       {/* ── CONNECTED HEADER ── */}
       {!loading && connection && (
-        <div className="bg-zinc-800 rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
+        <div className="bg-neutral-800 rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
           {/* Status */}
           <div className="flex items-center gap-2 flex-1">
             <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
             <span className="text-emerald-400 text-sm font-medium">Connected</span>
             {connection.account_name && (
-              <span className="text-zinc-500 text-xs ml-2">· {connection.account_name}</span>
+              <span className="text-neutral-500 text-xs ml-2">· {connection.account_name}</span>
             )}
           </div>
 
@@ -251,15 +251,15 @@ const MetaAds = () => {
               value={pendingRange.start}
               max={pendingRange.end}
               onChange={(e) => setPendingRange((p) => ({ ...p, start: e.target.value }))}
-              className="bg-zinc-700 text-zinc-200 text-xs rounded-lg px-3 py-1.5 border border-zinc-600 focus:outline-none focus:border-blue-500"
+              className="bg-neutral-700 text-neutral-200 text-xs rounded-lg px-3 py-1.5 border border-neutral-600 focus:outline-none focus:border-neutral-500"
             />
-            <span className="text-zinc-500 text-xs">to</span>
+            <span className="text-neutral-500 text-xs">to</span>
             <input
               type="date"
               value={pendingRange.end}
               min={pendingRange.start}
               onChange={(e) => setPendingRange((p) => ({ ...p, end: e.target.value }))}
-              className="bg-zinc-700 text-zinc-200 text-xs rounded-lg px-3 py-1.5 border border-zinc-600 focus:outline-none focus:border-blue-500"
+              className="bg-neutral-700 text-neutral-200 text-xs rounded-lg px-3 py-1.5 border border-neutral-600 focus:outline-none focus:border-neutral-500"
             />
             <button
               onClick={handleApplyRange}
@@ -273,7 +273,7 @@ const MetaAds = () => {
           <button
             onClick={handleDisconnect}
             disabled={disconnecting}
-            className="bg-zinc-700 hover:bg-zinc-600 disabled:opacity-60 text-zinc-300 text-xs font-medium px-4 py-1.5 rounded-lg transition-colors"
+            className="bg-neutral-700 hover:bg-neutral-600 disabled:opacity-60 text-neutral-300 text-xs font-medium px-4 py-1.5 rounded-lg transition-colors"
           >
             {disconnecting ? 'Disconnecting…' : 'Disconnect'}
           </button>
@@ -293,70 +293,70 @@ const MetaAds = () => {
       {/* ── KPI CARDS ── */}
       {!loading && connection && metaData.length > 0 && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <div className="bg-zinc-800 rounded-xl p-5">
-            <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-1">Total Spend</p>
-            <p className="text-2xl font-bold text-rose-400">{fmtCurrency(totalSpend)}</p>
+          <div className="bg-neutral-800 rounded-xl p-5">
+            <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide mb-1">Total Spend</p>
+            <p className="text-2xl font-bold text-red-400">{fmtCurrency(totalSpend)}</p>
           </div>
-          <div className="bg-zinc-800 rounded-xl p-5">
-            <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-1">Impressions</p>
-            <p className="text-2xl font-bold text-blue-400">{fmtNumber(totalImpressions)}</p>
+          <div className="bg-neutral-800 rounded-xl p-5">
+            <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide mb-1">Impressions</p>
+            <p className="text-2xl font-bold text-neutral-400">{fmtNumber(totalImpressions)}</p>
           </div>
-          <div className="bg-zinc-800 rounded-xl p-5">
-            <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-1">Clicks</p>
+          <div className="bg-neutral-800 rounded-xl p-5">
+            <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide mb-1">Clicks</p>
             <p className="text-2xl font-bold text-emerald-400">{fmtNumber(totalClicks)}</p>
           </div>
-          <div className="bg-zinc-800 rounded-xl p-5">
-            <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-1">Avg CTR</p>
+          <div className="bg-neutral-800 rounded-xl p-5">
+            <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide mb-1">Avg CTR</p>
             <p className="text-2xl font-bold text-amber-400">{avgCTR.toFixed(2)}%</p>
           </div>
-          <div className="bg-zinc-800 rounded-xl p-5">
-            <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-1">Avg CPM</p>
-            <p className="text-2xl font-bold text-purple-400">{fmtCurrency(avgCPM)}</p>
+          <div className="bg-neutral-800 rounded-xl p-5">
+            <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide mb-1">Avg CPM</p>
+            <p className="text-2xl font-bold text-neutral-400">{fmtCurrency(avgCPM)}</p>
           </div>
-          <div className="bg-zinc-800 rounded-xl p-5">
-            <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-1">Avg ROAS</p>
-            <p className="text-2xl font-bold text-cyan-400">{avgROAS.toFixed(2)}x</p>
+          <div className="bg-neutral-800 rounded-xl p-5">
+            <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide mb-1">Avg ROAS</p>
+            <p className="text-2xl font-bold text-neutral-400">{avgROAS.toFixed(2)}x</p>
           </div>
         </div>
       )}
 
       {/* ── CHART ── */}
       {!loading && connection && metaData.length > 0 && (
-        <div className="bg-zinc-800 rounded-xl p-5">
-          <p className="text-sm font-semibold text-zinc-200 mb-4">Spend &amp; Clicks Over Time</p>
+        <div className="bg-neutral-800 rounded-xl p-5">
+          <p className="text-sm font-semibold text-neutral-200 mb-4">Spend &amp; Clicks Over Time</p>
           <ResponsiveContainer width="100%" height={240}>
             <LineChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2A" />
               <XAxis
                 dataKey="dateLabel"
-                tick={{ fill: '#a1a1aa', fontSize: 11 }}
+                tick={{ fill: '#9A9A9A', fontSize: 11 }}
                 tickLine={false}
                 axisLine={false}
                 interval="preserveStartEnd"
               />
               <YAxis
                 yAxisId="left"
-                tick={{ fill: '#a1a1aa', fontSize: 11 }}
+                tick={{ fill: '#9A9A9A', fontSize: 11 }}
                 tickLine={false}
                 axisLine={false}
               />
               <YAxis
                 yAxisId="right"
                 orientation="right"
-                tick={{ fill: '#a1a1aa', fontSize: 11 }}
+                tick={{ fill: '#9A9A9A', fontSize: 11 }}
                 tickLine={false}
                 axisLine={false}
               />
               <Tooltip
-                contentStyle={{ background: '#27272a', border: '1px solid #3f3f46', borderRadius: 8, color: '#e4e4e7' }}
-                labelStyle={{ color: '#a1a1aa', marginBottom: 4 }}
+                contentStyle={{ background: '#1A1A1A', border: '1px solid #2A2A2A', borderRadius: 8, color: '#E8E8E8' }}
+                labelStyle={{ color: '#9A9A9A', marginBottom: 4 }}
               />
-              <Legend wrapperStyle={{ fontSize: 12, color: '#a1a1aa', paddingTop: 8 }} />
+              <Legend wrapperStyle={{ fontSize: 12, color: '#9A9A9A', paddingTop: 8 }} />
               <Line
                 yAxisId="left"
                 type="monotone"
                 dataKey="spend"
-                stroke="#f43f5e"
+                stroke="#D62828"
                 strokeWidth={2}
                 dot={false}
                 name="Spend ($)"
@@ -377,7 +377,7 @@ const MetaAds = () => {
 
       {/* ── EMPTY STATE ── */}
       {!loading && connection && !error && metaData.length === 0 && (
-        <div className="bg-zinc-800 rounded-xl p-10 text-center text-zinc-500 text-sm">
+        <div className="bg-neutral-800 rounded-xl p-10 text-center text-neutral-500 text-sm">
           No data available for this date range.
         </div>
       )}

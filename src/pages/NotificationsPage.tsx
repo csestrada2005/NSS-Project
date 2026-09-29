@@ -24,7 +24,7 @@ import LoadingSquares from '../components/brand/LoadingSquares';
 function notificationIcon(type: string) {
   switch (type) {
     case 'project_invitation':
-      return <UserPlus size={16} className="text-blue-400" />;
+      return <UserPlus size={16} className="text-neutral-400" />;
     case 'role_approved':
       return <CheckCircle size={16} className="text-emerald-400" />;
     case 'role_rejected':
@@ -32,9 +32,9 @@ function notificationIcon(type: string) {
     case 'role_request':
       return <Shield size={16} className="text-amber-400" />;
     case 'project_status':
-      return <Briefcase size={16} className="text-blue-400" />;
+      return <Briefcase size={16} className="text-neutral-400" />;
     case 'payment_created':
-      return <CreditCard size={16} className="text-blue-400" />;
+      return <CreditCard size={16} className="text-neutral-400" />;
     case 'payment_paid':
       return <DollarSign size={16} className="text-emerald-400" />;
     case 'milestone_added':
@@ -42,14 +42,14 @@ function notificationIcon(type: string) {
     case 'milestone_completed':
       return <CheckCircle size={16} className="text-emerald-400" />;
     case 'milestone_note':
-      return <MessageSquare size={16} className="text-gray-400" />;
+      return <MessageSquare size={16} className="text-neutral-400" />;
     case 'warning':
       return <AlertCircle size={16} className="text-amber-400" />;
     // legacy
     case 'role_approved_legacy':
       return <Check size={16} className="text-emerald-400" />;
     default:
-      return <Info size={16} className="text-gray-400" />;
+      return <Info size={16} className="text-neutral-400" />;
   }
 }
 
@@ -132,7 +132,7 @@ const NotificationsPage = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">Notifications</h1>
+          <h1 className="text-lg font-semibold text-foreground">Notifications</h1>
           {unreadCount > 0 && (
             <p className="text-sm mt-0.5 text-muted-foreground">
               {unreadCount} unread
@@ -187,7 +187,7 @@ const NotificationsPage = () => {
                     {!n.read && (
                       <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
                     )}
-                    <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
                       {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
                     </span>
                   </div>

@@ -31,9 +31,9 @@ const labels = {
 
 const statusBadgeClass: Record<Project['status'], string> = {
   active: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
-  completed: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+  completed: 'bg-neutral-500/10 text-neutral-500 border-neutral-500/20',
   paused: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
-  cancelled: 'bg-rose-500/10 text-rose-500 border-rose-500/20',
+  cancelled: 'bg-red-500/10 text-red-500 border-red-500/20',
 };
 
 const ClientProjects = () => {

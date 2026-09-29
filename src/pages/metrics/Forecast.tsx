@@ -70,17 +70,17 @@ interface ForecastData {
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
 const SkeletonCard = () => (
-  <div className="bg-zinc-800 rounded-xl p-5 animate-pulse">
-    <div className="h-3 w-24 bg-zinc-700 rounded mb-3" />
-    <div className="h-7 w-32 bg-zinc-700 rounded mb-2" />
-    <div className="h-3 w-16 bg-zinc-700 rounded" />
+  <div className="bg-neutral-800 rounded-xl p-5 animate-pulse">
+    <div className="h-3 w-24 bg-neutral-700 rounded mb-3" />
+    <div className="h-7 w-32 bg-neutral-700 rounded mb-2" />
+    <div className="h-3 w-16 bg-neutral-700 rounded" />
   </div>
 );
 
 const SkeletonChart = () => (
-  <div className="bg-zinc-800 rounded-xl p-5 animate-pulse">
-    <div className="h-4 w-40 bg-zinc-700 rounded mb-4" />
-    <div className="h-48 bg-zinc-700 rounded" />
+  <div className="bg-neutral-800 rounded-xl p-5 animate-pulse">
+    <div className="h-4 w-40 bg-neutral-700 rounded mb-4" />
+    <div className="h-48 bg-neutral-700 rounded" />
   </div>
 );
 
@@ -107,12 +107,12 @@ const labels = {
 // ── Badge helpers ─────────────────────────────────────────────────────────────
 
 const stageBadgeClass: Record<Stage, string> = {
-  prospecting: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
-  qualification: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+  prospecting: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20',
+  qualification: 'bg-neutral-500/10 text-neutral-500 border-neutral-500/20',
   proposal: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
-  negotiation: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
+  negotiation: 'bg-neutral-500/10 text-neutral-500 border-neutral-500/20',
   closed_won: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
-  closed_lost: 'bg-rose-500/10 text-rose-500 border-rose-500/20',
+  closed_lost: 'bg-red-500/10 text-red-500 border-red-500/20',
 };
 
 const stageBadgeLabel: Record<Stage, { en: string; es: string }> = {
@@ -222,16 +222,16 @@ const Forecast = () => {
   return (
     <div className="space-y-6">
       {/* Header bar */}
-      <div className="bg-zinc-800 rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
+      <div className="bg-neutral-800 rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
         <div className="flex items-center gap-2 flex-1">
-          <span className="text-zinc-400 text-sm font-medium">{l('title')}</span>
+          <span className="text-neutral-400 text-sm font-medium">{l('title')}</span>
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-zinc-400 text-xs">{l('yearSelector')}:</label>
+          <label className="text-neutral-400 text-xs">{l('yearSelector')}:</label>
           <select
             value={year}
             onChange={handleYearChange}
-            className="bg-zinc-700 text-zinc-200 text-xs rounded-lg px-3 py-1.5 border border-zinc-600 focus:outline-none focus:border-emerald-500"
+            className="bg-neutral-700 text-neutral-200 text-xs rounded-lg px-3 py-1.5 border border-neutral-600 focus:outline-none focus:border-emerald-500"
           >
             {yearOptions.map((y) => (
               <option key={y} value={y}>{y}</option>
@@ -252,38 +252,38 @@ const Forecast = () => {
       {!loading && data && (
         <>
           {/* Weighted Pipeline KPI */}
-          <div className="bg-zinc-800 rounded-xl p-5">
-            <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-1">
+          <div className="bg-neutral-800 rounded-xl p-5">
+            <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide mb-1">
               {l('weightedPipeline')}
             </p>
-            <p className="text-3xl font-bold text-emerald-400">{fmtCurrency(weightedPipeline)}</p>
-            <p className="text-xs text-zinc-500 mt-1">{l('openDealsOnly')}</p>
+            <p className="text-2xl font-bold text-emerald-400">{fmtCurrency(weightedPipeline)}</p>
+            <p className="text-xs text-neutral-500 mt-1">{l('openDealsOnly')}</p>
           </div>
 
           {/* Revenue Chart */}
-          <div className="bg-zinc-800 rounded-xl p-5">
-            <p className="text-sm font-semibold text-zinc-200 mb-4">{l('chartTitle')}</p>
+          <div className="bg-neutral-800 rounded-xl p-5">
+            <p className="text-sm font-semibold text-neutral-200 mb-4">{l('chartTitle')}</p>
             <ResponsiveContainer width="100%" height={260}>
               <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2A" />
                 <XAxis
                   dataKey="name"
-                  tick={{ fill: '#a1a1aa', fontSize: 11 }}
+                  tick={{ fill: '#9A9A9A', fontSize: 11 }}
                   tickLine={false}
                   axisLine={false}
                 />
                 <YAxis
-                  tick={{ fill: '#a1a1aa', fontSize: 11 }}
+                  tick={{ fill: '#9A9A9A', fontSize: 11 }}
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={(v) => fmtCurrency(v)}
                 />
                 <Tooltip
-                  contentStyle={{ background: '#27272a', border: '1px solid #3f3f46', borderRadius: 8, color: '#e4e4e7' }}
-                  labelStyle={{ color: '#a1a1aa', marginBottom: 4 }}
+                  contentStyle={{ background: '#1A1A1A', border: '1px solid #2A2A2A', borderRadius: 8, color: '#E8E8E8' }}
+                  labelStyle={{ color: '#9A9A9A', marginBottom: 4 }}
                   formatter={(value: any) => fmtCurrency(value)}
                 />
-                <Legend wrapperStyle={{ fontSize: 12, color: '#a1a1aa', paddingTop: 8 }} />
+                <Legend wrapperStyle={{ fontSize: 12, color: '#9A9A9A', paddingTop: 8 }} />
                 <Bar dataKey="actual" fill="#10b981" name={l('actual')} radius={[3, 3, 0, 0]} />
                 <Line
                   type="monotone"
@@ -299,30 +299,30 @@ const Forecast = () => {
           </div>
 
           {/* Deals Table */}
-          <div className="bg-zinc-800 rounded-xl p-5">
-            <p className="text-sm font-semibold text-zinc-200 mb-4">{l('dealsTitle')}</p>
+          <div className="bg-neutral-800 rounded-xl p-5">
+            <p className="text-sm font-semibold text-neutral-200 mb-4">{l('dealsTitle')}</p>
             {sortedDeals.length === 0 ? (
-              <p className="text-zinc-500 text-sm text-center py-8">{l('noDeals')}</p>
+              <p className="text-neutral-500 text-sm text-center py-8">{l('noDeals')}</p>
             ) : (
               <Table>
                 <TableHeader>
-                  <TableRow className="border-zinc-700 hover:bg-transparent">
-                    <TableHead className="text-zinc-400 text-xs">{l('colTitle')}</TableHead>
-                    <TableHead className="text-zinc-400 text-xs">{l('colContact')}</TableHead>
-                    <TableHead className="text-zinc-400 text-xs">{l('colValue')}</TableHead>
-                    <TableHead className="text-zinc-400 text-xs">{l('colStage')}</TableHead>
-                    <TableHead className="text-zinc-400 text-xs">{l('colProbability')}</TableHead>
-                    <TableHead className="text-zinc-400 text-xs">{l('colExpectedClose')}</TableHead>
+                  <TableRow className="border-neutral-700 hover:bg-transparent">
+                    <TableHead className="text-neutral-400 text-xs">{l('colTitle')}</TableHead>
+                    <TableHead className="text-neutral-400 text-xs">{l('colContact')}</TableHead>
+                    <TableHead className="text-neutral-400 text-xs">{l('colValue')}</TableHead>
+                    <TableHead className="text-neutral-400 text-xs">{l('colStage')}</TableHead>
+                    <TableHead className="text-neutral-400 text-xs">{l('colProbability')}</TableHead>
+                    <TableHead className="text-neutral-400 text-xs">{l('colExpectedClose')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sortedDeals.map((deal) => (
-                    <TableRow key={deal.id} className="border-zinc-700 hover:bg-zinc-700/30">
-                      <TableCell className="text-zinc-200 text-sm font-medium">{deal.title}</TableCell>
-                      <TableCell className="text-zinc-400 text-sm">
+                    <TableRow key={deal.id} className="border-neutral-700 hover:bg-neutral-700/30">
+                      <TableCell className="text-neutral-200 text-sm font-medium">{deal.title}</TableCell>
+                      <TableCell className="text-neutral-400 text-sm">
                         {deal.contacts?.name ?? '—'}
                       </TableCell>
-                      <TableCell className="text-zinc-200 text-sm font-semibold">
+                      <TableCell className="text-neutral-200 text-sm font-semibold">
                         {fmtCurrency(deal.value)}
                       </TableCell>
                       <TableCell>
@@ -330,8 +330,8 @@ const Forecast = () => {
                           {stageBadgeLabel[deal.stage][lang]}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-zinc-400 text-sm">{deal.probability}%</TableCell>
-                      <TableCell className="text-zinc-400 text-sm">
+                      <TableCell className="text-neutral-400 text-sm">{deal.probability}%</TableCell>
+                      <TableCell className="text-neutral-400 text-sm">
                         {deal.expected_close ? fmtDate(deal.expected_close) : '—'}
                       </TableCell>
                     </TableRow>

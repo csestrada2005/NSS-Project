@@ -54,11 +54,11 @@ const ContactForm = ({ initialData, onSubmit, onCancel, isLoading, lang }: Conta
           value={name}
           onChange={(e) => { setName(e.target.value); setNameError(false); }}
           placeholder={labels.name[lang]}
-          className={nameError ? 'border-rose-500' : ''}
+          className={nameError ? 'border-red-500' : ''}
           disabled={isLoading}
         />
         {nameError && (
-          <p className="text-xs text-rose-500">{labels.nameRequired[lang]}</p>
+          <p className="text-xs text-red-500">{labels.nameRequired[lang]}</p>
         )}
       </div>
 

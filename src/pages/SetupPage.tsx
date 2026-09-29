@@ -8,7 +8,7 @@ const SetupPage = () => {
   const { lang } = useLanguage();
 
   return (
-    <section className="relative h-screen w-screen flex flex-col items-center justify-center bg-[#0A0A0A] overflow-hidden">
+    <section className="relative h-screen w-screen flex flex-col items-center justify-center bg-[#0D0D0D] overflow-hidden">
       {/* Dark Scrim & Grid */}
       <div className="absolute inset-0 bg-black/40 pointer-events-none" />
       <div className="absolute inset-0 opacity-[0.04] bg-[linear-gradient(rgba(255,255,255,0.4)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.4)_1px,transparent_1px)] bg-[size:60px_60px]" />
@@ -32,7 +32,7 @@ const SetupPage = () => {
           transition={{ delay: 0.2, duration: 0.5, type: "spring" }}
           className="flex justify-center mb-8"
         >
-          <Clock size={56} className="text-[#E60000] drop-shadow-[0_0_15px_rgba(230,0,0,0.5)]" />
+          <Clock size={56} className="text-[#D62828] drop-shadow-[0_0_15px_rgba(214,40,40,0.5)]" />
         </motion.div>
 
         {/* Textos con tipografía display */}
@@ -45,7 +45,7 @@ const SetupPage = () => {
           <h1 className="font-display text-3xl sm:text-4xl tracking-tighter text-white uppercase">
             {lang === 'es' ? 'Cuenta en configuración' : 'Account being configured'}
           </h1>
-          <p className="text-white/60 font-light text-sm sm:text-base leading-relaxed max-w-sm mx-auto">
+          <p className="text-white/60 font-light text-sm sm:text-sm leading-relaxed max-w-sm mx-auto">
             {lang === 'es'
               ? 'Tu cuenta aún no tiene un rol asignado. Contacta a tu administrador para obtener acceso al sistema.'
               : 'Your account does not have a role assigned yet. Contact your administrator to get access to the system.'}
@@ -61,9 +61,9 @@ const SetupPage = () => {
         >
           <button
             onClick={signOut}
-            className="group relative flex items-center justify-center gap-3 px-8 py-3 text-sm font-medium tracking-widest uppercase text-[#E60000] transition-all hover:text-white overflow-hidden border-2 border-[#E60000] bg-transparent"
+            className="group relative flex items-center justify-center gap-3 px-8 py-3 text-sm font-medium tracking-widest uppercase text-[#D62828] transition-all hover:text-white overflow-hidden border-2 border-[#D62828] bg-transparent"
           >
-            <div className="absolute inset-0 bg-[#E60000] -translate-x-full transition-transform duration-300 ease-out group-hover:translate-x-0" />
+            <div className="absolute inset-0 bg-[#D62828] -translate-x-full transition-transform duration-300 ease-out group-hover:translate-x-0" />
             <LogOut size={18} className="relative z-10" />
             <span className="relative z-10">{lang === 'es' ? 'Cerrar sesión' : 'Sign out'}</span>
           </button>
@@ -77,7 +77,7 @@ const SetupPage = () => {
       </div>
 
       {/* Línea inferior decorativa */}
-      <div className="absolute bottom-0 left-0 right-0 h-[4px] bg-[#E60000] shadow-[0_0_16px_rgba(230,0,0,0.5)]" />
+      <div className="absolute bottom-0 left-0 right-0 h-[4px] bg-[#D62828] shadow-[0_0_16px_rgba(214,40,40,0.5)]" />
     </section>
   );
 };

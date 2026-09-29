@@ -56,11 +56,11 @@ export function WorkspaceLayout() {
 
   return (
     <LanguageProvider>
-      <div className="h-screen flex overflow-hidden bg-background">
+      <div className="nebu-crm h-screen flex overflow-hidden bg-background">
         <AppSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         <div className="flex-1 flex flex-col overflow-hidden">
           <Topbar onToggleSidebar={() => setSidebarOpen((p) => !p)} />
-          <main className="flex-1 overflow-y-auto p-6 md:p-8 pb-20 lg:pb-8">
+          <main className="nebu-crm-main flex-1 overflow-y-auto p-6 md:p-8 pb-20 lg:pb-8">
             <div className="animate-fade-in">
               <Outlet />
             </div>
