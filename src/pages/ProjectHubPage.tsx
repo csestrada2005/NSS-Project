@@ -140,9 +140,9 @@ export default function ProjectHubPage() {
   const isDeployed = !!project.deployment_url;
 
   return (
-    <div className="flex h-screen bg-gray-950">
-      {/* Sidebar */}
-      <aside className="w-56 flex flex-col border-r border-gray-800 bg-gray-900 shrink-0">
+    <div className="flex flex-col md:flex-row h-screen bg-gray-950">
+      {/* Sidebar — arriba y con pestañas en fila en pantalla chica (5.4) */}
+      <aside className="w-full md:w-56 flex flex-col border-b md:border-b-0 md:border-r border-gray-800 bg-gray-900 shrink-0">
         <div className="p-4 border-b border-gray-800">
           <button onClick={() => navigate('/forge')} className="flex items-center gap-2 text-xs text-gray-400 hover:text-white transition-colors mb-3">
             <ArrowLeft size={14} />
@@ -154,12 +154,12 @@ export default function ProjectHubPage() {
           </div>
         </div>
 
-        <nav className="flex-1 p-2 space-y-0.5">
+        <nav className="md:flex-1 p-2 flex md:flex-col gap-0.5 overflow-x-auto">
           {HUB_TABS.map(({ id, label, Icon }) => (
             <button
               key={id}
               onClick={() => setActiveTab(id)}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+              className={`shrink-0 md:w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
                 activeTab === id ? 'bg-blue-600/15 text-blue-400' : 'text-gray-400 hover:text-white hover:bg-gray-800'
               }`}
             >
@@ -172,7 +172,7 @@ export default function ProjectHubPage() {
         <div className="p-3 border-t border-gray-800 space-y-2">
           <button
             onClick={() => navigate(`/studio/${project.id}`)}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+            className="w-full hidden md:flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
           >
             <Code2 size={15} />
             {t('hub.openInForge')}
@@ -192,7 +192,7 @@ export default function ProjectHubPage() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto p-8">
+      <main className="flex-1 overflow-auto p-4 md:p-8">
 
         {/* Overview tab */}
         {activeTab === 'overview' && (

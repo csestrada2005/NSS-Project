@@ -16,6 +16,7 @@ import NebuLoader from '../components/brand/NebuLoader';
 import { useForgeLang } from "@/i18n/forge/useForgeLang";
 import { t as tNow } from "@/i18n/forge/lang";
 import { formatRelativeDate } from "@/i18n/forge/format";
+import { useIsPhone } from "@/hooks/useIsPhone";
 
 interface ForgeProject {
   id: string;
@@ -42,6 +43,9 @@ const ForgeDashboard = () => {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const { lang, t, tn } = useForgeLang();
+  // En teléfono no se crea proyecto: el pedido inicial viaja sólo en la
+  // navegación al editor, y el editor muestra el aviso de computadora (5.4).
+  const isPhone = useIsPhone();
 
   const supabase = SupabaseService.getInstance().client;
 
@@ -167,28 +171,30 @@ const ForgeDashboard = () => {
       </AnimatePresence>
 
       {/* Top header bar */}
-      <header className="h-14 border-b border-border bg-background flex items-center justify-between px-6 shrink-0">
+      <header className="h-14 border-b border-border bg-background flex items-center justify-between gap-2 px-4 sm:px-6 shrink-0">
         <div className="flex items-center gap-2">
           <Flame size={20} className="text-primary" />
           <span className="font-bold text-foreground">Wyrd Forge</span>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <span className="hidden sm:inline text-xs text-muted-foreground">
             {tn('dashboard.projectCount', projects.length)}
           </span>
-          <CreditBalance />
+          <div className="hidden sm:block">
+            <CreditBalance />
+          </div>
           <LangToggle className="inline-flex items-center gap-1.5 h-8 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors" />
-          <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
+          <Button variant="ghost" size="sm" onClick={() => navigate('/')} aria-label={t('dashboard.backToNebu')}>
             <ChevronLeft size={16} />
-            {t('dashboard.backToNebu')}
+            <span className="hidden sm:inline">{t('dashboard.backToNebu')}</span>
           </Button>
         </div>
       </header>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto p-6">
+      <main className="flex-1 overflow-auto p-4 sm:p-6">
         {/* Header row */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">{t('dashboard.title')}</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
@@ -196,7 +202,7 @@ const ForgeDashboard = () => {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="relative">
+            <div className="relative flex-1 sm:flex-none">
               <Search
                 size={16}
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
@@ -205,19 +211,27 @@ const ForgeDashboard = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t('dashboard.searchPlaceholder')}
-                className="pl-9 w-56"
+                className="pl-9 w-full sm:w-56"
               />
             </div>
             <Button
               onClick={() => setShowNewProjectModal(true)}
               size="sm"
-              className="nebu-cta"
+              className="nebu-cta shrink-0"
+              disabled={isPhone}
+              title={isPhone ? t('phone.createDisabled') : undefined}
             >
               <Plus size={16} />
               {t('dashboard.newProject')}
             </Button>
           </div>
         </div>
+
+        {isPhone && (
+          <p className="mb-4 text-xs text-muted-foreground border border-border rounded-md px-3 py-2">
+            {t('phone.createDisabled')}
+          </p>
+        )}
 
         {isLoadingProjects ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-5">
@@ -228,9 +242,9 @@ const ForgeDashboard = () => {
           <EmptyState
             icon={Layers}
             title={t('dashboard.empty.title')}
-            subtitle={t('dashboard.empty.subtitle')}
-            ctaLabel={t('dashboard.newProject')}
-            onCta={() => setShowNewProjectModal(true)}
+            subtitle={isPhone ? t('phone.createDisabled') : t('dashboard.empty.subtitle')}
+            ctaLabel={isPhone ? undefined : t('dashboard.newProject')}
+            onCta={isPhone ? undefined : () => setShowNewProjectModal(true)}
           />
         ) : filteredProjects.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-center text-muted-foreground gap-3">
@@ -249,7 +263,7 @@ const ForgeDashboard = () => {
                 {/* Delete button */}
                 <button
                   onClick={(e) => deleteProject(e, project.id)}
-                  className="absolute top-3 right-3 z-10 p-1.5 rounded-md bg-background/80 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all"
+                  className="absolute top-3 right-3 z-10 p-1.5 rounded-md bg-background/80 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 focus-visible:opacity-100 transition-all"
                   title={t('dashboard.deleteProject')}
                   aria-label={t('dashboard.deleteProject')}
                 >

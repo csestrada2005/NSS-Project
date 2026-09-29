@@ -586,6 +586,11 @@ export const en = {
   'orch.movedMigrations': "I moved {moves}: outside supabase/migrations/ the system didn't recognize it as a migration and couldn't offer to apply it from the chat.",
   'orch.misplacedSql': "{files} is outside supabase/migrations/, so I can't offer to apply it from the chat. Ask me to create it again and I'll write it in the right place.",
   'orch.partial': 'I built {done} of {total} steps. {failed} failed due to a temporary model overload. You can ask me to complete what is missing.',
+
+  // Teléfono (PhoneGate, dashboard)
+  'phone.title': 'The editor needs a computer',
+  'phone.body': 'Wyrd Forge builds and edits apps on a computer screen. From your phone you can see your projects, their Hub and share them.',
+  'phone.createDisabled': 'Creating and editing projects requires a computer.',
 } as const;
 
 export type ForgeKey = keyof typeof en;

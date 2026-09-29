@@ -581,4 +581,9 @@ export const es: Record<ForgeKey, string> = {
   'orch.movedMigrations': 'Moví {moves}: fuera de supabase/migrations/ el sistema no la reconocía como migración y no podía ofrecerte aplicarla desde el chat.',
   'orch.misplacedSql': '{files} está fuera de supabase/migrations/, así que no puedo ofrecerte aplicarla desde el chat. Pídeme que la vuelva a crear y la escribiré en su sitio.',
   'orch.partial': 'Generé {done} de {total} pasos. Falló: {failed} por sobrecarga temporal del modelo. Puedes pedirme completar lo que falta.',
+
+  // Teléfono (PhoneGate, dashboard)
+  'phone.title': 'El editor necesita una computadora',
+  'phone.body': 'Wyrd Forge construye y edita apps en pantalla de computadora. Desde el celular puedes ver tus proyectos, su Hub y compartirlos.',
+  'phone.createDisabled': 'Crear y editar proyectos requiere computadora.',
 };

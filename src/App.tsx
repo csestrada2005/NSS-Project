@@ -18,6 +18,7 @@ import ForgeDashboard from './pages/ForgeDashboard';
 import ProjectHubPage from './pages/ProjectHubPage';
 import { PublicPreviewPage } from './pages/PublicPreviewPage';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { PhoneGate } from './components/studio/PhoneGate';
 
 function App() {
   return (
@@ -45,7 +46,7 @@ function App() {
         {/* AI Web-Builder Studio — full-screen, no business chrome */}
         <Route element={<StudioLayout />}>
           <Route path="forge" element={<ProtectedRoute><ForgeDashboard /></ProtectedRoute>} />
-          <Route path="studio/:projectId" element={<StudioEngine />} />
+          <Route path="studio/:projectId" element={<PhoneGate><StudioEngine /></PhoneGate>} />
           <Route path="projects/:projectId/hub" element={<ProtectedRoute><ProjectHubPage /></ProtectedRoute>} />
         </Route>
       </Routes>
