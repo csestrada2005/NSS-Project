@@ -1,6 +1,8 @@
 import { useEffect, useState, type MutableRefObject, type ReactNode } from 'react';
 import { ColdStartOverlay } from './ColdStartOverlay';
 import NebuLoader from '../brand/NebuLoader';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
+import type { ForgeKey } from '@/i18n/forge/en';
 
 /**
  * Pantalla de espera del Studio con búho + barra de progreso (2026-09-27,
@@ -71,9 +73,9 @@ const LOAD_BANDS: Record<LoadStage, [number, number]> = {
   compile: [0.6, 0.95],
 };
 
-const LOAD_LABELS: Record<LoadStage, string> = {
-  download: 'Descargando archivos…',
-  compile: 'Preparando vista previa…',
+const LOAD_LABELS: Record<LoadStage, ForgeKey> = {
+  download: 'loader.download',
+  compile: 'loader.compile',
 };
 
 export function StudioLoadOverlay({
@@ -83,11 +85,12 @@ export function StudioLoadOverlay({
   stage: LoadStage;
   progressRef: MutableRefObject<number>;
 }) {
+  const { t } = useForgeLang();
   return (
     <StudioProgressOverlay
       band={LOAD_BANDS[stage]}
-      title="Cargando tu proyecto…"
-      detail={LOAD_LABELS[stage]}
+      title={t('loader.loadingProject')}
+      detail={t(LOAD_LABELS[stage])}
       progressRef={progressRef}
     />
   );

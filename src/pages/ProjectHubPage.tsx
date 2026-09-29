@@ -17,6 +17,9 @@ import { LighthousePanel } from '@/components/settings/analytics/LighthousePanel
 import { TopPagesTable } from '@/components/settings/analytics/TopPagesTable';
 import NebuLoader from '../components/brand/NebuLoader';
 import LoadingSquares from '../components/brand/LoadingSquares';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
+import { formatRelativeDate } from '@/i18n/forge/format';
+import type { ForgeKey } from '@/i18n/forge/en';
 
 interface ForgeProject {
   id: string;
@@ -33,41 +36,29 @@ interface ForgeProject {
 
 type HubTab = 'overview' | 'database' | 'domains' | 'email' | 'analytics' | 'performance' | 'ai_history' | 'settings';
 
-const HUB_TABS: { id: HubTab; label: string; Icon: React.ComponentType<any> }[] = [
-  { id: 'overview', label: 'Overview', Icon: Layers },
-  { id: 'database', label: 'Database', Icon: Database },
-  { id: 'domains', label: 'Domains', Icon: Globe },
-  { id: 'email', label: 'Email', Icon: Mail },
-  { id: 'analytics', label: 'Analytics', Icon: BarChart3 },
-  { id: 'performance', label: 'Performance', Icon: Gauge },
-  { id: 'ai_history', label: 'AI History', Icon: Sparkles },
-  { id: 'settings', label: 'Settings', Icon: Settings },
+const HUB_TABS: { id: HubTab; label: ForgeKey; Icon: React.ComponentType<any> }[] = [
+  { id: 'overview', label: 'hub.tab.overview', Icon: Layers },
+  { id: 'database', label: 'hub.tab.database', Icon: Database },
+  { id: 'domains', label: 'hub.tab.domains', Icon: Globe },
+  { id: 'email', label: 'hub.tab.email', Icon: Mail },
+  { id: 'analytics', label: 'hub.tab.analytics', Icon: BarChart3 },
+  { id: 'performance', label: 'hub.tab.performance', Icon: Gauge },
+  { id: 'ai_history', label: 'hub.tab.aiHistory', Icon: Sparkles },
+  { id: 'settings', label: 'hub.tab.settings', Icon: Settings },
 ];
 
-const DB_SUB_TABS = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'schema', label: 'Schema' },
-  { id: 'users', label: 'Users' },
-  { id: 'sql', label: 'SQL' },
-] as const;
-
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return 'Never';
-  const d = new Date(iso);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  if (diffMins < 60) return `${diffMins}m ago`;
-  const diffHrs = Math.floor(diffMins / 60);
-  if (diffHrs < 24) return `${diffHrs}h ago`;
-  const diffDays = Math.floor(diffHrs / 24);
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return d.toLocaleDateString();
-}
+const DB_SUB_TABS: readonly { id: 'overview' | 'schema' | 'users' | 'sql'; label: ForgeKey }[] = [
+  { id: 'overview', label: 'hub.tab.overview' },
+  { id: 'schema', label: 'hub.db.schema' },
+  { id: 'users', label: 'hub.db.users' },
+  { id: 'sql', label: 'hub.db.sql' },
+];
 
 export default function ProjectHubPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
+  const { lang, t } = useForgeLang();
+  const formatDate = (iso: string | null | undefined) => (iso ? formatRelativeDate(iso, lang) : t('hub.never'));
   const [project, setProject] = useState<ForgeProject | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<HubTab>('overview');
@@ -106,7 +97,7 @@ export default function ProjectHubPage() {
   };
 
   const handleDeleteProject = async () => {
-    if (!projectId || !window.confirm(`Delete "${project?.name}"? This cannot be undone.`)) return;
+    if (!projectId || !window.confirm(t('hub.deleteConfirm', { name: project?.name ?? '' }))) return;
     setIsDeleting(true);
     try {
       const supabase = SupabaseService.getInstance().client;
@@ -133,7 +124,7 @@ export default function ProjectHubPage() {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-gray-950 text-gray-500 gap-5">
         <NebuLoader size={160} />
-        <span>Loading project hub...</span>
+        <span>{t('hub.loading')}</span>
       </div>
     );
   }
@@ -141,7 +132,7 @@ export default function ProjectHubPage() {
   if (!project) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-950 text-gray-500">
-        Project not found.
+        {t('hub.notFound')}
       </div>
     );
   }
@@ -155,10 +146,10 @@ export default function ProjectHubPage() {
         <div className="p-4 border-b border-gray-800">
           <button onClick={() => navigate('/forge')} className="flex items-center gap-2 text-xs text-gray-400 hover:text-white transition-colors mb-3">
             <ArrowLeft size={14} />
-            Back to projects
+            {t('hub.back')}
           </button>
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full shrink-0 ${isDeployed ? 'bg-emerald-500' : 'bg-gray-600'}`} title={isDeployed ? 'Deployed' : 'Not deployed'} />
+            <div className={`w-2 h-2 rounded-full shrink-0 ${isDeployed ? 'bg-emerald-500' : 'bg-gray-600'}`} title={isDeployed ? t('hub.deployed') : t('hub.notDeployed')} />
             <h1 className="text-sm font-semibold text-white truncate">{project.name}</h1>
           </div>
         </div>
@@ -173,7 +164,7 @@ export default function ProjectHubPage() {
               }`}
             >
               <Icon size={15} />
-              {label}
+              {t(label)}
             </button>
           ))}
         </nav>
@@ -184,7 +175,7 @@ export default function ProjectHubPage() {
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
           >
             <Code2 size={15} />
-            Open in Forge
+            {t('hub.openInForge')}
           </button>
           {project.deployment_url && (
             <a
@@ -194,7 +185,7 @@ export default function ProjectHubPage() {
               className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
             >
               <ExternalLink size={15} />
-              Visit site
+              {t('hub.visitSite')}
             </a>
           )}
         </div>
@@ -206,17 +197,17 @@ export default function ProjectHubPage() {
         {/* Overview tab */}
         {activeTab === 'overview' && (
           <div className="space-y-6 max-w-3xl">
-            <h2 className="text-xl font-bold text-white">Overview</h2>
+            <h2 className="text-xl font-bold text-white">{t('hub.tab.overview')}</h2>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                <p className="text-xs text-gray-500 mb-1">Deployment status</p>
+                <p className="text-xs text-gray-500 mb-1">{t('hub.deployStatus')}</p>
                 <div className="flex items-center gap-2 mt-1">
                   {isDeployed
                     ? <CheckCircle size={14} className="text-emerald-400" />
                     : <Circle size={14} className="text-gray-600" />}
                   <span className={`text-sm font-medium ${isDeployed ? 'text-emerald-400' : 'text-gray-500'}`}>
-                    {isDeployed ? 'Deployed' : 'Not deployed'}
+                    {isDeployed ? t('hub.deployed') : t('hub.notDeployed')}
                   </span>
                 </div>
                 {project.deployment_url && (
@@ -227,24 +218,24 @@ export default function ProjectHubPage() {
               </div>
 
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                <p className="text-xs text-gray-500 mb-1">Last deployed</p>
+                <p className="text-xs text-gray-500 mb-1">{t('hub.lastDeployed')}</p>
                 <p className="text-sm font-medium text-white mt-1">{formatDate(project.last_deployed_at)}</p>
               </div>
 
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                <p className="text-xs text-gray-500 mb-1">Last AI activity</p>
+                <p className="text-xs text-gray-500 mb-1">{t('hub.lastAi')}</p>
                 <p className="text-sm font-medium text-white mt-1">{formatDate(project.last_active_at)}</p>
               </div>
 
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                <p className="text-xs text-gray-500 mb-1">Total AI calls</p>
+                <p className="text-xs text-gray-500 mb-1">{t('hub.totalAi')}</p>
                 <p className="text-2xl font-bold text-white mt-1">{project.ai_call_count ?? 0}</p>
               </div>
             </div>
 
             {project.supabase_project_url && (
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                <p className="text-xs text-gray-500 mb-1">Project database</p>
+                <p className="text-xs text-gray-500 mb-1">{t('hub.projectDb')}</p>
                 <code className="text-sm text-emerald-400">{project.supabase_project_url}</code>
               </div>
             )}
@@ -254,7 +245,7 @@ export default function ProjectHubPage() {
         {/* Database tab */}
         {activeTab === 'database' && (
           <div className="max-w-4xl">
-            <h2 className="text-xl font-bold text-white mb-6">Database</h2>
+            <h2 className="text-xl font-bold text-white mb-6">{t('hub.tab.database')}</h2>
             <div className="flex gap-1 border-b border-zinc-700 mb-4 overflow-x-auto pb-px">
               {DB_SUB_TABS.map((tab) => (
                 <button
@@ -262,7 +253,7 @@ export default function ProjectHubPage() {
                   onClick={() => setDbSubTab(tab.id)}
                   className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${dbSubTab === tab.id ? 'border-blue-500 text-white' : 'border-transparent text-zinc-400 hover:text-zinc-200'}`}
                 >
-                  {tab.label}
+                  {t(tab.label)}
                 </button>
               ))}
             </div>
@@ -276,7 +267,7 @@ export default function ProjectHubPage() {
         {/* Domains tab */}
         {activeTab === 'domains' && (
           <div className="max-w-2xl">
-            <h2 className="text-xl font-bold text-white mb-6">Domains</h2>
+            <h2 className="text-xl font-bold text-white mb-6">{t('hub.tab.domains')}</h2>
             <DomainsPanel projectId={projectId ?? null} />
           </div>
         )}
@@ -284,7 +275,7 @@ export default function ProjectHubPage() {
         {/* Email tab */}
         {activeTab === 'email' && (
           <div className="max-w-2xl">
-            <h2 className="text-xl font-bold text-white mb-6">Email</h2>
+            <h2 className="text-xl font-bold text-white mb-6">{t('hub.tab.email')}</h2>
             <EmailPanel projectId={projectId ?? null} />
           </div>
         )}
@@ -292,7 +283,7 @@ export default function ProjectHubPage() {
         {/* Analytics tab */}
         {activeTab === 'analytics' && (
           <div className="max-w-4xl space-y-6">
-            <h2 className="text-xl font-bold text-white">Analytics</h2>
+            <h2 className="text-xl font-bold text-white">{t('hub.tab.analytics')}</h2>
             <TrafficCharts projectId={projectId ?? null} dateRange={dateRange} />
             <TopPagesTable projectId={projectId ?? null} dateRange={dateRange} />
           </div>
@@ -301,7 +292,7 @@ export default function ProjectHubPage() {
         {/* Performance tab */}
         {activeTab === 'performance' && (
           <div className="max-w-2xl">
-            <h2 className="text-xl font-bold text-white mb-6">Performance</h2>
+            <h2 className="text-xl font-bold text-white mb-6">{t('hub.tab.performance')}</h2>
             <LighthousePanel projectId={projectId ?? null} initialUrl={project?.deployment_url ?? ''} />
           </div>
         )}
@@ -309,7 +300,7 @@ export default function ProjectHubPage() {
         {/* AI History tab */}
         {activeTab === 'ai_history' && (
           <div className="max-w-4xl">
-            <h2 className="text-xl font-bold text-white mb-6">AI History</h2>
+            <h2 className="text-xl font-bold text-white mb-6">{t('hub.tab.aiHistory')}</h2>
             <AIHistoryPanel projectId={projectId ?? null} />
           </div>
         )}
@@ -317,11 +308,11 @@ export default function ProjectHubPage() {
         {/* Settings tab */}
         {activeTab === 'settings' && (
           <div className="max-w-xl space-y-8">
-            <h2 className="text-xl font-bold text-white">Settings</h2>
+            <h2 className="text-xl font-bold text-white">{t('hub.tab.settings')}</h2>
 
             {/* Rename */}
             <div className="space-y-3">
-              <label className="block text-sm font-medium text-gray-300">Project Name</label>
+              <label className="block text-sm font-medium text-gray-300">{t('newProject.nameLabel')}</label>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -334,22 +325,22 @@ export default function ProjectHubPage() {
                   disabled={isSavingName || !newName.trim()}
                   className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors"
                 >
-                  {isSavingName ? 'Saving...' : 'Save'}
+                  {isSavingName ? t('common.saving') : t('common.save')}
                 </button>
               </div>
             </div>
 
             {/* Danger zone */}
             <div className="border border-red-900/50 rounded-xl p-4">
-              <h3 className="text-sm font-semibold text-red-400 mb-2">Danger Zone</h3>
-              <p className="text-xs text-gray-500 mb-4">Deleting this project is permanent and cannot be undone.</p>
+              <h3 className="text-sm font-semibold text-red-400 mb-2">{t('hub.danger')}</h3>
+              <p className="text-xs text-gray-500 mb-4">{t('hub.dangerText')}</p>
               <button
                 onClick={handleDeleteProject}
                 disabled={isDeleting}
                 className="flex items-center gap-2 px-4 py-2 bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors"
               >
                 {isDeleting ? <LoadingSquares size={14} /> : <Trash2 size={14} />}
-                {isDeleting ? 'Deleting...' : 'Delete Project'}
+                {isDeleting ? t('hub.deleting') : t('dashboard.deleteProject')}
               </button>
             </div>
           </div>

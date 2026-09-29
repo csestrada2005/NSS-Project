@@ -10,12 +10,15 @@ import type { DesignHints, BrandColor } from '@/services/DesignBriefService';
 import { modalBackdropMotion, modalPanelMotion } from '@/components/ui/modalMotion';
 import NebuLoader from '../brand/NebuLoader';
 import LoadingSquares from '../brand/LoadingSquares';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
+import type { ForgeKey } from '@/i18n/forge/en';
 
 interface NewProjectModalProps {
   onClose: () => void;
   onCreated: (projectId: string, projectName: string, initialPrompt: string, designHints?: DesignHints) => void;
 }
 
+// El valor (en inglés) viaja al modelo como `tone`; sólo la etiqueta se traduce.
 const VIBES = ['Playful', 'Professional', 'Luxury', 'Minimal', 'Bold'] as const;
 const WHEEL_PRESETS = ['#e63950', '#f4a340', '#2563eb', '#10b981', '#78350f', '#18181b'];
 
@@ -44,6 +47,7 @@ export default function NewProjectModal({ onClose, onCreated }: NewProjectModalP
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const { t } = useForgeLang();
 
   // Paso 3 — tono + color (mockup D)
   const [tone, setTone] = useState<string | null>(null);
@@ -99,7 +103,7 @@ export default function NewProjectModal({ onClose, onCreated }: NewProjectModalP
     try {
       const supabase = SupabaseService.getInstance().client;
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      if (!user) throw new Error(t('dashboard.notAuthenticated'));
 
       const { data, error: insertError } = await supabase
         .from('forge_projects')
@@ -111,7 +115,7 @@ export default function NewProjectModal({ onClose, onCreated }: NewProjectModalP
         .select('id')
         .single();
 
-      if (insertError || !data) throw insertError ?? new Error('Failed to create project');
+      if (insertError || !data) throw insertError ?? new Error(t('newProject.createFailed'));
 
       const selectedPalette = selectedPaletteIndex !== null ? suggestedPalettes[selectedPaletteIndex] : undefined;
       const designHints: DesignHints = {
@@ -126,7 +130,7 @@ export default function NewProjectModal({ onClose, onCreated }: NewProjectModalP
 
       onCreated(data.id, projectName.trim(), initialPrompt.trim(), designHints);
     } catch (e: any) {
-      setError(e?.message ?? 'Failed to create project');
+      setError(e?.message ?? t('newProject.createFailed'));
       setIsCreating(false);
     }
   };
@@ -156,14 +160,15 @@ export default function NewProjectModal({ onClose, onCreated }: NewProjectModalP
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-foreground">
-              {step === 1 ? 'New Project' : step === 2 ? 'What are we building?' : 'Tone and color'}
+              {step === 1 ? t('dashboard.newProject') : step === 2 ? t('newProject.step2.title') : t('newProject.step3.title')}
             </h2>
-            <p className="text-xs text-muted-foreground mt-0.5">Step {step} of 3</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{t('newProject.stepOf', { step, total: 3 })}</p>
           </div>
           <button
             onClick={onClose}
             disabled={isCreating}
             className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-full transition-colors disabled:opacity-50"
+            aria-label={t('common.close')}
           >
             <X size={18} />
           </button>
@@ -172,18 +177,18 @@ export default function NewProjectModal({ onClose, onCreated }: NewProjectModalP
         {step === 1 && (
           <>
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-foreground">Project name</label>
+              <label className="text-sm font-medium text-foreground">{t('newProject.nameLabel')}</label>
               <Input
                 ref={nameInputRef}
                 value={projectName}
                 onChange={(e) => setProjectName(e.target.value)}
-                placeholder="My awesome app"
+                placeholder={t('newProject.namePlaceholder')}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleNextFromName(); }}
               />
             </div>
             <div className="flex justify-end">
               <Button onClick={handleNextFromName} disabled={!projectName.trim()}>
-                Next →
+                {t('newProject.next')} →
               </Button>
             </div>
           </>
@@ -192,11 +197,11 @@ export default function NewProjectModal({ onClose, onCreated }: NewProjectModalP
         {step === 2 && (
           <>
             <div className="flex flex-col gap-2">
-              <p className="text-sm text-muted-foreground">Describe your vision — the AI will build it.</p>
+              <p className="text-sm text-muted-foreground">{t('newProject.promptHint')}</p>
               <textarea
                 value={initialPrompt}
                 onChange={(e) => setInitialPrompt(e.target.value)}
-                placeholder="A landing page for a coffee subscription service with dark theme, featuring pricing cards and a sign-up form..."
+                placeholder={t('newProject.promptPlaceholder')}
                 rows={6}
                 autoFocus
                 className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
@@ -204,10 +209,10 @@ export default function NewProjectModal({ onClose, onCreated }: NewProjectModalP
             </div>
             <div className="flex justify-between">
               <Button variant="ghost" onClick={() => setStep(1)}>
-                ← Back
+                ← {t('common.back')}
               </Button>
               <Button onClick={handleNextFromPrompt} disabled={!initialPrompt.trim()}>
-                Next →
+                {t('newProject.next')} →
               </Button>
             </div>
           </>
@@ -217,17 +222,17 @@ export default function NewProjectModal({ onClose, onCreated }: NewProjectModalP
           <>
             <div className="rounded-lg border border-border bg-background/60 px-3 py-2">
               <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
-                Your description
+                {t('newProject.yourDescription')}
               </div>
               <p className="text-xs text-muted-foreground line-clamp-2">{initialPrompt}</p>
             </div>
 
             <div className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-foreground">Tone</span>
+              <span className="text-sm font-medium text-foreground">{t('newProject.tone')}</span>
               <div className="flex flex-wrap gap-2">
                 {VIBES.map((v) => (
                   <button key={v} type="button" className={pillClass(tone === v)} onClick={() => setTone(v)}>
-                    {v}
+                    {t(`newProject.vibe.${v}` as ForgeKey)}
                   </button>
                 ))}
               </div>
@@ -235,21 +240,21 @@ export default function NewProjectModal({ onClose, onCreated }: NewProjectModalP
 
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-foreground">Color</span>
+                <span className="text-sm font-medium text-foreground">{t('newProject.color')}</span>
                 <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
                   <button
                     type="button"
                     className={`${tabClass(colorMode === 'wheel')} inline-flex items-center gap-1.5`}
                     onClick={() => setColorMode('wheel')}
                   >
-                    <Palette size={12} /> Color wheel
+                    <Palette size={12} /> {t('newProject.colorWheel')}
                   </button>
                   <button
                     type="button"
                     className={`${tabClass(colorMode === 'suggested')} inline-flex items-center gap-1.5`}
                     onClick={() => setColorMode('suggested')}
                   >
-                    <Sparkles size={12} /> Suggested for you
+                    <Sparkles size={12} /> {t('newProject.suggested')}
                   </button>
                 </div>
               </div>
@@ -281,11 +286,12 @@ export default function NewProjectModal({ onClose, onCreated }: NewProjectModalP
                           onClick={() => setWheelHex(hex)}
                           className={`w-6 h-6 rounded-md border ${wheelHex === hex ? 'border-foreground' : 'border-border'}`}
                           style={{ background: hex }}
+                          aria-label={hex}
                         />
                       ))}
                     </div>
                     <span className="text-[11px] text-muted-foreground">
-                      Use this when the Nebu brief already has the client's brand color.
+                      {t('newProject.wheelHint')}
                     </span>
                   </div>
                 </div>
@@ -295,12 +301,12 @@ export default function NewProjectModal({ onClose, onCreated }: NewProjectModalP
                 <div className="flex gap-3">
                   {isLoadingPalettes && (
                     <div className="flex-grow flex flex-col items-center justify-center py-6 text-muted-foreground text-xs gap-3">
-                      <NebuLoader size={64} /> Matching your description…
+                      <NebuLoader size={64} /> {t('newProject.matching')}
                     </div>
                   )}
                   {!isLoadingPalettes && suggestedPalettes.length === 0 && (
                     <div className="flex-grow text-xs text-muted-foreground py-4">
-                      No close match found — try the color wheel instead.
+                      {t('newProject.noMatch')}
                     </div>
                   )}
                   {!isLoadingPalettes &&
@@ -339,11 +345,11 @@ export default function NewProjectModal({ onClose, onCreated }: NewProjectModalP
             {error && <p className="text-destructive text-sm">{error}</p>}
             <div className="flex justify-between">
               <Button variant="ghost" onClick={() => setStep(2)} disabled={isCreating}>
-                ← Back
+                ← {t('common.back')}
               </Button>
               <Button onClick={handleSubmit} disabled={isCreating} className="nebu-cta">
                 {isCreating && <LoadingSquares size={14} className="mr-1" />}
-                Start Building →
+                {t('newProject.start')} →
               </Button>
             </div>
           </>

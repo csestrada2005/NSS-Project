@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { wyrdToast as toast } from '@/utils/wyrdToast';
 import { modalBackdropMotion, modalPanelMotion } from '@/components/ui/modalMotion';
 import LoadingSquares from '../brand/LoadingSquares';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
 
 interface SearchResult {
   id: string;
@@ -64,6 +65,7 @@ const ROLE_BADGE: Record<string, string> = {
 
 export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
   const { user, profile } = useAuth();
+  const { t } = useForgeLang();
   const [query, setQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -136,13 +138,13 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
         projectName,
         profile?.full_name ?? 'Someone'
       );
-      toast.success('Invitations sent');
+      toast.success(t('share.sent'));
       setPendingInvites([]);
       // Refresh collaborators list
       const updated = await CollaboratorService.getCollaborators(projectId);
       setCollaborators(updated);
     } catch {
-      toast.error('Failed to send invitations');
+      toast.error(t('share.sendFailed'));
     } finally {
       setSending(false);
     }
@@ -151,7 +153,7 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
   const handleRevokeCollaborator = async (collaboratorId: string) => {
     await CollaboratorService.revokeAccess(collaboratorId);
     setCollaborators((prev) => prev.filter((c) => c.id !== collaboratorId));
-    toast.success('Access revoked');
+    toast.success(t('share.revoked'));
   };
 
   const handleUpdateCollaboratorRole = async (collaboratorId: string, newRole: 'read' | 'edit') => {
@@ -175,10 +177,11 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
         >
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-            <h2 className="text-base font-semibold text-foreground">Share Project</h2>
+            <h2 className="text-base font-semibold text-foreground">{t('dashboard.shareProject')}</h2>
             <button
               onClick={onClose}
               className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              aria-label={t('common.close')}
             >
               <X size={16} />
             </button>
@@ -189,7 +192,7 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
             {collaborators.filter((c) => c.status === 'accepted' || c.status === 'pending').length > 0 && (
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
-                  Current Collaborators
+                  {t('share.current')}
                 </p>
                 <div className="space-y-2">
                   {collaborators
@@ -213,7 +216,7 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
                               : 'bg-emerald-500/20 text-emerald-300'
                           }`}
                         >
-                          {c.status}
+                          {c.status === 'pending' ? t('share.status.pending') : t('share.status.accepted')}
                         </span>
                         {/* Role selector */}
                         <div className="relative">
@@ -224,8 +227,8 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
                             }
                             className="appearance-none text-xs bg-accent border border-border text-foreground rounded-lg px-2 py-1 pr-6 focus:outline-none focus:ring-1 focus:ring-primary"
                           >
-                            <option value="read">Read Only</option>
-                            <option value="edit">Can Edit</option>
+                            <option value="read">{t('share.role.read')}</option>
+                            <option value="edit">{t('share.role.edit')}</option>
                           </select>
                           <ChevronDown size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                         </div>
@@ -233,7 +236,7 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
                           onClick={() => handleRevokeCollaborator(c.id)}
                           className="text-xs text-red-400 hover:text-red-300 transition-colors px-2 py-1 rounded-lg hover:bg-red-500/10"
                         >
-                          Revoke
+                          {t('share.revoke')}
                         </button>
                       </div>
                     ))}
@@ -244,7 +247,7 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
             {/* Search */}
             <div>
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
-                Invite People
+                {t('share.invite')}
               </p>
               <div className="relative">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -252,7 +255,7 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
                   type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search by name or email..."
+                  placeholder={t('share.searchPlaceholder')}
                   className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm bg-accent border border-border text-foreground placeholder-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
                 />
                 {searching && (
@@ -276,7 +279,7 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
                         <Avatar name={result.full_name} avatarUrl={result.avatar_url} />
                         <div className="flex-1 text-left min-w-0">
                           <p className="text-sm font-medium text-foreground truncate">
-                            {result.full_name ?? 'Unknown'}
+                            {result.full_name ?? t('share.unknown')}
                           </p>
                           <p className="text-xs text-muted-foreground truncate">{result.email}</p>
                         </div>
@@ -288,9 +291,9 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
                           </span>
                         )}
                         {alreadyCollaborator ? (
-                          <span className="text-xs text-muted-foreground">Added</span>
+                          <span className="text-xs text-muted-foreground">{t('share.added')}</span>
                         ) : alreadyAdded ? (
-                          <span className="text-xs text-muted-foreground">Pending</span>
+                          <span className="text-xs text-muted-foreground">{t('share.status.pending')}</span>
                         ) : (
                           <UserPlus size={14} className="text-muted-foreground" />
                         )}
@@ -305,7 +308,7 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
             {pendingInvites.length > 0 && (
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
-                  Pending Invites
+                  {t('share.pendingInvites')}
                 </p>
                 <div className="space-y-2">
                   {pendingInvites.map((invite) => (
@@ -316,7 +319,7 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
                       <Avatar name={invite.user.full_name} avatarUrl={invite.user.avatar_url} />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-foreground truncate">
-                          {invite.user.full_name ?? 'Unknown'}
+                          {invite.user.full_name ?? t('share.unknown')}
                         </p>
                         <p className="text-xs text-muted-foreground truncate">{invite.user.email}</p>
                       </div>
@@ -329,14 +332,15 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
                           }
                           className="appearance-none text-xs bg-accent border border-border text-foreground rounded-lg px-2 py-1 pr-6 focus:outline-none focus:ring-1 focus:ring-primary"
                         >
-                          <option value="read">Read Only</option>
-                          <option value="edit">Can Edit</option>
+                          <option value="read">{t('share.role.read')}</option>
+                          <option value="edit">{t('share.role.edit')}</option>
                         </select>
                         <ChevronDown size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                       </div>
                       <button
                         onClick={() => removePending(invite.user.id)}
                         className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                        aria-label={t('share.removeInvite')}
                       >
                         <X size={14} />
                       </button>
@@ -355,7 +359,7 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
               className="nebu-cta w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium bg-primary hover:bg-primary/90 text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {sending && <LoadingSquares size={14} />}
-              Send Invitations
+              {t('share.send')}
               {pendingInvites.length > 0 && ` (${pendingInvites.length})`}
             </button>
           </div>

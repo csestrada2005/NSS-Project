@@ -13,6 +13,9 @@ import EmptyState from "@/components/EmptyState";
 import { LangToggle } from "@/components/forge/LangToggle";
 import NewProjectModal from "@/components/forge/NewProjectModal";
 import NebuLoader from '../components/brand/NebuLoader';
+import { useForgeLang } from "@/i18n/forge/useForgeLang";
+import { t as tNow } from "@/i18n/forge/lang";
+import { formatRelativeDate } from "@/i18n/forge/format";
 
 interface ForgeProject {
   id: string;
@@ -38,6 +41,7 @@ const ForgeDashboard = () => {
   } | null>>(new Map());
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
+  const { lang, t, tn } = useForgeLang();
 
   const supabase = SupabaseService.getInstance().client;
 
@@ -56,7 +60,7 @@ const ForgeDashboard = () => {
         setProjects(data as ForgeProject[]);
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to load projects';
+      const msg = err instanceof Error ? err.message : tNow('dashboard.loadFailed');
       setError(msg);
     } finally {
       setIsLoadingProjects(false);
@@ -66,7 +70,7 @@ const ForgeDashboard = () => {
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
-      setError('User not authenticated');
+      setError(tNow('dashboard.notAuthenticated'));
       setIsLoadingProjects(false);
       return;
     }
@@ -101,7 +105,7 @@ const ForgeDashboard = () => {
 
   const deleteProject = async (e: React.MouseEvent, projectId: string) => {
     e.stopPropagation();
-    if (!window.confirm("Delete this project? This cannot be undone.")) return;
+    if (!window.confirm(t('dashboard.deleteConfirm'))) return;
     const { error } = await supabase
       .from("forge_projects")
       .delete()
@@ -116,24 +120,13 @@ const ForgeDashboard = () => {
     setShareProject(project);
   };
 
-  const formatDate = (iso: string) => {
-    const d = new Date(iso);
-    const now = new Date();
-    const diffMs = now.getTime() - d.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    if (diffMins < 60) return `${diffMins}m ago`;
-    const diffHrs = Math.floor(diffMins / 60);
-    if (diffHrs < 24) return `${diffHrs}h ago`;
-    const diffDays = Math.floor(diffHrs / 24);
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return d.toLocaleDateString();
-  };
+  const formatDate = (iso: string) => formatRelativeDate(iso, lang);
 
   if (error) {
     return (
       <div className="nebu-modal flex flex-col h-screen bg-background items-center justify-center p-6">
         <div className="bg-red-500/10 border border-red-500/30 text-red-300 rounded-xl px-5 py-4 text-sm max-w-md w-full text-center">
-          <p className="font-semibold mb-1">Failed to load projects</p>
+          <p className="font-semibold mb-1">{t('dashboard.loadFailed')}</p>
           <p>{error}</p>
           <Button
             variant="outline"
@@ -143,7 +136,7 @@ const ForgeDashboard = () => {
               loadProjects();
             }}
           >
-            Retry
+            {t('common.retry')}
           </Button>
         </div>
       </div>
@@ -181,13 +174,13 @@ const ForgeDashboard = () => {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-muted-foreground">
-            {projects.length} project{projects.length !== 1 ? "s" : ""}
+            {tn('dashboard.projectCount', projects.length)}
           </span>
           <CreditBalance />
           <LangToggle className="inline-flex items-center gap-1.5 h-8 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors" />
           <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
             <ChevronLeft size={16} />
-            Back to Nebu
+            {t('dashboard.backToNebu')}
           </Button>
         </div>
       </header>
@@ -197,9 +190,9 @@ const ForgeDashboard = () => {
         {/* Header row */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">Projects</h1>
+            <h1 className="text-2xl font-semibold text-foreground">{t('dashboard.title')}</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              {filteredProjects.length} project{filteredProjects.length !== 1 ? "s" : ""}
+              {tn('dashboard.projectCount', filteredProjects.length)}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -211,7 +204,7 @@ const ForgeDashboard = () => {
               <Input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search projects..."
+                placeholder={t('dashboard.searchPlaceholder')}
                 className="pl-9 w-56"
               />
             </div>
@@ -221,7 +214,7 @@ const ForgeDashboard = () => {
               className="nebu-cta"
             >
               <Plus size={16} />
-              New Project
+              {t('dashboard.newProject')}
             </Button>
           </div>
         </div>
@@ -229,20 +222,20 @@ const ForgeDashboard = () => {
         {isLoadingProjects ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-5">
             <NebuLoader size={140} />
-            <span>Loading projects...</span>
+            <span>{t('dashboard.loading')}</span>
           </div>
         ) : filteredProjects.length === 0 && !searchQuery ? (
           <EmptyState
             icon={Layers}
-            title={{ en: 'No projects yet', es: 'Sin proyectos aún' }}
-            subtitle={{ en: 'Create your first project to start building with AI.', es: 'Crea tu primer proyecto para empezar a construir con IA.' }}
-            ctaLabel={{ en: 'New Project', es: 'Nuevo Proyecto' }}
+            title={t('dashboard.empty.title')}
+            subtitle={t('dashboard.empty.subtitle')}
+            ctaLabel={t('dashboard.newProject')}
             onCta={() => setShowNewProjectModal(true)}
           />
         ) : filteredProjects.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-center text-muted-foreground gap-3">
             <Layers size={32} className="text-muted-foreground/40" />
-            <p className="text-sm">No projects match your search.</p>
+            <p className="text-sm">{t('dashboard.noMatches')}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -257,7 +250,8 @@ const ForgeDashboard = () => {
                 <button
                   onClick={(e) => deleteProject(e, project.id)}
                   className="absolute top-3 right-3 z-10 p-1.5 rounded-md bg-background/80 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all"
-                  title="Delete project"
+                  title={t('dashboard.deleteProject')}
+                  aria-label={t('dashboard.deleteProject')}
                 >
                   <Trash2 size={14} />
                 </button>
@@ -271,7 +265,7 @@ const ForgeDashboard = () => {
                       srcDoc={project.preview_html}
                       sandbox="allow-scripts"
                       tabIndex={-1}
-                      title={`${project.name} preview`}
+                      title={t('dashboard.previewOf', { name: project.name })}
                       className="absolute top-0 left-0 origin-top-left pointer-events-none"
                       style={{ width: '400%', height: '400%', transform: 'scale(0.25)' }}
                     />
@@ -285,14 +279,14 @@ const ForgeDashboard = () => {
                 <div className="p-5">
                   <h3 className="text-sm font-semibold text-foreground truncate pr-8">{project.name}</h3>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Updated {formatDate(project.updated_at)}
+                    {t('dashboard.updated', { when: formatDate(project.updated_at) })}
                   </p>
                   {(() => {
                     const summary = projectSummaries.get(project.id);
                     if (!summary) return <div className="h-4 mt-1" />;
                     return (
                       <p className="text-xs text-muted-foreground font-mono mt-1">
-                        {summary.componentCount} components · {summary.routeCount} routes
+                        {tn('dashboard.componentCount', summary.componentCount)} · {tn('dashboard.routeCount', summary.routeCount)}
                       </p>
                     );
                   })()}
@@ -303,7 +297,7 @@ const ForgeDashboard = () => {
                       onClick={(e) => { e.stopPropagation(); openProject(project); }}
                       className="flex-1 py-1.5 text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors"
                     >
-                      Open
+                      {t('dashboard.open')}
                     </button>
                     <button
                       onClick={(e) => openHub(e, project)}
@@ -315,7 +309,8 @@ const ForgeDashboard = () => {
                     <button
                       onClick={(e) => shareProjectFn(e, project)}
                       className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-accent text-muted-foreground hover:text-foreground rounded-lg transition-colors"
-                      title="Share project"
+                      title={t('dashboard.shareProject')}
+                      aria-label={t('dashboard.shareProject')}
                     >
                       <Share2 size={11} />
                     </button>
