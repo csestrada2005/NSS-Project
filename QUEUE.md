@@ -1159,6 +1159,31 @@ nuevos) · `npx vitest run` 56/56 (54 + test de `kind: 'planning'` + 2 de PhoneG
 **Higiene:** scripts de reemplazo en el scratchpad de la sesión (fuera del repo), nada que borrar en el
 repo. `graphify-out/` se regeneró con `graphify update .` (no commiteado, igual que las sesiones previas).
 
+### 5.5 HECHO (pendiente CHECK MANUAL) — Sistema visual minimalista: Wyrd + CRM (sesión 2026-09-29)
+
+Análisis previo (con Samuel): la idea era minimalista pero el sistema no — 3 escalas de gris, 7 radios,
+8 tamaños de texto, colores decorativos (morado/rosa/índigo/azul), Outfit cargada pero sin usar en Wyrd,
+Archivo Black descargada sin uso, IBM Plex Mono referenciada sin cargar. Samuel eligió la opción A
+("pasada de sistema") sin mockup, y después aplicarla al CRM con contenedores visibles sólo en hover.
+
+- `f6d3c44` Wyrd: `.wyrd-root` en StudioLayout con los tokens de marca de `.nebu-modal`; 4 px en todo
+  `rounded*` (círculos intactos); zinc/gray/slate → neutral; sólo rojo + emerald/amber/red de estado;
+  escala 12/14/18/24 (chat y navbar incluidos, triángulos de 9 px = íconos); títulos en Outfit; fuera
+  Archivo Black; mono del sistema; Hub con el contenedor Nebu.
+- (commit siguiente) CRM: `.nebu-crm` en WorkspaceLayout con el mismo sistema; `#E60000` → `#D62828`;
+  títulos display del onboarding (3xl/4xl) se quedan a propósito. Contenedores `.bg-card` del área de
+  contenido transparentes en reposo, visibles con hover o `:focus-within`; excluidos campos, menús y
+  popups; sólo con `@media (hover: hover)` (en táctil siguen visibles).
+- Verificación: tsc 0 errores · server 675/675 · vitest 56/56 · vite build OK · reglas presentes en el CSS
+  final.
+
+**CHECK MANUAL — PENDIENTE.** Esperado: Wyrd y CRM con el mismo negro/carbón/gris neutro, esquinas iguales,
+títulos en Outfit, sin azul/morado; en el CRM (computadora) tarjetas y paneles como texto suelto hasta pasar
+el mouse; formularios, menús y popups siempre visibles; en celular los contenedores se ven. Fallo: algún
+contenedor imprescindible (p. ej. un formulario dentro de una tarjeta) queda sin marco y se vuelve confuso;
+un estado que sólo se distinguía por color azul (p. ej. "completado" vs "en progreso") ahora sólo por texto.
+Residuo: las pantallas de carga (búho, rejilla, barra, cuadritos) no se tocaron.
+
 ### Resto del bucket (sin tocar esta sesión)
 - RAG de UI/UX: PatternRetriever da `direct: 0 | vector: 0`. Primera pregunta: ¿pasa igual en producción?
 - Catálogo de componentes, con auditoría de licencia por componente.
