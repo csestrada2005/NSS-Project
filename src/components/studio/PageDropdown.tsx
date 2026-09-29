@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { derivePageEntries } from '@/utils/projectRoutes.js';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
 
 /**
  * PageDropdown — el selector de página del navbar (zona central), estilo
@@ -28,6 +29,7 @@ export function PageDropdown({
   beforeNavigate?: (proceed: () => void) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const { t } = useForgeLang();
   const rootRef = useRef<HTMLDivElement>(null);
   const entries = derivePageEntries(files);
   const active = entries.find((e) => e.route === activeRoute) ?? entries.find((e) => e.route === '/');
@@ -60,7 +62,7 @@ export function PageDropdown({
         aria-expanded={open}
         onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
       >
-        <span className="wf-page-name">{active?.name ?? 'Inicio'}</span>
+        <span className="wf-page-name">{active?.name ?? t('studio.pages.home')}</span>
         <span className="wf-page-route">{active?.route ?? '/'}</span>
         <ChevronDown className="wf-caret" size={12} />
       </button>
@@ -68,7 +70,7 @@ export function PageDropdown({
         <div className="wf-menu" role="menu">
           {entries.length === 0 ? (
             <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--ink-dim)' }}>
-              No se encontraron páginas
+              {t('studio.pages.none')}
             </div>
           ) : (
             entries.map((entry) => (

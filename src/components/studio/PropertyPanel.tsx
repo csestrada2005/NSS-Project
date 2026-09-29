@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { X, Type, Palette, Move, Bold, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
 import type { TargetElement } from '../../utils/ast';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
 
 /**
  * PropertyPanel — the deterministic heart of Visual mode (PR-2, CAMBIO 3).
@@ -95,6 +96,7 @@ export function PropertyPanel({ element, projectCss, onApplyClassName, onApplyTe
   // `key` tied to the element identity, so selecting a different element remounts
   // it fresh instead of syncing props into state via an effect.
   const [workingClass, setWorkingClass] = useState(element.className ?? '');
+  const { t } = useForgeLang();
   const [textDraft, setTextDraft] = useState(element.textContent ?? '');
 
   const brandVars = useMemo(() => parseBrandVars(projectCss), [projectCss]);
@@ -122,7 +124,7 @@ export function PropertyPanel({ element, projectCss, onApplyClassName, onApplyTe
           {repeated && (
             <span
               className="text-[10px] font-medium bg-amber-500/15 text-amber-500 px-1.5 py-0.5 rounded"
-              title="Elemento repetido — editar el estilo cambia las N instancias"
+              title={t('props.repeatedHint')}
             >
               ×{element.instanceCount}
             </span>
@@ -131,7 +133,8 @@ export function PropertyPanel({ element, projectCss, onApplyClassName, onApplyTe
         <button
           onClick={onClose}
           className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-          title="Deseleccionar (Esc)"
+          title={t('props.deselect')}
+          aria-label={t('props.deselect')}
         >
           <X size={15} />
         </button>
@@ -139,15 +142,15 @@ export function PropertyPanel({ element, projectCss, onApplyClassName, onApplyTe
 
       <div className="p-4 flex flex-col gap-5">
         {/* COLOR */}
-        <Section icon={<Palette size={13} />} title="Color">
+        <Section icon={<Palette size={13} />} title={t('props.color')}>
           <ColorRow
-            label="Texto"
+            label={t('props.textColor')}
             brandVars={brandVars}
             onBrand={(css) => applyColor('text', css)}
             onFree={(hex) => applyColor('text', hex)}
           />
           <ColorRow
-            label="Fondo"
+            label={t('props.background')}
             brandVars={brandVars}
             onBrand={(css) => applyColor('bg', css)}
             onFree={(hex) => applyColor('bg', hex)}
@@ -155,8 +158,8 @@ export function PropertyPanel({ element, projectCss, onApplyClassName, onApplyTe
         </Section>
 
         {/* TYPOGRAPHY */}
-        <Section icon={<Type size={13} />} title="Tipografía">
-          <ChipRow label="Tamaño">
+        <Section icon={<Type size={13} />} title={t('props.typography')}>
+          <ChipRow label={t('props.size')}>
             {FONT_SIZES.map((s) => (
               <Chip
                 key={s}
@@ -167,7 +170,7 @@ export function PropertyPanel({ element, projectCss, onApplyClassName, onApplyTe
               </Chip>
             ))}
           </ChipRow>
-          <ChipRow label="Peso" icon={<Bold size={11} />}>
+          <ChipRow label={t('props.weight')} icon={<Bold size={11} />}>
             {FONT_WEIGHTS.map((w) => (
               <Chip
                 key={w}
@@ -178,7 +181,7 @@ export function PropertyPanel({ element, projectCss, onApplyClassName, onApplyTe
               </Chip>
             ))}
           </ChipRow>
-          <ChipRow label="Alineación">
+          <ChipRow label={t('props.align')}>
             {(
               [
                 ['left', <AlignLeft size={12} key="l" />],
@@ -198,22 +201,22 @@ export function PropertyPanel({ element, projectCss, onApplyClassName, onApplyTe
         </Section>
 
         {/* SPACING */}
-        <Section icon={<Move size={13} />} title="Espaciado">
-          <ChipRow label="Padding">
+        <Section icon={<Move size={13} />} title={t('props.spacing')}>
+          <ChipRow label={t('props.padding')}>
             {SPACING.map((n) => (
               <Chip key={n} active={hasToken(workingClass, `p-${n}`)} onClick={() => apply(isPadding, `p-${n}`)}>
                 {n}
               </Chip>
             ))}
           </ChipRow>
-          <ChipRow label="Margin">
+          <ChipRow label={t('props.margin')}>
             {SPACING.map((n) => (
               <Chip key={n} active={hasToken(workingClass, `m-${n}`)} onClick={() => apply(isMargin, `m-${n}`)}>
                 {n}
               </Chip>
             ))}
           </ChipRow>
-          <ChipRow label="Radio">
+          <ChipRow label={t('props.radius')}>
             {RADII.map((r) => (
               <Chip
                 key={r}
@@ -224,7 +227,7 @@ export function PropertyPanel({ element, projectCss, onApplyClassName, onApplyTe
               </Chip>
             ))}
           </ChipRow>
-          <ChipRow label="Sombra">
+          <ChipRow label={t('props.shadow')}>
             {SHADOWS.map((s) => (
               <Chip
                 key={s}
@@ -238,14 +241,14 @@ export function PropertyPanel({ element, projectCss, onApplyClassName, onApplyTe
         </Section>
 
         {/* TEXT */}
-        <Section icon={<Type size={13} />} title="Texto">
+        <Section icon={<Type size={13} />} title={t('props.text')}>
           {repeated ? (
             <p className="text-[11px] text-muted-foreground leading-relaxed">
-              Elemento repetido — el texto vive en datos; edítalo por chat.
+              {t('props.repeatedText')}
             </p>
           ) : element.hasChildElements ? (
             <p className="text-[11px] text-muted-foreground leading-relaxed">
-              Este elemento contiene otros elementos — edita su texto por chat.
+              {t('props.nestedText')}
             </p>
           ) : (
             <div className="flex flex-col gap-2">
@@ -254,14 +257,14 @@ export function PropertyPanel({ element, projectCss, onApplyClassName, onApplyTe
                 onChange={(e) => setTextDraft(e.target.value)}
                 rows={2}
                 className="w-full text-xs p-2 rounded-md border border-border bg-background text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
-                placeholder="Texto del elemento…"
+                placeholder={t('props.textPlaceholder')}
               />
               <button
                 onClick={() => onApplyText(textDraft)}
                 disabled={textDraft === (element.textContent ?? '')}
                 className="self-end text-xs font-medium bg-primary text-white px-3 py-1.5 rounded-md hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
-                Aplicar texto
+                {t('props.applyText')}
               </button>
             </div>
           )}
@@ -324,6 +327,7 @@ function ColorRow({
   onBrand: (css: string) => void;
   onFree: (hex: string) => void;
 }) {
+  const { t } = useForgeLang();
   return (
     <div className="flex flex-col gap-1">
       <span className="text-[10px] text-muted-foreground">{label}</span>
@@ -340,7 +344,7 @@ function ColorRow({
         {/* Free picker — arbitrary hex value. */}
         <label
           className="w-6 h-6 rounded-md border border-border overflow-hidden cursor-pointer relative"
-          title="Color libre"
+          title={t('props.freeColor')}
         >
           <span className="absolute inset-0 bg-gradient-to-br from-red-500 via-green-500 to-blue-500" />
           <input

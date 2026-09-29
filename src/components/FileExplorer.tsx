@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { File, Folder, ChevronRight, ChevronDown, Plus } from 'lucide-react';
+import { t } from '@/i18n/forge/lang';
 
 interface FileExplorerProps {
   files: Map<string, string>;
@@ -145,7 +146,7 @@ const TreeNodeItem: React.FC<TreeNodeProps> = ({ node, depth, onSelect }) => {
 export const FileExplorer: React.FC<FileExplorerProps> = ({ files, onSelect, onAddPackage }) => {
   const handleAddPackage = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const pkg = window.prompt('Enter npm package name (e.g. framer-motion):');
+    const pkg = window.prompt(t('code.installPrompt'));
     if (pkg && onAddPackage) {
       onAddPackage(pkg);
     }
@@ -156,12 +157,13 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ files, onSelect, onA
   return (
     <div className="h-full bg-background overflow-y-auto border-r border-border flex flex-col">
       <div className="p-3 font-semibold text-xs text-muted-foreground uppercase tracking-wider border-b border-border flex justify-between items-center">
-        <span>Explorer</span>
+        <span>{t('code.explorer')}</span>
         {onAddPackage && (
           <button
             onClick={handleAddPackage}
             className="hover:text-foreground transition-colors p-1 rounded hover:bg-accent focus:outline-none focus-visible:ring-1 focus-visible:ring-primary"
-            title="Install npm package"
+            title={t('code.install')}
+            aria-label={t('code.install')}
           >
             <Plus size={14} />
           </button>

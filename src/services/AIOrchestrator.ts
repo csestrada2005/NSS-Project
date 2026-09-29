@@ -972,9 +972,13 @@ export class AIOrchestrator {
     if (/^\s*Corrige este error de runtime/i.test(input)) return true;
     const lastAssistant = [...(chatHistory ?? [])].reverse().find((m) => m.role === 'assistant');
     const content = lastAssistant?.content ?? '';
+    // Los dos idiomas del aviso (i18n de Wyrd, ítem 5.4): el historial puede
+    // traer cualquiera de los dos según el idioma elegido al mostrarse.
     return (
       content.includes('Error de runtime en el preview') ||
-      content.includes('El código falló al cargar')
+      content.includes('El código falló al cargar') ||
+      content.includes('Runtime error in the preview') ||
+      content.includes('The code failed to load')
     );
   }
 

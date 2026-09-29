@@ -1,5 +1,6 @@
 import { Download } from 'lucide-react';
 import { FileExplorer } from '../FileExplorer';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
 
 // ---------------------------------------------------------------------------
 // CodePanel — code editor rendered inside CommandModal.
@@ -40,6 +41,7 @@ export function CodePanel({
   onDownloadZip,
   isGenerating,
 }: CodePanelProps) {
+  const { t } = useForgeLang();
   return (
     <div className="flex w-full h-full bg-background">
       <div className="w-56 border-r border-border h-full overflow-hidden shrink-0">
@@ -50,23 +52,23 @@ export function CodePanel({
       </div>
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         <div className="h-10 border-b border-border flex items-center justify-between px-4 bg-card shrink-0">
-          <span className="text-sm text-muted-foreground truncate">{selectedFilePath || 'No file selected'}</span>
+          <span className="text-sm text-muted-foreground truncate">{selectedFilePath || t('code.noFile')}</span>
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={onDownloadZip}
               disabled={isGenerating}
-              title={isGenerating ? 'Espera a que termine la generación' : 'Download the whole project as a .zip'}
+              title={isGenerating ? t('code.waitGeneration') : t('code.downloadHint')}
               className="flex items-center gap-1.5 px-3 py-1 bg-secondary hover:bg-secondary/80 text-secondary-foreground text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Download size={13} />
-              Download ZIP
+              {t('code.download')}
             </button>
             <button
               onClick={onSaveAndRun}
               disabled={!selectedFilePath || isSaving}
               className="px-3 py-1 bg-primary hover:bg-primary/90 text-white text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSaving ? 'Saving...' : 'Save & Run'}
+              {isSaving ? t('common.saving') : t('code.saveRun')}
             </button>
           </div>
         </div>

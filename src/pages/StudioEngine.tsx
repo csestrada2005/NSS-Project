@@ -54,6 +54,8 @@ import NebuLoadingCard from '../components/brand/NebuLoadingCard';
 import { StudioLoadOverlay, StudioProgressOverlay } from '../components/studio/StudioLoadOverlay';
 import type { ViewportMode, PanelMode } from '../components/studio/types';
 import LoadingSquares from '../components/brand/LoadingSquares';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
+import { t as tNow, tn as tnNow, getForgeLang } from '@/i18n/forge/lang';
 
 // Navbar del preview (bucket 5 ítem 3, 2026-09-20): Visual/Código/Navegar se
 // promovieron a PreviewNavbar, persistente arriba del preview en vez de una
@@ -89,7 +91,8 @@ function parseOid(oid: string): { slug: string; ordinal: number } | null {
 // versión de …"). Mismo formato local que usa el HistoryDrawer.
 function formatSnapshotDate(dateStr: string): string {
   const d = new Date(dateStr);
-  return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  const lang = getForgeLang();
+  return `${d.toLocaleDateString(lang)} ${d.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' })}`;
 }
 
 // Recorte determinista para labels de snapshot: colapsa espacios y trunca a
@@ -135,14 +138,12 @@ function buildGenerationSummary(modifiedFiles: string[]): string | null {
 
   const parts: string[] = [];
   if (sections.length > 0) {
-    const word = sections.length === 1 ? 'sección' : 'secciones';
-    parts.push(`${sections.length} ${word} (${sections.join(', ')})`);
+    parts.push(`${tnNow('studio.summary.sections', sections.length)} (${sections.join(', ')})`);
   }
   if (pages.length > 0) {
-    const word = pages.length === 1 ? 'página' : 'páginas';
-    parts.push(`${pages.length} ${word} (${pages.join(', ')})`);
+    parts.push(`${tnNow('studio.summary.pages', pages.length)} (${pages.join(', ')})`);
   }
-  return `Proyecto generado: ${parts.join(', ')}.`;
+  return tNow('studio.summary.generated', { parts: parts.join(', ') });
 }
 
 // Resumen corto y DETERMINISTA de una sesión de guardado visual, derivado de las
@@ -152,15 +153,19 @@ function summarizeVisualEdits(
   touchedFiles: string[],
   byFile: Map<string, PendingVisualEdit[]>,
 ): string {
-  const props = new Set<string>();
+  const props = new Set<'style' | 'text'>();
   for (const path of touchedFiles) {
     for (const e of byFile.get(path) ?? []) {
-      props.add(e.property === 'className' ? 'estilo' : 'texto');
+      props.add(e.property === 'className' ? 'style' : 'text');
     }
   }
+  const and = tNow('studio.summary.and');
   // Orden fijo: "estilo" antes que "texto", para que el mismo set produzca
   // siempre el mismo texto.
-  const propLabel = ['estilo', 'texto'].filter((p) => props.has(p)).join(' y ');
+  const propLabel = (['style', 'text'] as const)
+    .filter((p) => props.has(p))
+    .map((p) => tNow(p === 'style' ? 'studio.summary.style' : 'studio.summary.text'))
+    .join(` ${and} `);
 
   const components: string[] = [];
   for (const path of touchedFiles) {
@@ -168,12 +173,12 @@ function summarizeVisualEdits(
     if (!components.includes(name)) components.push(name);
   }
   const compLabel = components.length <= 2
-    ? components.join(' y ')
-    : `${components.slice(0, 2).join(', ')} y ${components.length - 2} más`;
+    ? components.join(` ${and} `)
+    : tNow('studio.summary.andMore', { first: components.slice(0, 2).join(', '), count: components.length - 2 });
 
   if (!propLabel) return compLabel;
   if (!compLabel) return propLabel;
-  return `${propLabel} en ${compLabel}`;
+  return tNow('studio.summary.propsIn', { props: propLabel, components: compLabel });
 }
 
 /**
@@ -191,6 +196,7 @@ type PendingPlanDecision = {
 };
 
 export function StudioEngine() {
+  const { t, tn } = useForgeLang();
   // -------------------------------------------------------------------------
   // Routing
   // -------------------------------------------------------------------------
@@ -916,7 +922,7 @@ export function StudioEngine() {
       }
       const filePath = oidMapRef.current[parsed.slug];
       if (!filePath) {
-        toast.message('Recompilando para sincronizar…');
+        toast.message(t('studio.toast.resync'));
         if (files.size > 0) {
           setIsCompiling(true);
           runExclusive(async () => {
@@ -974,7 +980,7 @@ export function StudioEngine() {
       return;
     }
     if (panelMode !== 'preview') {
-      toast.error('Ve a preview primero para abrir chat');
+      toast.error(t('studio.toast.chatNeedsPreview'));
       return;
     }
     setChatPeeking(false);
@@ -1126,7 +1132,7 @@ export function StudioEngine() {
       if (isReadOnly || !projectId) return;
 
       // b. Checkpoint del estado actual antes de tocar nada.
-      await saveSnapshot('pre_restore', 'Antes de restaurar');
+      await saveSnapshot('pre_restore', t('studio.snapshot.preRestore'));
 
       // c. Estado completo: escribir lo del snapshot, borrar lo que sobra.
       lastChangeSource.current = 'ai';
@@ -1207,10 +1213,10 @@ export function StudioEngine() {
       const labelSuffix = meta.label ? ` (${meta.label})` : '';
       const systemMessage =
         restore.outcome === 'ok'
-          ? `Proyecto restaurado a la versión de ${dateLabel}${labelSuffix}.`
+          ? t('studio.restore.ok', { date: dateLabel, label: labelSuffix })
           : restore.outcome === 'infra'
-            ? `El servidor tarda en responder — la versión se restauró; el preview se actualizará al terminar.`
-            : `La versión restaurada no compila: ${restore.error}. Guardé un checkpoint "Antes de restaurar" para que puedas volver al estado anterior.`;
+            ? t('studio.restore.infra')
+            : t('studio.restore.broken', { error: restore.error ?? '', checkpoint: t('studio.snapshot.preRestore') });
 
       setChatHistory((prev) => [
         ...prev,
@@ -1302,7 +1308,7 @@ export function StudioEngine() {
       lastChangeSource.current = 'user';
       updateLocalFile(selectedFilePath, selectedFileContent);
       await saveFile(selectedFilePath, selectedFileContent);
-      toast.success('Saved successfully');
+      toast.success(t('studio.toast.saved'));
     } finally {
       setIsSaving(false);
     }
@@ -1330,7 +1336,7 @@ export function StudioEngine() {
     (updates: { className?: string; textContent?: string }, options?: { classNameMode?: 'replace' | 'merge' }) => {
       const el = selectedElement;
       if (!el || !el.filePath || typeof el.ordinal !== 'number' || !el.dataOid) {
-        toast.error('No pude aplicar el cambio con seguridad — usa el chat');
+        toast.error(t('studio.toast.unsafeEdit'));
         return;
       }
       const { dataOid, filePath, ordinal, tagName } = el;
@@ -1420,7 +1426,7 @@ export function StudioEngine() {
     setPendingEdits(new Map());
 
     if (anyNotFound) {
-      toast.error('Algunos cambios no se pudieron localizar — revisa el resultado');
+      toast.error(t('studio.toast.someNotFound'));
     }
 
     // (b) UNA sola compilación, por la red de seguridad global (runExclusive).
@@ -1428,7 +1434,7 @@ export function StudioEngine() {
       setIsCompiling(true);
       try {
         const result = await compileWithMeta(finalFiles, {
-          onServerRetry: () => toast.message('Servidor ocupado — reintentando…'),
+          onServerRetry: () => toast.message(t('studio.toast.serverBusy')),
           ...(projectId ? { projectId } : null),
         });
         const { html, oidMap, verdict } = result;
@@ -1440,13 +1446,13 @@ export function StudioEngine() {
 
         if (decision.status === 'ok') {
           applyPreviewHtml(html);
-          toast.success(`Cambios guardados (${touchedFiles.length} archivo${touchedFiles.length === 1 ? '' : 's'})`);
+          toast.success(t('studio.toast.changesSaved', { files: tn('studio.files', touchedFiles.length) }));
           // CAMBIO 2 — cierre exitoso de una sesión de guardado del modo Visual:
           // capturar snapshot por el mismo embudo que el resto de la cobertura,
           // con un label determinista derivado de lo que tocó el buffer.
           if (touchedFiles.length > 0) {
             const resumen = summarizeVisualEdits(touchedFiles, byFile);
-            void saveSnapshot('manual_save', `Edición visual: ${resumen}`);
+            void saveSnapshot('manual_save', t('studio.snapshot.visualEdit', { summary: resumen }));
           }
           return;
         }
@@ -1457,14 +1463,14 @@ export function StudioEngine() {
           if (verdict === 'network-error') {
             applyPreviewHtml(html); // flujo de red existente (página con reintento).
           } else {
-            toast.message('Guardado — el preview se actualizará al reconectar');
+            toast.message(t('studio.toast.savedOffline'));
           }
           return;
         }
 
         // decision.status === 'code-error': el cambio rompió la compilación →
         // revertir al baseline.
-        toast.error('El cambio rompió la compilación — revertido');
+        toast.error(t('studio.toast.reverted'));
         const reverted = new Map(finalFiles);
         for (const [path, original] of baseline) {
           updateLocalFile(path, original);
@@ -1684,7 +1690,7 @@ export function StudioEngine() {
       if (result.modifiedFiles.length > 0) {
         const promptLabel = truncateLabel(message, 80);
         const snapshotLabel = isInitialGeneration
-          ? `Proyecto creado: ${promptLabel}`
+          ? t('studio.snapshot.created', { prompt: promptLabel })
           : promptLabel;
         await saveSnapshot('ai_action', snapshotLabel);
       }
@@ -1735,7 +1741,7 @@ export function StudioEngine() {
         return {
           success: true,
           modifiedFiles: [],
-          chatResponse: 'Generación cancelada — se conservaron 0 archivos.',
+          chatResponse: tn('studio.cancelled.chat', 0),
           cancelled: true,
         };
       }
@@ -1824,8 +1830,7 @@ export function StudioEngine() {
     !!cancelledInfo && !hasBuiltProject && !showGeneratingOverlay;
 
   // CAMBIO 4 — prompt de "Completar proyecto": viaja por el flujo normal del chat.
-  const COMPLETE_PROJECT_PROMPT =
-    'Completa el proyecto: conserva los componentes existentes y genera las secciones y páginas que faltan.';
+  const COMPLETE_PROJECT_PROMPT = t('studio.completePrompt');
   const handleCompleteProject = useCallback(() => {
     setIsCommandModalOpen(true);
     setPendingChatSend(COMPLETE_PROJECT_PROMPT);
@@ -1869,7 +1874,7 @@ export function StudioEngine() {
     const handleRuntimeError = (event: MessageEvent) => {
       if (event.data?.type !== 'preview-runtime-error') return;
       const { message, filename, lineno, componentName, componentStack, stack, source } = event.data;
-      const where = componentName || filename || 'el preview';
+      const where = componentName || filename || t('studio.runtime.thePreview');
       // CAMBIO 1d — cuando el error llega de la evaluación top-level del módulo
       // (antes de que React monte), el código falló al CARGAR: el mensaje del
       // chat lo dice así en vez de nombrar un componente inexistente. El prompt
@@ -1908,14 +1913,14 @@ export function StudioEngine() {
         );
 
         const runtimeErrorContent = isModuleEval
-          ? `⚠ El código falló al cargar: ${message ?? 'error desconocido'}`
-          : `⚠ Error de runtime en el preview: ${message ?? 'error desconocido'} en ${where}`;
+          ? `⚠ ${t('studio.runtime.loadFailed', { message: message ?? t('studio.runtime.unknown') })}`
+          : `⚠ ${t('studio.runtime.error', { message: message ?? t('studio.runtime.unknown'), where })}`;
         setChatHistory(prev => [
           ...prev,
           {
             role: 'assistant',
             content: runtimeErrorContent,
-            actionLabel: 'Corregir con AI',
+            actionLabel: t('studio.runtime.fix'),
             suggestedAction: fixPrompt,
           } as Message,
         ].slice(-30));
@@ -1998,6 +2003,7 @@ export function StudioEngine() {
                   <button
                     onClick={() => setIsMenuPanelOpen(false)}
                     className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                    aria-label={t('common.close')}
                   >
                     <XIcon size={16} />
                   </button>
@@ -2010,14 +2016,14 @@ export function StudioEngine() {
                     className="w-full flex items-center gap-3 px-5 py-3 text-sm text-foreground hover:bg-primary/10 hover:text-primary transition-colors"
                   >
                     <ChevronLeft size={16} />
-                    Back to Nebu
+                    {t('dashboard.backToNebu')}
                   </button>
                   <button
                     onClick={() => { setIsMenuPanelOpen(false); setIsHistoryOpen(true); }}
                     className="w-full flex items-center gap-3 px-5 py-3 text-sm text-foreground hover:bg-primary/10 hover:text-primary transition-colors"
                   >
                     <Clock size={16} />
-                    Version History
+                    {t('studio.menu.history')}
                   </button>
                 </div>
 
@@ -2029,14 +2035,14 @@ export function StudioEngine() {
                     className="w-full flex items-center gap-3 px-5 py-3 text-sm text-foreground hover:bg-primary/10 hover:text-primary transition-colors"
                   >
                     <Download size={16} />
-                    Export Zip
+                    {t('studio.menu.export')}
                   </button>
                   <button
                     onClick={() => { setIsMenuPanelOpen(false); setShowShareModal(true); }}
                     className="w-full flex items-center gap-3 px-5 py-3 text-sm text-foreground hover:bg-primary/10 hover:text-primary transition-colors"
                   >
                     <UserPlus size={16} />
-                    Invite Collaborators
+                    {t('studio.menu.invite')}
                   </button>
                 </div>
               </div>
@@ -2045,7 +2051,7 @@ export function StudioEngine() {
               {isReadOnly && (
                 <div className="absolute top-4 right-4 z-50 flex items-center gap-1.5 bg-yellow-900/80 border border-yellow-700 text-yellow-300 text-xs px-3 py-1.5 rounded-full">
                   <Eye size={12} />
-                  View only
+                  {t('studio.viewOnly')}
                 </div>
               )}
 
@@ -2056,7 +2062,7 @@ export function StudioEngine() {
               {!isReadOnly && isPublic && (
                 <div className="absolute top-14 right-4 z-40 flex items-center gap-1.5 bg-green-950/80 border border-green-700/50 rounded-full px-2.5 py-1 text-[10px] text-green-400 font-medium">
                   <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                  Live
+                  {t('studio.live')}
                 </div>
               )}
 
@@ -2112,15 +2118,15 @@ export function StudioEngine() {
                       desde 2026-09-27 (pedido de Samuel) tarjeta grande con el búho.
                       Sólo aparece si la compilación pasa de 300 ms, para que las
                       ediciones rápidas no hagan parpadear nada. */}
-                  {isCompiling && <NebuLoadingCard label="Compiling…" />}
+                  {isCompiling && <NebuLoadingCard label={t('studio.compiling')} />}
                   {!isCompiling && !hasValidPreview && compiledHtml !== '' && (
-                    <NebuLoadingCard label="Compiling preview..." />
+                    <NebuLoadingCard label={t('studio.compilingPreview')} />
                   )}
 
                   {isIndexing && (
                     <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center gap-3">
                       <NebuLoader size={160} delay={0} />
-                      <p className="text-sm text-gray-400 font-mono">Analyzing project structure...</p>
+                      <p className="text-sm text-gray-400 font-mono">{t('studio.indexing')}</p>
                     </div>
                   )}
 
@@ -2132,7 +2138,7 @@ export function StudioEngine() {
                         srcDoc={compiledHtml}
                         sandbox="allow-scripts allow-modals"
                         className="w-full h-full border-none"
-                        title="Preview"
+                        title={t('studio.previewFrame')}
                       />
                     </div>
                   ) : (
@@ -2150,7 +2156,7 @@ export function StudioEngine() {
                           srcDoc={compiledHtml}
                           sandbox="allow-scripts allow-modals"
                           className="w-full h-full border border-zinc-600 rounded-t-lg"
-                          title="Preview"
+                          title={t('studio.previewFrame')}
                         />
                       </div>
                     </div>
@@ -2181,19 +2187,19 @@ export function StudioEngine() {
                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 bg-card border border-border rounded-full shadow-2xl px-2 py-1.5">
                       <span className="text-xs text-muted-foreground pl-2 flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                        {pendingCount} cambio{pendingCount === 1 ? '' : 's'} sin guardar
+                        {tn('studio.visual.unsaved', pendingCount)}
                       </span>
                       <button
                         onClick={() => discardVisualChanges()}
                         className="text-xs font-medium text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-full hover:bg-accent transition-colors"
                       >
-                        Descartar
+                        {t('studio.visual.discard')}
                       </button>
                       <button
                         onClick={() => { void saveVisualChanges(); }}
                         className="text-xs font-medium bg-primary text-white px-4 py-1.5 rounded-full hover:bg-primary/90 transition-colors"
                       >
-                        Guardar cambios ({pendingCount})
+                        {t('studio.visual.saveN', { count: pendingCount })}
                       </button>
                     </div>
                   )}
@@ -2208,7 +2214,7 @@ export function StudioEngine() {
                   srcDoc={compiledHtml}
                   sandbox="allow-scripts allow-modals"
                   className="w-full h-full border-none"
-                  title="Preview"
+                  title={t('studio.previewFrame')}
                 />
               ) : (
                 /* Waiting / auto-loading state — brecha entre "isLoading" ya en
@@ -2241,10 +2247,10 @@ export function StudioEngine() {
                         ]
                       : isGenerating ? [0, 0.05] : [0.95, 0.99]
                   }
-                  title="Generando tu proyecto…"
+                  title={t('studio.generating')}
                   detail={
                     generationProgress
-                      ? `Paso ${generationProgress.step}/${generationProgress.total} · ${generationProgress.file}`
+                      ? `${t('studio.generatingStep', { step: generationProgress.step, total: generationProgress.total })} · ${generationProgress.file}`
                       : undefined
                   }
                 >
@@ -2255,13 +2261,13 @@ export function StudioEngine() {
                     <button
                       onClick={handleCancelGeneration}
                       disabled={isCancelling}
-                      title="Cancelar generación"
+                      title={t('studio.cancelGeneration')}
                       className="mt-2 flex items-center gap-1.5 bg-destructive/90 text-white px-4 py-2 rounded-md hover:bg-destructive disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
                     >
                       {isCancelling
                         ? <LoadingSquares size={16} />
                         : <XIcon className="w-4 h-4" />}
-                      <span>{isCancelling ? 'Cancelando…' : 'Cancelar'}</span>
+                      <span>{isCancelling ? t('studio.cancelling') : t('common.cancel')}</span>
                     </button>
                   )}
                 </StudioProgressOverlay>
@@ -2275,17 +2281,17 @@ export function StudioEngine() {
               {showCancelledOverlay && (
                 <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-4 bg-background px-6 text-center">
                   <div className="text-sm font-medium text-foreground">
-                    Generación cancelada — {cancelledInfo!.count} componente{cancelledInfo!.count === 1 ? '' : 's'} conservado{cancelledInfo!.count === 1 ? '' : 's'}
+                    {tn('studio.cancelled.title', cancelledInfo!.count)}
                   </div>
                   <div className="text-xs text-muted-foreground max-w-[80%]">
-                    Se conservó lo que ya se había generado. Puedes completar el resto cuando quieras.
+                    {t('studio.cancelled.body')}
                   </div>
                   <button
                     onClick={handleCompleteProject}
                     className="mt-1 flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-md hover:bg-primary/90 transition-colors text-sm"
                   >
                     <Flame className="w-4 h-4" />
-                    <span>Completar proyecto</span>
+                    <span>{t('studio.cancelled.complete')}</span>
                   </button>
                 </div>
               )}
@@ -2346,9 +2352,9 @@ export function StudioEngine() {
           <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60">
             <div className="w-[92%] max-w-md rounded-xl border border-border bg-card shadow-2xl text-foreground p-6 flex flex-col gap-4">
               <div className="flex flex-col gap-1">
-                <h3 className="text-base font-semibold">Tienes cambios sin guardar</h3>
+                <h3 className="text-base font-semibold">{t('studio.unsavedDialog.title')}</h3>
                 <p className="text-sm text-muted-foreground">
-                  {pendingCount} cambio{pendingCount === 1 ? '' : 's'} visual{pendingCount === 1 ? '' : 'es'} sin guardar. ¿Qué quieres hacer antes de continuar?
+                  {tn('studio.unsavedDialog.body', pendingCount)}
                 </p>
               </div>
               <div className="flex items-center justify-end gap-2 pt-1">
@@ -2356,7 +2362,7 @@ export function StudioEngine() {
                   onClick={() => setPendingNavAction(null)}
                   className="text-sm font-medium text-muted-foreground hover:text-foreground px-4 py-2 rounded-md hover:bg-accent transition-colors"
                 >
-                  Cancelar
+                  {t('common.cancel')}
                 </button>
                 <button
                   onClick={() => {
@@ -2367,7 +2373,7 @@ export function StudioEngine() {
                   }}
                   className="text-sm font-medium border border-border text-foreground px-4 py-2 rounded-md hover:bg-accent transition-colors"
                 >
-                  Descartar
+                  {t('studio.visual.discard')}
                 </button>
                 <button
                   onClick={() => {
@@ -2377,7 +2383,7 @@ export function StudioEngine() {
                   }}
                   className="text-sm font-medium bg-primary text-white px-4 py-2 rounded-md hover:bg-primary/90 transition-colors"
                 >
-                  Guardar
+                  {t('common.save')}
                 </button>
               </div>
             </div>

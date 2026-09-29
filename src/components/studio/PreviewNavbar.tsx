@@ -5,6 +5,7 @@ import { ViewportToggle } from './ViewportToggle';
 import { LangToggle } from '../forge/LangToggle';
 import type { ViewportMode, PanelMode } from './types';
 import './previewNavbar.css';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
 
 /**
  * PreviewNavbar — navbar superior persistente sobre el preview. Reescrito
@@ -63,14 +64,15 @@ export function PreviewNavbar({
   onOpenChat: () => void;
   onPublish: () => void;
 }) {
+  const { t } = useForgeLang();
   return (
     <div className="wf-navbar">
       <div className="wf-zone wf-left">
-        <button type="button" className="wf-btn wf-icon-only" aria-label="Menú" onClick={onOpenMenu}>
+        <button type="button" className="wf-btn wf-icon-only" aria-label={t('studio.nav.menu')} onClick={onOpenMenu}>
           <Menu size={16} />
         </button>
         <div className="wf-divider" />
-        <div className="wf-seg" role="group" aria-label="Modo">
+        <div className="wf-seg" role="group" aria-label={t('studio.nav.mode')}>
           <button
             type="button"
             className="wf-btn"
@@ -78,7 +80,7 @@ export function PreviewNavbar({
             onClick={onPreview}
           >
             <Eye size={15} />
-            <span>Preview</span>
+            <span>{t('studio.nav.preview')}</span>
           </button>
           <button
             type="button"
@@ -87,7 +89,7 @@ export function PreviewNavbar({
             onClick={onVisual}
           >
             <Edit3 size={15} />
-            <span>Editor</span>
+            <span>{t('studio.nav.editor')}</span>
           </button>
         </div>
       </div>
@@ -114,7 +116,7 @@ export function PreviewNavbar({
           onClick={onOpenCode}
         >
           <Code size={15} />
-          <span>Código</span>
+          <span>{t('studio.nav.code')}</span>
         </button>
         <button
           type="button"
@@ -122,14 +124,14 @@ export function PreviewNavbar({
           onClick={onOpenSettings}
         >
           <Settings size={15} />
-          <span>Ajustes</span>
+          <span>{t('studio.nav.settings')}</span>
         </button>
         <button type="button" className="wf-btn" onClick={onOpenChat}>
           <MessageSquare size={15} />
-          <span>Chat</span>
+          <span>{t('studio.nav.chat')}</span>
         </button>
         <button type="button" className="wf-publish" onClick={onPublish}>
-          Publicar
+          {t('studio.nav.publish')}
         </button>
       </div>
     </div>
