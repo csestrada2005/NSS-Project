@@ -15,7 +15,7 @@ interface AIHistoryRecord {
   user_prompt: string | null;
   intent_type: string | null;
   intent_risk: string | null;
-  plan_steps: { description: string }[] | null;
+  plan_steps: { description: string; summary?: string }[] | null;
   modified_files: string[] | null;
   outcome: string | null;
   error_message: string | null;
@@ -245,7 +245,7 @@ export function AIHistoryPanel({ projectId }: AIHistoryPanelProps) {
                         {record.plan_steps.map((step, idx) => (
                           <li key={idx} className="flex gap-2 text-sm text-zinc-400">
                             <span className="text-green-500 mt-0.5">✓</span>
-                            <span>{step.description}</span>
+                            <span>{step.summary || step.description}</span>
                           </li>
                         ))}
                       </ul>

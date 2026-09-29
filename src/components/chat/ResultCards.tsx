@@ -209,7 +209,7 @@ export function PlanCard({
           <li key={i} className="fc-paso fc-listo">
             <span className="fc-marca" />
             <span>
-              {step.description}
+              {step.summary || step.description}
               {step.action === 'delete' && (
                 <span style={{ display: 'block', color: 'rgba(214,40,40,.85)', fontSize: 12 }}>
                   {t('chat.card.plan.deletes', { file: step.file_path })}

@@ -18,6 +18,8 @@
 export interface ChatPlanStep {
   order: number;
   description: string;
+  /** Resumen para el usuario en su idioma (Architect); si falta, se muestra `description`. */
+  summary?: string;
   file_path: string;
   action: 'create' | 'modify' | 'delete';
 }

@@ -299,7 +299,7 @@ export function ChatInterface({
           });
           planLineIndexRef.current = index;
           setProgressLines(ordered.map(step => ({
-            text: `${actionVerb(step.action)} ${progressLabel(step.description, step.file_path)}`,
+            text: `${actionVerb(step.action)} ${progressLabel(step.summary || step.description, step.file_path)}`,
             status: 'pending' as const,
           })));
         }

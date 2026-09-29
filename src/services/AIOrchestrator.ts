@@ -1067,6 +1067,11 @@ export class AIOrchestrator {
    * independientes) y da a NO_PROJECT_DB su propio texto, porque con el
    * Bloque 2 activo va a ser el caso FRECUENTE, no la excepción.
    */
+  /** Idioma en que la IA le habla al usuario: el de la interfaz de Wyrd. */
+  private static replyLanguage(): 'Spanish' | 'English' {
+    return getForgeLang() === 'es' ? 'Spanish' : 'English';
+  }
+
   private static functionDeployFailureWarning(
     failed: { slug: string; reason: string; code?: string }[]
   ): string | undefined {
@@ -2951,7 +2956,7 @@ export class AIOrchestrator {
             'AMBIGUITY ESCAPE: if two or more candidates are genuinely defensible AND would ' +
             'produce visibly different results (e.g. "change the background" in a page with ' +
             'several sections that each paint their own), do NOT guess. Respond instead with ' +
-            '{"reasoning": ..., "clarify": "<ONE short question in the user\'s language, naming ' +
+            `{"reasoning": ..., "clarify": "<ONE short question written in ${this.replyLanguage()} (the user's interface language, whatever language the request is in), naming ` +
             'the concrete options, e.g. ¿El fondo de qué sección: el hero, los productos, o el ' +
             'contacto?>"}. Use this ONLY for genuine ambiguity — if a reasonable person looking ' +
             'at the page would know what to change, decide. Asking when you could know is a ' +
@@ -3032,8 +3037,9 @@ export class AIOrchestrator {
 
     const systemPrompt =
       "You are Wyrd Forge's AI assistant inside a web-builder IDE. The user is " +
-      'asking a question about their project — answer it helpfully, in the same ' +
-      'language the user wrote in. You have the project structure and the most ' +
+      'asking a question about their project — answer it helpfully, in the REPLY ' +
+      'LANGUAGE stated at the end of the user message (even if the question or earlier ' +
+      'messages are in another language). You have the project structure and the most ' +
       'relevant file contents below for context.\n\n' +
       AVAILABLE_RUNTIME_CONTEXT + '\n\n' +
       'FORMAT RULES:\n' +
@@ -3047,7 +3053,7 @@ export class AIOrchestrator {
       '  SUGGESTED_ACTION line is the only call to action.\n\n' +
       'After your answer, if the question implies something that could be built or ' +
       'changed, end with one final line in this exact format:\n' +
-      'SUGGESTED_ACTION: <a short imperative prompt in the user\'s language that ' +
+      'SUGGESTED_ACTION: <a short imperative prompt in the REPLY LANGUAGE that ' +
       'would implement it>\n' +
       'If nothing actionable applies, omit that line entirely.';
 
@@ -3055,7 +3061,11 @@ export class AIOrchestrator {
       `PROJECT STRUCTURE:\n${blueprint}\n\n` +
       (memorySummary ? `PROJECT MEMORY:\n${memorySummary}\n\n` : '') +
       (fileContext ? `RELEVANT FILES:\n${fileContext}\n\n` : '') +
-      `USER QUESTION:\n${input}`;
+      `USER QUESTION:\n${input}\n\n` +
+      // i18n de Wyrd (ítem 5.4): la IA responde en el idioma de la interfaz,
+      // no en el de la pregunta. Va aquí y no en el system para no partir el
+      // prefijo cacheado en dos.
+      `REPLY LANGUAGE: ${this.replyLanguage()}`;
 
     const priorMessages = (chatHistory ?? []).map(msg => ({
       role: msg.role === 'assistant' ? ('assistant' as const) : ('user' as const),
