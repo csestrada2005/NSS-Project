@@ -194,12 +194,12 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
                 <div className="flex items-center gap-2">
                   <label className="text-xs text-muted-foreground">{t('settings.analytics.from')}</label>
                   <input type="date" value={dateRange.start} onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                    className="bg-muted border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none" />
+                    className="bg-muted border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:border-primary" />
                 </div>
                 <div className="flex items-center gap-2">
                   <label className="text-xs text-muted-foreground">{t('settings.analytics.to')}</label>
                   <input type="date" value={dateRange.end} onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                    className="bg-muted border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none" />
+                    className="bg-muted border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:border-primary" />
                 </div>
                 <div className="flex gap-1">
                   {[7, 30, 90].map(d => (

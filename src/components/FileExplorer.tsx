@@ -105,6 +105,16 @@ const TreeNodeItem: React.FC<TreeNodeProps> = ({ node, depth, onSelect }) => {
         className="flex items-center gap-1 py-1 px-2 hover:bg-accent cursor-pointer select-none text-muted-foreground hover:text-foreground transition-colors"
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={handleClick}
+        // Teclado (5.4): la fila se enfoca con Tab y se abre con Enter/Espacio.
+        role="button"
+        tabIndex={0}
+        aria-expanded={node.isDirectory ? isOpen : undefined}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleClick();
+          }
+        }}
       >
         {node.isDirectory ? (
           <span className="text-muted-foreground">

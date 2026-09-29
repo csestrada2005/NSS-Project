@@ -306,7 +306,7 @@ const ForgeDashboard = () => {
                   })()}
 
                   {/* Action buttons */}
-                  <div className="flex gap-2 mt-4 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                  <div className="flex gap-2 mt-4 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100 transition-opacity">
                     <button
                       onClick={(e) => { e.stopPropagation(); openProject(project); }}
                       className="flex-1 py-1.5 text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors"
