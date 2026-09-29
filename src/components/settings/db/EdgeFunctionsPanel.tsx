@@ -66,20 +66,20 @@ export function EdgeFunctionsPanel({ projectId, files }: EdgeFunctionsPanelProps
 
   if (!projectId) {
     return (
-      <div className="text-center text-zinc-500 text-sm py-8">
+      <div className="text-center text-neutral-500 text-sm py-8">
         {t('edge.needProject')}
       </div>
     );
   }
 
   if (isLoading) {
-    return <div className="text-center text-zinc-500 text-sm py-8">{t('edge.loading')}</div>;
+    return <div className="text-center text-neutral-500 text-sm py-8">{t('edge.loading')}</div>;
   }
 
   if (localFunctions.length === 0) {
     return (
-      <div className="text-center text-zinc-500 text-sm py-8">
-        <Zap size={24} className="mx-auto mb-2 text-zinc-600" />
+      <div className="text-center text-neutral-500 text-sm py-8">
+        <Zap size={24} className="mx-auto mb-2 text-neutral-600" />
         {t('edge.empty')}
       </div>
     );
@@ -102,18 +102,18 @@ export function EdgeFunctionsPanel({ projectId, files }: EdgeFunctionsPanelProps
         // El estado remoto llega en inglés desde Supabase; sólo se traducen los dos conocidos.
         const statusLabel = status === 'ACTIVE' ? t('edge.active') : status === 'NOT DEPLOYED' ? t('edge.notDeployed') : status;
         return (
-          <div key={fn.slug} className="flex items-center justify-between p-3 bg-zinc-800/50 border border-zinc-700 rounded-lg">
+          <div key={fn.slug} className="flex items-center justify-between p-3 bg-neutral-800/50 border border-neutral-700 rounded-lg">
             <div className="flex items-center gap-3">
-              <Zap size={14} className="text-zinc-400" />
-              <span className="text-sm text-zinc-200 font-mono">{fn.slug}</span>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${isActive ? 'bg-emerald-600/20 text-emerald-400 border-emerald-600/30' : 'bg-zinc-700 text-zinc-500 border-zinc-600'}`}>
+              <Zap size={14} className="text-neutral-400" />
+              <span className="text-sm text-neutral-200 font-mono">{fn.slug}</span>
+              <span className={`text-xs px-1.5 py-0.5 rounded border font-medium ${isActive ? 'bg-emerald-600/20 text-emerald-400 border-emerald-600/30' : 'bg-neutral-700 text-neutral-500 border-neutral-600'}`}>
                 {statusLabel}
               </span>
             </div>
             <button
               onClick={() => handleDeploy(fn)}
               disabled={state === 'deploying'}
-              className="flex items-center gap-1 px-2 py-1 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 text-xs rounded transition-colors disabled:opacity-50"
+              className="flex items-center gap-1 px-2 py-1 bg-neutral-700 hover:bg-neutral-600 text-neutral-300 text-xs rounded transition-colors disabled:opacity-50"
             >
               <RefreshCw size={11} className={state === 'deploying' ? 'animate-spin' : ''} />
               {state === 'error' ? t('common.retry') : t('settings.tab.deploy')}

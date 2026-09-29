@@ -57,7 +57,7 @@ export default function CreditBalance() {
       {/* Credit pill */}
       <div className="flex items-center gap-2">
         {showFreePrompt ? (
-          <div className="flex items-center gap-1.5 bg-background/90 border border-border rounded-full px-3 py-1.5 text-xs text-yellow-400 font-medium">
+          <div className="flex items-center gap-1.5 bg-background/90 border border-border rounded-full px-3 py-1.5 text-xs text-amber-400 font-medium">
             <Zap size={12} className="shrink-0" />
             <span>{t('credits.freeBuild')}</span>
           </div>
@@ -81,7 +81,7 @@ export default function CreditBalance() {
           </div>
         ) : (
           <div className="flex items-center gap-1.5 bg-background/90 border border-border rounded-full px-3 py-1.5 text-xs text-foreground font-medium">
-            <Zap size={12} className="shrink-0 text-yellow-400" />
+            <Zap size={12} className="shrink-0 text-amber-400" />
             <span>{t('credits.amount', { amount: formatCredits(balance) })}</span>
           </div>
         )}

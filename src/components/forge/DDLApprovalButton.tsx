@@ -143,7 +143,7 @@ export function DDLApprovalButton({
       <div className="mt-2 pt-2 border-t border-border/50">
         <StatusRow
           icon={<CheckCircle2 className="w-3.5 h-3.5" />}
-          tone="text-green-400"
+          tone="text-emerald-400"
           text={t('ddl.applied', { names })}
         />
       </div>

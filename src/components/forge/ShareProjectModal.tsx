@@ -57,10 +57,11 @@ function Avatar({ name, avatarUrl, size = 8 }: { name: string | null; avatarUrl?
 // pastel-100/700 (pensadas para el fondo claro que este modal tenía antes).
 // "dev" pasa de azul a ámbar: el azul se eliminó de toda la plataforma.
 const ROLE_BADGE: Record<string, string> = {
-  admin: 'bg-red-500/20 text-red-300',
-  dev: 'bg-amber-500/20 text-amber-300',
-  vendedor: 'bg-purple-500/20 text-purple-300',
-  cliente: 'bg-emerald-500/20 text-emerald-300',
+  // Sistema (5.5): el rol no es un estado; sólo admin lleva el rojo de marca.
+  admin: 'bg-primary/15 text-primary',
+  dev: 'bg-neutral-800 text-neutral-300',
+  vendedor: 'bg-neutral-800 text-neutral-300',
+  cliente: 'bg-neutral-800 text-neutral-300',
 };
 
 export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
@@ -177,7 +178,7 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
         >
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-            <h2 className="text-base font-semibold text-foreground">{t('dashboard.shareProject')}</h2>
+            <h2 className="text-sm font-semibold text-foreground">{t('dashboard.shareProject')}</h2>
             <button
               onClick={onClose}
               className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
@@ -210,7 +211,7 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
                           <p className="text-xs text-muted-foreground truncate">{c.profile?.email}</p>
                         </div>
                         <span
-                          className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                          className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                             c.status === 'pending'
                               ? 'bg-amber-500/20 text-amber-300'
                               : 'bg-emerald-500/20 text-emerald-300'
@@ -265,7 +266,7 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
 
               {/* Search results dropdown */}
               {searchResults.length > 0 && (
-                <div className="mt-2 rounded-xl border border-border bg-accent divide-y divide-gray-700 overflow-hidden">
+                <div className="mt-2 rounded-xl border border-border bg-accent divide-y divide-neutral-700 overflow-hidden">
                   {searchResults.map((result) => {
                     const alreadyAdded = pendingInvites.some((p) => p.user.id === result.id);
                     const alreadyCollaborator = collaborators.some((c) => c.user_id === result.id);
@@ -285,7 +286,7 @@ export function ShareProjectModal({ projectId, projectName, onClose }: Props) {
                         </div>
                         {result.role && (
                           <span
-                            className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${ROLE_BADGE[result.role] ?? 'bg-accent text-muted-foreground'}`}
+                            className={`text-xs px-2 py-0.5 rounded-full font-medium ${ROLE_BADGE[result.role] ?? 'bg-accent text-muted-foreground'}`}
                           >
                             {result.role}
                           </span>

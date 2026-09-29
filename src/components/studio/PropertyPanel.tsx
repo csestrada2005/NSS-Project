@@ -123,7 +123,7 @@ export function PropertyPanel({ element, projectCss, onApplyClassName, onApplyTe
           </span>
           {repeated && (
             <span
-              className="text-[10px] font-medium bg-amber-500/15 text-amber-500 px-1.5 py-0.5 rounded"
+              className="text-xs font-medium bg-amber-500/15 text-amber-500 px-1.5 py-0.5 rounded"
               title={t('props.repeatedHint')}
             >
               ×{element.instanceCount}
@@ -243,11 +243,11 @@ export function PropertyPanel({ element, projectCss, onApplyClassName, onApplyTe
         {/* TEXT */}
         <Section icon={<Type size={13} />} title={t('props.text')}>
           {repeated ? (
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
+            <p className="text-xs text-muted-foreground leading-relaxed">
               {t('props.repeatedText')}
             </p>
           ) : element.hasChildElements ? (
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
+            <p className="text-xs text-muted-foreground leading-relaxed">
               {t('props.nestedText')}
             </p>
           ) : (
@@ -280,7 +280,7 @@ export function PropertyPanel({ element, projectCss, onApplyClassName, onApplyTe
 function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         {icon}
         {title}
       </div>
@@ -292,7 +292,7 @@ function Section({ icon, title, children }: { icon: React.ReactNode; title: stri
 function ChipRow({ label, icon, children }: { label: string; icon?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+      <span className="text-xs text-muted-foreground flex items-center gap-1">
         {icon}
         {label}
       </span>
@@ -305,7 +305,7 @@ function Chip({ active, onClick, children }: { active?: boolean; onClick: () => 
   return (
     <button
       onClick={onClick}
-      className={`min-w-[24px] px-1.5 py-1 text-[11px] rounded border transition-colors flex items-center justify-center ${
+      className={`min-w-[24px] px-1.5 py-1 text-xs rounded border transition-colors flex items-center justify-center ${
         active
           ? 'bg-primary text-white border-primary'
           : 'bg-background text-muted-foreground border-border hover:text-foreground hover:border-primary/50'
@@ -330,7 +330,7 @@ function ColorRow({
   const { t } = useForgeLang();
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-[10px] text-muted-foreground">{label}</span>
+      <span className="text-xs text-muted-foreground">{label}</span>
       <div className="flex items-center gap-1.5 flex-wrap">
         {brandVars.map((v) => (
           <button
@@ -346,7 +346,7 @@ function ColorRow({
           className="w-6 h-6 rounded-md border border-border overflow-hidden cursor-pointer relative"
           title={t('props.freeColor')}
         >
-          <span className="absolute inset-0 bg-gradient-to-br from-red-500 via-green-500 to-blue-500" />
+          <span className="absolute inset-0 bg-gradient-to-br from-red-500 via-emerald-500 to-blue-500" />
           <input
             type="color"
             className="opacity-0 w-full h-full cursor-pointer"

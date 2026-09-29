@@ -48,9 +48,9 @@
 /* botón base: 3 niveles gris -> blanco -> blanco+fondo */
 .wf-btn {
   appearance: none; border: 0; background: transparent;
-  color: var(--ink-dim); font: inherit; font-size: 13px; font-weight: 500;
+  color: var(--ink-dim); font: inherit; font-size: 14px; font-weight: 500;
   display: inline-flex; align-items: center; gap: 7px;
-  height: 34px; padding: 0 10px; border-radius: 8px; cursor: pointer;
+  height: 34px; padding: 0 10px; border-radius: 4px; cursor: pointer;
   transition: color .15s ease, background-color .15s ease;
   white-space: nowrap;
 }
@@ -61,7 +61,7 @@
 .wf-btn[aria-pressed="true"], .wf-btn.wf-active { color: var(--ink); background: var(--active-bg); }
 
 /* toggle Preview / Editor */
-.wf-seg { display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: rgba(255, 255, 255, .05); }
+.wf-seg { display: flex; gap: 2px; padding: 3px; border-radius: 4px; background: rgba(255, 255, 255, .05); }
 .wf-seg .wf-btn { height: 28px; min-width: 96px; justify-content: center; }
 
 .wf-divider { width: 1px; height: 20px; background: var(--chrome-line); margin: 0 4px; flex: 0 0 auto; }
@@ -69,20 +69,20 @@
 /* selector de página */
 .wf-page {
   display: inline-flex; align-items: center; gap: 8px;
-  height: 34px; padding: 0 12px; border-radius: 8px;
+  height: 34px; padding: 0 12px; border-radius: 4px;
   background: transparent; border: 0; cursor: pointer; color: var(--ink-dim);
   font: inherit; transition: background-color .15s ease;
 }
 .wf-page:hover { background: var(--hover-bg); }
-.wf-page .wf-page-name { font-size: 13.5px; font-weight: 600; color: var(--ink); }
-.wf-page .wf-page-route { font-size: 11.5px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+.wf-page .wf-page-name { font-size: 14px; font-weight: 600; color: var(--ink); }
+.wf-page .wf-page-route { font-size: 12px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
 .wf-page .wf-caret { flex: 0 0 auto; width: 12px; height: 12px; stroke: var(--ink-dim); transition: transform .2s ease; }
 .wf-page[aria-expanded="true"] .wf-caret { transform: rotate(180deg); }
 
 /* acción de publicar — único rojo de la barra */
 .wf-publish {
-  background: var(--wf-red); color: #fff; font-weight: 600; font-size: 13px;
-  height: 32px; padding: 0 15px; border: 0; border-radius: 8px; cursor: pointer;
+  background: var(--wf-red); color: #fff; font-weight: 600; font-size: 14px;
+  height: 32px; padding: 0 15px; border: 0; border-radius: 4px; cursor: pointer;
   transition: filter .15s ease;
 }
 .wf-publish:hover { filter: brightness(1.1); }
@@ -92,16 +92,16 @@
 /* dropdown de páginas */
 .wf-menu {
   position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%);
-  background: var(--surface); border: 1px solid var(--chrome-line); border-radius: 10px;
+  background: var(--surface); border: 1px solid var(--chrome-line); border-radius: 4px;
   padding: 5px; min-width: 230px; box-shadow: 0 12px 32px rgba(0, 0, 0, .5); z-index: 40;
 }
 .wf-menu button {
   width: 100%; display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
-  background: transparent; border: 0; color: var(--ink); font: inherit; font-size: 13px;
-  padding: 8px 10px; border-radius: 7px; cursor: pointer; text-align: left;
+  background: transparent; border: 0; color: var(--ink); font: inherit; font-size: 14px;
+  padding: 8px 10px; border-radius: 4px; cursor: pointer; text-align: left;
 }
 .wf-menu button:hover { background: var(--hover-bg); }
-.wf-menu button .wf-menu-route { font-size: 11.5px; color: var(--ink-dim); }
+.wf-menu button .wf-menu-route { font-size: 12px; color: var(--ink-dim); }
 
 @media (max-width: 720px) {
   .wf-seg .wf-btn span { display: none; }

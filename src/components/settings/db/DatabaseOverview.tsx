@@ -124,7 +124,7 @@ export function DatabaseOverview({ projectId }: DatabaseOverviewProps) {
             {isLoading ? (
               <LoadingSquares size={16} />
             ) : (
-              <p className="text-xl font-bold text-foreground">{kpi.value}</p>
+              <p className="text-lg font-bold text-foreground">{kpi.value}</p>
             )}
           </div>
         ))}

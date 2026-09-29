@@ -70,12 +70,12 @@ export function UsersManager() {
   return (
     <div className="space-y-3">
       {isLoading ? (
-        <div className="text-center text-zinc-500 text-sm py-8">{t('users.loading')}</div>
+        <div className="text-center text-neutral-500 text-sm py-8">{t('users.loading')}</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="text-zinc-500 border-b border-zinc-700">
+              <tr className="text-neutral-500 border-b border-neutral-700">
                 <th className="text-left py-2 px-3 font-medium">{t('users.user')}</th>
                 <th className="text-left py-2 px-3 font-medium">{t('users.email')}</th>
                 <th className="text-left py-2 px-3 font-medium">{t('users.role')}</th>
@@ -83,36 +83,36 @@ export function UsersManager() {
                 <th className="text-left py-2 px-3 font-medium">{t('users.joined')}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-800">
+            <tbody className="divide-y divide-neutral-800">
               {profiles.map((p) => (
-                <tr key={p.id} className="hover:bg-zinc-800/30 transition-colors">
+                <tr key={p.id} className="hover:bg-neutral-800/30 transition-colors">
                   <td className="py-2.5 px-3">
                     <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full bg-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-300 shrink-0">
+                      <div className="w-7 h-7 rounded-full bg-neutral-700 flex items-center justify-center text-xs font-bold text-neutral-300 shrink-0">
                         {getInitials(p.full_name)}
                       </div>
-                      <span className="text-zinc-200 font-medium">{p.full_name ?? '—'}</span>
+                      <span className="text-neutral-200 font-medium">{p.full_name ?? '—'}</span>
                     </div>
                   </td>
-                  <td className="py-2.5 px-3 text-zinc-400">{p.email ?? '—'}</td>
+                  <td className="py-2.5 px-3 text-neutral-400">{p.email ?? '—'}</td>
                   <td className="py-2.5 px-3">
                     <div className="flex items-center gap-2">
                       <select
                         value={p.role}
                         onChange={(e) => updateRole(p.id, e.target.value)}
-                        className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:border-primary"
+                        className="bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-xs text-neutral-200 focus:outline-none focus:border-primary"
                       >
                         {ROLES.map(r => (
                           <option key={r} value={r}>{r}</option>
                         ))}
                       </select>
                       {successId === p.id && (
-                        <span className="text-emerald-400 text-[10px]">{t('users.saved')}</span>
+                        <span className="text-emerald-400 text-xs">{t('users.saved')}</span>
                       )}
                     </div>
                   </td>
-                  <td className="py-2.5 px-3 text-zinc-500">{relativeTime(p.last_seen)}</td>
-                  <td className="py-2.5 px-3 text-zinc-500">
+                  <td className="py-2.5 px-3 text-neutral-500">{relativeTime(p.last_seen)}</td>
+                  <td className="py-2.5 px-3 text-neutral-500">
                     {new Date(p.created_at).toLocaleDateString(lang)}
                   </td>
                 </tr>
@@ -124,21 +124,21 @@ export function UsersManager() {
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between pt-2">
-          <span className="text-xs text-zinc-500">{tn('users.count', total)}</span>
+          <span className="text-xs text-neutral-500">{tn('users.count', total)}</span>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPage(p => Math.max(0, p - 1))}
               disabled={page === 0}
-              className="p-1 text-zinc-400 hover:text-white disabled:opacity-30 transition-colors"
+              className="p-1 text-neutral-400 hover:text-white disabled:opacity-30 transition-colors"
               aria-label={t('users.prev')}
             >
               <ChevronLeft size={16} />
             </button>
-            <span className="text-xs text-zinc-400">{page + 1} / {totalPages}</span>
+            <span className="text-xs text-neutral-400">{page + 1} / {totalPages}</span>
             <button
               onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
               disabled={page >= totalPages - 1}
-              className="p-1 text-zinc-400 hover:text-white disabled:opacity-30 transition-colors"
+              className="p-1 text-neutral-400 hover:text-white disabled:opacity-30 transition-colors"
               aria-label={t('users.next')}
             >
               <ChevronRight size={16} />

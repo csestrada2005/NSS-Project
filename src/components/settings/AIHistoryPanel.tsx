@@ -24,17 +24,19 @@ interface AIHistoryRecord {
 }
 
 const colorMap: Record<string, string> = {
-  new_feature: 'bg-pink-900/40 text-pink-400 border-pink-500/30',
-  style_change: 'bg-purple-900/40 text-purple-400 border-purple-500/30',
-  fix_bug: 'bg-amber-900/40 text-amber-400 border-amber-500/30',
-  modify_existing: 'bg-zinc-800 text-zinc-300 border-zinc-700',
-  add_page: 'bg-green-900/40 text-green-400 border-green-500/30',
-  database_change: 'bg-orange-900/40 text-orange-400 border-orange-500/30',
-  refactor: 'bg-indigo-900/40 text-indigo-400 border-indigo-500/30',
+  // Sistema (5.5): el tipo de pedido es información, no un estado — todos
+  // neutros; la severidad ya la codifica la etiqueta de riesgo.
+  new_feature: 'bg-neutral-800 text-neutral-300 border-neutral-700',
+  style_change: 'bg-neutral-800 text-neutral-300 border-neutral-700',
+  fix_bug: 'bg-neutral-800 text-neutral-300 border-neutral-700',
+  modify_existing: 'bg-neutral-800 text-neutral-300 border-neutral-700',
+  add_page: 'bg-neutral-800 text-neutral-300 border-neutral-700',
+  database_change: 'bg-neutral-800 text-neutral-300 border-neutral-700',
+  refactor: 'bg-neutral-800 text-neutral-300 border-neutral-700',
 };
 
 const riskColorMap: Record<string, string> = {
-  low: 'bg-green-900/40 text-green-400 border-green-500/30',
+  low: 'bg-emerald-900/40 text-emerald-400 border-emerald-500/30',
   medium: 'bg-amber-900/40 text-amber-400 border-amber-500/30',
   high: 'bg-red-900/40 text-red-400 border-red-500/30',
 };
@@ -94,7 +96,7 @@ export function AIHistoryPanel({ projectId }: AIHistoryPanelProps) {
     return (
       <div className="space-y-4">
         {[1, 2, 3].map(i => (
-          <div key={i} className="animate-pulse bg-zinc-800 rounded-lg h-14 w-full" />
+          <div key={i} className="animate-pulse bg-neutral-800 rounded-lg h-14 w-full" />
         ))}
       </div>
     );
@@ -102,10 +104,10 @@ export function AIHistoryPanel({ projectId }: AIHistoryPanelProps) {
 
   if (history.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 bg-zinc-900/50 border border-zinc-800 rounded-xl text-center">
-        <Sparkles className="w-12 h-12 text-zinc-600 mb-4" />
-        <h3 className="text-lg font-semibold text-zinc-300 mb-1">{t('aiHistory.empty')}</h3>
-        <p className="text-sm text-zinc-500 max-w-sm">
+      <div className="flex flex-col items-center justify-center p-12 bg-neutral-900/50 border border-neutral-800 rounded-xl text-center">
+        <Sparkles className="w-12 h-12 text-neutral-600 mb-4" />
+        <h3 className="text-lg font-semibold text-neutral-300 mb-1">{t('aiHistory.empty')}</h3>
+        <p className="text-sm text-neutral-500 max-w-sm">
           {t('aiHistory.emptyHint')}
         </p>
       </div>
@@ -142,20 +144,20 @@ export function AIHistoryPanel({ projectId }: AIHistoryPanelProps) {
     <div className="space-y-6">
       {/* Stats Bar */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-          <p className="text-xs text-zinc-500 mb-1">{t('aiHistory.total')}</p>
-          <p className="text-xl font-bold text-white">{totalActions}</p>
+        <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
+          <p className="text-xs text-neutral-500 mb-1">{t('aiHistory.total')}</p>
+          <p className="text-lg font-bold text-white">{totalActions}</p>
         </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-          <p className="text-xs text-zinc-500 mb-1">{t('aiHistory.successRate')}</p>
-          <p className="text-xl font-bold text-white">{successRate}%</p>
+        <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
+          <p className="text-xs text-neutral-500 mb-1">{t('aiHistory.successRate')}</p>
+          <p className="text-lg font-bold text-white">{successRate}%</p>
         </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-          <p className="text-xs text-zinc-500 mb-1">{t('aiHistory.avgDuration')}</p>
-          <p className="text-xl font-bold text-white">{avgDuration}s</p>
+        <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
+          <p className="text-xs text-neutral-500 mb-1">{t('aiHistory.avgDuration')}</p>
+          <p className="text-lg font-bold text-white">{avgDuration}s</p>
         </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-          <p className="text-xs text-zinc-500 mb-1">{t('aiHistory.topIntent')}</p>
+        <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
+          <p className="text-xs text-neutral-500 mb-1">{t('aiHistory.topIntent')}</p>
           <p className="text-sm font-bold text-white truncate capitalize mt-1.5">{mostCommonIntent === '—' ? '—' : enumLabel('aiHistory.intent', mostCommonIntent)}</p>
         </div>
       </div>
@@ -169,10 +171,10 @@ export function AIHistoryPanel({ projectId }: AIHistoryPanelProps) {
           const durationStr = record.duration_ms ? `${Math.round(record.duration_ms / 1000)}s` : '';
 
           return (
-            <div key={record.id} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden transition-all">
+            <div key={record.id} className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden transition-all">
               {/* Header (Collapsed State) */}
               <div
-                className="flex items-center gap-4 p-4 cursor-pointer hover:bg-zinc-800/50 transition-colors"
+                className="flex items-center gap-4 p-4 cursor-pointer hover:bg-neutral-800/50 transition-colors"
                 onClick={() => toggleExpand(record.id)}
                 role="button"
                 tabIndex={0}
@@ -186,7 +188,7 @@ export function AIHistoryPanel({ projectId }: AIHistoryPanelProps) {
               >
                 <div className="shrink-0">
                   {record.outcome === 'success' ? (
-                    <CheckCircle className="w-5 h-5 text-green-500" />
+                    <CheckCircle className="w-5 h-5 text-emerald-500" />
                   ) : record.outcome === 'failed' ? (
                     <XCircle className="w-5 h-5 text-red-500" />
                   ) : (
@@ -195,21 +197,21 @@ export function AIHistoryPanel({ projectId }: AIHistoryPanelProps) {
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-zinc-200 truncate font-medium">{truncatedPrompt}</p>
+                  <p className="text-sm text-neutral-200 truncate font-medium">{truncatedPrompt}</p>
                 </div>
 
-                <div className="flex items-center gap-3 shrink-0 text-xs text-zinc-500">
+                <div className="flex items-center gap-3 shrink-0 text-xs text-neutral-500">
                   <span>{formatRelativeDate(record.created_at, lang)}</span>
-                  {durationStr && <span className="font-mono bg-zinc-800 px-1.5 py-0.5 rounded">{durationStr}</span>}
+                  {durationStr && <span className="font-mono bg-neutral-800 px-1.5 py-0.5 rounded">{durationStr}</span>}
                   {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 </div>
               </div>
 
               {/* Expanded Content */}
               {isExpanded && (
-                <div className="p-4 pt-0 border-t border-zinc-800 bg-zinc-900/50 space-y-4">
+                <div className="p-4 pt-0 border-t border-neutral-800 bg-neutral-900/50 space-y-4">
                   <div className="mt-4">
-                    <p className="text-sm text-zinc-300">{promptText}</p>
+                    <p className="text-sm text-neutral-300">{promptText}</p>
                   </div>
 
                   <div className="flex flex-wrap gap-2">
@@ -219,7 +221,7 @@ export function AIHistoryPanel({ projectId }: AIHistoryPanelProps) {
                       </span>
                     )}
                     {record.intent_risk && (
-                      <span className={`text-xs px-2 py-1 rounded-md border capitalize ${riskColorMap[record.intent_risk] || 'bg-zinc-800 text-zinc-400 border-zinc-700'}`}>
+                      <span className={`text-xs px-2 py-1 rounded-md border capitalize ${riskColorMap[record.intent_risk] || 'bg-neutral-800 text-neutral-400 border-neutral-700'}`}>
                         {t('aiHistory.riskLabel')}: {enumLabel('aiHistory.risk', record.intent_risk)}
                       </span>
                     )}
@@ -227,10 +229,10 @@ export function AIHistoryPanel({ projectId }: AIHistoryPanelProps) {
 
                   {record.modified_files && record.modified_files.length > 0 && (
                     <div>
-                      <p className="text-xs text-zinc-500 mb-2 font-medium uppercase tracking-wider">{t('aiHistory.modifiedFiles')}</p>
+                      <p className="text-xs text-neutral-500 mb-2 font-medium uppercase tracking-wider">{t('aiHistory.modifiedFiles')}</p>
                       <div className="flex flex-wrap gap-1.5">
                         {record.modified_files.map(file => (
-                          <span key={file} className="font-mono text-[11px] bg-zinc-950 border border-zinc-800 text-zinc-300 px-2 py-1 rounded">
+                          <span key={file} className="font-mono text-xs bg-neutral-950 border border-neutral-800 text-neutral-300 px-2 py-1 rounded">
                             {file}
                           </span>
                         ))}
@@ -240,11 +242,11 @@ export function AIHistoryPanel({ projectId }: AIHistoryPanelProps) {
 
                   {record.plan_steps && Array.isArray(record.plan_steps) && record.plan_steps.length > 0 && (
                     <div>
-                      <p className="text-xs text-zinc-500 mb-2 font-medium uppercase tracking-wider">{t('aiHistory.planSteps')}</p>
+                      <p className="text-xs text-neutral-500 mb-2 font-medium uppercase tracking-wider">{t('aiHistory.planSteps')}</p>
                       <ul className="space-y-1">
                         {record.plan_steps.map((step, idx) => (
-                          <li key={idx} className="flex gap-2 text-sm text-zinc-400">
-                            <span className="text-green-500 mt-0.5">✓</span>
+                          <li key={idx} className="flex gap-2 text-sm text-neutral-400">
+                            <span className="text-emerald-500 mt-0.5">✓</span>
                             <span>{step.summary || step.description}</span>
                           </li>
                         ))}
@@ -268,7 +270,7 @@ export function AIHistoryPanel({ projectId }: AIHistoryPanelProps) {
                         </button>
                       </div>
                       <div className="overflow-x-auto">
-                        <pre className="text-[10px] text-red-300/80 font-mono whitespace-pre-wrap">{record.error_message}</pre>
+                        <pre className="text-xs text-red-300/80 font-mono whitespace-pre-wrap">{record.error_message}</pre>
                       </div>
                     </div>
                   )}

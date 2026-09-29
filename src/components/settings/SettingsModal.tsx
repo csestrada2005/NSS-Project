@@ -107,7 +107,7 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
   return (
     <div className="nebu-modal bg-card w-full h-full p-6 flex flex-col">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-bold text-foreground">{t('hub.tab.settings')}</h2>
+        <h2 className="text-lg font-bold text-foreground">{t('hub.tab.settings')}</h2>
         <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors" aria-label={t('common.close')}>
           <X size={20} />
         </button>

@@ -56,7 +56,7 @@ export function UsagePanel({ projectId }: UsagePanelProps) {
   ];
 
   if (!projectId) {
-    return <div className="text-center text-zinc-500 text-sm py-8">{t('usage.needProject')}</div>;
+    return <div className="text-center text-neutral-500 text-sm py-8">{t('usage.needProject')}</div>;
   }
 
   return (

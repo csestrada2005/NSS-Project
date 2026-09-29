@@ -194,20 +194,20 @@ export function SecretsPanel({ projectId }: SecretsPanelProps) {
 
       <div className="space-y-2">
         {secrets.length === 0 ? (
-          <div className="text-center text-zinc-500 py-4">{t('secrets.empty')}</div>
+          <div className="text-center text-neutral-500 py-4">{t('secrets.empty')}</div>
         ) : (
           secrets.map((secret, index) => (
-            <div key={index} className="flex items-center gap-2 bg-zinc-800/50 p-3 rounded border border-zinc-800 group hover:border-zinc-700 transition-colors">
+            <div key={index} className="flex items-center gap-2 bg-neutral-800/50 p-3 rounded border border-neutral-800 group hover:border-neutral-700 transition-colors">
               <div className="flex-1 font-mono text-sm text-foreground truncate" title={secret.key}>
                 {secret.key}
               </div>
-              <div className="flex items-center gap-2 bg-zinc-900 px-2 py-1 rounded border border-zinc-800 max-w-[200px]">
-                <span className="font-mono text-xs text-zinc-300 truncate">
+              <div className="flex items-center gap-2 bg-neutral-900 px-2 py-1 rounded border border-neutral-800 max-w-[200px]">
+                <span className="font-mono text-xs text-neutral-300 truncate">
                   {showValues[index] ? secret.value : '••••••••••••••••'}
                 </span>
                 <button
                   onClick={() => setShowValues(prev => ({ ...prev, [index]: !prev[index] }))}
-                  className="text-zinc-500 hover:text-white transition-colors"
+                  className="text-neutral-500 hover:text-white transition-colors"
                   aria-label={showValues[index] ? t('secrets.hide') : t('secrets.show')}
                 >
                   {showValues[index] ? <EyeOff size={12} /> : <Eye size={12} />}
@@ -215,7 +215,7 @@ export function SecretsPanel({ projectId }: SecretsPanelProps) {
               </div>
               <button
                 onClick={() => removeSecret(index)}
-                className="p-2 text-zinc-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                className="p-2 text-neutral-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
                 aria-label={t('secrets.remove', { key: secret.key })}
               >
                 <Trash2 size={16} />

@@ -221,7 +221,7 @@ export default function NewProjectModal({ onClose, onCreated }: NewProjectModalP
         {step === 3 && (
           <>
             <div className="rounded-lg border border-border bg-background/60 px-3 py-2">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">
                 {t('newProject.yourDescription')}
               </div>
               <p className="text-xs text-muted-foreground line-clamp-2">{initialPrompt}</p>
@@ -290,7 +290,7 @@ export default function NewProjectModal({ onClose, onCreated }: NewProjectModalP
                         />
                       ))}
                     </div>
-                    <span className="text-[11px] text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       {t('newProject.wheelHint')}
                     </span>
                   </div>
@@ -334,7 +334,7 @@ export default function NewProjectModal({ onClose, onCreated }: NewProjectModalP
                             <div className="w-4/5 h-1 rounded-sm bg-foreground/10 mt-2" />
                             <div className="w-3/5 h-1 rounded-sm bg-foreground/10 mt-1" />
                           </div>
-                          <span className="text-[11px] text-muted-foreground leading-snug mt-auto">{p.notes}</span>
+                          <span className="text-xs text-muted-foreground leading-snug mt-auto">{p.notes}</span>
                         </button>
                       );
                     })}

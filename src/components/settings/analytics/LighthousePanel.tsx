@@ -20,7 +20,7 @@ interface Scores {
 
 function scoreColor(score: number | null): string {
   if (score === null) return 'rgba(255,255,255,0.3)';
-  if (score >= 90) return '#22c55e';
+  if (score >= 90) return '#10b981';
   if (score >= 50) return '#f59e0b';
   return '#ef4444';
 }
@@ -141,11 +141,11 @@ export function LighthousePanel({ projectId, initialUrl }: LighthousePanelProps 
           placeholder={t('audit.urlPlaceholder')}
           value={deployedUrl}
           onChange={(e) => setDeployedUrl(e.target.value)}
-          className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-primary placeholder-zinc-500"
+          className="flex-1 bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-neutral-200 focus:outline-none focus:border-primary placeholder-neutral-500"
         />
         <button
           onClick={() => setStrategy(s => s === 'mobile' ? 'desktop' : 'mobile')}
-          className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
+          className="px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-xs text-neutral-300 hover:bg-neutral-700 transition-colors"
         >
           {strategy === 'mobile' ? t('audit.mobile') : t('audit.desktop')}
         </button>
@@ -164,7 +164,7 @@ export function LighthousePanel({ projectId, initialUrl }: LighthousePanelProps 
       )}
 
       {lastRun && (
-        <p className="text-xs text-zinc-500">{t('audit.lastRun', { when: lastRun.toLocaleString(lang) })}</p>
+        <p className="text-xs text-neutral-500">{t('audit.lastRun', { when: lastRun.toLocaleString(lang) })}</p>
       )}
 
       {/* Gauges */}

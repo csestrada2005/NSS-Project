@@ -164,7 +164,7 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
   };
 
   if (!projectId) {
-    return <div className="text-center text-zinc-500 py-8 text-sm">{t('email.needProject')}</div>;
+    return <div className="text-center text-neutral-500 py-8 text-sm">{t('email.needProject')}</div>;
   }
 
   const TemplateEditor = ({ template, onSave, onCancel }: { template: Partial<EmailTemplate>; onSave: (t: Partial<EmailTemplate>) => void; onCancel: () => void }) => {
@@ -303,7 +303,7 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
       {/* Section B: Templates */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-neutral-200 flex items-center gap-2">
             {t('email.templates')}
           </h3>
           {!newTemplate && (
@@ -326,7 +326,7 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
         )}
 
         {templates.length === 0 && !newTemplate ? (
-          <p className="text-zinc-500 text-sm text-center py-4">{t('email.noTemplates')}</p>
+          <p className="text-neutral-500 text-sm text-center py-4">{t('email.noTemplates')}</p>
         ) : (
           templates.map(template => (
             <div key={template.id}>
@@ -337,22 +337,22 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
                   onCancel={() => setEditingTemplate(null)}
                 />
               ) : (
-                <div className="flex items-center gap-3 bg-zinc-800/50 p-3 rounded border border-zinc-700 group">
-                  <Mail size={13} className="text-zinc-500 shrink-0" />
+                <div className="flex items-center gap-3 bg-neutral-800/50 p-3 rounded border border-neutral-700 group">
+                  <Mail size={13} className="text-neutral-500 shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-zinc-200">{template.name}</p>
-                    <p className="text-xs text-zinc-500 truncate">{template.subject}</p>
+                    <p className="text-sm font-medium text-neutral-200">{template.name}</p>
+                    <p className="text-xs text-neutral-500 truncate">{template.subject}</p>
                   </div>
                   <button
                     onClick={() => setEditingTemplate(template)}
-                    className="p-1.5 text-zinc-500 hover:text-white opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all"
+                    className="p-1.5 text-neutral-500 hover:text-white opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all"
                     aria-label={t('email.editTemplate', { name: template.name })}
                   >
                     <Edit2 size={12} />
                   </button>
                   <button
                     onClick={() => deleteTemplate(template.id)}
-                    className="p-1.5 text-zinc-500 hover:text-red-400 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all"
+                    className="p-1.5 text-neutral-500 hover:text-red-400 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all"
                     aria-label={t('email.deleteTemplate', { name: template.name })}
                   >
                     <Trash2 size={12} />

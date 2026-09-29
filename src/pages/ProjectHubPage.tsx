@@ -122,7 +122,7 @@ export default function ProjectHubPage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-gray-950 text-gray-500 gap-5">
+      <div className="flex flex-col items-center justify-center h-screen bg-background text-neutral-500 gap-5">
         <NebuLoader size={160} />
         <span>{t('hub.loading')}</span>
       </div>
@@ -131,7 +131,7 @@ export default function ProjectHubPage() {
 
   if (!project) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-950 text-gray-500">
+      <div className="flex items-center justify-center h-screen bg-background text-neutral-500">
         {t('hub.notFound')}
       </div>
     );
@@ -140,16 +140,16 @@ export default function ProjectHubPage() {
   const isDeployed = !!project.deployment_url;
 
   return (
-    <div className="flex flex-col md:flex-row h-screen bg-gray-950">
+    <div className="nebu-modal flex flex-col md:flex-row h-screen bg-background">
       {/* Sidebar — arriba y con pestañas en fila en pantalla chica (5.4) */}
-      <aside className="w-full md:w-56 flex flex-col border-b md:border-b-0 md:border-r border-gray-800 bg-gray-900 shrink-0">
-        <div className="p-4 border-b border-gray-800">
-          <button onClick={() => navigate('/forge')} className="flex items-center gap-2 text-xs text-gray-400 hover:text-white transition-colors mb-3">
+      <aside className="w-full md:w-56 flex flex-col border-b md:border-b-0 md:border-r border-border bg-card shrink-0">
+        <div className="p-4 border-b border-border">
+          <button onClick={() => navigate('/forge')} className="flex items-center gap-2 text-xs text-neutral-400 hover:text-white transition-colors mb-3">
             <ArrowLeft size={14} />
             {t('hub.back')}
           </button>
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full shrink-0 ${isDeployed ? 'bg-emerald-500' : 'bg-gray-600'}`} title={isDeployed ? t('hub.deployed') : t('hub.notDeployed')} />
+            <div className={`w-2 h-2 rounded-full shrink-0 ${isDeployed ? 'bg-emerald-500' : 'bg-neutral-600'}`} title={isDeployed ? t('hub.deployed') : t('hub.notDeployed')} />
             <h1 className="text-sm font-semibold text-white truncate">{project.name}</h1>
           </div>
         </div>
@@ -160,7 +160,7 @@ export default function ProjectHubPage() {
               key={id}
               onClick={() => setActiveTab(id)}
               className={`shrink-0 md:w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
-                activeTab === id ? 'bg-blue-600/15 text-blue-400' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                activeTab === id ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-accent'
               }`}
             >
               <Icon size={15} />
@@ -169,10 +169,10 @@ export default function ProjectHubPage() {
           ))}
         </nav>
 
-        <div className="p-3 border-t border-gray-800 space-y-2">
+        <div className="p-3 border-t border-border space-y-2">
           <button
             onClick={() => navigate(`/studio/${project.id}`)}
-            className="w-full hidden md:flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+            className="w-full hidden md:flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
           >
             <Code2 size={15} />
             {t('hub.openInForge')}
@@ -182,7 +182,7 @@ export default function ProjectHubPage() {
               href={project.deployment_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
             >
               <ExternalLink size={15} />
               {t('hub.visitSite')}
@@ -197,45 +197,45 @@ export default function ProjectHubPage() {
         {/* Overview tab */}
         {activeTab === 'overview' && (
           <div className="space-y-6 max-w-3xl">
-            <h2 className="text-xl font-bold text-white">{t('hub.tab.overview')}</h2>
+            <h2 className="text-lg font-bold text-white">{t('hub.tab.overview')}</h2>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                <p className="text-xs text-gray-500 mb-1">{t('hub.deployStatus')}</p>
+              <div className="bg-card border border-border rounded-xl p-4">
+                <p className="text-xs text-neutral-500 mb-1">{t('hub.deployStatus')}</p>
                 <div className="flex items-center gap-2 mt-1">
                   {isDeployed
                     ? <CheckCircle size={14} className="text-emerald-400" />
-                    : <Circle size={14} className="text-gray-600" />}
-                  <span className={`text-sm font-medium ${isDeployed ? 'text-emerald-400' : 'text-gray-500'}`}>
+                    : <Circle size={14} className="text-neutral-600" />}
+                  <span className={`text-sm font-medium ${isDeployed ? 'text-emerald-400' : 'text-neutral-500'}`}>
                     {isDeployed ? t('hub.deployed') : t('hub.notDeployed')}
                   </span>
                 </div>
                 {project.deployment_url && (
-                  <a href={project.deployment_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:underline mt-2 block truncate">
+                  <a href={project.deployment_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline mt-2 block truncate">
                     {project.deployment_url}
                   </a>
                 )}
               </div>
 
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                <p className="text-xs text-gray-500 mb-1">{t('hub.lastDeployed')}</p>
+              <div className="bg-card border border-border rounded-xl p-4">
+                <p className="text-xs text-neutral-500 mb-1">{t('hub.lastDeployed')}</p>
                 <p className="text-sm font-medium text-white mt-1">{formatDate(project.last_deployed_at)}</p>
               </div>
 
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                <p className="text-xs text-gray-500 mb-1">{t('hub.lastAi')}</p>
+              <div className="bg-card border border-border rounded-xl p-4">
+                <p className="text-xs text-neutral-500 mb-1">{t('hub.lastAi')}</p>
                 <p className="text-sm font-medium text-white mt-1">{formatDate(project.last_active_at)}</p>
               </div>
 
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                <p className="text-xs text-gray-500 mb-1">{t('hub.totalAi')}</p>
+              <div className="bg-card border border-border rounded-xl p-4">
+                <p className="text-xs text-neutral-500 mb-1">{t('hub.totalAi')}</p>
                 <p className="text-2xl font-bold text-white mt-1">{project.ai_call_count ?? 0}</p>
               </div>
             </div>
 
             {project.supabase_project_url && (
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                <p className="text-xs text-gray-500 mb-1">{t('hub.projectDb')}</p>
+              <div className="bg-card border border-border rounded-xl p-4">
+                <p className="text-xs text-neutral-500 mb-1">{t('hub.projectDb')}</p>
                 <code className="text-sm text-emerald-400">{project.supabase_project_url}</code>
               </div>
             )}
@@ -245,13 +245,13 @@ export default function ProjectHubPage() {
         {/* Database tab */}
         {activeTab === 'database' && (
           <div className="max-w-4xl">
-            <h2 className="text-xl font-bold text-white mb-6">{t('hub.tab.database')}</h2>
-            <div className="flex gap-1 border-b border-zinc-700 mb-4 overflow-x-auto pb-px">
+            <h2 className="text-lg font-bold text-white mb-6">{t('hub.tab.database')}</h2>
+            <div className="flex gap-1 border-b border-neutral-700 mb-4 overflow-x-auto pb-px">
               {DB_SUB_TABS.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setDbSubTab(tab.id)}
-                  className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${dbSubTab === tab.id ? 'border-blue-500 text-white' : 'border-transparent text-zinc-400 hover:text-zinc-200'}`}
+                  className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${dbSubTab === tab.id ? 'border-primary text-foreground' : 'border-transparent text-neutral-400 hover:text-neutral-200'}`}
                 >
                   {t(tab.label)}
                 </button>
@@ -267,7 +267,7 @@ export default function ProjectHubPage() {
         {/* Domains tab */}
         {activeTab === 'domains' && (
           <div className="max-w-2xl">
-            <h2 className="text-xl font-bold text-white mb-6">{t('hub.tab.domains')}</h2>
+            <h2 className="text-lg font-bold text-white mb-6">{t('hub.tab.domains')}</h2>
             <DomainsPanel projectId={projectId ?? null} />
           </div>
         )}
@@ -275,7 +275,7 @@ export default function ProjectHubPage() {
         {/* Email tab */}
         {activeTab === 'email' && (
           <div className="max-w-2xl">
-            <h2 className="text-xl font-bold text-white mb-6">{t('hub.tab.email')}</h2>
+            <h2 className="text-lg font-bold text-white mb-6">{t('hub.tab.email')}</h2>
             <EmailPanel projectId={projectId ?? null} />
           </div>
         )}
@@ -283,7 +283,7 @@ export default function ProjectHubPage() {
         {/* Analytics tab */}
         {activeTab === 'analytics' && (
           <div className="max-w-4xl space-y-6">
-            <h2 className="text-xl font-bold text-white">{t('hub.tab.analytics')}</h2>
+            <h2 className="text-lg font-bold text-white">{t('hub.tab.analytics')}</h2>
             <TrafficCharts projectId={projectId ?? null} dateRange={dateRange} />
             <TopPagesTable projectId={projectId ?? null} dateRange={dateRange} />
           </div>
@@ -292,7 +292,7 @@ export default function ProjectHubPage() {
         {/* Performance tab */}
         {activeTab === 'performance' && (
           <div className="max-w-2xl">
-            <h2 className="text-xl font-bold text-white mb-6">{t('hub.tab.performance')}</h2>
+            <h2 className="text-lg font-bold text-white mb-6">{t('hub.tab.performance')}</h2>
             <LighthousePanel projectId={projectId ?? null} initialUrl={project?.deployment_url ?? ''} />
           </div>
         )}
@@ -300,7 +300,7 @@ export default function ProjectHubPage() {
         {/* AI History tab */}
         {activeTab === 'ai_history' && (
           <div className="max-w-4xl">
-            <h2 className="text-xl font-bold text-white mb-6">{t('hub.tab.aiHistory')}</h2>
+            <h2 className="text-lg font-bold text-white mb-6">{t('hub.tab.aiHistory')}</h2>
             <AIHistoryPanel projectId={projectId ?? null} />
           </div>
         )}
@@ -308,17 +308,17 @@ export default function ProjectHubPage() {
         {/* Settings tab */}
         {activeTab === 'settings' && (
           <div className="max-w-xl space-y-8">
-            <h2 className="text-xl font-bold text-white">{t('hub.tab.settings')}</h2>
+            <h2 className="text-lg font-bold text-white">{t('hub.tab.settings')}</h2>
 
             {/* Rename */}
             <div className="space-y-3">
-              <label className="block text-sm font-medium text-gray-300">{t('newProject.nameLabel')}</label>
+              <label className="block text-sm font-medium text-neutral-300">{t('newProject.nameLabel')}</label>
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={newName}
                   onChange={e => setNewName(e.target.value)}
-                  className="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                  className="flex-1 bg-card border border-neutral-700 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
                 />
                 <button
                   onClick={handleSaveName}
@@ -333,7 +333,7 @@ export default function ProjectHubPage() {
             {/* Danger zone */}
             <div className="border border-red-900/50 rounded-xl p-4">
               <h3 className="text-sm font-semibold text-red-400 mb-2">{t('hub.danger')}</h3>
-              <p className="text-xs text-gray-500 mb-4">{t('hub.dangerText')}</p>
+              <p className="text-xs text-neutral-500 mb-4">{t('hub.dangerText')}</p>
               <button
                 onClick={handleDeleteProject}
                 disabled={isDeleting}

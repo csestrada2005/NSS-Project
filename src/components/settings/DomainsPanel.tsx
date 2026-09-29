@@ -109,7 +109,7 @@ export function DomainsPanel({ projectId }: DomainsPanelProps) {
 
   if (!projectId) {
     return (
-      <div className="text-center text-zinc-500 py-8 text-sm">
+      <div className="text-center text-neutral-500 py-8 text-sm">
         {t('domains.needProject')}
       </div>
     );
@@ -176,24 +176,24 @@ export function DomainsPanel({ projectId }: DomainsPanelProps) {
 
       {/* Domain list */}
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-8 text-zinc-500 gap-3 text-sm">
+        <div className="flex flex-col items-center justify-center py-8 text-neutral-500 gap-3 text-sm">
           <NebuLoader size={96} />
           {t('domains.loading')}
         </div>
       ) : domains.length === 0 ? (
-        <div className="text-center text-zinc-500 py-6 text-sm">
+        <div className="text-center text-neutral-500 py-6 text-sm">
           {t('domains.empty')}
         </div>
       ) : (
         <div className="space-y-2">
           {domains.map((domain) => (
-            <div key={domain.id} className="flex items-center gap-3 bg-zinc-800/50 p-3 rounded border border-zinc-700 group">
-              <Globe size={14} className="text-zinc-500 shrink-0" />
-              <span className="flex-1 font-mono text-sm text-zinc-200">{domain.domain}</span>
+            <div key={domain.id} className="flex items-center gap-3 bg-neutral-800/50 p-3 rounded border border-neutral-700 group">
+              <Globe size={14} className="text-neutral-500 shrink-0" />
+              <span className="flex-1 font-mono text-sm text-neutral-200">{domain.domain}</span>
               <StatusBadge status={domain.status} />
               <button
                 onClick={() => deleteDomain(domain.id)}
-                className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                className="p-1.5 text-neutral-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
                 title={t('domains.remove')}
                 aria-label={t('domains.remove')}
               >

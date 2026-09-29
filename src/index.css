@@ -125,7 +125,8 @@ button, [role="button"], a { cursor: pointer; }
  * ver ese archivo, para que el rojo quede libre para los recuadros normales
  * sin diluir la señal de la única confirmación irreversible de la plataforma).
  */
-.nebu-modal {
+.nebu-modal,
+.wyrd-root {
   --color-background: #0D0D0D;         /* negro profundo */
   --color-card: #1A1A1A;               /* carbón */
   --color-card-foreground: #E8E8E8;    /* gris claro */
@@ -220,4 +221,30 @@ button, [role="button"], a { cursor: pointer; }
 }
 .animate-fade-in { animation: fadeIn 200ms ease-out; }
 *:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+
+/*
+ * Sistema visual de Wyrd Forge (bucket 5, ítem 5.5, 2026-09-29). Todo Wyrd
+ * cuelga de .wyrd-root (StudioLayout): mismos tokens de marca que .nebu-modal
+ * (arriba), UNA esquina (4px; los círculos —rounded-full— se quedan) y los
+ * títulos en Outfit, la fuente display del brandbook. Escala de texto de la
+ * plataforma: 12 / 14 / 18 / 24 px (text-xs / sm / lg / 2xl). Grises: una
+ * sola escala (neutral), del mismo tono que los tokens. Color: rojo de marca
+ * + emerald/amber/red como estados; nada decorativo fuera de eso.
+ */
+.wyrd-root .rounded,
+.wyrd-root .rounded-sm,
+.wyrd-root .rounded-md,
+.wyrd-root .rounded-lg,
+.wyrd-root .rounded-xl,
+.wyrd-root .rounded-2xl {
+  border-radius: 4px;
+}
+.wyrd-root .rounded-t,
+.wyrd-root .rounded-t-lg {
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+}
+.wyrd-root :is(h1, h2, h3) {
+  font-family: var(--font-display);
+}
 ::selection { background: hsl(var(--primary) / 0.25); color: hsl(var(--foreground)); }

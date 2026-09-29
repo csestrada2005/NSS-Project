@@ -111,7 +111,7 @@ export function SQLEditor({ projectId }: SQLEditorProps = {}) {
         <div className="relative">
           <button
             onClick={() => setShowHistory(v => !v)}
-            className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+            className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-neutral-200 transition-colors"
           >
             <History size={12} />
             {t('sql.recent')}
@@ -119,12 +119,12 @@ export function SQLEditor({ projectId }: SQLEditorProps = {}) {
           {showHistory && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setShowHistory(false)} />
-              <div className="absolute top-6 left-0 z-20 w-80 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl overflow-hidden">
+              <div className="absolute top-6 left-0 z-20 w-80 bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl overflow-hidden">
                 {history.map((q, i) => (
                   <button
                     key={i}
                     onClick={() => { setQuery(q); setShowHistory(false); }}
-                    className="w-full text-left px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-700 font-mono truncate transition-colors"
+                    className="w-full text-left px-3 py-2 text-xs text-neutral-300 hover:bg-neutral-700 font-mono truncate transition-colors"
                   >
                     {q}
                   </button>
@@ -136,7 +136,7 @@ export function SQLEditor({ projectId }: SQLEditorProps = {}) {
       )}
 
       {/* Editor */}
-      <div className="border border-zinc-700 rounded-lg overflow-hidden">
+      <div className="border border-neutral-700 rounded-lg overflow-hidden">
         <Editor
           height="240px"
           language="sql"
@@ -165,7 +165,7 @@ export function SQLEditor({ projectId }: SQLEditorProps = {}) {
         </button>
         <button
           onClick={() => { setResults(null); setError(null); setRowCount(null); }}
-          className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm rounded-lg transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-sm rounded-lg transition-colors"
         >
           <Trash2 size={14} />
           {t('logs.clear')}
@@ -182,23 +182,23 @@ export function SQLEditor({ projectId }: SQLEditorProps = {}) {
       {/* Results */}
       {results && (
         <div className="space-y-2">
-          <div className="text-xs text-zinc-500">{tn('sql.rows', rowCount ?? 0)}</div>
+          <div className="text-xs text-neutral-500">{tn('sql.rows', rowCount ?? 0)}</div>
           {results.length > 0 ? (
-            <div className="overflow-x-auto border border-zinc-700 rounded-lg">
+            <div className="overflow-x-auto border border-neutral-700 rounded-lg">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="bg-zinc-800 text-zinc-400 border-b border-zinc-700">
+                  <tr className="bg-neutral-800 text-neutral-400 border-b border-neutral-700">
                     {columns.map(col => (
                       <th key={col} className="text-left px-3 py-2 font-medium whitespace-nowrap">{col}</th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-800">
+                <tbody className="divide-y divide-neutral-800">
                   {results.map((row, i) => (
-                    <tr key={i} className="hover:bg-zinc-800/30 transition-colors">
+                    <tr key={i} className="hover:bg-neutral-800/30 transition-colors">
                       {columns.map(col => (
-                        <td key={col} className="px-3 py-2 text-zinc-300 font-mono whitespace-nowrap max-w-[200px] truncate">
-                          {row[col] === null ? <span className="text-zinc-600">null</span> : String(row[col])}
+                        <td key={col} className="px-3 py-2 text-neutral-300 font-mono whitespace-nowrap max-w-[200px] truncate">
+                          {row[col] === null ? <span className="text-neutral-600">null</span> : String(row[col])}
                         </td>
                       ))}
                     </tr>
@@ -207,7 +207,7 @@ export function SQLEditor({ projectId }: SQLEditorProps = {}) {
               </table>
             </div>
           ) : (
-            <p className="text-zinc-500 text-sm py-4 text-center">{t('sql.noRows')}</p>
+            <p className="text-neutral-500 text-sm py-4 text-center">{t('sql.noRows')}</p>
           )}
         </div>
       )}

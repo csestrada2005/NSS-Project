@@ -121,7 +121,7 @@ export function MigrationApplyModal({
           className="nebu-modal bg-card border border-border rounded-2xl w-full max-w-lg shadow-2xl pointer-events-auto flex flex-col max-h-[90vh]"
         >
           <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-            <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
               {isDestructive && <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />}
               {isDestructive ? t('ddl.modal.destructiveTitle') : t('ddl.modal.title')}
             </h2>
@@ -154,10 +154,10 @@ export function MigrationApplyModal({
                 </p>
                 {flagged.map(({ path, finding }, index) => (
                   <div key={`${path}:${finding.line}:${index}`} className="space-y-0.5">
-                    <div className="text-[10px] uppercase tracking-wide text-amber-400/80">
+                    <div className="text-xs uppercase tracking-wide text-amber-400/80">
                       {fileName(path)}:{finding.line} — {KIND_LABEL[finding.kind] ? t(KIND_LABEL[finding.kind]) : finding.kind}
                     </div>
-                    <pre className="text-[11px] text-amber-200 bg-black/40 border border-amber-800/40 rounded p-2 overflow-x-auto whitespace-pre-wrap">
+                    <pre className="text-xs text-amber-200 bg-black/40 border border-amber-800/40 rounded p-2 overflow-x-auto whitespace-pre-wrap">
                       {finding.statement}
                     </pre>
                   </div>
@@ -177,7 +177,7 @@ export function MigrationApplyModal({
                   {t('ddl.modal.typeBefore')} <span className="font-mono font-semibold text-foreground">{required}</span>{' '}
                   {t('ddl.modal.typeAfter')}
                   {targets.length > 1 && (
-                    <span className="block text-[10px] mt-0.5">
+                    <span className="block text-xs mt-0.5">
                       {t('ddl.modal.alsoAffected', { targets: targets.slice(1).join(', ') })}
                     </span>
                   )}

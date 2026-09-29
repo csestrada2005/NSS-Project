@@ -2049,7 +2049,7 @@ export function StudioEngine() {
 
               {/* Read-only badge */}
               {isReadOnly && (
-                <div className="absolute top-4 right-4 z-50 flex items-center gap-1.5 bg-yellow-900/80 border border-yellow-700 text-yellow-300 text-xs px-3 py-1.5 rounded-full">
+                <div className="absolute top-4 right-4 z-50 flex items-center gap-1.5 bg-amber-900/80 border border-amber-700 text-amber-300 text-xs px-3 py-1.5 rounded-full">
                   <Eye size={12} />
                   {t('studio.viewOnly')}
                 </div>
@@ -2060,8 +2060,8 @@ export function StudioEngine() {
                   (CreditsBadge.tsx), tenerlo duplicado en la esquina del
                   editor ya no tenía sentido. */}
               {!isReadOnly && isPublic && (
-                <div className="absolute top-14 right-4 z-40 flex items-center gap-1.5 bg-green-950/80 border border-green-700/50 rounded-full px-2.5 py-1 text-[10px] text-green-400 font-medium">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                <div className="absolute top-14 right-4 z-40 flex items-center gap-1.5 bg-emerald-950/80 border border-emerald-700/50 rounded-full px-2.5 py-1 text-xs text-emerald-400 font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   {t('studio.live')}
                 </div>
               )}
@@ -2091,7 +2091,7 @@ export function StudioEngine() {
                     onOpenChat={handleOpenChat}
                     onPublish={() => { setIsCommandModalOpen(false); setSettingsInitialTab('deploy'); setPanelMode('settings'); }}
                   />
-                  <div className={`relative flex-1 min-h-0 w-full ${panelMode === 'preview' && viewportMode !== 'desktop' ? 'bg-zinc-900 flex items-start justify-center' : ''}`}>
+                  <div className={`relative flex-1 min-h-0 w-full ${panelMode === 'preview' && viewportMode !== 'desktop' ? 'bg-neutral-900 flex items-start justify-center' : ''}`}>
                   {panelMode === 'code' ? (
                     <CodePanel
                       files={files}
@@ -2126,7 +2126,7 @@ export function StudioEngine() {
                   {isIndexing && (
                     <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center gap-3">
                       <NebuLoader size={160} delay={0} />
-                      <p className="text-sm text-gray-400 font-mono">{t('studio.indexing')}</p>
+                      <p className="text-sm text-neutral-400 font-mono">{t('studio.indexing')}</p>
                     </div>
                   )}
 
@@ -2146,7 +2146,7 @@ export function StudioEngine() {
                       className="flex flex-col items-center h-full"
                       style={{ width: viewportMode === 'mobile' ? 390 : 768 }}
                     >
-                      <div className="text-xs text-zinc-500 py-1 shrink-0">
+                      <div className="text-xs text-neutral-500 py-1 shrink-0">
                         {viewportMode === 'mobile' ? '390px' : '768px'}
                       </div>
                       <div className="relative flex-1 w-full overflow-hidden">
@@ -2155,7 +2155,7 @@ export function StudioEngine() {
                           ref={iframeRef}
                           srcDoc={compiledHtml}
                           sandbox="allow-scripts allow-modals"
-                          className="w-full h-full border border-zinc-600 rounded-t-lg"
+                          className="w-full h-full border border-neutral-600 rounded-t-lg"
                           title={t('studio.previewFrame')}
                         />
                       </div>
@@ -2352,7 +2352,7 @@ export function StudioEngine() {
           <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60">
             <div className="w-[92%] max-w-md rounded-xl border border-border bg-card shadow-2xl text-foreground p-6 flex flex-col gap-4">
               <div className="flex flex-col gap-1">
-                <h3 className="text-base font-semibold">{t('studio.unsavedDialog.title')}</h3>
+                <h3 className="text-sm font-semibold">{t('studio.unsavedDialog.title')}</h3>
                 <p className="text-sm text-muted-foreground">
                   {tn('studio.unsavedDialog.body', pendingCount)}
                 </p>

@@ -33,12 +33,13 @@ interface HistoryDrawerProps {
 }
 
 const TRIGGER_COLORS: Record<string, string> = {
-  ai_action: 'bg-red-600/20 text-red-400 border-red-600/30',
-  manual: 'bg-blue-600/20 text-blue-400 border-blue-600/30',
-  zip_upload: 'bg-purple-600/20 text-purple-400 border-purple-600/30',
-  template_load: 'bg-green-600/20 text-green-400 border-green-600/30',
-  manual_save: 'bg-amber-600/20 text-amber-400 border-amber-600/30',
-  pre_restore: 'bg-slate-600/20 text-slate-300 border-slate-600/30',
+  // Sistema (5.5): rojo de marca sólo para lo que hizo la IA; el resto neutro.
+  ai_action: 'bg-primary/15 text-primary border-primary/30',
+  manual: 'bg-neutral-800 text-neutral-300 border-neutral-700',
+  zip_upload: 'bg-neutral-800 text-neutral-300 border-neutral-700',
+  template_load: 'bg-neutral-800 text-neutral-300 border-neutral-700',
+  manual_save: 'bg-neutral-800 text-neutral-300 border-neutral-700',
+  pre_restore: 'bg-neutral-800 text-neutral-400 border-neutral-700',
 };
 
 const TRIGGER_LABELS: Record<string, ForgeKey> = {
@@ -175,7 +176,7 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${TRIGGER_COLORS[snap.trigger] ?? 'bg-gray-700 text-gray-400 border-gray-600'}`}>
+            <span className={`text-xs font-medium px-1.5 py-0.5 rounded border ${TRIGGER_COLORS[snap.trigger] ?? 'bg-neutral-700 text-neutral-400 border-neutral-600'}`}>
               {TRIGGER_LABELS[snap.trigger] ? t(TRIGGER_LABELS[snap.trigger]) : snap.trigger}
             </span>
           </div>
@@ -279,7 +280,7 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
               </button>
               <button
                 onClick={() => { setShowLabelInput(false); setLabelValue(''); }}
-                className="px-2 py-1.5 text-gray-400 hover:text-white text-xs rounded transition-colors"
+                className="px-2 py-1.5 text-neutral-400 hover:text-white text-xs rounded transition-colors"
               >
                 {t('common.cancel')}
               </button>
@@ -303,9 +304,9 @@ export function HistoryDrawer({ projectId, isOpen, onClose, onRestore, currentTr
             </div>
           ) : snapshots.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
-              <Clock size={32} className="text-gray-600" />
-              <p className="text-gray-400 font-medium">{t('history.empty')}</p>
-              <p className="text-gray-600 text-sm">{t('history.emptyHint')}</p>
+              <Clock size={32} className="text-neutral-600" />
+              <p className="text-neutral-400 font-medium">{t('history.empty')}</p>
+              <p className="text-neutral-600 text-sm">{t('history.emptyHint')}</p>
             </div>
           ) : (
             <>

@@ -80,7 +80,7 @@ export function SchemaViewer({ projectId }: SchemaViewerProps = {}) {
   const filtered = tables.filter(tbl => tbl.name.toLowerCase().includes(search.toLowerCase()));
 
   if (isLoading) {
-    return <div className="flex items-center justify-center py-10 text-zinc-500 text-sm">{t('schema.loading')}</div>;
+    return <div className="flex items-center justify-center py-10 text-neutral-500 text-sm">{t('schema.loading')}</div>;
   }
 
   if (error) {
@@ -98,39 +98,39 @@ export function SchemaViewer({ projectId }: SchemaViewerProps = {}) {
         placeholder={t('schema.search')}
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-primary placeholder-zinc-500"
+        className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-neutral-200 focus:outline-none focus:border-primary placeholder-neutral-500"
       />
 
       <div className="space-y-1">
         {filtered.map((table) => (
-          <div key={table.name} className="border border-zinc-700 rounded-lg overflow-hidden">
+          <div key={table.name} className="border border-neutral-700 rounded-lg overflow-hidden">
             <button
               onClick={() => setExpanded(prev => ({ ...prev, [table.name]: !prev[table.name] }))}
-              className="w-full flex items-center justify-between px-4 py-2.5 bg-zinc-800/50 hover:bg-zinc-800 text-left transition-colors"
+              className="w-full flex items-center justify-between px-4 py-2.5 bg-neutral-800/50 hover:bg-neutral-800 text-left transition-colors"
               aria-expanded={!!expanded[table.name]}
             >
               <div className="flex items-center gap-2">
                 <ChevronRight
                   size={14}
-                  className={`text-zinc-400 transition-transform ${expanded[table.name] ? 'rotate-90' : ''}`}
+                  className={`text-neutral-400 transition-transform ${expanded[table.name] ? 'rotate-90' : ''}`}
                 />
-                <span className="text-sm font-medium text-zinc-200 font-mono">{table.name}</span>
+                <span className="text-sm font-medium text-neutral-200 font-mono">{table.name}</span>
               </div>
-              <span className="text-xs bg-zinc-700 text-zinc-400 px-2 py-0.5 rounded-full">
+              <span className="text-xs bg-neutral-700 text-neutral-400 px-2 py-0.5 rounded-full">
                 {t('schema.cols', { count: table.columns.length })}
               </span>
             </button>
 
             {expanded[table.name] && (
-              <div className="px-4 py-2 space-y-1.5 bg-zinc-900/30">
+              <div className="px-4 py-2 space-y-1.5 bg-neutral-900/30">
                 {table.columns.map((col) => (
                   <div key={col.column_name} className="flex items-center gap-3">
                     <div
-                      className={`w-2 h-2 rounded-full shrink-0 ${col.is_nullable === 'YES' ? 'bg-emerald-500' : 'bg-zinc-600'}`}
+                      className={`w-2 h-2 rounded-full shrink-0 ${col.is_nullable === 'YES' ? 'bg-emerald-500' : 'bg-neutral-600'}`}
                       title={col.is_nullable === 'YES' ? t('schema.nullable') : t('schema.notNull')}
                     />
-                    <span className="text-sm text-zinc-200 font-mono">{col.column_name}</span>
-                    <span className="text-xs text-zinc-500 ml-auto">{col.data_type}</span>
+                    <span className="text-sm text-neutral-200 font-mono">{col.column_name}</span>
+                    <span className="text-xs text-neutral-500 ml-auto">{col.data_type}</span>
                   </div>
                 ))}
               </div>
@@ -138,7 +138,7 @@ export function SchemaViewer({ projectId }: SchemaViewerProps = {}) {
           </div>
         ))}
         {filtered.length === 0 && (
-          <p className="text-center text-zinc-500 text-sm py-6">{t('schema.empty')}</p>
+          <p className="text-center text-neutral-500 text-sm py-6">{t('schema.empty')}</p>
         )}
       </div>
     </div>
