@@ -1,9 +1,15 @@
+import { useEffect } from 'react';
 import { Outlet, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import NebuLoader from '../components/brand/NebuLoader';
 
 export function StudioLayout() {
   const { user, loading } = useAuth();
+
+  // Nombre de la pestaña por zona: Wyrd Forge aquí, Nebu Studio en WorkspaceLayout.
+  useEffect(() => {
+    document.title = 'Wyrd Forge';
+  }, []);
 
   if (loading) {
     return (

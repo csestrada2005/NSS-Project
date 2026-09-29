@@ -1060,6 +1060,44 @@ selección de rol: las 3 tarjetas deben desplazarse un poco y ganar sombra roja 
 bordes más gruesos; el botón "Continue" sigue con su efecto de relleno de siempre. Setup/Pending
 Approval: el botón de salir con el mismo borde más grueso, sin cambios de comportamiento.
 
+### Pantallas de carga — búho Nebu, barra por etapas, cuadritos (2026-09-27, rama `continuacion-sesion-g5`)
+
+Registrado a posteriori (sesión 2026-09-29): la sesión del 27 no actualizó esta cola. Cuatro commits sobre
+la v2 de la animación (`6d3c85f`, ya documentada arriba), último `f2db4c0`:
+- `5f3846a` — `NebuLoader` (búho, `src/components/brand/`) + `NebuLoadingCard`: el pill "Compiling…" pasa
+  a tarjeta grande con retraso de 300 ms; el spinner rojo de carga/generación/indexado pasa al búho.
+- `a5be40b` — búho en todas las cargas grandes (tamaños 160/140/96/64 px); spinners chicos en blanco `#E8E8E8`.
+- `84a6405` — `StudioLoadOverlay`: barra y porcentaje por etapas reales al cargar un proyecto (descarga
+  0-60 %, preparación 60-95 %, nunca 100 % antes de terminar). `LoadingSquares` (tres cuadritos)
+  reemplaza a todos los spinners chicos; Nebu Studio usa cuadritos y el búho queda para Wyrd Forge.
+- `f2db4c0` — `StudioProgressOverlay`: la generación usa la MISMA pantalla que la carga (cada paso real
+  ocupa su tramo de 5-95 %, 95-99 % esperando el primer compile, la barra nunca retrocede). Se quita la
+  reacción al mouse de la rejilla. Entrada a Nebu Studio vuelve al búho.
+
+**Estado:** la rama `continuacion-sesion-g5` lleva 28 commits que NO están en `main` (verificado
+2026-09-29 contra `origin/main` = `eceb398`). **CHECK MANUAL — PENDIENTE**, se hace junto con el del
+pulido completo (ítem 5.4).
+
+**Hallazgo de paso, sin tocar:** `5f3846a` agregó `graphifyy` a `package.json` (dependencia de la app, +3k
+líneas en el lockfile). Es una herramienta del agente, no de la app: probablemente debería ser
+devDependency o no estar ahí (Render la instala en cada deploy). Ver "SIN CONFIRMAR".
+
+### 5.4 EN PROGRESO — Pulido completo de UI/UX (sesión 2026-09-29)
+
+Decidido con Samuel (opción "pulido completo", todas las recomendaciones aceptadas):
+- Idioma: Wyrd Forge bilingüe en/es DE VERDAD, con interruptor PROPIO (separado del `LanguageContext`
+  de Nebu Studio), guardado en el navegador, primera vez = idioma del navegador.
+- Chat: la IA responde SIEMPRE en el idioma de la interfaz, sin importar en qué idioma escriba el
+  usuario. El contenido de la app generada NO se ve afectado (sigue lo que pida el prompt).
+- Botón de comprar créditos: deshabilitado con etiqueta "Próximamente".
+- Celular: dashboard y popups adaptados; el editor muestra aviso "usa computadora".
+- Nombre en la pestaña: "Wyrd Forge" en `/forge` y `/studio`, "Nebu Studio" en el CRM.
+- Sin checks manuales hasta terminar todos los bloques; un solo check al final.
+
+Bloques: 0 arranque + cola · 1 base de idioma · 2a dashboard/popups/login/cargas · 2b editor · 2c chat ·
+2d Ajustes (+ `.nebu-cta` en sus botones) · 3 avisos de guards + idioma de la IA · 4 créditos ·
+5 celular · 6 teclado/foco · 7 cierre.
+
 ### Resto del bucket (sin tocar esta sesión)
 - RAG de UI/UX: PatternRetriever da `direct: 0 | vector: 0`. Primera pregunta: ¿pasa igual en producción?
 - Catálogo de componentes, con auditoría de licencia por componente.
@@ -1845,6 +1883,7 @@ buenos resultados la primera vez que se usó en este ítem (ver Bloque 1, "Halla
 - Aprobación de Unsplash en producción (hoy en modo demo, 50 req/h). Prerrequisito antes de añadir cualquier proveedor de imágenes con IA.
 - Ruta `/api/admin/bootstrap-db` con comentario "TEMPORAL": se decidió conservarla y quitar el comentario en una cirugía de servidor.
 - Decisión sobre `graphify-out/cache/ast/` y archivos `.sig`: ¿se commitean o van a `.gitignore`?
+- `graphifyy` en `dependencies` de `package.json` (entró en `5f3846a`): ¿moverlo a devDependencies o quitarlo?
 
 ## Decisión de arquitectura permanente
 - **D-1 (preview)**: el endgame es la Opción C (sandboxes server-side efímeros, estilo Lovable). Se ejecuta sólo cuando el software esté casi completo. Hoy: vendoring curado (Opción A).

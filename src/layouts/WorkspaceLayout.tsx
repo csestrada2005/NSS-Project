@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet, Navigate } from 'react-router-dom';
 import { LanguageProvider } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -12,6 +12,11 @@ import NebuLoader from '../components/brand/NebuLoader';
 export function WorkspaceLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, loading, profile, pendingApproval } = useAuth();
+
+  // Nombre de la pestaña por zona: Nebu Studio aquí, Wyrd Forge en StudioLayout.
+  useEffect(() => {
+    document.title = 'Nebu Studio';
+  }, []);
 
   if (loading) {
     return (
