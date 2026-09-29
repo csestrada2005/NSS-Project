@@ -6,6 +6,7 @@ import { DDLApprovalButton } from '../forge/DDLApprovalButton';
 import type { DdlProposal, ProposalSourceMessage } from '@/utils/ddlProposalState.js';
 import type { ChatPlanStep } from './types';
 import LoadingSquares from '../brand/LoadingSquares';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
 
 /**
  * ResultCards — las 5 variantes de tarjeta de resultado (Bloque 3 del
@@ -20,9 +21,10 @@ import LoadingSquares from '../brand/LoadingSquares';
  */
 
 function FilesLine({ count, seconds }: { count: number; seconds: number }) {
+  const { t, tn } = useForgeLang();
   return (
     <div className="fc-resumen-texto" style={{ fontSize: 12, marginBottom: 11 }}>
-      <b>{count} archivo{count === 1 ? '' : 's'}</b> modificado{count === 1 ? '' : 's'} · compiló sin errores · {seconds}s
+      <b>{tn('chat.files.modified', count)}</b> · {t('chat.files.compiled')} · {seconds}s
     </div>
   );
 }
@@ -42,13 +44,14 @@ export function ResumenCard({
   completedCount,
   onOpenHistory,
 }: StepsProps & { filesCount: number; durationSeconds: number; onOpenHistory: () => void }) {
+  const { t, tn } = useForgeLang();
   return (
     <div className="fc-pieza">
       <div className="fc-resumen">
         <div className="fc-resumen-texto">
-          <b>{filesCount} archivo{filesCount === 1 ? '' : 's'}</b> modificado{filesCount === 1 ? '' : 's'} · compiló sin errores · {durationSeconds}s
+          <b>{tn('chat.files.modified', filesCount)}</b> · {t('chat.files.compiled')} · {durationSeconds}s
         </div>
-        <button type="button" className="fc-pill" onClick={onOpenHistory}>Ver historial completo</button>
+        <button type="button" className="fc-pill" onClick={onOpenHistory}>{t('chat.card.fullHistory')}</button>
       </div>
       {steps.length > 0 && (
         <>
@@ -89,14 +92,15 @@ export function DDLCard({
   onOpenHistory: () => void;
 }) {
   const sql = useSqlPreview(projectId, proposal.paths);
+  const { t } = useForgeLang();
 
   return (
     <div className="fc-pieza fc-accion">
-      <span className="fc-marcador">Cambio en base de datos</span>
+      <span className="fc-marcador">{t('chat.card.ddl.tag')}</span>
       <div className="fc-pieza-head">
-        <span className="fc-pieza-titulo">Hay que aprobar esto antes de aplicarlo</span>
+        <span className="fc-pieza-titulo">{t('chat.card.ddl.title')}</span>
       </div>
-      <p className="fc-accion-cuerpo">{bodyText} Nada se aplica hasta que lo apruebes.</p>
+      <p className="fc-accion-cuerpo">{bodyText} {t('chat.card.ddl.body')}</p>
       <div className="fc-accion-fila">
         <DDLApprovalButton
           proposal={proposal}
@@ -106,10 +110,10 @@ export function DDLCard({
           disabled={isReadOnly || isLoading}
         />
         <button type="button" className="fc-accion-btn fc-secundario" onClick={sql.toggle} disabled={sql.loading}>
-          {sql.loading ? 'Leyendo…' : sql.open ? 'Ocultar el SQL' : 'Ver el SQL'}
+          {sql.loading ? t('chat.card.ddl.reading') : sql.open ? t('chat.card.ddl.hideSql') : t('chat.card.ddl.showSql')}
         </button>
         <button type="button" className="fc-accion-btn fc-secundario" onClick={onOpenHistory}>
-          Ver historial completo
+          {t('chat.card.fullHistory')}
         </button>
       </div>
       {sql.open && (
@@ -151,19 +155,20 @@ export function SeguridadCard({
   // colapsable de pasos, que es lo más cercano que existe a "qué se tocó" sin
   // inventar una vista nueva fuera de alcance de esta sesión (sólo-UI).
   const [detailOpen, setDetailOpen] = useState(false);
+  const { t } = useForgeLang();
   return (
     <div className="fc-pieza fc-accion">
-      <span className="fc-marcador">Revisión de seguridad</span>
+      <span className="fc-marcador">{t('chat.card.security.tag')}</span>
       <div className="fc-pieza-head">
-        <span className="fc-pieza-titulo">Wyrd corrigió un permiso abierto</span>
+        <span className="fc-pieza-titulo">{t('chat.card.security.title')}</span>
       </div>
       <p className="fc-accion-cuerpo">{warningText}</p>
       <div className="fc-accion-fila">
         <button type="button" className="fc-accion-btn fc-secundario" onClick={() => setDetailOpen(v => !v)}>
-          {detailOpen ? 'Ocultar qué cambió' : 'Ver qué cambió'}
+          {detailOpen ? t('chat.card.security.hide') : t('chat.card.security.show')}
         </button>
         <button type="button" className="fc-accion-btn fc-secundario" onClick={onOpenHistory}>
-          Ver historial completo
+          {t('chat.card.fullHistory')}
         </button>
       </div>
       <div className="fc-sep" />
@@ -189,16 +194,14 @@ export function PlanCard({
 }) {
   const ordered = [...steps].sort((a, b) => a.order - b.order);
   const deletions = ordered.filter(s => s.action === 'delete');
-  const intro =
-    steps.length === 1
-      ? 'Esto es lo que Wyrd haría:'
-      : `Esto es lo que Wyrd haría (${steps.length} pasos):`;
+  const { t, tn } = useForgeLang();
+  const intro = tn('chat.card.plan.intro', steps.length);
 
   return (
     <div className="fc-pieza fc-accion">
-      <span className="fc-marcador">Plan listo</span>
+      <span className="fc-marcador">{t('chat.card.plan.tag')}</span>
       <div className="fc-pieza-head">
-        <span className="fc-pieza-titulo">Esto es lo que Wyrd haría</span>
+        <span className="fc-pieza-titulo">{t('chat.card.plan.title')}</span>
       </div>
       <p className="fc-accion-cuerpo">{intro}</p>
       <ul className="fc-pasos" style={{ marginBottom: 14 }}>
@@ -209,7 +212,7 @@ export function PlanCard({
               {step.description}
               {step.action === 'delete' && (
                 <span style={{ display: 'block', color: 'rgba(214,40,40,.85)', fontSize: 12 }}>
-                  esto también borra {step.file_path} — no se puede deshacer fácilmente
+                  {t('chat.card.plan.deletes', { file: step.file_path })}
                 </span>
               )}
             </span>
@@ -218,19 +221,18 @@ export function PlanCard({
       </ul>
       {deletions.length > 0 && (
         <p className="fc-accion-cuerpo" style={{ fontSize: 12 }}>
-          Aprobar es el techo de lo que puede borrarse, no el piso: una guardia interna revisa cada
-          borrado igual y puede rechazar cualquiera de estos.
+          {t('chat.card.plan.deleteNote')}
         </p>
       )}
       <div className="fc-accion-fila">
-        <button type="button" className="fc-accion-btn" onClick={onApprove}>Construir</button>
-        <button type="button" className="fc-accion-btn fc-secundario" disabled title="Próximamente">
-          Editar el plan
+        <button type="button" className="fc-accion-btn" onClick={onApprove}>{t('chat.card.plan.build')}</button>
+        <button type="button" className="fc-accion-btn fc-secundario" disabled title={t('common.comingSoon')}>
+          {t('chat.card.plan.edit')}
         </button>
         <button type="button" className="fc-accion-btn fc-secundario" onClick={onOpenHistory}>
-          Ver historial completo
+          {t('chat.card.fullHistory')}
         </button>
-        <button type="button" className="fc-accion-btn fc-rechazar" onClick={onReject}>Rechazar</button>
+        <button type="button" className="fc-accion-btn fc-rechazar" onClick={onReject}>{t('chat.card.plan.reject')}</button>
       </div>
     </div>
   );
@@ -240,17 +242,18 @@ export function PlanCard({
 // 3.5 — CANCELADO
 // ---------------------------------------------------------------------------
 export function CanceladoCard({ steps, completedCount, onResume }: StepsProps & { completedCount: number; onResume: () => void }) {
+  const { t } = useForgeLang();
   return (
     <div className="fc-pieza fc-neutra">
-      <span className="fc-marcador">Detenido por ti</span>
+      <span className="fc-marcador">{t('chat.card.cancelled.tag')}</span>
       <div className="fc-pieza-head">
-        <span className="fc-pieza-titulo">Wyrd paró donde iba</span>
+        <span className="fc-pieza-titulo">{t('chat.card.cancelled.title')}</span>
       </div>
       <p className="fc-accion-cuerpo">
-        Lo que ya había escrito se quedó. Nada a medias se guardó en tu proyecto.
+        {t('chat.card.cancelled.body')}
       </p>
       <div className="fc-accion-fila">
-        <button type="button" className="fc-accion-btn" onClick={onResume}>Retomar desde aquí</button>
+        <button type="button" className="fc-accion-btn" onClick={onResume}>{t('chat.card.cancelled.resume')}</button>
       </div>
       {steps.length > 0 && (
         <>
@@ -283,16 +286,17 @@ export function ErrorCard({
   onSuggestedAction: (action: string) => void;
 }) {
   const [showDetail, setShowDetail] = useState(false);
+  const { t } = useForgeLang();
   return (
     <div className="fc-pieza fc-neutra">
-      <span className="fc-marcador"><AlertTriangle size={11} style={{ marginRight: 2 }} />No se pudo terminar</span>
+      <span className="fc-marcador"><AlertTriangle size={11} style={{ marginRight: 2 }} />{t('chat.card.error.tag')}</span>
       <div className="fc-pieza-head">
         <span className="fc-pieza-titulo">{text}</span>
       </div>
       {errorDetail && (
         <div className="fc-accion-fila" style={{ marginBottom: 10 }}>
           <button type="button" className="fc-accion-btn fc-secundario" onClick={() => setShowDetail(v => !v)}>
-            {showDetail ? 'Ocultar detalle' : '¿Qué salió mal?'}
+            {showDetail ? t('chat.card.error.hide') : t('chat.card.error.show')}
           </button>
         </div>
       )}

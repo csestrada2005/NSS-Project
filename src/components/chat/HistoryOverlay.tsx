@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { stripDdlMarks } from '@/utils/ddlProposalState.js';
 import { parseModeMark } from '@/utils/chatModeMark.js';
 import type { Message } from './types';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
 
 /**
  * HistoryOverlay — Bloque 4 del rediseño: overlay a pantalla completa sobre
@@ -30,6 +31,7 @@ export function HistoryOverlay({
   returnFocusRef: React.RefObject<HTMLElement | null>;
 }) {
   const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const { t, tn } = useForgeLang();
   const wasOpenRef = useRef(false);
 
   useEffect(() => {
@@ -48,13 +50,13 @@ export function HistoryOverlay({
       aria-hidden={!isOpen}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <button ref={closeBtnRef} type="button" className="fc-icon-btn fc-cerrar" aria-label="Cerrar historial" onClick={onClose}>
+      <button ref={closeBtnRef} type="button" className="fc-icon-btn fc-cerrar" aria-label={t('chat.history.close')} onClick={onClose}>
         <X size={16} />
       </button>
       <div className="fc-historial-panel">
         <div className="fc-historial-head">
-          <h2>Historial de la conversación</h2>
-          <span>{messages.length} turno{messages.length === 1 ? '' : 's'}{projectName ? ` · ${projectName}` : ''}</span>
+          <h2>{t('chat.history.title')}</h2>
+          <span>{tn('chat.history.turns', messages.length)}{projectName ? ` · ${projectName}` : ''}</span>
         </div>
         <div className="fc-historial-scroll">
           {messages.map((msg, i) => {
@@ -64,8 +66,8 @@ export function HistoryOverlay({
             return (
               <div key={i} className={`fc-turno ${isUser ? 'fc-usuario' : ''}`}>
                 <div className="fc-turno-quien">
-                  {isUser ? 'Tú' : 'Wyrd'}
-                  {mode && <span className="fc-turno-modo">{mode === 'plan' ? 'plan' : 'automático'}</span>}
+                  {isUser ? t('chat.history.you') : 'Wyrd'}
+                  {mode && <span className="fc-turno-modo">{mode === 'plan' ? t('chat.mode.plan').toLowerCase() : t('chat.mode.auto').toLowerCase()}</span>}
                 </div>
                 <p>{shown}</p>
               </div>

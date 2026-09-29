@@ -1,4 +1,6 @@
-export type ProgressLine = { text: string; status: 'pending' | 'done' | 'error' };
+// `kind: 'planning'` marca la línea inicial sin depender de su texto (que
+// ahora sale traducido). `text === 'Planning...'` se conserva por compatibilidad.
+export type ProgressLine = { text: string; status: 'pending' | 'done' | 'error'; kind?: 'planning' };
 
 export const isLastDone = (lines: ProgressLine[]): boolean =>
   lines.length > 0 && lines[lines.length - 1].status === 'done';
@@ -27,7 +29,7 @@ export const getPlainEnglish = (
   if (isRetrying) return 'Fixing a small issue...';
   const pending = lines.find(l => l.status === 'pending');
   if (pending) {
-    if (pending.text === 'Planning...') return 'Figuring out what to build...';
+    if (pending.kind === 'planning' || pending.text === 'Planning...') return 'Figuring out what to build...';
     if (currentAction === 'create') return 'Writing new components...';
     if (currentAction === 'modify') return 'Updating existing files...';
     if (currentAction === 'delete') return 'Removing files...';

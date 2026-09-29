@@ -3,6 +3,7 @@ import { Zap, Infinity as InfinityIcon } from 'lucide-react';
 import { CreditService } from '@/services/CreditService';
 import { formatCredits } from '@/lib/creditDisplay';
 import { useAuth } from '@/contexts/AuthContext';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
 
 /**
  * CreditsBadge — el contador de créditos, arriba del todo (encima de
@@ -19,6 +20,7 @@ import { useAuth } from '@/contexts/AuthContext';
 export function CreditsBadge() {
   const { user } = useAuth();
   const [balance, setBalance] = useState<number | null>(null);
+  const { t } = useForgeLang();
   const [unlimited, setUnlimited] = useState(false);
   const [freePromptUsed, setFreePromptUsed] = useState(false);
 
@@ -44,10 +46,10 @@ export function CreditsBadge() {
   if (balance === null) return null;
 
   const label = unlimited
-    ? 'Créditos ilimitados'
+    ? t('chat.credits.unlimited')
     : !freePromptUsed
-    ? '1 build gratis disponible'
-    : `${formatCredits(balance)} créditos`;
+    ? t('credits.freeBuild')
+    : t('credits.amount', { amount: formatCredits(balance) });
 
   return (
     <div className={`fc-creditos ${unlimited ? 'fc-ilimitado' : ''}`} style={{ alignSelf: 'flex-end' }}>

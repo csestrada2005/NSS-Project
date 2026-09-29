@@ -2,6 +2,7 @@ import { Paperclip, Mic, ArrowUp, Square } from 'lucide-react';
 import { LiveNode } from './LiveNode';
 import { ModeSelector } from './ModeSelector';
 import type { ChatSendMode } from '@/utils/chatModeMark.js';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
 
 /**
  * Typebar — Bloque 1 del rediseño: nodo vivo | selector de modo | input |
@@ -38,6 +39,7 @@ export function Typebar({
   onModeChange: (mode: ChatSendMode) => void;
   inputRef: React.RefObject<HTMLInputElement | null>;
 }) {
+  const { t } = useForgeLang();
   return (
     <div className="fc-stack">
       <div className="typebar">
@@ -48,7 +50,7 @@ export function Typebar({
           type="text"
           value={value}
           disabled={isBusy}
-          placeholder="Dile a Wyrd qué construir…"
+          placeholder={t('chat.input.placeholder')}
           autoComplete="off"
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => {
@@ -58,16 +60,16 @@ export function Typebar({
             }
           }}
         />
-        <button type="button" className="fc-icon-btn" aria-label="Adjuntar" disabled title="Próximamente">
+        <button type="button" className="fc-icon-btn" aria-label={t('chat.input.attach')} disabled title={t('common.comingSoon')}>
           <Paperclip size={14} />
         </button>
-        <button type="button" className="fc-icon-btn" aria-label="Dictar" disabled title="Próximamente">
+        <button type="button" className="fc-icon-btn" aria-label={t('chat.input.dictate')} disabled title={t('common.comingSoon')}>
           <Mic size={14} />
         </button>
         <button
           type="button"
           className={`fc-icon-btn fc-enviar ${isBusy ? 'fc-cancelar' : ''}`}
-          aria-label={isBusy ? 'Cancelar' : 'Enviar'}
+          aria-label={isBusy ? t('common.cancel') : t('chat.input.send')}
           disabled={isBusy && isCancelling}
           onClick={onSend}
         >

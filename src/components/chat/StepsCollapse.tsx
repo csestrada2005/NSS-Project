@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
 
 /**
  * StepsCollapse — el bloque colapsable de pasos al pie de toda tarjeta de
@@ -25,6 +26,7 @@ export function StepsCollapse({
   onToggle?: (next: boolean) => void;
 }) {
   const [localOpen, setLocalOpen] = useState(false);
+  const { t, tn } = useForgeLang();
   const open = controlledOpen ?? localOpen;
   const setOpen = (next: boolean) => {
     if (onToggle) onToggle(next);
@@ -32,8 +34,8 @@ export function StepsCollapse({
   };
   const label =
     completedCount >= steps.length
-      ? `${steps.length} paso${steps.length === 1 ? '' : 's'} completado${steps.length === 1 ? '' : 's'}`
-      : `${completedCount} de ${steps.length} pasos completados`;
+      ? tn('chat.steps.done', steps.length)
+      : t('chat.steps.partial', { done: completedCount, total: steps.length });
 
   return (
     <div>

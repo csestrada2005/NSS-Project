@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { MigrationRunner } from '@/services/MigrationRunner';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
 
 /** Nombre de archivo, sin el `supabase/migrations/` que llevan todos (mismo criterio que DDLApprovalButton). */
 function fileName(path: string): string {
@@ -17,6 +18,7 @@ function fileName(path: string): string {
  */
 export function useSqlPreview(projectId: string | null | undefined, paths: string[]) {
   const [open, setOpen] = useState(false);
+  const { t } = useForgeLang();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sqlByPath, setSqlByPath] = useState<[string, string][] | null>(null);
@@ -29,7 +31,7 @@ export function useSqlPreview(projectId: string | null | undefined, paths: strin
     setOpen(true);
     if (sqlByPath) return; // ya se leyó una vez, no se vuelve a pedir.
     if (!projectId) {
-      setError('No sé contra qué proyecto — abre el proyecto primero.');
+      setError(t('chat.sql.noProject'));
       return;
     }
     setLoading(true);
@@ -38,7 +40,7 @@ export function useSqlPreview(projectId: string | null | undefined, paths: strin
     for (const path of paths) {
       const { sql, error: err } = await MigrationRunner.readMigrationSql(projectId, path);
       if (err) {
-        setError(`No pude leer ${fileName(path)} (${err}).`);
+        setError(t('chat.sql.readFailed', { file: fileName(path), error: String(err) }));
         setLoading(false);
         return;
       }

@@ -20,6 +20,8 @@ import {
 } from './chat/ResultCards';
 import type { ChatPlanStep, Message } from './chat/types';
 import './chat/forgeChat.css';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
+import { t as tNow } from '@/i18n/forge/lang';
 
 // Re-exportados desde ./chat/types — ver ese archivo para el porqué (evita un
 // ciclo de módulos con las tarjetas, que también necesitan estos tipos). El
@@ -32,7 +34,7 @@ export type { ChatPlanStep, Message };
 // borrado. Anunciar un delete como "Creating" ataca justo el mecanismo que el
 // gate de aprobación sostiene — el usuario aprueba un plan y ve ejecutarse otro.
 const actionVerb = (action: ChatPlanStep['action']): string =>
-  action === 'delete' ? 'Deleting' : action === 'modify' ? 'Updating' : 'Creating';
+  tNow(action === 'delete' ? 'chat.verb.delete' : action === 'modify' ? 'chat.verb.modify' : 'chat.verb.create');
 
 // Label de una línea de progreso: la description real del step truncada a 60
 // chars y, si no hay description (callers viejos), el nombre de archivo.
@@ -213,28 +215,26 @@ export function ChatInterface({
       if (result.error === 'INSUFFICIENT_CREDITS') {
         const freePromptSpent = result.errorReason === 'FREE_PROMPT_SPENT';
         return {
-          content: freePromptSpent
-            ? "You've used your free build. Top up credits to continue building."
-            : 'Saldo insuficiente — recarga créditos para continuar.',
+          content: freePromptSpent ? tNow('chat.error.freeSpent') : tNow('chat.error.noCredits'),
           errorType: 'insufficient_credits',
         };
       }
       if (result.error && result.error.length > 0) {
         return {
-          content: "The AI couldn't fix the compile error after 3 attempts. Your last working version is preserved.",
+          content: tNow('chat.error.compile'),
           errorType: 'compile_error',
           errorDetail: result.error.slice(-200),
         };
       }
-      return { content: 'Sorry, something went wrong processing your request.', errorType: 'generic' };
+      return { content: tNow('chat.error.generic'), errorType: 'generic' };
     }
     if (result.chatResponse) {
       return { content: result.chatResponse, warning: result.warning, suggestedAction: result.suggestedAction, planSteps: result.planSteps };
     }
     if (result.modifiedFiles.length > 0) {
-      return { content: `Done. Modified: ${result.modifiedFiles.join(', ')}`, warning: result.warning, suggestedAction: result.suggestedAction, planSteps: result.planSteps };
+      return { content: tNow('chat.done.modified', { files: result.modifiedFiles.join(', ') }), warning: result.warning, suggestedAction: result.suggestedAction, planSteps: result.planSteps };
     }
-    return { content: 'Done — no files needed changing.', warning: result.warning, suggestedAction: result.suggestedAction, planSteps: result.planSteps };
+    return { content: tNow('chat.done.none'), warning: result.warning, suggestedAction: result.suggestedAction, planSteps: result.planSteps };
   };
 
   const sendMessage = async (text: string) => {
@@ -250,7 +250,7 @@ export function ChatInterface({
 
     startTimeRef.current = Date.now();
     setElapsedSeconds(0);
-    setProgressLines([{ text: 'Planning...', status: 'pending' }]);
+    setProgressLines([{ text: tNow('chat.progress.planning'), status: 'pending', kind: 'planning' }]);
 
     const intervalId = setInterval(() => {
       if (startTimeRef.current) {
@@ -276,7 +276,7 @@ export function ChatInterface({
             if (next.length > 0 && next[next.length - 1].status === 'pending') {
               next[next.length - 1].status = 'done';
             }
-            next.push({ text: `Creating ${label}`, status: 'pending' });
+            next.push({ text: `${actionVerb('create')} ${label}`, status: 'pending' });
             return next;
           });
         },
@@ -287,7 +287,7 @@ export function ChatInterface({
             if (next.length > 0 && next[next.length - 1].status === 'pending') {
               next[next.length - 1].status = 'done';
             }
-            next.push({ text: `Fixing compile error (attempt ${attempt}/3)...`, status: 'pending' });
+            next.push({ text: tNow('chat.progress.fixing', { attempt, max: 3 }), status: 'pending' });
             return next;
           });
         },
@@ -323,7 +323,7 @@ export function ChatInterface({
       if (result.cancelled) {
         appendMessage({
           role: 'assistant',
-          content: 'Cancelaste esta corrida. Lo que ya se había escrito se conservó; nada a medias se guardó.',
+          content: tNow('chat.cancelled'),
           cancelled: true,
           stepsSnapshot,
           stepsCompletedSnapshot,
@@ -351,7 +351,7 @@ export function ChatInterface({
       planLineIndexRef.current = new Map();
       isRetryingRef.current = false;
       console.error('Error in chat:', error);
-      appendMessage({ role: 'assistant', content: 'Sorry, an unexpected error occurred.' });
+      appendMessage({ role: 'assistant', content: tNow('chat.error.unexpected') });
     }
   };
 
@@ -435,7 +435,8 @@ export function ChatInterface({
     hasPendingPlan || isLoading ? 'pensando' : hasResult ? 'listo' : 'reposo';
 
   const isBusy = isLoading;
-  const processTitle = mode === 'plan' ? 'Armando el plan' : 'Trabajando';
+  const { t } = useForgeLang();
+  const processTitle = mode === 'plan' ? t('chat.process.plan') : t('chat.process.auto');
 
   // Esc — prioridad: historial abierto > cancelar un run en curso. El menú de
   // modo se cierra solo (ModeSelector detiene la propagación de su propio Esc).
@@ -457,7 +458,7 @@ export function ChatInterface({
           {selectedElement && (
             <div className="fc-pieza" style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: 12, color: 'var(--fc-texto-2)' }}>
-                Elemento seleccionado: <span style={{ fontFamily: 'var(--fc-mono)', color: 'var(--crema)' }}>
+                {t('chat.selected')} <span style={{ fontFamily: 'var(--fc-mono)', color: 'var(--crema)' }}>
                   &lt;{selectedElement.tagName.toLowerCase()}{selectedElement.className ? `.${selectedElement.className.split(' ')[0]}` : ''}&gt;
                 </span>
               </span>

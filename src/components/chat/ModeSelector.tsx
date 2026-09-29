@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ChatSendMode } from '@/utils/chatModeMark.js';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
 
 /**
  * ModeSelector — el dropdown de modo (1.3 del rediseño). SUSTITUYE al checkbox
@@ -18,6 +19,7 @@ export function ModeSelector({
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const { t } = useForgeLang();
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -54,7 +56,7 @@ export function ModeSelector({
         }}
       >
         <span className={`fc-glifo ${mode === 'plan' ? 'fc-plan' : 'fc-auto'}`} />
-        <span>{mode === 'plan' ? 'Plan' : 'Automático'}</span>
+        <span>{mode === 'plan' ? t('chat.mode.plan') : t('chat.mode.auto')}</span>
         <span className="fc-flecha">▲</span>
       </button>
       <div className={`fc-modo-menu ${open ? 'fc-abierto' : ''}`} role="menu">
@@ -67,8 +69,8 @@ export function ModeSelector({
         >
           <span className="fc-glifo fc-auto" />
           <span>
-            <strong>Automático</strong>
-            <span>Wyrd construye de una. Rápido para cambios chicos.</span>
+            <strong>{t('chat.mode.auto')}</strong>
+            <span>{t('chat.mode.autoHint')}</span>
           </span>
         </button>
         <button
@@ -80,8 +82,8 @@ export function ModeSelector({
         >
           <span className="fc-glifo fc-plan" />
           <span>
-            <strong>Plan</strong>
-            <span>Wyrd te enseña qué va a hacer y espera tu visto bueno.</span>
+            <strong>{t('chat.mode.plan')}</strong>
+            <span>{t('chat.mode.planHint')}</span>
           </span>
         </button>
       </div>
