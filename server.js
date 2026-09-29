@@ -15,6 +15,7 @@ import { bootstrapProject } from './server/bootstrapProject.js';
 import { deployEdgeFunctionViaManagement, validateEdgeFunctionDeployRequest } from './server/edgeFunctionDeploy.js';
 import { applyProductionSupabaseClient } from './src/utils/deploySupabaseClient.js';
 import { isPlatformAdmin, planRoleDecision } from './server/roleDecision.js';
+import { runTypecheck } from './server/typecheckPool.js';
 import {
   validateProjectRefRequest,
   validateLogsRequest,
@@ -1326,6 +1327,25 @@ async function getDbCredentialsForProject(projectId) {
     return null;
   }
 }
+
+// Revisión de tipos (bucket 6, 2026-09-29): mismo veredicto que `tsc -b` en
+// Vercel, con las librerías exactas de la plantilla (server/typeenv). Corre en
+// un hilo aparte (server/typecheckPool.js). Fail-open: si no está disponible
+// responde { available: false } y el Verifier sigue como antes.
+app.post('/api/typecheck', async (req, res) => {
+  const { files, autoFix } = req.body ?? {};
+  if (!files || typeof files !== 'object') {
+    return res.status(400).json({ error: 'files object is required' });
+  }
+  const result = await runTypecheck(files, { autoFix: autoFix !== false });
+  if (result.available) {
+    console.log(`[typecheck] ${result.errors.length} errores, ${result.autoFixed} auto-arreglados, ` +
+      `${result.unverifiable.length} no verificables, ${result.durationMs} ms`);
+  } else {
+    console.warn('[typecheck] no disponible:', result.reason);
+  }
+  res.json(result);
+});
 
 app.post('/api/compile', async (req, res) => {
   const { files, projectId } = req.body;

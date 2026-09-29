@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "start": "node server.js",
+    "postinstall": "node scripts/installTypeEnv.mjs",
+    "typeenv:sync": "node scripts/syncTypeEnv.mjs && cd server/typeenv && npm install --no-audit --no-fund --loglevel=error",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test": "npm run test:server && npm run test:ui",
