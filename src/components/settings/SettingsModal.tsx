@@ -17,6 +17,9 @@ import { TopPagesTable } from './analytics/TopPagesTable';
 import { DomainsPanel } from './DomainsPanel';
 import { EmailPanel } from './EmailPanel';
 import LoadingSquares from '../brand/LoadingSquares';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
+import { t as tNow } from '@/i18n/forge/lang';
+import type { ForgeKey } from '@/i18n/forge/en';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -34,19 +37,20 @@ type DbSubTab = 'overview' | 'schema' | 'sql' | 'secrets' | 'edge-functions' | '
 // existían como componentes hechos pero nunca montados aquí. edge-functions/
 // logs/usage estaban además rotos (exponían SUPABASE_SERVICE_ROLE_KEY al
 // navegador) — arreglado en server/projectManagementApi.js antes de montarlos.
-const DB_SUB_TABS: { id: DbSubTab; label: string }[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'schema', label: 'Schema' },
-  { id: 'sql', label: 'SQL' },
-  { id: 'secrets', label: 'Secrets' },
-  { id: 'edge-functions', label: 'Edge Functions' },
-  { id: 'logs', label: 'Logs' },
-  { id: 'usage', label: 'Usage' },
-  { id: 'users', label: 'Users' },
+const DB_SUB_TABS: { id: DbSubTab; label: ForgeKey }[] = [
+  { id: 'overview', label: 'hub.tab.overview' },
+  { id: 'schema', label: 'hub.db.schema' },
+  { id: 'sql', label: 'hub.db.sql' },
+  { id: 'secrets', label: 'settings.tab.secrets' },
+  { id: 'edge-functions', label: 'settings.db.edgeFunctions' },
+  { id: 'logs', label: 'settings.db.logs' },
+  { id: 'usage', label: 'settings.db.usage' },
+  { id: 'users', label: 'hub.db.users' },
 ];
 
 export function SettingsModal({ onClose, fileTree, files, projectId: propProjectId, initialTab = 'secrets' }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<MainTab>(initialTab);
+  const { t } = useForgeLang();
   const [dbSubTab, setDbSubTab] = useState<DbSubTab>('schema');
 
   const projectId = propProjectId ?? sessionStorage.getItem('forge_project_id');
@@ -67,7 +71,7 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
   // GitHub State
   const [repoName, setRepoName] = useState('');
   const [branch, setBranch] = useState('main');
-  const [commitMessage, setCommitMessage] = useState('Update from Open Lovable Builder');
+  const [commitMessage, setCommitMessage] = useState(() => tNow('settings.github.defaultCommit'));
   const [isPushing, setIsPushing] = useState(false);
   const [pushStatus, setPushStatus] = useState<{ success: boolean; message: string } | null>(null);
 
@@ -76,7 +80,7 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
     setPushStatus(null);
     try {
       const url = await gitHubService.pushToRepo(repoName, branch, fileTree, commitMessage);
-      setPushStatus({ success: true, message: `Successfully pushed to ${url}` });
+      setPushStatus({ success: true, message: t('settings.github.pushed', { url }) });
     } catch (error: any) {
       setPushStatus({ success: false, message: error.message });
     } finally {
@@ -103,21 +107,21 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
   return (
     <div className="nebu-modal bg-card w-full h-full p-6 flex flex-col">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-bold text-foreground">Settings</h2>
-        <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
+        <h2 className="text-xl font-bold text-foreground">{t('hub.tab.settings')}</h2>
+        <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors" aria-label={t('common.close')}>
           <X size={20} />
         </button>
       </div>
 
         {/* Main tabs */}
         <div className="flex gap-1 mb-6 border-b border-border pb-1 overflow-x-auto">
-          {TAB_BUTTON('secrets', 'Secrets', Lock)}
+          {TAB_BUTTON('secrets', t('settings.tab.secrets'), Lock)}
           {TAB_BUTTON('github', 'GitHub', Github)}
-          {TAB_BUTTON('deploy', 'Deploy', Rocket)}
-          {TAB_BUTTON('domains', 'Domains', Globe)}
-          {TAB_BUTTON('database', 'Database', Database)}
-          {TAB_BUTTON('email', 'Email', Mail)}
-          {TAB_BUTTON('analytics', 'Analytics', BarChart3)}
+          {TAB_BUTTON('deploy', t('settings.tab.deploy'), Rocket)}
+          {TAB_BUTTON('domains', t('hub.tab.domains'), Globe)}
+          {TAB_BUTTON('database', t('hub.tab.database'), Database)}
+          {TAB_BUTTON('email', t('hub.tab.email'), Mail)}
+          {TAB_BUTTON('analytics', t('hub.tab.analytics'), BarChart3)}
         </div>
 
         <div className="flex-1 overflow-y-auto min-h-0 pr-2 custom-scrollbar">
@@ -132,32 +136,31 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
               <div className="bg-background/50 rounded-lg p-4 border border-border">
                 <h3 className="text-lg font-semibold text-foreground mb-2 flex items-center gap-2">
                   <Github className="text-foreground" size={20} />
-                  Push to GitHub
+                  {t('settings.github.title')}
                 </h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Commit and push your changes directly to a GitHub repository.
-                  Requires <code>GITHUB_TOKEN</code> in secrets.
+                  {t('settings.github.intro')} {t('settings.github.requires')} <code>GITHUB_TOKEN</code>.
                 </p>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">Repository (username/repo)</label>
-                    <input type="text" placeholder="e.g. jules/my-app" value={repoName} onChange={(e) => setRepoName(e.target.value)}
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">{t('settings.github.repo')}</label>
+                    <input type="text" placeholder={t('settings.github.repoPlaceholder')} value={repoName} onChange={(e) => setRepoName(e.target.value)}
                       className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none" />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">Branch</label>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">{t('settings.github.branch')}</label>
                     <input type="text" placeholder="main" value={branch} onChange={(e) => setBranch(e.target.value)}
                       className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none" />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">Commit Message</label>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">{t('settings.github.commit')}</label>
                     <input type="text" value={commitMessage} onChange={(e) => setCommitMessage(e.target.value)}
                       className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none" />
                   </div>
                   <button onClick={handleGitHubPush} disabled={isPushing || !repoName || !branch}
-                    className="w-full py-2 bg-secondary hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed text-foreground rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 border border-border">
+                    className="nebu-cta w-full py-2 bg-secondary hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed text-foreground rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 border border-border">
                     {isPushing ? <LoadingSquares size={16} /> : <Github size={16} />}
-                    {isPushing ? 'Pushing...' : 'Push Changes'}
+                    {isPushing ? t('settings.github.pushing') : t('settings.github.push')}
                   </button>
                   {pushStatus && (
                     <div className={`p-3 rounded border text-sm ${pushStatus.success ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-red-500/10 border-red-500/30 text-red-300'}`}>
@@ -189,12 +192,12 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
             <div className="space-y-6">
               <div className="flex items-center gap-3 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <label className="text-xs text-muted-foreground">From</label>
+                  <label className="text-xs text-muted-foreground">{t('settings.analytics.from')}</label>
                   <input type="date" value={dateRange.start} onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
                     className="bg-muted border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none" />
                 </div>
                 <div className="flex items-center gap-2">
-                  <label className="text-xs text-muted-foreground">To</label>
+                  <label className="text-xs text-muted-foreground">{t('settings.analytics.to')}</label>
                   <input type="date" value={dateRange.end} onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
                     className="bg-muted border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none" />
                 </div>
@@ -202,7 +205,7 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
                   {[7, 30, 90].map(d => (
                     <button key={d} onClick={() => setQuickRange(d)}
                       className="px-2 py-1 text-xs bg-muted hover:bg-accent border border-border text-muted-foreground rounded transition-colors">
-                      {d}D
+                      {t('settings.analytics.days', { count: d })}
                     </button>
                   ))}
                 </div>
@@ -210,11 +213,11 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
               <TrafficCharts projectId={projectId} dateRange={dateRange} />
               <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                 <div className="lg:col-span-3">
-                  <h3 className="text-sm font-medium text-muted-foreground mb-3">Performance Audit</h3>
+                  <h3 className="text-sm font-medium text-muted-foreground mb-3">{t('settings.analytics.audit')}</h3>
                   <LighthousePanel projectId={projectId} />
                 </div>
                 <div className="lg:col-span-2">
-                  <h3 className="text-sm font-medium text-muted-foreground mb-3">Top Pages & Speed</h3>
+                  <h3 className="text-sm font-medium text-muted-foreground mb-3">{t('settings.analytics.topPages')}</h3>
                   <TopPagesTable projectId={projectId} dateRange={dateRange} />
                 </div>
               </div>
@@ -232,7 +235,7 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
                     onClick={() => setDbSubTab(tab.id)}
                     className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${dbSubTab === tab.id ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
                   >
-                    {tab.label}
+                    {t(tab.label)}
                   </button>
                 ))}
               </div>
@@ -253,7 +256,7 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
 
       <div className="flex justify-end gap-3 pt-4 border-t border-border mt-4">
         <button onClick={onClose} className="px-4 py-2 text-muted-foreground hover:text-foreground text-sm font-medium transition-colors">
-          Close
+          {t('common.close')}
         </button>
       </div>
     </div>

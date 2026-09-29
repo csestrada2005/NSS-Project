@@ -4,6 +4,7 @@ import { SupabaseService } from '@/services/SupabaseService';
 import { platformService } from '@/services/PlatformService';
 import { wyrdToast as toast } from '@/utils/wyrdToast';
 import LoadingSquares from '../../brand/LoadingSquares';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
 
 interface Secret {
   key: string;
@@ -35,6 +36,7 @@ const PLATFORM_LABELS: Record<string, string> = {
 
 export function SecretsPanel({ projectId }: SecretsPanelProps) {
   const [secrets, setSecrets] = useState<Secret[]>([]);
+  const { t } = useForgeLang();
   const [newKey, setNewKey] = useState('');
   const [newValue, setNewValue] = useState('');
   const [showValues, setShowValues] = useState<Record<number, boolean>>({});
@@ -72,7 +74,7 @@ export function SecretsPanel({ projectId }: SecretsPanelProps) {
 
   const saveSecrets = async () => {
     if (!projectId) {
-      toast.error('Save your project first to enable secret storage.');
+      toast.error(t('secrets.needProject'));
       return;
     }
     setIsSaving(true);
@@ -84,10 +86,10 @@ export function SecretsPanel({ projectId }: SecretsPanelProps) {
           { onConflict: 'project_id,key' }
         );
       }
-      toast.success('Secrets saved');
+      toast.success(t('secrets.saved'));
     } catch (e) {
       console.error('[SecretsPanel] save error:', e);
-      toast.error('Failed to save secrets');
+      toast.error(t('secrets.saveFailed'));
     } finally {
       setIsSaving(false);
     }
@@ -96,7 +98,7 @@ export function SecretsPanel({ projectId }: SecretsPanelProps) {
   const addSecret = () => {
     if (!newKey.trim()) return;
     if (PLATFORM_MANAGED_KEYS.has(newKey.trim())) {
-      alert(`"${newKey.trim()}" is a platform-managed key. It is configured server-side.`);
+      alert(t('secrets.platformKey', { key: newKey.trim() }));
       return;
     }
     setSecrets(prev => [...prev, { key: newKey.trim(), value: newValue }]);
@@ -129,17 +131,17 @@ export function SecretsPanel({ projectId }: SecretsPanelProps) {
       {!projectId && (
         <div className="bg-amber-900/20 border border-amber-700/40 rounded-xl p-4 text-sm text-amber-300 flex items-center gap-2">
           <Cloud size={16} />
-          Secrets are stored securely per project. Open a project to manage secrets.
+          {t('secrets.openProject')}
         </div>
       )}
 
       {/* Platform services (read-only) */}
       <div className="bg-background/50 rounded-xl p-4 border border-border border-l-4 border-l-primary">
-        <h3 className="text-sm font-semibold text-foreground mb-3">Platform Services</h3>
+        <h3 className="text-sm font-semibold text-foreground mb-3">{t('secrets.platform')}</h3>
         {loadingPlatform ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <LoadingSquares size={12} />
-            Checking platform services...
+            {t('secrets.checking')}
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-2">
@@ -156,25 +158,25 @@ export function SecretsPanel({ projectId }: SecretsPanelProps) {
             })}
           </div>
         )}
-        <p className="text-xs text-muted-foreground mt-3">Platform keys are managed server-side and never exposed to the client.</p>
+        <p className="text-xs text-muted-foreground mt-3">{t('secrets.platformNote')}</p>
       </div>
 
       {/* User-managed secrets */}
       <div className="bg-background/50 rounded-lg p-4 border border-border border-l-4 border-l-primary">
         <p className="text-sm text-muted-foreground mb-1">
-          Project secrets (e.g. <code>GITHUB_TOKEN</code>, custom API keys) are stored securely per project.
+          {t('secrets.projectIntro')}
         </p>
         <div className="flex gap-2 mb-4 mt-4">
           <input
             type="text"
-            placeholder="KEY (e.g. GITHUB_TOKEN)"
+            placeholder={t('secrets.keyPlaceholder')}
             value={newKey}
             onChange={(e) => setNewKey(e.target.value)}
             className="flex-1 bg-muted border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
           />
           <input
             type="password"
-            placeholder="VALUE"
+            placeholder={t('secrets.valuePlaceholder')}
             value={newValue}
             onChange={(e) => setNewValue(e.target.value)}
             className="flex-1 bg-muted border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
@@ -185,14 +187,14 @@ export function SecretsPanel({ projectId }: SecretsPanelProps) {
             className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
           >
             <Plus size={16} />
-            Add
+            {t('secrets.add')}
           </button>
         </div>
       </div>
 
       <div className="space-y-2">
         {secrets.length === 0 ? (
-          <div className="text-center text-zinc-500 py-4">No project secrets added yet.</div>
+          <div className="text-center text-zinc-500 py-4">{t('secrets.empty')}</div>
         ) : (
           secrets.map((secret, index) => (
             <div key={index} className="flex items-center gap-2 bg-zinc-800/50 p-3 rounded border border-zinc-800 group hover:border-zinc-700 transition-colors">
@@ -206,13 +208,15 @@ export function SecretsPanel({ projectId }: SecretsPanelProps) {
                 <button
                   onClick={() => setShowValues(prev => ({ ...prev, [index]: !prev[index] }))}
                   className="text-zinc-500 hover:text-white transition-colors"
+                  aria-label={showValues[index] ? t('secrets.hide') : t('secrets.show')}
                 >
                   {showValues[index] ? <EyeOff size={12} /> : <Eye size={12} />}
                 </button>
               </div>
               <button
                 onClick={() => removeSecret(index)}
-                className="p-2 text-zinc-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                className="p-2 text-zinc-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                aria-label={t('secrets.remove', { key: secret.key })}
               >
                 <Trash2 size={16} />
               </button>
@@ -224,10 +228,10 @@ export function SecretsPanel({ projectId }: SecretsPanelProps) {
       <button
         onClick={saveSecrets}
         disabled={isSaving}
-        className="flex items-center gap-2 px-6 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors"
+        className="nebu-cta flex items-center gap-2 px-6 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors"
       >
         <Save size={16} />
-        {isSaving ? 'Saving...' : 'Save Secrets'}
+        {isSaving ? t('common.saving') : t('secrets.save')}
       </button>
     </div>
   );

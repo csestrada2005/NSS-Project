@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Database, Zap, Radio, HardDrive } from 'lucide-react';
 import { SupabaseService } from '@/services/SupabaseService';
 import LoadingSquares from '../../brand/LoadingSquares';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
 
 interface UsagePanelProps {
   projectId?: string | null;
@@ -24,6 +25,7 @@ export function UsagePanel({ projectId }: UsagePanelProps) {
   } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { lang, t } = useForgeLang();
 
   useEffect(() => {
     if (!projectId) {
@@ -36,7 +38,7 @@ export function UsagePanel({ projectId }: UsagePanelProps) {
       if (result.ok) {
         const latest = result.snapshots[result.snapshots.length - 1] ?? null;
         setSnapshot(latest);
-        setError(latest ? null : 'No usage data available yet');
+        setError(latest ? null : t('usage.empty'));
       } else {
         setSnapshot(null);
         setError(result.reason);
@@ -47,14 +49,14 @@ export function UsagePanel({ projectId }: UsagePanelProps) {
   }, [projectId]);
 
   const kpis = [
-    { label: 'REST Requests', value: snapshot?.total_rest_requests, icon: <Database size={18} className="text-muted-foreground" /> },
-    { label: 'Auth Requests', value: snapshot?.total_auth_requests, icon: <Zap size={18} className="text-muted-foreground" /> },
-    { label: 'Storage Requests', value: snapshot?.total_storage_requests, icon: <HardDrive size={18} className="text-muted-foreground" /> },
-    { label: 'Realtime Requests', value: snapshot?.total_realtime_requests, icon: <Radio size={18} className="text-muted-foreground" /> },
+    { label: t('usage.rest'), value: snapshot?.total_rest_requests, icon: <Database size={18} className="text-muted-foreground" /> },
+    { label: t('usage.auth'), value: snapshot?.total_auth_requests, icon: <Zap size={18} className="text-muted-foreground" /> },
+    { label: t('usage.storage'), value: snapshot?.total_storage_requests, icon: <HardDrive size={18} className="text-muted-foreground" /> },
+    { label: t('usage.realtime'), value: snapshot?.total_realtime_requests, icon: <Radio size={18} className="text-muted-foreground" /> },
   ];
 
   if (!projectId) {
-    return <div className="text-center text-zinc-500 text-sm py-8">Save your project first to view usage.</div>;
+    return <div className="text-center text-zinc-500 text-sm py-8">{t('usage.needProject')}</div>;
   }
 
   return (
@@ -75,7 +77,7 @@ export function UsagePanel({ projectId }: UsagePanelProps) {
               <LoadingSquares size={16} />
             ) : (
               <p className="text-2xl font-bold text-foreground">
-                {kpi.value !== undefined && kpi.value !== null ? kpi.value.toLocaleString() : '--'}
+                {kpi.value !== undefined && kpi.value !== null ? kpi.value.toLocaleString(lang) : '--'}
               </p>
             )}
           </div>

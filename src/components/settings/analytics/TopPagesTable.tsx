@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { SupabaseService } from '@/services/SupabaseService';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
 
 interface TopPagesTableProps {
   projectId: string | null;
@@ -15,6 +16,7 @@ interface PageStat {
 
 export function TopPagesTable({ projectId, dateRange }: TopPagesTableProps) {
   const [pages, setPages] = useState<PageStat[]>([]);
+  const { t } = useForgeLang();
   const [isLoading, setIsLoading] = useState(true);
   const [avgTTFB, setAvgTTFB] = useState<number | null>(null);
 
@@ -66,9 +68,9 @@ export function TopPagesTable({ projectId, dateRange }: TopPagesTableProps) {
 
   const speedLabel = (ttfb: number | null) => {
     if (ttfb === null) return null;
-    if (ttfb < 200) return { label: 'Fast', cls: 'bg-emerald-600/20 text-emerald-400' };
-    if (ttfb < 600) return { label: 'Moderate', cls: 'bg-amber-600/20 text-amber-400' };
-    return { label: 'Slow', cls: 'bg-red-600/20 text-red-400' };
+    if (ttfb < 200) return { label: t('pages.fast'), cls: 'bg-emerald-600/20 text-emerald-400' };
+    if (ttfb < 600) return { label: t('pages.moderate'), cls: 'bg-amber-600/20 text-amber-400' };
+    return { label: t('pages.slow'), cls: 'bg-red-600/20 text-red-400' };
   };
 
   const speed = speedLabel(avgTTFB);
@@ -78,7 +80,7 @@ export function TopPagesTable({ projectId, dateRange }: TopPagesTableProps) {
       {avgTTFB !== null && speed && (
         <div className="bg-zinc-800/30 border border-zinc-700 rounded-xl p-4 flex items-center justify-between">
           <div>
-            <p className="text-xs text-zinc-500">Avg TTFB</p>
+            <p className="text-xs text-zinc-500">{t('pages.avgTtfb')}</p>
             <p className="text-lg font-bold text-zinc-200">{avgTTFB}ms</p>
           </div>
           <span className={`text-xs font-medium px-2 py-1 rounded ${speed.cls}`}>{speed.label}</span>
@@ -86,19 +88,19 @@ export function TopPagesTable({ projectId, dateRange }: TopPagesTableProps) {
       )}
 
       {isLoading ? (
-        <div className="text-center text-zinc-500 text-sm py-6">Loading...</div>
+        <div className="text-center text-zinc-500 text-sm py-6">{t('common.loading')}</div>
       ) : pages.length === 0 ? (
-        <div className="text-center text-zinc-500 text-sm py-6">No page data yet</div>
+        <div className="text-center text-zinc-500 text-sm py-6">{t('pages.empty')}</div>
       ) : (
         <div className="overflow-x-auto border border-zinc-700 rounded-xl">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-zinc-700 text-zinc-500">
                 <th className="text-left px-4 py-2 font-medium">#</th>
-                <th className="text-left px-4 py-2 font-medium">Path</th>
-                <th className="text-right px-4 py-2 font-medium">Sessions</th>
-                <th className="text-right px-4 py-2 font-medium">Avg Dur</th>
-                <th className="text-right px-4 py-2 font-medium">Bounce</th>
+                <th className="text-left px-4 py-2 font-medium">{t('pages.path')}</th>
+                <th className="text-right px-4 py-2 font-medium">{t('pages.sessions')}</th>
+                <th className="text-right px-4 py-2 font-medium">{t('pages.avgDur')}</th>
+                <th className="text-right px-4 py-2 font-medium">{t('pages.bounce')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800">

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Zap, RefreshCw } from 'lucide-react';
 import { SupabaseService, type RemoteEdgeFunctionSummary } from '@/services/SupabaseService';
 import { isEdgeFunctionEntrypoint, edgeFunctionSlug } from '../../../utils/edgeFunctionPath.js';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
 
 interface LocalEdgeFunction {
   slug: string;
@@ -29,6 +30,7 @@ function getLocalFunctions(files?: Map<string, string>): LocalEdgeFunction[] {
 export function EdgeFunctionsPanel({ projectId, files }: EdgeFunctionsPanelProps) {
   const localFunctions = getLocalFunctions(files);
   const [remote, setRemote] = useState<RemoteEdgeFunctionSummary[]>([]);
+  const { t } = useForgeLang();
   const [remoteError, setRemoteError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [deployState, setDeployState] = useState<Record<string, DeployState>>({});
@@ -65,20 +67,20 @@ export function EdgeFunctionsPanel({ projectId, files }: EdgeFunctionsPanelProps
   if (!projectId) {
     return (
       <div className="text-center text-zinc-500 text-sm py-8">
-        Save your project first to manage edge functions.
+        {t('edge.needProject')}
       </div>
     );
   }
 
   if (isLoading) {
-    return <div className="text-center text-zinc-500 text-sm py-8">Loading functions...</div>;
+    return <div className="text-center text-zinc-500 text-sm py-8">{t('edge.loading')}</div>;
   }
 
   if (localFunctions.length === 0) {
     return (
       <div className="text-center text-zinc-500 text-sm py-8">
         <Zap size={24} className="mx-auto mb-2 text-zinc-600" />
-        No edge functions found in this project
+        {t('edge.empty')}
       </div>
     );
   }
@@ -89,14 +91,16 @@ export function EdgeFunctionsPanel({ projectId, files }: EdgeFunctionsPanelProps
     <div className="space-y-2">
       {remoteError && (
         <div className="bg-amber-900/20 border border-amber-700/40 rounded-xl p-3 text-xs text-amber-300">
-          Couldn't reach live status ({remoteError}) — showing functions detected in the project's code.
+          {t('edge.remoteError', { error: remoteError })}
         </div>
       )}
       {localFunctions.map((fn) => {
         const remoteInfo = remoteBySlug.get(fn.slug);
         const state = deployState[fn.slug] ?? 'idle';
-        const statusLabel = remoteInfo?.status ?? (state === 'deployed' ? 'ACTIVE' : 'NOT DEPLOYED');
-        const isActive = statusLabel === 'ACTIVE';
+        const status = remoteInfo?.status ?? (state === 'deployed' ? 'ACTIVE' : 'NOT DEPLOYED');
+        const isActive = status === 'ACTIVE';
+        // El estado remoto llega en inglés desde Supabase; sólo se traducen los dos conocidos.
+        const statusLabel = status === 'ACTIVE' ? t('edge.active') : status === 'NOT DEPLOYED' ? t('edge.notDeployed') : status;
         return (
           <div key={fn.slug} className="flex items-center justify-between p-3 bg-zinc-800/50 border border-zinc-700 rounded-lg">
             <div className="flex items-center gap-3">
@@ -112,7 +116,7 @@ export function EdgeFunctionsPanel({ projectId, files }: EdgeFunctionsPanelProps
               className="flex items-center gap-1 px-2 py-1 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 text-xs rounded transition-colors disabled:opacity-50"
             >
               <RefreshCw size={11} className={state === 'deploying' ? 'animate-spin' : ''} />
-              {state === 'error' ? 'Retry' : 'Deploy'}
+              {state === 'error' ? t('common.retry') : t('settings.tab.deploy')}
             </button>
           </div>
         );

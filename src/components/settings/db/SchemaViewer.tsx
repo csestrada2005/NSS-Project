@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { SupabaseService } from '@/services/SupabaseService';
 import { projectDBService } from '@/services/ProjectDBService';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
 
 interface Column {
   table_name: string;
@@ -22,6 +23,7 @@ interface SchemaViewerProps {
 export function SchemaViewer({ projectId }: SchemaViewerProps = {}) {
   const resolvedProjectId = projectId ?? sessionStorage.getItem('forge_project_id');
   const [tables, setTables] = useState<TableGroup[]>([]);
+  const { t } = useForgeLang();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -50,7 +52,7 @@ export function SchemaViewer({ projectId }: SchemaViewerProps = {}) {
 
           if (qError) {
             if (qError.message?.includes('permission') || qError.code === '42501') {
-              setError('Schema access requires service role key. Add SUPABASE_SERVICE_ROLE_KEY to your project secrets.');
+              setError(t('schema.needKey'));
             } else {
               setError(qError.message);
             }
@@ -67,7 +69,7 @@ export function SchemaViewer({ projectId }: SchemaViewerProps = {}) {
         }
         setTables(Object.entries(grouped).map(([name, cols]) => ({ name, columns: cols })));
       } catch (e: any) {
-        setError(e.message ?? 'Unknown error');
+        setError(e.message ?? t('studio.runtime.unknown'));
       } finally {
         setIsLoading(false);
       }
@@ -75,10 +77,10 @@ export function SchemaViewer({ projectId }: SchemaViewerProps = {}) {
     load();
   }, [resolvedProjectId]);
 
-  const filtered = tables.filter(t => t.name.toLowerCase().includes(search.toLowerCase()));
+  const filtered = tables.filter(tbl => tbl.name.toLowerCase().includes(search.toLowerCase()));
 
   if (isLoading) {
-    return <div className="flex items-center justify-center py-10 text-zinc-500 text-sm">Loading schema...</div>;
+    return <div className="flex items-center justify-center py-10 text-zinc-500 text-sm">{t('schema.loading')}</div>;
   }
 
   if (error) {
@@ -93,7 +95,7 @@ export function SchemaViewer({ projectId }: SchemaViewerProps = {}) {
     <div className="space-y-3">
       <input
         type="text"
-        placeholder="Search tables..."
+        placeholder={t('schema.search')}
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-primary placeholder-zinc-500"
@@ -105,6 +107,7 @@ export function SchemaViewer({ projectId }: SchemaViewerProps = {}) {
             <button
               onClick={() => setExpanded(prev => ({ ...prev, [table.name]: !prev[table.name] }))}
               className="w-full flex items-center justify-between px-4 py-2.5 bg-zinc-800/50 hover:bg-zinc-800 text-left transition-colors"
+              aria-expanded={!!expanded[table.name]}
             >
               <div className="flex items-center gap-2">
                 <ChevronRight
@@ -114,7 +117,7 @@ export function SchemaViewer({ projectId }: SchemaViewerProps = {}) {
                 <span className="text-sm font-medium text-zinc-200 font-mono">{table.name}</span>
               </div>
               <span className="text-xs bg-zinc-700 text-zinc-400 px-2 py-0.5 rounded-full">
-                {table.columns.length} cols
+                {t('schema.cols', { count: table.columns.length })}
               </span>
             </button>
 
@@ -124,7 +127,7 @@ export function SchemaViewer({ projectId }: SchemaViewerProps = {}) {
                   <div key={col.column_name} className="flex items-center gap-3">
                     <div
                       className={`w-2 h-2 rounded-full shrink-0 ${col.is_nullable === 'YES' ? 'bg-emerald-500' : 'bg-zinc-600'}`}
-                      title={col.is_nullable === 'YES' ? 'Nullable' : 'Not null'}
+                      title={col.is_nullable === 'YES' ? t('schema.nullable') : t('schema.notNull')}
                     />
                     <span className="text-sm text-zinc-200 font-mono">{col.column_name}</span>
                     <span className="text-xs text-zinc-500 ml-auto">{col.data_type}</span>
@@ -135,7 +138,7 @@ export function SchemaViewer({ projectId }: SchemaViewerProps = {}) {
           </div>
         ))}
         {filtered.length === 0 && (
-          <p className="text-center text-zinc-500 text-sm py-6">No tables found</p>
+          <p className="text-center text-zinc-500 text-sm py-6">{t('schema.empty')}</p>
         )}
       </div>
     </div>

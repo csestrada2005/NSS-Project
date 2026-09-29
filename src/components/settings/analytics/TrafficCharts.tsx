@@ -13,6 +13,8 @@ import {
 } from 'recharts';
 import { SupabaseService } from '@/services/SupabaseService';
 import NebuLoader from '../../brand/NebuLoader';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
+import { getForgeLang } from '@/i18n/forge/lang';
 
 interface TrafficChartsProps {
   projectId: string | null;
@@ -28,11 +30,12 @@ interface AnalyticsRow {
 }
 
 function formatDate(d: string): string {
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return new Date(d).toLocaleDateString(getForgeLang(), { month: 'short', day: 'numeric' });
 }
 
 export function TrafficCharts({ projectId, dateRange }: TrafficChartsProps) {
   const [rows, setRows] = useState<AnalyticsRow[]>([]);
+  const { lang, t } = useForgeLang();
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -72,10 +75,10 @@ export function TrafficCharts({ projectId, dateRange }: TrafficChartsProps) {
   }));
 
   const kpis = [
-    { label: 'Total Visitors', value: totalVisitors.toLocaleString(), icon: <Users size={16} className="text-zinc-400" /> },
-    { label: 'Total Pageviews', value: totalPageviews.toLocaleString(), icon: <Eye size={16} className="text-zinc-400" /> },
-    { label: 'Avg Views/Visit', value: avgViewsPerVisit, icon: <Layers size={16} className="text-zinc-400" /> },
-    { label: 'Avg Bounce Rate', value: `${avgBounce}%`, icon: <TrendingDown size={16} className="text-zinc-400" /> },
+    { label: t('traffic.visitors'), value: totalVisitors.toLocaleString(lang), icon: <Users size={16} className="text-zinc-400" /> },
+    { label: t('traffic.pageviews'), value: totalPageviews.toLocaleString(lang), icon: <Eye size={16} className="text-zinc-400" /> },
+    { label: t('traffic.viewsPerVisit'), value: avgViewsPerVisit, icon: <Layers size={16} className="text-zinc-400" /> },
+    { label: t('traffic.bounceRate'), value: `${avgBounce}%`, icon: <TrendingDown size={16} className="text-zinc-400" /> },
   ];
 
   if (isLoading) {
@@ -86,7 +89,7 @@ export function TrafficCharts({ projectId, dateRange }: TrafficChartsProps) {
     return (
       <div className="text-center py-10 text-zinc-500">
         <Eye size={32} className="mx-auto mb-2 text-zinc-600" />
-        <p>No visitor data yet. Deploy your project to start collecting analytics.</p>
+        <p>{t('traffic.empty')}</p>
       </div>
     );
   }
@@ -108,22 +111,22 @@ export function TrafficCharts({ projectId, dateRange }: TrafficChartsProps) {
 
       {/* Visitors + Pageviews chart */}
       <div className="bg-zinc-800/30 border border-zinc-700 rounded-xl p-4">
-        <h3 className="text-sm font-medium text-zinc-300 mb-4">Visitors & Pageviews</h3>
+        <h3 className="text-sm font-medium text-zinc-300 mb-4">{t('traffic.chart1')}</h3>
         <ResponsiveContainer width="100%" height={200}>
           <LineChart data={chartData}>
             <XAxis dataKey="date" tick={{ fill: '#71717a', fontSize: 11 }} />
             <YAxis tick={{ fill: '#71717a', fontSize: 11 }} />
             <Tooltip contentStyle={{ background: '#18181b', border: '1px solid #3f3f46', borderRadius: 8 }} />
             <Legend />
-            <Line type="monotone" dataKey="visitors" stroke="#10b981" strokeWidth={2} dot={false} name="Visitors" />
-            <Line type="monotone" dataKey="pageviews" stroke="#3b82f6" strokeWidth={2} dot={false} name="Pageviews" />
+            <Line type="monotone" dataKey="visitors" stroke="#10b981" strokeWidth={2} dot={false} name={t('traffic.legendVisitors')} />
+            <Line type="monotone" dataKey="pageviews" stroke="#3b82f6" strokeWidth={2} dot={false} name={t('traffic.legendPageviews')} />
           </LineChart>
         </ResponsiveContainer>
       </div>
 
       {/* Duration + Bounce chart */}
       <div className="bg-zinc-800/30 border border-zinc-700 rounded-xl p-4">
-        <h3 className="text-sm font-medium text-zinc-300 mb-4">Visit Duration & Bounce Rate</h3>
+        <h3 className="text-sm font-medium text-zinc-300 mb-4">{t('traffic.chart2')}</h3>
         <ResponsiveContainer width="100%" height={180}>
           <ComposedChart data={chartData}>
             <XAxis dataKey="date" tick={{ fill: '#71717a', fontSize: 11 }} />
@@ -131,8 +134,8 @@ export function TrafficCharts({ projectId, dateRange }: TrafficChartsProps) {
             <YAxis yAxisId="right" orientation="right" tick={{ fill: '#71717a', fontSize: 11 }} />
             <Tooltip contentStyle={{ background: '#18181b', border: '1px solid #3f3f46', borderRadius: 8 }} />
             <Legend />
-            <Bar yAxisId="left" dataKey="duration" fill="#6366f1" name="Avg Duration (s)" />
-            <Line yAxisId="right" type="monotone" dataKey="bounce" stroke="#f59e0b" strokeWidth={2} dot={false} name="Bounce %" />
+            <Bar yAxisId="left" dataKey="duration" fill="#6366f1" name={t('traffic.legendDuration')} />
+            <Line yAxisId="right" type="monotone" dataKey="bounce" stroke="#f59e0b" strokeWidth={2} dot={false} name={t('traffic.legendBounce')} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>

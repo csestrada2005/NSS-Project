@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Mail, Plus, Trash2, CheckCircle, Clock, Send, Save, Edit2, X } from 'lucide-react';
 import { SupabaseService } from '@/services/SupabaseService';
 import LoadingSquares from '../brand/LoadingSquares';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
 
 interface EmailConfig {
   status: 'pending' | 'verified' | null;
@@ -32,6 +33,7 @@ async function getAuthHeader() {
 
 export function EmailPanel({ projectId }: EmailPanelProps) {
   const [emailConfig, setEmailConfig] = useState<EmailConfig | null>(null);
+  const { t } = useForgeLang();
   const [sendingDomain, setSendingDomain] = useState('');
   const [isSettingUp, setIsSettingUp] = useState(false);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
@@ -83,12 +85,12 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
       });
       const data = await response.json();
       if (!response.ok) {
-        setError(data.error || 'Setup failed');
+        setError(data.error || t('email.setupFailed'));
         return;
       }
       setEmailConfig({ status: 'pending', dnsRecords: data.dnsRecords || [] });
     } catch (e: any) {
-      setError(e?.message || 'Setup failed');
+      setError(e?.message || t('email.setupFailed'));
     } finally {
       setIsSettingUp(false);
     }
@@ -103,7 +105,7 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
       const data = await response.json();
       setEmailConfig(data);
       if (data.status === 'verified') {
-        setSuccessMsg('Domain verified!');
+        setSuccessMsg(t('email.verifiedMsg'));
         setTimeout(() => setSuccessMsg(null), 3000);
       }
     } finally {
@@ -133,7 +135,7 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
   };
 
   const deleteTemplate = async (templateId: string) => {
-    if (!window.confirm('Delete this template?')) return;
+    if (!window.confirm(t('email.deleteConfirm'))) return;
     const headers = await getAuthHeader();
     await fetch(`/api/email/${projectId}/templates/${templateId}`, { method: 'DELETE', headers });
     await loadTemplates();
@@ -151,18 +153,18 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
         body: JSON.stringify({ to: testEmail, templateName: testTemplate, variables: {} }),
       });
       const data = await response.json();
-      if (!response.ok) { setError(data.error || 'Send failed'); return; }
-      setSuccessMsg('Test email sent!');
+      if (!response.ok) { setError(data.error || t('email.sendFailed')); return; }
+      setSuccessMsg(t('email.sentMsg'));
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (e: any) {
-      setError(e?.message || 'Send failed');
+      setError(e?.message || t('email.sendFailed'));
     } finally {
       setIsSending(false);
     }
   };
 
   if (!projectId) {
-    return <div className="text-center text-zinc-500 py-8 text-sm">Save your project to manage email settings.</div>;
+    return <div className="text-center text-zinc-500 py-8 text-sm">{t('email.needProject')}</div>;
   }
 
   const TemplateEditor = ({ template, onSave, onCancel }: { template: Partial<EmailTemplate>; onSave: (t: Partial<EmailTemplate>) => void; onCancel: () => void }) => {
@@ -171,20 +173,20 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
       <div className="bg-background/50 border border-border border-l-4 border-l-primary rounded-lg p-4 space-y-3">
         <input
           type="text"
-          placeholder="Template name (e.g. welcome, otp)"
+          placeholder={t('email.tpl.name')}
           value={local.name || ''}
           onChange={e => setLocal(p => ({ ...p, name: e.target.value }))}
           className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
         />
         <input
           type="text"
-          placeholder="Subject line (use {{variable}} for placeholders)"
+          placeholder={t('email.tpl.subject')}
           value={local.subject || ''}
           onChange={e => setLocal(p => ({ ...p, subject: e.target.value }))}
           className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
         />
         <div>
-          <p className="text-xs text-muted-foreground mb-1">HTML body — use {'{{variable}}'} for dynamic values</p>
+          <p className="text-xs text-muted-foreground mb-1">{t('email.tpl.bodyHint')}</p>
           <textarea
             placeholder="<h1>Hello {{name}}</h1><p>Welcome!</p>"
             value={local.html_body || ''}
@@ -197,14 +199,14 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
           <button
             onClick={() => onSave(local)}
             disabled={!local.name || !local.subject}
-            className="px-4 py-1.5 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-1.5"
+            className="nebu-cta px-4 py-1.5 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-1.5"
           >
             <Save size={13} />
-            Save
+            {t('common.save')}
           </button>
           <button onClick={onCancel} className="px-4 py-1.5 bg-secondary hover:bg-accent text-foreground border border-border rounded text-sm transition-colors flex items-center gap-1.5">
             <X size={13} />
-            Cancel
+            {t('common.cancel')}
           </button>
         </div>
       </div>
@@ -227,14 +229,14 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
       <div className="bg-background/50 rounded-lg p-4 border border-border border-l-4 border-l-primary">
         <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
           <Mail size={14} />
-          Sending Domain
+          {t('email.sendingDomain')}
         </h3>
 
         {!emailConfig?.status ? (
           <div className="flex gap-2">
             <input
               type="text"
-              placeholder="e.g. mail.myapp.com"
+              placeholder={t('email.domainPlaceholder')}
               value={sendingDomain}
               onChange={e => setSendingDomain(e.target.value)}
               className="flex-1 bg-muted border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
@@ -242,10 +244,10 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
             <button
               onClick={setupDomain}
               disabled={isSettingUp || !sendingDomain.trim()}
-              className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
+              className="nebu-cta px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
             >
               {isSettingUp ? <LoadingSquares size={14} /> : <Plus size={14} />}
-              Setup
+              {t('email.setup')}
             </button>
           </div>
         ) : (
@@ -255,7 +257,7 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
                 ? <CheckCircle size={14} className="text-emerald-500" />
                 : <Clock size={14} className="text-muted-foreground animate-pulse" />}
               <span className={`text-sm font-medium ${emailConfig.status === 'verified' ? 'text-emerald-500' : 'text-foreground'}`}>
-                {emailConfig.status === 'verified' ? 'Verified' : 'Pending verification'}
+                {emailConfig.status === 'verified' ? t('email.verified') : t('email.pending')}
               </span>
               {emailConfig.status === 'pending' && (
                 <button
@@ -264,21 +266,21 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
                   className="ml-auto text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
                 >
                   {isCheckingStatus ? <LoadingSquares size={11} /> : null}
-                  Check verification
+                  {t('email.check')}
                 </button>
               )}
             </div>
 
             {emailConfig.dnsRecords && emailConfig.dnsRecords.length > 0 && emailConfig.status === 'pending' && (
               <div>
-                <p className="text-xs text-muted-foreground mb-2">Add these DNS records to verify your domain:</p>
+                <p className="text-xs text-muted-foreground mb-2">{t('email.dnsIntro')}</p>
                 <div className="overflow-x-auto border border-border rounded-lg">
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="bg-muted text-muted-foreground border-b border-border">
-                        <th className="text-left px-3 py-2 font-medium">Type</th>
-                        <th className="text-left px-3 py-2 font-medium">Name</th>
-                        <th className="text-left px-3 py-2 font-medium">Value</th>
+                        <th className="text-left px-3 py-2 font-medium">{t('email.dns.type')}</th>
+                        <th className="text-left px-3 py-2 font-medium">{t('email.dns.name')}</th>
+                        <th className="text-left px-3 py-2 font-medium">{t('email.dns.value')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
@@ -302,7 +304,7 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
-            Templates
+            {t('email.templates')}
           </h3>
           {!newTemplate && (
             <button
@@ -310,7 +312,7 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
               className="text-xs text-primary hover:text-primary/80 flex items-center gap-1 transition-colors"
             >
               <Plus size={12} />
-              New template
+              {t('email.newTemplate')}
             </button>
           )}
         </div>
@@ -324,7 +326,7 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
         )}
 
         {templates.length === 0 && !newTemplate ? (
-          <p className="text-zinc-500 text-sm text-center py-4">No templates yet.</p>
+          <p className="text-zinc-500 text-sm text-center py-4">{t('email.noTemplates')}</p>
         ) : (
           templates.map(template => (
             <div key={template.id}>
@@ -343,13 +345,15 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
                   </div>
                   <button
                     onClick={() => setEditingTemplate(template)}
-                    className="p-1.5 text-zinc-500 hover:text-white opacity-0 group-hover:opacity-100 transition-all"
+                    className="p-1.5 text-zinc-500 hover:text-white opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all"
+                    aria-label={t('email.editTemplate', { name: template.name })}
                   >
                     <Edit2 size={12} />
                   </button>
                   <button
                     onClick={() => deleteTemplate(template.id)}
-                    className="p-1.5 text-zinc-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                    className="p-1.5 text-zinc-500 hover:text-red-400 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all"
+                    aria-label={t('email.deleteTemplate', { name: template.name })}
                   >
                     <Trash2 size={12} />
                   </button>
@@ -365,12 +369,12 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
         <div className="bg-background/50 rounded-lg p-4 border border-border border-l-4 border-l-primary">
           <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
             <Send size={14} />
-            Test Send
+            {t('email.testSend')}
           </h3>
           <div className="space-y-3">
             <input
               type="email"
-              placeholder="Recipient email"
+              placeholder={t('email.recipient')}
               value={testEmail}
               onChange={e => setTestEmail(e.target.value)}
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
@@ -380,16 +384,16 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
               onChange={e => setTestTemplate(e.target.value)}
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
             >
-              <option value="">Select template...</option>
-              {templates.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+              <option value="">{t('email.selectTemplate')}</option>
+              {templates.map(tpl => <option key={tpl.id} value={tpl.name}>{tpl.name}</option>)}
             </select>
             <button
               onClick={sendTestEmail}
               disabled={isSending || !testEmail || !testTemplate}
-              className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
+              className="nebu-cta px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
             >
               {isSending ? <LoadingSquares size={14} /> : <Send size={14} />}
-              {isSending ? 'Sending...' : 'Send Test'}
+              {isSending ? t('email.sending') : t('email.sendTest')}
             </button>
           </div>
         </div>

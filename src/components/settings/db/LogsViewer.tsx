@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { SupabaseService } from '@/services/SupabaseService';
 import LoadingSquares from '../../brand/LoadingSquares';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
 
 type LogSource = 'postgres' | 'auth' | 'edge-functions';
 
@@ -16,6 +17,7 @@ interface LogsViewerProps {
 
 export function LogsViewer({ projectId }: LogsViewerProps) {
   const [source, setSource] = useState<LogSource>('postgres');
+  const { lang, t } = useForgeLang();
   const [logs, setLogs] = useState<LogLine[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +65,7 @@ export function LogsViewer({ projectId }: LogsViewerProps) {
   const LEVEL_COLORS = { INFO: 'text-zinc-400', WARN: 'text-amber-400', ERROR: 'text-red-400' };
 
   if (!projectId) {
-    return <div className="text-center text-zinc-500 text-sm py-8">Save your project first to view logs.</div>;
+    return <div className="text-center text-zinc-500 text-sm py-8">{t('logs.needProject')}</div>;
   }
 
   return (
@@ -77,7 +79,7 @@ export function LogsViewer({ projectId }: LogsViewerProps) {
               onClick={() => setSource(s)}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors capitalize ${source === s ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-white hover:bg-zinc-800'}`}
             >
-              {s === 'edge-functions' ? 'Edge Fn' : s.charAt(0).toUpperCase() + s.slice(1)}
+              {s === 'edge-functions' ? t('logs.edge') : s === 'auth' ? t('logs.auth') : 'Postgres'}
             </button>
           ))}
         </div>
@@ -89,13 +91,13 @@ export function LogsViewer({ projectId }: LogsViewerProps) {
               onChange={(e) => setAutoRefresh(e.target.checked)}
               className="rounded"
             />
-            Auto-refresh
+            {t('logs.autoRefresh')}
           </label>
           <button
             onClick={() => setLogs([])}
             className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
           >
-            Clear
+            {t('logs.clear')}
           </button>
         </div>
       </div>
@@ -109,13 +111,13 @@ export function LogsViewer({ projectId }: LogsViewerProps) {
         )}
         {logs.map((log, i) => (
           <div key={i} className="flex gap-2">
-            <span className="text-green-500 shrink-0">{new Date(log.timestamp).toLocaleTimeString()}</span>
+            <span className="text-green-500 shrink-0">{new Date(log.timestamp).toLocaleTimeString(lang)}</span>
             <span className={`shrink-0 font-bold ${LEVEL_COLORS[log.level] ?? 'text-zinc-400'}`}>[{log.level}]</span>
             <span className="text-zinc-300 break-all">{log.message}</span>
           </div>
         ))}
         {logs.length === 0 && !isLoading && !error && (
-          <span className="text-zinc-600">No logs available</span>
+          <span className="text-zinc-600">{t('logs.empty')}</span>
         )}
         {error && !isLoading && (
           <span className="text-amber-400">{error}</span>

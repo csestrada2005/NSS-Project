@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { SupabaseService } from '@/services/SupabaseService';
+import { useForgeLang } from '@/i18n/forge/useForgeLang';
+import { formatRelativeDate } from '@/i18n/forge/format';
 
 interface Profile {
   id: string;
@@ -18,21 +20,12 @@ function getInitials(name: string | null): string {
   return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
 }
 
-function relativeTime(dateStr: string | null): string {
-  if (!dateStr) return 'Never';
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
-}
-
 const PAGE_SIZE = 20;
 
 export function UsersManager() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const { lang, t, tn } = useForgeLang();
+  const relativeTime = (dateStr: string | null) => (dateStr ? formatRelativeDate(dateStr, lang) : t('hub.never'));
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
@@ -77,17 +70,17 @@ export function UsersManager() {
   return (
     <div className="space-y-3">
       {isLoading ? (
-        <div className="text-center text-zinc-500 text-sm py-8">Loading users...</div>
+        <div className="text-center text-zinc-500 text-sm py-8">{t('users.loading')}</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr className="text-zinc-500 border-b border-zinc-700">
-                <th className="text-left py-2 px-3 font-medium">User</th>
-                <th className="text-left py-2 px-3 font-medium">Email</th>
-                <th className="text-left py-2 px-3 font-medium">Role</th>
-                <th className="text-left py-2 px-3 font-medium">Last seen</th>
-                <th className="text-left py-2 px-3 font-medium">Joined</th>
+                <th className="text-left py-2 px-3 font-medium">{t('users.user')}</th>
+                <th className="text-left py-2 px-3 font-medium">{t('users.email')}</th>
+                <th className="text-left py-2 px-3 font-medium">{t('users.role')}</th>
+                <th className="text-left py-2 px-3 font-medium">{t('users.lastSeen')}</th>
+                <th className="text-left py-2 px-3 font-medium">{t('users.joined')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800">
@@ -114,13 +107,13 @@ export function UsersManager() {
                         ))}
                       </select>
                       {successId === p.id && (
-                        <span className="text-emerald-400 text-[10px]">Saved!</span>
+                        <span className="text-emerald-400 text-[10px]">{t('users.saved')}</span>
                       )}
                     </div>
                   </td>
                   <td className="py-2.5 px-3 text-zinc-500">{relativeTime(p.last_seen)}</td>
                   <td className="py-2.5 px-3 text-zinc-500">
-                    {new Date(p.created_at).toLocaleDateString()}
+                    {new Date(p.created_at).toLocaleDateString(lang)}
                   </td>
                 </tr>
               ))}
@@ -131,12 +124,13 @@ export function UsersManager() {
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between pt-2">
-          <span className="text-xs text-zinc-500">{total} users</span>
+          <span className="text-xs text-zinc-500">{tn('users.count', total)}</span>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPage(p => Math.max(0, p - 1))}
               disabled={page === 0}
               className="p-1 text-zinc-400 hover:text-white disabled:opacity-30 transition-colors"
+              aria-label={t('users.prev')}
             >
               <ChevronLeft size={16} />
             </button>
@@ -145,6 +139,7 @@ export function UsersManager() {
               onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
               disabled={page >= totalPages - 1}
               className="p-1 text-zinc-400 hover:text-white disabled:opacity-30 transition-colors"
+              aria-label={t('users.next')}
             >
               <ChevronRight size={16} />
             </button>
