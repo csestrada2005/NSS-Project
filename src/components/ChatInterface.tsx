@@ -17,11 +17,13 @@ import {
   PlanCard,
   CanceladoCard,
   ErrorCard,
+  TypeErrorsCard,
 } from './chat/ResultCards';
 import type { ChatPlanStep, Message } from './chat/types';
 import './chat/forgeChat.css';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
 import { t as tNow } from '@/i18n/forge/lang';
+import type { TypeIssue } from '../services/PlatformService';
 
 // Re-exportados desde ./chat/types — ver ese archivo para el porqué (evita un
 // ciclo de módulos con las tarjetas, que también necesitan estos tipos). El
@@ -68,6 +70,8 @@ interface ChatInterfaceProps {
     planSteps?: ChatPlanStep[];
     /** Este turno terminó porque se canceló a mitad de camino (CANCELADO, 3.5). */
     cancelled?: boolean;
+    /** Bucket 6 — errores de tipos que quedaron (funciona, pero aún no publicable). */
+    typeErrors?: TypeIssue[];
   }>;
   selectedElement: { tagName: string; className?: string } | null;
   chatHistory?: Message[];
@@ -210,7 +214,8 @@ export function ChatInterface({
     chatResponse?: string;
     suggestedAction?: string;
     planSteps?: ChatPlanStep[];
-  }): { content: string; warning?: string; errorType?: 'insufficient_credits' | 'compile_error' | 'generic'; errorDetail?: string; suggestedAction?: string; planSteps?: ChatPlanStep[] } => {
+    typeErrors?: TypeIssue[];
+  }): { content: string; warning?: string; errorType?: 'insufficient_credits' | 'compile_error' | 'generic'; errorDetail?: string; suggestedAction?: string; planSteps?: ChatPlanStep[]; typeErrors?: TypeIssue[] } => {
     if (!result.success) {
       if (result.error === 'INSUFFICIENT_CREDITS') {
         const freePromptSpent = result.errorReason === 'FREE_PROMPT_SPENT';
@@ -229,12 +234,12 @@ export function ChatInterface({
       return { content: tNow('chat.error.generic'), errorType: 'generic' };
     }
     if (result.chatResponse) {
-      return { content: result.chatResponse, warning: result.warning, suggestedAction: result.suggestedAction, planSteps: result.planSteps };
+      return { content: result.chatResponse, warning: result.warning, suggestedAction: result.suggestedAction, planSteps: result.planSteps, typeErrors: result.typeErrors };
     }
     if (result.modifiedFiles.length > 0) {
-      return { content: tNow('chat.done.modified', { files: result.modifiedFiles.join(', ') }), warning: result.warning, suggestedAction: result.suggestedAction, planSteps: result.planSteps };
+      return { content: tNow('chat.done.modified', { files: result.modifiedFiles.join(', ') }), warning: result.warning, suggestedAction: result.suggestedAction, planSteps: result.planSteps, typeErrors: result.typeErrors };
     }
-    return { content: tNow('chat.done.none'), warning: result.warning, suggestedAction: result.suggestedAction, planSteps: result.planSteps };
+    return { content: tNow('chat.done.none'), warning: result.warning, suggestedAction: result.suggestedAction, planSteps: result.planSteps, typeErrors: result.typeErrors };
   };
 
   const sendMessage = async (text: string) => {
@@ -331,7 +336,7 @@ export function ChatInterface({
         return;
       }
 
-      const { content, warning, errorType, errorDetail, suggestedAction, planSteps } = buildAssistantMessage(result);
+      const { content, warning, errorType, errorDetail, suggestedAction, planSteps, typeErrors } = buildAssistantMessage(result);
       const proposedMark = result.success ? ddlProposedMark(result.modifiedFiles ?? []) : '';
       appendMessage({
         role: 'assistant',
@@ -341,6 +346,7 @@ export function ChatInterface({
         errorDetail,
         suggestedAction,
         planSteps,
+        typeErrors,
         filesModifiedCount: result.success ? result.modifiedFiles.length : undefined,
         durationSeconds: result.success ? elapsedSeconds : undefined,
         stepsSnapshot,
@@ -475,7 +481,16 @@ export function ChatInterface({
           ) : estado === 'pensando' ? (
             <ProcessCard title={processTitle} promptEcho={lastSentText} lines={progressLines} />
           ) : estado === 'listo' ? (
-            executableProposal ? (
+            <>
+            {/* Bucket 6 — funciona en el editor, pero aún no se puede publicar. */}
+            {!lastAssistant?.errorType && !lastAssistant?.cancelled && (lastAssistant?.typeErrors?.length ?? 0) > 0 && (
+              <TypeErrorsCard
+                errors={lastAssistant!.typeErrors!}
+                isLoading={isLoading}
+                onFix={(prompt: string) => sendMessage(prompt)}
+              />
+            )}
+            {executableProposal ? (
               <DDLCard
                 bodyText={proposalMessage ? stripDdlMarks(proposalMessage.content) : ''}
                 proposal={executableProposal}
@@ -522,7 +537,8 @@ export function ChatInterface({
                 completedCount={lastAssistant.stepsSnapshot?.length ?? 0}
                 onOpenHistory={() => setHistoryOpen(true)}
               />
-            ) : null
+            ) : null}
+            </>
           ) : null}
         </div>
 

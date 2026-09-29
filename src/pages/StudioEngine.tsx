@@ -20,6 +20,7 @@ import { ChatInterface, type ChatPlanStep, type Message } from '../components/Ch
 import { PropertyPanel } from '../components/studio/PropertyPanel';
 import { AIOrchestrator } from '../services/AIOrchestrator';
 import { platformService } from '../services/PlatformService';
+import type { TypeIssue } from '../services/PlatformService';
 import { SupabaseService } from '../services/SupabaseService';
 import { compileWithMeta, classifyCompileResult, isPreviewError, type OidMap } from '../services/BrowserCompiler';
 import { isAbortError } from '../utils/abort';
@@ -826,7 +827,10 @@ export function StudioEngine() {
           const body = summary ?? (proposedMark ? 'Proyecto generado.' : null);
           if (body) {
             const content = `${body}${proposedMark}`;
-            setChatHistory(prev => [...prev, { role: 'assistant', content }]);
+            // Bucket 6 — la primera generación no pasa por ChatInterface: los
+            // errores de tipos viajan en el mensaje para que el chat muestre el
+            // aviso "Aún no se puede publicar" también aquí.
+            setChatHistory(prev => [...prev, { role: 'assistant', content, typeErrors: result.typeErrors }]);
             persistChatMessage('assistant', content);
           }
         }
@@ -1607,7 +1611,7 @@ export function StudioEngine() {
     // construcción que sella el acta de #290, y se expresa aquí como lo que es,
     // un argumento, y no como una condición que pueda cambiar sola.
     allowPlanGate: boolean = true
-  ): Promise<{ success: boolean; modifiedFiles: string[]; error?: string; errorReason?: string; warning?: string; chatResponse?: string; suggestedAction?: string; planSteps?: { order: number; description: string; file_path: string; action: 'create' | 'modify' | 'delete' }[]; cancelled?: boolean }> => {
+  ): Promise<{ success: boolean; modifiedFiles: string[]; error?: string; errorReason?: string; warning?: string; chatResponse?: string; suggestedAction?: string; planSteps?: { order: number; description: string; file_path: string; action: 'create' | 'modify' | 'delete' }[]; cancelled?: boolean; typeErrors?: TypeIssue[] }> => {
     if (isReadOnly) return { success: false, modifiedFiles: [] };
 
     // Persistencia del mensaje del usuario: embudo común de TODOS los envíos.
@@ -1719,6 +1723,8 @@ export function StudioEngine() {
         warning: result.warning,
         chatResponse: result.chatResponse,
         suggestedAction: result.suggestedAction,
+        // Bucket 6 — errores de tipos que quedaron (no publicable todavía).
+        typeErrors: result.typeErrors,
         // CIRUGÍA B1 — el plan que el Implementer ejecutó ya viajaba en
         // OrchestratorResult.steps y moría aquí. Se cablea al chat para que el
         // mensaje del asistente pueda mostrarlo; es informativo y efímero (no se

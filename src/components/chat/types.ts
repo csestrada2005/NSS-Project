@@ -8,6 +8,8 @@
  * '../components/ChatInterface'`) no cambia.
  */
 
+import type { TypeIssue } from '../../services/PlatformService';
+
 /**
  * CIRUGÍA B1 — forma de un paso del plan tal como lo consume el chat.
  *
@@ -34,6 +36,12 @@ export interface Message {
    */
   planSteps?: ChatPlanStep[];
   warning?: string;
+  /**
+   * Bucket 6 — errores de tipos que quedaron tras la segunda puerta del
+   * Verifier: funciona en el editor pero Vercel no podría construirlo.
+   * Efímero en sesión, como planSteps/suggestedAction.
+   */
+  typeErrors?: TypeIssue[];
   errorType?: 'insufficient_credits' | 'compile_error' | 'generic';
   errorDetail?: string;
   suggestedAction?: string;

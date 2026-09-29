@@ -579,6 +579,17 @@ export const en = {
   'phone.title': 'The editor needs a computer',
   'phone.body': 'Wyrd Forge builds and edits apps on a computer screen. From your phone you can see your projects, their Hub and share them.',
   'phone.createDisabled': 'Creating and editing projects requires a computer.',
+
+  // Chat: aún no se puede publicar (errores de tipos, bucket 6)
+  'chat.types.tag': 'Not publishable yet',
+  'chat.types.title': 'It works in the editor, but Vercel could not build it',
+  'chat.types.body_one': 'There is {count} type error that would block publishing.',
+  'chat.types.body_other': 'There are {count} type errors that would block publishing.',
+  'chat.types.fix': 'Fix now',
+  'chat.types.show': 'See the errors',
+  'chat.types.hide': 'Hide the errors',
+  'chat.types.more': '…and {count} more',
+  'chat.types.fixPrompt': "Fix these TypeScript type errors so the project can be published, without removing any feature:\n{list}",
 } as const;
 
 export type ForgeKey = keyof typeof en;

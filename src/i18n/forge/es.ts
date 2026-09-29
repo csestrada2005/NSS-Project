@@ -574,4 +574,15 @@ export const es: Record<ForgeKey, string> = {
   'phone.title': 'El editor necesita una computadora',
   'phone.body': 'Wyrd Forge construye y edita apps en pantalla de computadora. Desde el celular puedes ver tus proyectos, su Hub y compartirlos.',
   'phone.createDisabled': 'Crear y editar proyectos requiere computadora.',
+
+  // Chat: aún no se puede publicar (errores de tipos, bucket 6)
+  'chat.types.tag': 'Aún no se puede publicar',
+  'chat.types.title': 'Funciona en el editor, pero Vercel no podría construirlo',
+  'chat.types.body_one': 'Hay {count} error de tipos que impediría publicar.',
+  'chat.types.body_other': 'Hay {count} errores de tipos que impedirían publicar.',
+  'chat.types.fix': 'Arreglar ahora',
+  'chat.types.show': 'Ver los errores',
+  'chat.types.hide': 'Ocultar los errores',
+  'chat.types.more': '…y {count} más',
+  'chat.types.fixPrompt': "Arregla estos errores de tipos de TypeScript para que el proyecto se pueda publicar, sin quitar ninguna funcionalidad:\n{list}",
 };

@@ -7,6 +7,8 @@ import type { DdlProposal, ProposalSourceMessage } from '@/utils/ddlProposalStat
 import type { ChatPlanStep } from './types';
 import LoadingSquares from '../brand/LoadingSquares';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
+import type { TypeIssue } from '../../services/PlatformService';
+import { t as tNow } from '@/i18n/forge/lang';
 
 /**
  * ResultCards — las 5 variantes de tarjeta de resultado (Bloque 3 del
@@ -234,6 +236,65 @@ export function PlanCard({
         </button>
         <button type="button" className="fc-accion-btn fc-rechazar" onClick={onReject}>{t('chat.card.plan.reject')}</button>
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Bucket 6 — FUNCIONA, PERO AÚN NO SE PUEDE PUBLICAR
+// La segunda puerta del Verifier dejó errores de tipos: el preview (esbuild)
+// no los ve, pero `tsc -b` en Vercel sí y no construiría. "Arreglar ahora"
+// manda al chat un pedido con la lista exacta, igual que "Corregir con IA".
+// ---------------------------------------------------------------------------
+const TYPE_ERRORS_SHOWN = 8;
+
+/** Pedido que envía "Arreglar ahora": la lista literal, en el idioma elegido. */
+export function buildTypeFixPrompt(errors: TypeIssue[]): string {
+  const list = errors
+    .map((e) => `- ${e.file ?? '?'}${e.line ? `(${e.line},${e.column ?? 0})` : ''}: TS${e.code} ${e.message}`)
+    .join('\n');
+  return tNow('chat.types.fixPrompt', { list });
+}
+
+export function TypeErrorsCard({
+  errors,
+  isLoading,
+  onFix,
+}: {
+  errors: TypeIssue[];
+  isLoading: boolean;
+  onFix: (prompt: string) => void;
+}) {
+  const { t, tn } = useForgeLang();
+  const [open, setOpen] = useState(false);
+  const shown = errors.slice(0, TYPE_ERRORS_SHOWN);
+  const rest = errors.length - shown.length;
+  return (
+    <div className="fc-pieza fc-accion">
+      <span className="fc-marcador"><AlertTriangle size={11} style={{ marginRight: 2 }} />{t('chat.types.tag')}</span>
+      <div className="fc-pieza-head">
+        <span className="fc-pieza-titulo">{t('chat.types.title')}</span>
+      </div>
+      <p className="fc-accion-cuerpo">{tn('chat.types.body', errors.length)}</p>
+      <div className="fc-accion-fila">
+        <button type="button" className="fc-accion-btn" disabled={isLoading} onClick={() => onFix(buildTypeFixPrompt(errors))}>
+          {isLoading ? <LoadingSquares size={14} style={{ marginRight: 6 }} /> : null}
+          {t('chat.types.fix')}
+        </button>
+        <button type="button" className="fc-accion-btn fc-secundario" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+          {open ? t('chat.types.hide') : t('chat.types.show')}
+        </button>
+      </div>
+      {open && (
+        <ul className="fc-accion-cuerpo" style={{ margin: '10px 0 0', paddingLeft: 16, fontFamily: 'var(--fc-mono)', fontSize: 12 }}>
+          {shown.map((e, i) => (
+            <li key={i} style={{ marginBottom: 6 }}>
+              {e.file ?? '?'}{e.line ? `:${e.line}` : ''} — {e.message}
+            </li>
+          ))}
+          {rest > 0 && <li style={{ listStyle: 'none' }}>{t('chat.types.more', { count: rest })}</li>}
+        </ul>
+      )}
     </div>
   );
 }
