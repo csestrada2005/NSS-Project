@@ -75,6 +75,19 @@ export const D = () => <motion.div className={cn('a')}><Star size={12} /></motio
   assert.deepEqual(r.unverifiable, []);
 });
 
+test('los mensajes citan otros archivos con ruta relativa al proyecto', { skip }, () => {
+  const lib = 'export interface AppUser { id: number }\nexport const load = (): AppUser[] => [];\n';
+  const table = `import { load } from '../lib/users';
+interface AppUser { id: string }
+export const first: AppUser = load()[0];
+`;
+  const r = typecheckProject({ 'src/lib/users.ts': lib, 'src/components/Table.tsx': table });
+  assert.equal(r.errors.length, 1);
+  assert.equal(r.errors[0].code, 2322);
+  assert.match(r.errors[0].message, /import\("src\/lib\/users"\)/);
+  assert.equal(r.errors[0].message.includes('__project__'), false);
+});
+
 test('autoFix:false reporta los imports sin usar y no escribe nada', { skip }, () => {
   const r = typecheckProject({ 'src/App.tsx': `import React from 'react';\n${APP}` }, { autoFix: false });
   assert.deepEqual(r.fixedFiles, {});

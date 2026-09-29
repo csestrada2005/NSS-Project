@@ -25,6 +25,7 @@ const PLAN_STEPS = [
 ];
 
 const COMPILE_FIXTURE = { ok: true, source: 'fakeFetch', route: 'compile' };
+const TYPECHECK_CLEAN_FIXTURE = { available: true, errors: [], unverifiable: [], fixedFiles: {}, autoFixed: 0, durationMs: 0 };
 const EMBED_SEARCH_FIXTURE = { patterns: [] };
 const SUPABASE_REST_EMPTY_FIXTURE: unknown[] = [];
 
@@ -80,6 +81,13 @@ export function installFakeFetch(): FakeFetchControl {
     // --- /api/compile — siempre compila limpio; el Verifier no necesita reparar ---
     if (url.includes('/api/compile')) {
       return jsonResponse(COMPILE_FIXTURE);
+    }
+
+    // --- /api/typecheck — segunda puerta del Verifier (bucket 6): siempre
+    // limpio, igual que el compile fixture; así estos tests siguen midiendo el
+    // pipeline sin depender del entorno de tipos del servidor. ---
+    if (url.includes('/api/typecheck')) {
+      return jsonResponse(TYPECHECK_CLEAN_FIXTURE);
     }
 
     // --- /api/embed-and-search — PatternRetriever, vector search vacía ---

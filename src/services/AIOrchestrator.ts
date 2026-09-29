@@ -59,6 +59,8 @@ import { DesignBriefService } from './DesignBriefService';
 import { isAbortError } from '../utils/abort';
 import { canEnterFastLane, isSimpleEditIntent } from '../utils/laneRouting.js';
 import { KNOWN_DEP_VERSIONS } from '../utils/knownDepVersions';
+import { typeCheckTelemetry } from '../utils/typeRepairLoop';
+import type { TypeIssue } from './PlatformService';
 import { promptNeedsServer } from '../utils/serverLogicSignals.js';
 import { touchesMigrations } from '../utils/migrationGate.js';
 import { shouldGatePlan, planRejectedTelemetry } from '../utils/planGate.js';
@@ -107,6 +109,14 @@ export interface OrchestratorResult {
    * vacía o undefined cuando no hubo hallazgos.
    */
   clientSecretMark?: string;
+  /**
+   * Segunda puerta del Verifier (bucket 6): errores de tipos que quedaron —
+   * el proyecto funciona en el editor pero `tsc -b` (Vercel) todavía falla.
+   * Vacío/undefined si quedó limpio o no se pudo revisar.
+   */
+  typeErrors?: TypeIssue[];
+  /** Sufijo ' [TYPE_ERRORS:n]' / ' [TYPECHECK_OFF]' para forge_intent_log (simple lane). */
+  typeCheckMark?: string;
   tokensInput?: number;
   tokensOutput?: number;
   chatResponse?: string;
@@ -1408,7 +1418,8 @@ export class AIOrchestrator {
       if (projectId) {
         await this.logIntent({
           projectId,
-          prompt: (result.clarifyAsked ? `${input} [CLARIFY_ASKED]` : input) + (result.clientSecretMark ?? ''),
+          prompt: (result.clarifyAsked ? `${input} [CLARIFY_ASKED]` : input) + (result.clientSecretMark ?? '') +
+            (result.typeCheckMark ?? ''),
           intentType: intent.type,
           intentRisk: intent.risk,
           modifiedFiles: result.modifiedFiles,
@@ -1804,6 +1815,8 @@ export class AIOrchestrator {
     // que hubo que repararlo. Mismo patrón de sufijo que [PARTIAL:...],
     // [DELETE_REJECTED:...] y [RESTORED:...] — sin tocar columnas ni enums.
     const danglingMark = danglingRefsTelemetry(verifyResult.danglingRefs ?? []);
+    // Bucket 6 — segunda puerta: ¿quedaron errores de tipos (no publicable)?
+    const typeCheckMark = typeCheckTelemetry(verifyResult.typeCheck, verifyResult.typeErrors?.length ?? 0);
 
     if (verifyResult.success) {
       // ----------------------------------------------------------------
@@ -2340,7 +2353,7 @@ export class AIOrchestrator {
             targetsMark + rejectedDeleteMark + restoredMark + danglingMark + ddlProposedMark +
             ddlMisplacedMark + planRepairedMark + trimmedMark + orphanCreatedMark +
             functionDeployFailedMark + rlsPolicyBlockedMark + rlsEnabledMark + rlsUnreadableMark +
-            clientSecretMark + clientRoleWriteMark,
+            clientSecretMark + clientRoleWriteMark + typeCheckMark,
           intentType: intent.type,
           intentRisk: intent.risk,
           planSteps: steps,
@@ -2444,6 +2457,7 @@ export class AIOrchestrator {
         outcome: 'success',
         warning: warnings.length > 0 ? warnings.join(' ') : undefined,
         suggestedAction,
+        typeErrors: verifyResult.typeErrors ?? [],
       };
     } else {
       // ----------------------------------------------------------------
@@ -2716,9 +2730,11 @@ export class AIOrchestrator {
           tokensOutput: data.usage?.output_tokens ?? 0,
           compileAttempts: verifyResult.attempts,
           warning: otherPaths.length > 0
-            ? `Reparé además un error preexistente en: ${otherPaths.join(', ')}`
+            ? tr('orch.alsoRepaired', { files: otherPaths.join(', ') })
             : undefined,
           clientSecretMark,
+          typeErrors: verifyResult.typeErrors ?? [],
+          typeCheckMark: typeCheckTelemetry(verifyResult.typeCheck, verifyResult.typeErrors?.length ?? 0),
         };
       }
 

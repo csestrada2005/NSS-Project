@@ -160,7 +160,12 @@ export function typecheckProject(files, opts = {}) {
           line,
           column,
           code: d.code,
-          message: ts.flattenDiagnosticMessageText(d.messageText, '\n').slice(0, MAX_MESSAGE),
+          // Rutas relativas al proyecto: un mensaje que cita otro archivo
+          // (import("…/src/lib/x").T) debe nombrarlo como src/lib/x, que es
+          // como el reparador del Verifier encuentra los archivos citados.
+          message: ts.flattenDiagnosticMessageText(d.messageText, '\n')
+            .split(`${root}/`).join('')
+            .slice(0, MAX_MESSAGE),
         });
       }
     }

@@ -1,5 +1,5 @@
 import { platformService } from './PlatformService';
-import type { CompileErrorDetail } from './PlatformService';
+import type { CompileErrorDetail, TypeIssue } from './PlatformService';
 import { isAbortError } from '../utils/abort';
 import { groupCompileErrors, labelForError } from '../utils/groupCompileErrors';
 import type { RepairBatch } from '../utils/groupCompileErrors';
@@ -12,6 +12,8 @@ import {
 } from '../utils/deterministicRestore';
 import { findDanglingRefs, syntheticDanglingErrors } from '../utils/danglingRefs';
 import type { DanglingRef } from '../utils/danglingRefs';
+import { runTypeRepair } from '../utils/typeRepairLoop';
+import type { TypeRepairOutcome } from '../utils/typeRepairLoop';
 import { cachedSystemBlocks } from './promptCache';
 import { buildProjectContextPrefix, buildBlueprintBlock } from './promptRules';
 
@@ -34,6 +36,18 @@ const HAIKU_REPAIR_CLASSES = new Set<string>([
   'syntax error',
   'export/import name mismatch',
 ]);
+
+/**
+ * Etiqueta del lote de errores de TIPOS (segunda puerta, bucket 6). Va al
+ * prompt de reparación como la "clase" del lote, así que dice qué se espera:
+ * pasar `tsc` estricto sin amputar nada. No está en HAIKU_REPAIR_CLASSES: los
+ * errores de tipos requieren juicio (qué prop falta, qué tipo es el correcto),
+ * así que van a Sonnet.
+ */
+const TYPE_REPAIR_LABEL =
+  'TypeScript type error (the project must pass strict `tsc`: add the missing prop/field to the ' +
+  'SOURCE component or type instead of deleting its usage; unused locals/parameters may be ' +
+  'removed or prefixed with _)';
 
 /** Devuelve el modelo de reparación adecuado para una etiqueta de clase. */
 function pickRepairModel(label: string): string {
@@ -107,6 +121,15 @@ export interface VerifyResult {
    * la frecuencia real del diff de descableado incompleto.
    */
   danglingRefs: DanglingRef[];
+  /**
+   * Segunda puerta (bucket 6): resultado de la revisión de tipos sobre el
+   * proyecto ya en verde. 'errors' = compila y funciona en el editor pero
+   * `tsc -b` (Vercel) todavía falla; 'unavailable' = no se pudo revisar.
+   * Ausente cuando el verify falla.
+   */
+  typeCheck?: 'clean' | 'errors' | 'unavailable';
+  /** Errores de tipos que quedaron tras el arreglo automático y la reparación. */
+  typeErrors?: TypeIssue[];
 }
 
 // ---------------------------------------------------------------------------
@@ -201,9 +224,23 @@ export class Verifier {
       }
 
       if (result.success && dangling.length === 0) {
+        // SEGUNDA PUERTA (bucket 6) — el proyecto ya compila; ahora los tipos,
+        // como `tsc -b` en Vercel. Nunca empeora el resultado (ver
+        // typeRepairLoop): parte de esta versión en verde y sólo la cambia por
+        // otra que también compila y tiene menos errores. Las rondas de tipos
+        // siguen la proporción del lane: plan 3 intentos → 2 rondas, simple
+        // 2 → 1.
+        const typed = await this.typePhase(
+          currentFiles, originalFiles, signal, designContext, blueprint,
+          new Set(restoredPaths), Math.max(0, MAX_RETRIES - 1)
+        );
+        currentFiles = typed.files;
+        fixCalls += typed.fixCalls;
         console.log('[Verifier] telemetry | totalErrors:', totalErrors, '| fixCalls:', fixCalls,
           '| saved:', Math.max(0, totalErrors - fixCalls),
-          absentFilesTelemetry(restoredPaths, recreatedPaths));
+          absentFilesTelemetry(restoredPaths, recreatedPaths),
+          '| types:', typed.status, typed.errors.length, 'left,', typed.autoFixed, 'auto-fixed,',
+          typed.rounds, 'rounds');
         return {
           success: true,
           files: currentFiles,
@@ -214,6 +251,8 @@ export class Verifier {
           recreatedPaths,
           restoredPaths,
           danglingRefs,
+          typeCheck: typed.status,
+          typeErrors: typed.errors,
         };
       }
 
@@ -370,6 +409,63 @@ export class Verifier {
       restoredPaths,
       danglingRefs,
     };
+  }
+
+  /**
+   * Segunda puerta: revisión de tipos + arreglo automático + reparación con el
+   * modelo, a través de runTypeRepair (que garantiza no empeorar). Aditiva y
+   * fail-open: cualquier fallo que no sea una cancelación devuelve la entrada
+   * intacta como 'unavailable'.
+   */
+  private static async typePhase(
+    files: Map<string, string>,
+    originalFiles: Map<string, string>,
+    signal: AbortSignal | undefined,
+    designContext: string,
+    blueprint: string,
+    protectedPaths: ReadonlySet<string>,
+    maxRounds: number
+  ): Promise<TypeRepairOutcome> {
+    const toObj = (m: Map<string, string>) => Object.fromEntries(m);
+    try {
+      return await runTypeRepair({
+        files,
+        typecheck: (fs, opts) => platformService.typecheck(toObj(fs), signal, opts),
+        compile: async (fs) => (await this.tryCompile(fs, signal)).success,
+        repair: async (fs, errors) => {
+          const details: CompileErrorDetail[] = errors
+            .filter((e) => e.file && fs.has(e.file))
+            .map((e) => ({
+              message: `${e.file}(${e.line ?? 0},${e.column ?? 0}): error TS${e.code}: ${e.message}`,
+              file: e.file,
+              line: e.line,
+              lineText: e.line ? (fs.get(e.file!)?.split('\n')[e.line - 1] ?? null) : null,
+            }));
+          // Todos los errores de tipos en UN lote (partido sólo por los topes
+          // de tamaño): una llamada por ronda, no una por forma de mensaje.
+          const batches = groupCompileErrors(details, (p) => fs.get(p), {
+            classify: () => 'typescript',
+            label: () => TYPE_REPAIR_LABEL,
+          });
+          let current = fs;
+          let calls = 0;
+          for (const batch of batches) {
+            const fixed = await this.fixBatch(
+              batch, current, originalFiles, signal, designContext, blueprint, protectedPaths
+            );
+            calls += 1;
+            if (fixed) current = fixed;
+          }
+          return { files: current === fs ? null : current, calls };
+        },
+        maxRounds,
+        isAborted: () => !!signal?.aborted,
+      });
+    } catch (e) {
+      if (isAbortError(e)) throw e;
+      console.error('[Verifier] type phase failed (ignored):', e);
+      return { status: 'unavailable', files, errors: [], unverifiable: [], autoFixed: 0, fixCalls: 0, rounds: 0 };
+    }
   }
 
   /**

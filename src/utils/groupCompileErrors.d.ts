@@ -38,5 +38,12 @@ export function labelForError(message: string): string;
 export function groupCompileErrors(
   errors: CompileErrorDetail[],
   getFileContent: (path: string) => string | undefined,
-  opts?: { maxFiles?: number; maxChars?: number }
+  opts?: {
+    maxFiles?: number;
+    maxChars?: number;
+    /** Clave de agrupación por mensaje (por defecto, el esqueleto del error). */
+    classify?: (message: string) => string;
+    /** Etiqueta del lote por mensaje (por defecto, la clase conocida). */
+    label?: (message: string) => string;
+  }
 ): RepairBatch[];

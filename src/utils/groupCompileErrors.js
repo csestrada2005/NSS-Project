@@ -119,16 +119,21 @@ export function labelForError(message) {
 export function groupCompileErrors(errors, getFileContent, opts = {}) {
   const maxFiles = opts.maxFiles ?? MAX_FILES_PER_BATCH;
   const maxChars = opts.maxChars ?? MAX_CHARS_PER_BATCH;
+  // Opcionales (bucket 6, errores de tipos): agrupar con otro criterio —p. ej.
+  // TODOS los errores de tipos en un solo lote— y con otra etiqueta. Sin
+  // ellos, el comportamiento es exactamente el histórico.
+  const classify = opts.classify ?? classifyError;
+  const labelFor = opts.label ?? labelForError;
 
   // 1. Bucket errors by type skeleton, preserving first-seen order.
   /** @type {Map<string, { label: string, errors: CompileErrorDetail[] }>} */
   const buckets = new Map();
   for (const err of errors) {
     if (!err) continue;
-    const key = classifyError(err.message ?? '');
+    const key = classify(err.message ?? '');
     let bucket = buckets.get(key);
     if (!bucket) {
-      bucket = { label: labelForError(err.message ?? ''), errors: [] };
+      bucket = { label: labelFor(err.message ?? ''), errors: [] };
       buckets.set(key, bucket);
     }
     bucket.errors.push(err);

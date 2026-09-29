@@ -18,6 +18,28 @@ export interface CompileErrorDetail {
   lineText: string | null;
 }
 
+/** Un error de la revisión de tipos (server/typecheck.js), como lo imprime tsc. */
+export interface TypeIssue {
+  file: string | null;
+  line: number | null;
+  column: number | null;
+  code: number;
+  message: string;
+}
+
+export type TypecheckResult =
+  | { available: false; reason: string }
+  | {
+      available: true;
+      errors: TypeIssue[];
+      /** Paquetes npm sin tipos en el entorno del servidor: no verificables. */
+      unverifiable: TypeIssue[];
+      /** Archivos a los que se les borraron imports sin usar (sin modelo). */
+      fixedFiles: Record<string, string>;
+      autoFixed: number;
+      durationMs: number;
+    };
+
 class PlatformService {
   // ---------------------------------------------------------------------------
   // Intent correlation (CIRUGÍA: cobro dentro del pipeline servido). One user
@@ -217,6 +239,33 @@ class PlatformService {
         return { error: err.message };
       }
       throw err;
+    }
+  }
+
+  /**
+   * Revisión de tipos del proyecto en el servidor (igual que `tsc -b` en
+   * Vercel). Fail-open: cualquier fallo de red/servidor se devuelve como
+   * { available: false } y el Verifier sigue como antes. Una cancelación sí
+   * se propaga.
+   */
+  async typecheck(
+    files: Record<string, string>,
+    signal?: AbortSignal,
+    opts: { autoFix?: boolean } = {}
+  ): Promise<TypecheckResult> {
+    try {
+      const headers = await this.getHeaders();
+      const response = await fetch('/api/typecheck', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ files, autoFix: opts.autoFix !== false }),
+        signal,
+      });
+      if (!response.ok) return { available: false, reason: `HTTP ${response.status}` };
+      return (await response.json()) as TypecheckResult;
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') throw err;
+      return { available: false, reason: err instanceof Error ? err.message : String(err) };
     }
   }
 
