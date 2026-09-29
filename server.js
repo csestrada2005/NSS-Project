@@ -36,7 +36,16 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const GOOGLE_PSI_KEY = process.env.GOOGLE_PSI_KEY;
 const CLOUDFLARE_API_KEY = process.env.CLOUDFLARE_API_KEY;
 const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
-const VERCEL_TOKEN = process.env.VERCEL_TOKEN;
+// Nombre en Render: NEBU_STUDIO_VERCEL_TOKEN (VERCEL_TOKEN queda como respaldo).
+// Con plan Pro la cuenta es un Team: sin VERCEL_TEAM_ID las publicaciones irían
+// a la cuenta personal. vercelApiUrl() añade ?teamId= cuando está configurado.
+const VERCEL_TOKEN = process.env.NEBU_STUDIO_VERCEL_TOKEN || process.env.VERCEL_TOKEN;
+const VERCEL_TEAM_ID = process.env.VERCEL_TEAM_ID;
+function vercelApiUrl(pathname) {
+  const url = new URL(pathname, 'https://api.vercel.com');
+  if (VERCEL_TEAM_ID) url.searchParams.set('teamId', VERCEL_TEAM_ID);
+  return url.toString();
+}
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -1392,7 +1401,7 @@ app.post('/api/deploy/:projectId', async (req, res) => {
     }));
 
     // Initiate Vercel deployment
-    const deployResponse = await fetch('https://api.vercel.com/v13/deployments', {
+    const deployResponse = await fetch(vercelApiUrl('/v13/deployments'), {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${VERCEL_TOKEN}`,
@@ -1419,7 +1428,7 @@ app.post('/api/deploy/:projectId', async (req, res) => {
     const maxAttempts = 20;
     for (let i = 0; i < maxAttempts; i++) {
       await new Promise(r => setTimeout(r, 3000));
-      const statusResponse = await fetch(`https://api.vercel.com/v13/deployments/${deploymentId}`, {
+      const statusResponse = await fetch(vercelApiUrl(`/v13/deployments/${deploymentId}`), {
         headers: { Authorization: `Bearer ${VERCEL_TOKEN}` },
       });
       const statusData = await statusResponse.json();
