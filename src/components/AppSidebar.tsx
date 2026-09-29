@@ -21,7 +21,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useViewMode } from "@/contexts/ViewModeContext";
 import { UserApprovalPanel } from "@/components/admin/UserApprovalPanel";
-import { SupabaseService } from "@/services/SupabaseService";
+import { AdminService } from "@/services/AdminService";
 
 export type Page =
   | "dashboard"
@@ -128,15 +128,13 @@ const AppSidebar = ({ open, onClose }: AppSidebarProps) => {
   // Fetch pending approval count for admins
   useEffect(() => {
     if (!isAdmin) return;
-    const supabase = SupabaseService.getInstance().client;
+    // Por el servidor: un admin sólo puede leer su propia fila de profiles.
     const fetchCount = async () => {
-      const { count } = await supabase
-        .from('profiles')
-        .select('id', { count: 'exact', head: true })
-        .not('pending_role', 'is', null)
-        .is('role', null)
-        .eq('role_approved', false);
-      setPendingApprovalCount(count ?? 0);
+      try {
+        setPendingApprovalCount((await AdminService.getPendingUsers()).length);
+      } catch (e) {
+        console.error('[AppSidebar] pending count error:', e);
+      }
     };
     fetchCount();
     const interval = setInterval(fetchCount, 30000);
@@ -351,14 +349,9 @@ const AppSidebar = ({ open, onClose }: AppSidebarProps) => {
           onClose={() => {
             setApprovalPanelOpen(false);
             // Refresh count after panel closes
-            const supabase = SupabaseService.getInstance().client;
-            supabase
-              .from('profiles')
-              .select('id', { count: 'exact', head: true })
-              .not('pending_role', 'is', null)
-              .is('role', null)
-              .eq('role_approved', false)
-              .then(({ count }) => setPendingApprovalCount(count ?? 0));
+            AdminService.getPendingUsers()
+              .then((users) => setPendingApprovalCount(users.length))
+              .catch((e) => console.error('[AppSidebar] pending count error:', e));
           }}
         />
       )}

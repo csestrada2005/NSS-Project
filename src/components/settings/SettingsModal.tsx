@@ -10,7 +10,6 @@ import { DatabaseOverview } from './db/DatabaseOverview';
 import { EdgeFunctionsPanel } from './db/EdgeFunctionsPanel';
 import { LogsViewer } from './db/LogsViewer';
 import { UsagePanel } from './db/UsagePanel';
-import { UsersManager } from './db/UsersManager';
 import { TrafficCharts } from './analytics/TrafficCharts';
 import { LighthousePanel } from './analytics/LighthousePanel';
 import { TopPagesTable } from './analytics/TopPagesTable';
@@ -31,7 +30,7 @@ interface SettingsModalProps {
 }
 
 export type MainTab = 'secrets' | 'github' | 'deploy' | 'domains' | 'database' | 'email' | 'analytics';
-type DbSubTab = 'overview' | 'schema' | 'sql' | 'secrets' | 'edge-functions' | 'logs' | 'usage' | 'users';
+type DbSubTab = 'overview' | 'schema' | 'sql' | 'secrets' | 'edge-functions' | 'logs' | 'usage';
 
 // Panel Cloud (bucket 5, ítem 1): overview/edge-functions/logs/usage/users
 // existían como componentes hechos pero nunca montados aquí. edge-functions/
@@ -45,7 +44,6 @@ const DB_SUB_TABS: { id: DbSubTab; label: ForgeKey }[] = [
   { id: 'edge-functions', label: 'settings.db.edgeFunctions' },
   { id: 'logs', label: 'settings.db.logs' },
   { id: 'usage', label: 'settings.db.usage' },
-  { id: 'users', label: 'hub.db.users' },
 ];
 
 export function SettingsModal({ onClose, fileTree, files, projectId: propProjectId, initialTab = 'secrets' }: SettingsModalProps) {
@@ -248,7 +246,6 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
                 {dbSubTab === 'edge-functions' && <EdgeFunctionsPanel projectId={projectId} files={files} />}
                 {dbSubTab === 'logs' && <LogsViewer projectId={projectId} />}
                 {dbSubTab === 'usage' && <UsagePanel projectId={projectId} />}
-                {dbSubTab === 'users' && <UsersManager />}
               </div>
             </div>
           )}

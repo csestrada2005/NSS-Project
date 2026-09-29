@@ -1,16 +1,8 @@
 import { useState, useEffect } from 'react';
 import { X, CheckCircle, XCircle, Shield } from 'lucide-react';
-import { SupabaseService } from '@/services/SupabaseService';
+import { AdminService, type PendingProfile } from '@/services/AdminService';
 import { toast } from 'sonner';
 import LoadingSquares from '../brand/LoadingSquares';
-
-interface PendingProfile {
-  id: string;
-  full_name: string | null;
-  email: string | null;
-  pending_role: 'admin' | 'dev' | 'cliente' | null;
-  avatar_url: string | null;
-}
 
 interface UserApprovalPanelProps {
   open: boolean;
@@ -33,20 +25,15 @@ export function UserApprovalPanel({ open, onClose }: UserApprovalPanelProps) {
   const [loading, setLoading] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
-  const supabase = SupabaseService.getInstance().client;
-
+  // Todo por el servidor (AdminService): la base ya no deja escribir `role`
+  // desde el navegador, y un admin sólo puede leer su propia fila de profiles.
   const fetchPendingUsers = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase
-        .from('profiles')
-        .select('id, full_name, email, pending_role, avatar_url')
-        .not('pending_role', 'is', null)
-        .is('role', null)
-        .eq('role_approved', false);
-      setPendingUsers((data as PendingProfile[]) ?? []);
+      setPendingUsers(await AdminService.getPendingUsers());
     } catch (e) {
       console.error('[UserApprovalPanel] fetch error:', e);
+      toast.error('Failed to load pending users');
     } finally {
       setLoading(false);
     }
@@ -58,58 +45,27 @@ export function UserApprovalPanel({ open, onClose }: UserApprovalPanelProps) {
     }
   }, [open]);
 
-  const handleApprove = async (user: PendingProfile) => {
-    if (!user.pending_role) return;
+  const decide = async (user: PendingProfile, decision: 'approve' | 'reject') => {
+    if (decision === 'approve' && !user.pending_role) return;
     setProcessingId(user.id);
     try {
-      await supabase
-        .from('profiles')
-        .update({ role: user.pending_role, role_approved: true, pending_role: null })
-        .eq('id', user.id);
-
-      await supabase.from('notifications').insert({
-        user_id: user.id,
-        type: 'role_approved',
-        title: 'Access granted',
-        body: `Your account has been approved. You now have ${user.pending_role} access.`,
-        read: false,
-      });
-
+      await AdminService.decideRole(user.id, decision);
       setPendingUsers((prev) => prev.filter((u) => u.id !== user.id));
-      toast.success(`Approved ${user.full_name ?? 'user'} as ${user.pending_role}`);
+      toast.success(
+        decision === 'approve'
+          ? `Approved ${user.full_name ?? 'user'} as ${user.pending_role}`
+          : `Rejected ${user.full_name ?? 'user'}'s request`
+      );
     } catch (e) {
-      console.error('[UserApprovalPanel] approve error:', e);
-      toast.error('Failed to approve user');
+      console.error(`[UserApprovalPanel] ${decision} error:`, e);
+      toast.error(decision === 'approve' ? 'Failed to approve user' : 'Failed to reject user');
     } finally {
       setProcessingId(null);
     }
   };
 
-  const handleReject = async (user: PendingProfile) => {
-    setProcessingId(user.id);
-    try {
-      await supabase
-        .from('profiles')
-        .update({ pending_role: null, role_approved: false })
-        .eq('id', user.id);
-
-      await supabase.from('notifications').insert({
-        user_id: user.id,
-        type: 'role_rejected',
-        title: 'Access request declined',
-        body: 'Your access request was reviewed. Please contact your administrator.',
-        read: false,
-      });
-
-      setPendingUsers((prev) => prev.filter((u) => u.id !== user.id));
-      toast.success(`Rejected ${user.full_name ?? 'user'}'s request`);
-    } catch (e) {
-      console.error('[UserApprovalPanel] reject error:', e);
-      toast.error('Failed to reject user');
-    } finally {
-      setProcessingId(null);
-    }
-  };
+  const handleApprove = (user: PendingProfile) => decide(user, 'approve');
+  const handleReject = (user: PendingProfile) => decide(user, 'reject');
 
   return (
     <>

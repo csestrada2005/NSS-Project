@@ -68,7 +68,7 @@ Notas de G-4 ya decididas:
 - `projectId: none`: si no se resolvió en G-4, va como sub-bullet del bucket 5.
 - La bomba de `deployGeneratedFunctions` se documenta como comentario en código, no como ítem.
 
-## 3. HECHO (pendiente CHECK MANUAL) — Guard de código bajo `src/` (G-6, 2026-09-19)
+## 3. HECHO Y CONFIRMADO — Guard de código bajo `src/` (G-6, 2026-09-19)
 
 **El agujero:** el Verifier (`src/services/Verifier.ts`) compila y repara errores de compilación —
 nunca inspecciona el CONTENIDO por reglas de seguridad. `BACKEND_RULES` (`src/services/promptRules.ts`)
@@ -1184,6 +1184,29 @@ contenedor imprescindible (p. ej. un formulario dentro de una tarjeta) queda sin
 un estado que sólo se distinguía por color azul (p. ej. "completado" vs "en progreso") ahora sólo por texto.
 Residuo: las pantallas de carga (búho, rejilla, barra, cuadritos) no se tocaron.
 
+### 5.6 HECHO EN CÓDIGO (pendiente APLICAR SQL + CHECK MANUAL) — Escalada de rol en `profiles` (seguridad, 2026-09-29)
+
+**Evidencia (DB principal de Wyrd, consultas de Samuel):** RLS encendido; políticas UPDATE `auth.uid() = id`
+sin `WITH CHECK` ni restricción de columnas; `authenticated` con UPDATE sobre toda la tabla; triggers sólo
+`AFTER` (ninguno frena `role`); `set_admin_unlimited_credits` (no SECURITY DEFINER) pone `unlimited = true`
+al pasar a admin; `server.js` confía en `profiles.role`. → **Cualquier usuario podía cambiarse `role`
+(dev seguro; admin si RLS de wallets lo permite) desde la consola del navegador.** Además, la aprobación de
+roles no podía funcionar: un admin sólo lee/edita su propia fila.
+
+**Decisión (Samuel): opción A — aprobación por el servidor.**
+- `supabase/migrations/20240110000000_protect_profile_privileges.sql` (aditiva): trigger `BEFORE UPDATE`
+  que rechaza cambios de `role`/`role_approved` salvo servidor (service_role), sesión sin JWT (SQL Editor)
+  u onboarding propio (rol vacío → `cliente`). **NO APLICADA TODAVÍA** — la aplica Samuel en la DB principal.
+- `server/roleDecision.js` (+ 5 tests): quién decide (role === admin, mismo criterio que getCreditContext)
+  y qué se escribe (sólo peticiones vivas; se asigna exactamente el rol pedido).
+- `server.js`: `GET /api/admin/pending-users`, `POST /api/admin/users/:userId/role-decision` (llave de
+  servidor, notificación al usuario incluida).
+- `AdminService.ts`; `UserApprovalPanel` y el contador de `AppSidebar` pasan por el servidor.
+- Pestaña "Usuarios" quitada de Ajustes y del Hub del proyecto; `UsersManager.tsx` borrado (mostraba
+  usuarios de la PLATAFORMA dentro de un proyecto y ofrecía cambiarles el rol).
+
+Verificación automática: tsc 0 · server 680/680 · vitest 56/56 · vite build OK.
+
 ### Resto del bucket (sin tocar esta sesión)
 - RAG de UI/UX: PatternRetriever da `direct: 0 | vector: 0`. Primera pregunta: ¿pasa igual en producción?
 - Catálogo de componentes, con auditoría de licencia por componente.
@@ -1956,6 +1979,11 @@ más grande y probablemente necesita su propia sesión con mockup, como ya pasó
 resolver con `ui-ux-pro-max` qué encaja mejor para portar el estilo brutalista dado que el skill no dio
 buenos resultados la primera vez que se usó en este ítem (ver Bloque 1, "Hallazgo del skill, con matiz").
 
+## ANTES DE LANZAR (público)
+- Quitar los botones "Próximamente" que no hacen nada (chat: Adjuntar, Dictar, Editar el plan; créditos:
+  Comprar créditos). Decisión de Samuel (2026-09-29): se quedan mientras él sea el único usuario, porque le
+  sirven como recordatorio de lo que falta.
+
 ## APARCADO hasta después de lanzar
 - **A+**: quitar el botón de aprobación cuando el guard no pudo inspeccionar. Aparcado: `unparseable` no tiene causa conocida tras G-3; sólo verificable con SQL fabricado a mano (choca con medir por comportamiento).
 - **Auditoría del pipeline de deploy** (absorbe D-5).
@@ -1970,7 +1998,8 @@ buenos resultados la primera vez que se usó en este ítem (ver Bloque 1, "Halla
 - Ruta `/api/admin/bootstrap-db` con comentario "TEMPORAL": se decidió conservarla y quitar el comentario en una cirugía de servidor.
 - Decisión sobre `graphify-out/cache/ast/` y archivos `.sig`: ¿se commitean o van a `.gitignore`?
 - `graphifyy` en `dependencies` de `package.json` (entró en `5f3846a`): ¿moverlo a devDependencies o quitarlo?
-- `UsersManager`/`DatabaseOverview` leen `profiles` de la DB principal y permiten cambiar roles de la plataforma desde Ajustes de un proyecto (ver 5.4, hallazgos). Verificar RLS de `profiles`.
+- (CERRADO en 5.6) `UsersManager` quitado; escalada de rol en `profiles` → ver 5.6. Pendiente menor: `DatabaseOverview` sigue mostrando la URL y el conteo de `profiles` de la DB principal dentro de un proyecto.
+- Políticas duplicadas en `profiles` (DB principal): dos UPDATE y dos SELECT idénticas (`auth.uid() = id`). Limpiarlas es DDL destructivo (DROP POLICY): frase tecleada.
 
 ## Decisión de arquitectura permanente
 - **D-1 (preview)**: el endgame es la Opción C (sandboxes server-side efímeros, estilo Lovable). Se ejecuta sólo cuando el software esté casi completo. Hoy: vendoring curado (Opción A).

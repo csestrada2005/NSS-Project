@@ -8,7 +8,6 @@ import { SupabaseService } from '@/services/SupabaseService';
 import { DatabaseOverview } from '@/components/settings/db/DatabaseOverview';
 import { AIHistoryPanel } from '@/components/settings/AIHistoryPanel';
 import { SchemaViewer } from '@/components/settings/db/SchemaViewer';
-import { UsersManager } from '@/components/settings/db/UsersManager';
 import { SQLEditor } from '@/components/settings/db/SQLEditor';
 import { DomainsPanel } from '@/components/settings/DomainsPanel';
 import { EmailPanel } from '@/components/settings/EmailPanel';
@@ -47,10 +46,9 @@ const HUB_TABS: { id: HubTab; label: ForgeKey; Icon: React.ComponentType<any> }[
   { id: 'settings', label: 'hub.tab.settings', Icon: Settings },
 ];
 
-const DB_SUB_TABS: readonly { id: 'overview' | 'schema' | 'users' | 'sql'; label: ForgeKey }[] = [
+const DB_SUB_TABS: readonly { id: 'overview' | 'schema' | 'sql'; label: ForgeKey }[] = [
   { id: 'overview', label: 'hub.tab.overview' },
   { id: 'schema', label: 'hub.db.schema' },
-  { id: 'users', label: 'hub.db.users' },
   { id: 'sql', label: 'hub.db.sql' },
 ];
 
@@ -259,7 +257,6 @@ export default function ProjectHubPage() {
             </div>
             {dbSubTab === 'overview' && <DatabaseOverview projectId={projectId!} />}
             {dbSubTab === 'schema' && <SchemaViewer projectId={projectId!} />}
-            {dbSubTab === 'users' && <UsersManager />}
             {dbSubTab === 'sql' && <SQLEditor projectId={projectId!} />}
           </div>
         )}

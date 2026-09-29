@@ -14,6 +14,7 @@ import { createIntentAccumulator } from './server/intentAccumulator.js';
 import { bootstrapProject } from './server/bootstrapProject.js';
 import { deployEdgeFunctionViaManagement, validateEdgeFunctionDeployRequest } from './server/edgeFunctionDeploy.js';
 import { applyProductionSupabaseClient } from './src/utils/deploySupabaseClient.js';
+import { isPlatformAdmin, planRoleDecision } from './server/roleDecision.js';
 import {
   validateProjectRefRequest,
   validateLogsRequest,
@@ -363,6 +364,83 @@ app.post('/api/admin/bootstrap-db/:projectRef', async (req, res) => {
 
 // Apply auth middleware to all /api/* routes
 app.use("/api/", requireAuth);
+
+// ---------------------------------------------------------------------------
+// Aprobación de roles de la plataforma (bucket 5, 2026-09-29). `role` y
+// `role_approved` de `profiles` ya no se pueden escribir desde el navegador
+// (candado en la base: protect_profile_privileges); el admin aprueba por aquí,
+// con la llave de servidor. La regla vive en server/roleDecision.js.
+// ---------------------------------------------------------------------------
+
+/** Cierra la request si quien llama no es admin. Devuelve true si puede seguir. */
+async function requirePlatformAdmin(req, res) {
+  if (!supabaseAdmin) {
+    res.status(503).json({ error: 'Auth unavailable' });
+    return false;
+  }
+  const { data: caller, error } = await supabaseAdmin
+    .from('profiles')
+    .select('role')
+    .eq('id', req.userId)
+    .maybeSingle();
+  if (error) {
+    console.error('[admin] caller profile error:', error);
+    res.status(500).json({ error: 'Could not verify caller' });
+    return false;
+  }
+  if (!isPlatformAdmin(caller)) {
+    res.status(403).json({ error: 'Forbidden' });
+    return false;
+  }
+  return true;
+}
+
+app.get('/api/admin/pending-users', async (req, res) => {
+  if (!(await requirePlatformAdmin(req, res))) return;
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('id, full_name, email, pending_role, avatar_url')
+    .not('pending_role', 'is', null)
+    .is('role', null)
+    .eq('role_approved', false);
+  if (error) {
+    console.error('[admin] pending-users error:', error);
+    return res.status(500).json({ error: 'Could not load pending users' });
+  }
+  res.json({ users: data ?? [] });
+});
+
+app.post('/api/admin/users/:userId/role-decision', async (req, res) => {
+  if (!(await requirePlatformAdmin(req, res))) return;
+  const { userId } = req.params;
+  const { data: target, error: readError } = await supabaseAdmin
+    .from('profiles')
+    .select('id, role, pending_role, role_approved')
+    .eq('id', userId)
+    .maybeSingle();
+  if (readError) {
+    console.error('[admin] role-decision read error:', readError);
+    return res.status(500).json({ error: 'Could not load user' });
+  }
+  const plan = planRoleDecision(target, req.body?.decision);
+  if (!plan.ok) return res.status(plan.status).json({ error: plan.error });
+
+  const { error: writeError } = await supabaseAdmin
+    .from('profiles')
+    .update(plan.update)
+    .eq('id', userId);
+  if (writeError) {
+    console.error('[admin] role-decision write error:', writeError);
+    return res.status(500).json({ error: 'Could not save decision' });
+  }
+  // El aviso al usuario no bloquea la decisión ya escrita.
+  const { error: notifyError } = await supabaseAdmin
+    .from('notifications')
+    .insert({ user_id: userId, ...plan.notification, read: false });
+  if (notifyError) console.error('[admin] role-decision notification error:', notifyError);
+
+  res.json({ ok: true, role: plan.update.role ?? null });
+});
 
 // ---------------------------------------------------------------------------
 // Phase 1: Existing AI routes

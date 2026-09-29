@@ -108,7 +108,6 @@ export const en = {
   'hub.tab.aiHistory': 'AI History',
   'hub.tab.settings': 'Settings',
   'hub.db.schema': 'Schema',
-  'hub.db.users': 'Users',
   'hub.db.sql': 'SQL',
   'hub.never': 'Never',
   'hub.deleteConfirm': 'Delete "{name}"? This cannot be undone.',
@@ -515,7 +514,7 @@ export const en = {
   'traffic.legendDuration': 'Avg Duration (s)',
   'traffic.legendBounce': 'Bounce %',
 
-  // Ajustes: base de datos (DatabaseOverview, EdgeFunctions, Logs, Schema, SQL, Usage, Users)
+  // Ajustes: base de datos (DatabaseOverview, EdgeFunctions, Logs, Schema, SQL, Usage)
   'dbOverview.tables': 'Tables',
   'dbOverview.activeUsers': 'Active Users',
   'dbOverview.snapshots': 'Snapshots',
@@ -555,17 +554,6 @@ export const en = {
   'usage.storage': 'Storage Requests',
   'usage.realtime': 'Realtime Requests',
   'usage.needProject': 'Save your project first to view usage.',
-  'users.loading': 'Loading users...',
-  'users.user': 'User',
-  'users.email': 'Email',
-  'users.role': 'Role',
-  'users.lastSeen': 'Last seen',
-  'users.joined': 'Joined',
-  'users.saved': 'Saved!',
-  'users.count_one': '{count} user',
-  'users.count_other': '{count} users',
-  'users.prev': 'Previous page',
-  'users.next': 'Next page',
 
   // Mensajes del orquestador (AIOrchestrator) — se escriben en el idioma elegido al momento de la corrida
   'orch.fnDeploy.noDb': 'I wrote the function `{slug}` but could not deploy it: this project needs its database provisioned before functions can be deployed.',

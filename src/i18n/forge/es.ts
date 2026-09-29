@@ -103,7 +103,6 @@ export const es: Record<ForgeKey, string> = {
   'hub.tab.aiHistory': 'Historial de IA',
   'hub.tab.settings': 'Ajustes',
   'hub.db.schema': 'Esquema',
-  'hub.db.users': 'Usuarios',
   'hub.db.sql': 'SQL',
   'hub.never': 'Nunca',
   'hub.deleteConfirm': '¿Eliminar "{name}"? No se puede deshacer.',
@@ -510,7 +509,7 @@ export const es: Record<ForgeKey, string> = {
   'traffic.legendDuration': 'Duración prom. (s)',
   'traffic.legendBounce': 'Rebote %',
 
-  // Ajustes: base de datos (DatabaseOverview, EdgeFunctions, Logs, Schema, SQL, Usage, Users)
+  // Ajustes: base de datos (DatabaseOverview, EdgeFunctions, Logs, Schema, SQL, Usage)
   'dbOverview.tables': 'Tablas',
   'dbOverview.activeUsers': 'Usuarios activos',
   'dbOverview.snapshots': 'Versiones guardadas',
@@ -550,17 +549,6 @@ export const es: Record<ForgeKey, string> = {
   'usage.storage': 'Peticiones de almacenamiento',
   'usage.realtime': 'Peticiones en tiempo real',
   'usage.needProject': 'Guarda tu proyecto primero para ver el uso.',
-  'users.loading': 'Cargando usuarios...',
-  'users.user': 'Usuario',
-  'users.email': 'Correo',
-  'users.role': 'Rol',
-  'users.lastSeen': 'Última vez',
-  'users.joined': 'Se unió',
-  'users.saved': '¡Guardado!',
-  'users.count_one': '{count} usuario',
-  'users.count_other': '{count} usuarios',
-  'users.prev': 'Página anterior',
-  'users.next': 'Página siguiente',
 
   // Mensajes del orquestador (AIOrchestrator) — se escriben en el idioma elegido al momento de la corrida
   'orch.fnDeploy.noDb': 'Escribí la función `{slug}` pero no pude desplegarla: este proyecto necesita su base de datos provisionada antes de poder desplegar funciones.',
