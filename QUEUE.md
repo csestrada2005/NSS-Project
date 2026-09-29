@@ -1082,21 +1082,82 @@ pulido completo (ítem 5.4).
 líneas en el lockfile). Es una herramienta del agente, no de la app: probablemente debería ser
 devDependency o no estar ahí (Render la instala en cada deploy). Ver "SIN CONFIRMAR".
 
-### 5.4 EN PROGRESO — Pulido completo de UI/UX (sesión 2026-09-29)
+### 5.4 HECHO (pendiente CHECK MANUAL) — Pulido completo de UI/UX (sesión 2026-09-29)
+
+Rama `continuacion-sesion-g5`, 10 commits sobre `f2db4c0` (`779e59d` … `dce6d2e`), SIN push todavía.
 
 Decidido con Samuel (opción "pulido completo", todas las recomendaciones aceptadas):
 - Idioma: Wyrd Forge bilingüe en/es DE VERDAD, con interruptor PROPIO (separado del `LanguageContext`
   de Nebu Studio), guardado en el navegador, primera vez = idioma del navegador.
 - Chat: la IA responde SIEMPRE en el idioma de la interfaz, sin importar en qué idioma escriba el
   usuario. El contenido de la app generada NO se ve afectado (sigue lo que pida el prompt).
+- Pasos del plan: "resumen aparte" — el Architect agrega `summary` (en el idioma de la interfaz) a cada
+  paso; `description` sigue en inglés y es lo único que lee el Implementer.
 - Botón de comprar créditos: deshabilitado con etiqueta "Próximamente".
-- Celular: dashboard y popups adaptados; el editor muestra aviso "usa computadora".
+- Celular: editor detrás de `PhoneGate` (aviso "necesita computadora"); dashboard y Hub adaptados;
+  "Nuevo proyecto" apagado en teléfono (el pedido inicial viaja sólo en `location.state` y se perdería).
+- Test roto por la traducción (`migrationDirNormalization.test.js`, ancla de "dos avisos separados"):
+  se re-ancló a las claves del diccionario, misma protección.
 - Nombre en la pestaña: "Wyrd Forge" en `/forge` y `/studio`, "Nebu Studio" en el CRM.
-- Sin checks manuales hasta terminar todos los bloques; un solo check al final.
 
-Bloques: 0 arranque + cola · 1 base de idioma · 2a dashboard/popups/login/cargas · 2b editor · 2c chat ·
-2d Ajustes (+ `.nebu-cta` en sus botones) · 3 avisos de guards + idioma de la IA · 4 créditos ·
-5 celular · 6 teclado/foco · 7 cierre.
+**Hecho, por bloque:**
+- B0 `779e59d` — `index.html`: fondo `#0d0d0d` desde el primer pintado (el blanco venía del html/body
+  por defecto mientras el búho está transparente sus primeros 300 ms), búho a 160 px, título por zona.
+- B1 `e716c21` — `src/i18n/forge/` (en.ts = forma de referencia; es.ts tipado contra sus claves: una
+  clave faltante rompe `tsc`), store fuera de React (`getForgeLang`/`t`/`tn`), `useForgeLang`,
+  `LangToggle` en dashboard y navbar del editor, `<html lang>` sincronizado. ~540 claves al cierre.
+- B2a+B4 `ee30c54` — dashboard, nuevo proyecto, compartir, Hub, créditos, pantallas de carga.
+- B2b `91d12f8` — StudioEngine, navbar, código, propiedades, historial de versiones.
+  `hasReportedRuntimeError` reconoce el aviso de runtime en los dos idiomas.
+- B2c `2f18964` — chat completo + aprobación de migraciones. `ProgressLine.kind: 'planning'`.
+- B2d `0b5a5d2` — Ajustes (7 pestañas + 7 paneles de DB) + `.nebu-cta` en sus botones principales.
+  Commit por defecto de GitHub: "Update from Wyrd Forge" (decía "Open Lovable Builder").
+- B3a/b `1d3d706` — guards (RLS, código de cliente), recorte de plan y resultado de migración con `lang`
+  opcional (sin él, idioma histórico: los tests viejos no cambian). La marca de cierre es idéntica en los
+  dos idiomas. Mensajes fijos del orquestador al diccionario. `server/forgeMessagesI18n.test.js` (4).
+- B3c `35177c7` — idioma de la IA: question lane y aclaraciones del simple lane; `summary` del Architect.
+  El idioma viaja en el user message para no partir el prefijo cacheado.
+- B5 `37e3a8c` — `useIsPhone` (<768 px Y puntero táctil), `PhoneGate`, dashboard/Hub responsive.
+- B6 `dce6d2e` — teclado. **Corrección de mi diagnóstico inicial:** el marco de foco global YA existía
+  (`index.css`, `*:focus-visible`); los huecos reales eran controles que sólo aparecen con hover, filas
+  clicables sin teclado (árbol de archivos, historial de IA) y botones de ícono sin nombre.
+
+**Verificación:** `npx tsc -b --force` 0 errores · `node --test "server/*.test.js"` 675/675 (671 + 4
+nuevos) · `npx vitest run` 56/56 (54 + test de `kind: 'planning'` + 2 de PhoneGate) · `npx vite build` OK.
+
+**CHECK MANUAL — PENDIENTE** (junto con el de las pantallas de carga). Mundos pre-registrados:
+- Esperado: búho sobre negro sin destello al abrir cualquier URL; pestaña "Wyrd Forge"/"Nebu Studio".
+- Esperado: EN/ES en dashboard y navbar; cambia TODO Wyrd (toasts incluidos) y sobrevive a recargar;
+  primera vez con navegador en español → ES. El CRM NO cambia de idioma.
+- Esperado: con ES, una pregunta en inglés se responde en español (y al revés); la tarjeta del plan
+  muestra los pasos en el idioma elegido; avisos de guards y resultado de migración en ese idioma.
+- Esperado: la app generada sigue el idioma del PROMPT, no el de la interfaz.
+- Esperado: "Comprar créditos · Próximamente" apagado. En teléfono: aviso en `/studio/...`, dashboard
+  usable, "Nuevo proyecto" apagado con explicación. Ventana angosta con mouse: editor normal.
+- Esperado: con Tab, Abrir/Hub/Compartir aparecen al enfocar la tarjeta; el árbol de archivos se abre
+  con Enter.
+- Residuos conocidos (no bugs): mensajes viejos del chat quedan en el idioma en que se escribieron;
+  nombres/notas de paletas sugeridas vienen de la tabla `colors` en inglés; los loaders compartidos con
+  Nebu (`NebuLoader`, `LoadingSquares`) dicen "Cargando" a lectores de pantalla; Login/rol/setup/
+  aprobación son onboarding de Nebu y no se tradujeron; el prompt interno de "Corregir con IA" sigue en
+  español (es instrucción al modelo); pasos del plan sin `summary` (modelo que lo omita) caen a
+  `description` en inglés.
+- Fallo: un texto en el idioma equivocado; la IA ignora el idioma en alguna ruta; el idioma se cuela en
+  la app generada; aviso de celular en una ventana de escritorio.
+
+**Hallazgos de paso, SIN tocar (decisión de Samuel pendiente):**
+- **Seguridad/alcance — Ajustes → Base de datos → Usuarios (`UsersManager`)** lee `profiles` de la DB
+  PRINCIPAL de Wyrd/Nebu (usuarios de la plataforma, no los de la app del cliente) y ofrece un selector
+  para CAMBIARLES EL ROL (admin/dev/vendedor/cliente). `DatabaseOverview` también muestra la URL y cuenta
+  `profiles` de la DB principal. Si RLS lo permite, un dueño de proyecto podría cambiar roles de la
+  plataforma. Verificar contra la DB principal qué deja hacer RLS en `profiles` antes de decidir.
+- `ProjectHubPage` sigue con el estilo viejo (gris/azul `blue-600`), fuera del brutalista Nebu; las
+  gráficas de Analíticas usan azul/índigo (el azul se retiró de la plataforma).
+- `PreviewOverlay.tsx`, `InspectorPanel.tsx`, `ElementEditPopover.tsx`: no se montan en ningún lado
+  (código muerto); no se tradujeron.
+
+**Higiene:** scripts de reemplazo en el scratchpad de la sesión (fuera del repo), nada que borrar en el
+repo. `graphify-out/` se regeneró con `graphify update .` (no commiteado, igual que las sesiones previas).
 
 ### Resto del bucket (sin tocar esta sesión)
 - RAG de UI/UX: PatternRetriever da `direct: 0 | vector: 0`. Primera pregunta: ¿pasa igual en producción?
@@ -1884,6 +1945,7 @@ buenos resultados la primera vez que se usó en este ítem (ver Bloque 1, "Halla
 - Ruta `/api/admin/bootstrap-db` con comentario "TEMPORAL": se decidió conservarla y quitar el comentario en una cirugía de servidor.
 - Decisión sobre `graphify-out/cache/ast/` y archivos `.sig`: ¿se commitean o van a `.gitignore`?
 - `graphifyy` en `dependencies` de `package.json` (entró en `5f3846a`): ¿moverlo a devDependencies o quitarlo?
+- `UsersManager`/`DatabaseOverview` leen `profiles` de la DB principal y permiten cambiar roles de la plataforma desde Ajustes de un proyecto (ver 5.4, hallazgos). Verificar RLS de `profiles`.
 
 ## Decisión de arquitectura permanente
 - **D-1 (preview)**: el endgame es la Opción C (sandboxes server-side efímeros, estilo Lovable). Se ejecuta sólo cuando el software esté casi completo. Hoy: vendoring curado (Opción A).
