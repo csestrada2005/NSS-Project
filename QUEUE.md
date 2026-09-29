@@ -1251,12 +1251,28 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   como están o hay una decisión de producto pendiente ahí?
 
 ## 6. BUCKET Calidad del modelo
-- **(PRIMERO — desbloquea ítem 4) El código generado no pasa `tsc -b`.** El Verifier sólo compila con
-  esbuild (no revisa tipos), así que la IA entrega imports sin usar, tipos duplicados que no coinciden y
-  props que el componente no acepta — varios son bugs reales visibles en la app (botón que no hace nada,
-  errores que nunca se muestran). Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4).
-  Decisión de Samuel (2026-09-29): que el Verifier revise tipos y la IA los corrija antes de terminar. Al
-  cerrarlo, re-publicar Vertigo y retomar el check del Bloque 1 del ítem 4.
+- **(HECHO EN CÓDIGO, pendiente CHECK MANUAL — desbloquea ítem 4) El código generado no pasaba `tsc -b`.**
+  Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4). Decisiones de Samuel (2026-09-29):
+  revisión en el SERVIDOR con copia exacta de las librerías; arreglo automático + IA + aviso con botón
+  "Arreglar ahora". Hecho en 4 bloques sobre `main`:
+  - `3fdb6b8` B1: `server/typeenv` (librerías exactas de la plantilla + KNOWN_DEP_VERSIONS, lockfile; se
+    instala en el postinstall con `scripts/installTypeEnv.mjs`, que limpia las variables npm_* heredadas —
+    sin eso el npm anidado instalaba la raíz dentro de typeenv), `server/typecheck.js` (LanguageService;
+    borra sólo imports sin usar; paquete npm sin tipos = "no verificable"), hilo aparte
+    (`typecheckPool.js`, ~1 s en caliente), `POST /api/typecheck`, test de sincronía con la plantilla.
+  - `efd1500` B2: segunda puerta en el Verifier (`src/utils/typeRepairLoop.js`, salvaguarda: sólo acepta
+    una versión que compila y tiene MENOS errores; 2 rondas plan / 1 simple), marca
+    `[TYPE_ERRORS:n]`/`[TYPECHECK_OFF]` en forge_intent_log.
+  - `693e32c` B3: tarjeta "Aún no se puede publicar" + "Arreglar ahora" (también tras la 1ª generación).
+  - `3a7455c` B4: /api/deploy revisa tipos antes de Vercel (422 con la lista) y devuelve `inspectorUrl`.
+  Verificación: tsc 0 · server 701/701 · vitest 62/62 · vite build OK.
+  Residuos: el fast lane no pasa por el Verifier (no revisa tipos); `vite.config.ts` (tsconfig.node.json)
+  no se revisa; costo de memoria del worker en Render no medido.
+  **CHECK MANUAL — PENDIENTE:** (1) Render despliega y el log muestra el postinstall de typeenv sin error;
+  (2) en Vertigo, Publicar → debe listar los errores de tipos (no "failed during build"); (3) en el chat,
+  pedir cualquier cambio chico → si quedan errores, aparece la tarjeta; "Arreglar ahora" → la lista baja
+  o desaparece; (4) Publicar de nuevo → llega a Vercel (retoma el ítem 4 y sus dos mundos pendientes:
+  página en blanco por `dist/`, login de Deployment Protection).
 - Bug de recomendaciones: no muestra filas que SÍ están en la DB; la IA respondió dos veces "compila y no encuentro errores".
 - Reglas duras incumplidas: tocó `package.json` pese a prohibición explícita; añadió comportamiento no pedido dos veces.
 - Detectar que lo pedido YA EXISTE y responder "ya está construido". OJO: rompe la batería de regresión sobre fixtures ya construidos → necesita plan de checkpoints con fixtures vírgenes.
