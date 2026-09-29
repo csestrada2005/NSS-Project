@@ -1184,7 +1184,7 @@ contenedor imprescindible (p. ej. un formulario dentro de una tarjeta) queda sin
 un estado que sólo se distinguía por color azul (p. ej. "completado" vs "en progreso") ahora sólo por texto.
 Residuo: las pantallas de carga (búho, rejilla, barra, cuadritos) no se tocaron.
 
-### 5.6 CANDADO APLICADO Y VERIFICADO EN LA DB (pendiente CHECK en software desplegado) — Escalada de rol en `profiles` (seguridad, 2026-09-29)
+### 5.6 HECHO Y CONFIRMADO — Escalada de rol en `profiles` (seguridad, 2026-09-29)
 
 **Evidencia (DB principal de Wyrd, consultas de Samuel):** RLS encendido; políticas UPDATE `auth.uid() = id`
 sin `WITH CHECK` ni restricción de columnas; `authenticated` con UPDATE sobre toda la tabla; triggers sólo
@@ -1212,8 +1212,11 @@ Verificación automática: tsc 0 · server 680/680 · vitest 56/56 · vite build
 cambia `role` → `ERROR 42501 role and role_approved can only be changed by the server` (esperado); (2)
 onboarding rol vacío → cliente, (3) pedir `pending_role`, (4) `service_role` cambia `role` → sin error
 (esperado). El editor no muestra conteos de UPDATE; el mismo id disparó el candado en (1), así que la fila
-existe. **Pendiente:** llevar la rama a `main` y comprobar en el software desplegado que el admin ve y
-aprueba a un usuario de prueba desde el panel del CRM.
+existe.
+
+**CHECK MANUAL — CONFIRMADO (2026-09-29, Samuel, software desplegado desde `continuacion-sesion-g5`):**
+cuenta nueva pide Developer → queda pendiente; el admin ve "1 pendiente" en el sidebar, la ve en el panel y
+la aprueba; la cuenta entra como Developer con la notificación "Access granted". Coincide con el mundo esperado.
 
 ### Resto del bucket (sin tocar esta sesión)
 - RAG de UI/UX: PatternRetriever da `direct: 0 | vector: 0`. Primera pregunta: ¿pasa igual en producción?
