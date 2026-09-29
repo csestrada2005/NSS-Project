@@ -1074,7 +1074,7 @@ la v2 de la animación (`6d3c85f`, ya documentada arriba), último `f2db4c0`:
   ocupa su tramo de 5-95 %, 95-99 % esperando el primer compile, la barra nunca retrocede). Se quita la
   reacción al mouse de la rejilla. Entrada a Nebu Studio vuelve al búho.
 
-**Estado:** la rama `continuacion-sesion-g5` lleva 28 commits que NO están en `main` (verificado
+**CHECK MANUAL — CONFIRMADO (2026-09-29, Samuel).** Estado previo: la rama `continuacion-sesion-g5` lleva 28 commits que NO están en `main` (verificado
 2026-09-29 contra `origin/main` = `eceb398`). **CHECK MANUAL — PENDIENTE**, se hace junto con el del
 pulido completo (ítem 5.4).
 
@@ -1082,7 +1082,7 @@ pulido completo (ítem 5.4).
 líneas en el lockfile). Es una herramienta del agente, no de la app: probablemente debería ser
 devDependency o no estar ahí (Render la instala en cada deploy). Ver "SIN CONFIRMAR".
 
-### 5.4 HECHO (pendiente CHECK MANUAL) — Pulido completo de UI/UX (sesión 2026-09-29)
+### 5.4 HECHO Y CONFIRMADO — Pulido completo de UI/UX (sesión 2026-09-29)
 
 Rama `continuacion-sesion-g5`, 10 commits sobre `f2db4c0` (`779e59d` … `dce6d2e`), SIN push todavía.
 
@@ -1125,7 +1125,7 @@ Decidido con Samuel (opción "pulido completo", todas las recomendaciones acepta
 **Verificación:** `npx tsc -b --force` 0 errores · `node --test "server/*.test.js"` 675/675 (671 + 4
 nuevos) · `npx vitest run` 56/56 (54 + test de `kind: 'planning'` + 2 de PhoneGate) · `npx vite build` OK.
 
-**CHECK MANUAL — PENDIENTE** (junto con el de las pantallas de carga). Mundos pre-registrados:
+**CHECK MANUAL — CONFIRMADO (2026-09-29)** (junto con el de las pantallas de carga). Mundos pre-registrados:
 - Esperado: búho sobre negro sin destello al abrir cualquier URL; pestaña "Wyrd Forge"/"Nebu Studio".
 - Esperado: EN/ES en dashboard y navbar; cambia TODO Wyrd (toasts incluidos) y sobrevive a recargar;
   primera vez con navegador en español → ES. El CRM NO cambia de idioma.
@@ -1159,7 +1159,7 @@ nuevos) · `npx vitest run` 56/56 (54 + test de `kind: 'planning'` + 2 de PhoneG
 **Higiene:** scripts de reemplazo en el scratchpad de la sesión (fuera del repo), nada que borrar en el
 repo. `graphify-out/` se regeneró con `graphify update .` (no commiteado, igual que las sesiones previas).
 
-### 5.5 HECHO (pendiente CHECK MANUAL) — Sistema visual minimalista: Wyrd + CRM (sesión 2026-09-29)
+### 5.5 HECHO Y CONFIRMADO — Sistema visual minimalista: Wyrd + CRM (sesión 2026-09-29)
 
 Análisis previo (con Samuel): la idea era minimalista pero el sistema no — 3 escalas de gris, 7 radios,
 8 tamaños de texto, colores decorativos (morado/rosa/índigo/azul), Outfit cargada pero sin usar en Wyrd,
@@ -1177,7 +1177,7 @@ Archivo Black descargada sin uso, IBM Plex Mono referenciada sin cargar. Samuel 
 - Verificación: tsc 0 errores · server 675/675 · vitest 56/56 · vite build OK · reglas presentes en el CSS
   final.
 
-**CHECK MANUAL — PENDIENTE.** Esperado: Wyrd y CRM con el mismo negro/carbón/gris neutro, esquinas iguales,
+**CHECK MANUAL — CONFIRMADO (2026-09-29).** Esperado: Wyrd y CRM con el mismo negro/carbón/gris neutro, esquinas iguales,
 títulos en Outfit, sin azul/morado; en el CRM (computadora) tarjetas y paneles como texto suelto hasta pasar
 el mouse; formularios, menús y popups siempre visibles; en celular los contenedores se ven. Fallo: algún
 contenedor imprescindible (p. ej. un formulario dentro de una tarjeta) queda sin marco y se vuelve confuso;
