@@ -1282,7 +1282,7 @@ no opcionales, nacidos del diseño del ítem 4:
 
 Pendiente: escribir el tutorial (sesión de producto, bucket 5, con mockup) una vez cerrado el ítem 4.
 
-## 8. HECHO (pendiente merge a main) — infra: ruta duplicada `C:\C:\` en Windows (2026-09-20)
+## 8. HECHO Y EN MAIN — infra: ruta duplicada `C:\C:\` en Windows (2026-09-20)
 
 **Cirugía aparte, fuera de los buckets de producto** — el entorno de desarrollo se acaba de mover de
 GitHub Codespaces a Windows nativo, y esto expuso un bug que siempre estuvo ahí.
@@ -1313,8 +1313,7 @@ errores.
 **Higiene:** un script de reproducción aislado (`server/_pathtest.mjs`) se creó para confirmar la causa
 raíz y se borró antes de tocar el código real — no llegó a commitearse.
 
-**Estado:** commiteado en rama `sesion-g5` (`3f08d3f`), empujado a origin. **NO mergeado a main todavía**
-— pendiente que Samuel abra el PR o pida el merge. Push inicial bloqueado por permisos (credenciales de
+**Estado:** commiteado en rama `sesion-g5` (`3f08d3f`) y mergeado a main en el PR #328 (`eceb398`). Push inicial bloqueado por permisos (credenciales de
 git en la máquina apuntaban a otra cuenta sin acceso de escritura al repo); resuelto re-logueando
 `gh auth login` como `csestrada2005`.
 
