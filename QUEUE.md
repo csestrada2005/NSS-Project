@@ -1442,6 +1442,18 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   archivos proporcionados…?" aunque `src/components/layout/Footer.tsx` existe. El targeting del simple lane
   sólo recibe candidatos preseleccionados (`selectRelevantFiles`) y el layout parece quedar fuera. Samuel:
   "hay que mejorar la IA en general… sigue siendo ineficiente a la hora de leer el código".
+  **Segunda evidencia (Vertigo, 2026-09-30):** acción sugerida "Cambia el color del título "Choose your
+  edge" en ExpeditionsSection.tsx … [CLARIFY_ASKED]" → "No veo ExpeditionsSection.tsx". Queries (DB
+  principal): el archivo existe (7034 chars), el classifier acertó (`affected_files` = ese archivo), 30
+  componentes, y el título está escrito "Choose Your Edge" en el carácter **6374**. Causa: el targeting
+  (Haiku) sólo ve los primeros **1500** caracteres de hasta 8 candidatos, y el acierto del classifier iba
+  detrás de los imports de página. **Opción A (Samuel) — HECHO EN CÓDIGO, pendiente CHECK MANUAL:**
+  `src/utils/targetHints.js` (+5 tests): nivel 1.5 del targeting — texto citado presente en UN solo
+  archivo (sin mayúsculas/espacios) o archivo nombrado que existe → decide sin Haiku (`method:
+  quoted-text | named-file` en el log `[SimpleLane] target:` de la consola); candidatos: classifier ANTES
+  que imports de página; el Haiku ve el trozo donde aparece lo citado, no el principio. Residuo del
+  fixture: el título hoy es `text-[#ff0000]` (intento anterior). Pendiente aparte: el caso del Footer de
+  arriba (332f31d3) no traía comillas ni nombre de archivo: lo cubre sólo el cambio de orden, sin probar.
 - **(HECHO EN CÓDIGO, pendiente CHECK MANUAL — desbloquea ítem 4) El código generado no pasaba `tsc -b`.**
   Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4). Decisiones de Samuel (2026-09-29):
   revisión en el SERVIDOR con copia exacta de las librerías; arreglo automático + IA + aviso con botón
@@ -2256,6 +2268,12 @@ el admin tiene acceso). Nada de esto se construye por ahora.
   → requiere ANTES el cobro al usuario (créditos / pagos, hoy "Próximamente").
 - Al empezar la fase 1: quitar el código de Cloudflare (`server.js` /api/domains, `DomainsPanel.tsx`), que
   sólo sirve si el dominio vive en la cuenta de Cloudflare del admin.
+
+## 16. IDEA SIN DISEÑO — "Prompt refiner": del PDF del proyecto a prompts dentro de Wyrd (Samuel, 2026-09-30)
+
+Hoy, al cerrar un proyecto con un cliente, el equipo le da el PDF a Claude externo, que lo analiza y devuelve
+los prompts para Lovable. Samuel pregunta si puede hacerse todo dentro de Wyrd. Opciones presentadas en
+chat (pendiente de decisión y diseño en frío): ver resumen de cierre de la sesión del 2026-09-30.
 
 ## APARCADO hasta después de lanzar
 - **A+**: quitar el botón de aprobación cuando el guard no pudo inspeccionar. Aparcado: `unparseable` no tiene causa conocida tras G-3; sólo verificable con SQL fabricado a mano (choca con medir por comportamiento).

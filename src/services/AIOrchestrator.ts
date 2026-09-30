@@ -58,6 +58,7 @@ import { cachedSystem, cachedSystemBlocks } from './promptCache';
 import { DesignBriefService } from './DesignBriefService';
 import { isAbortError } from '../utils/abort';
 import { canEnterFastLane, isSimpleEditIntent, planModeRequiresPlanLane, isTypeFixRequest } from '../utils/laneRouting.js';
+import { extractQuotedTexts, resolveHintedTarget, snippetForTargeting } from '../utils/targetHints.js';
 import { KNOWN_DEP_VERSIONS } from '../utils/knownDepVersions';
 import { typeCheckTelemetry } from '../utils/typeRepairLoop';
 import type { TypeIssue } from './PlatformService';
@@ -2817,14 +2818,16 @@ export class AIOrchestrator {
     signal?: AbortSignal,
     previousClarifyQuestion?: string | null
   ): Promise<
-    | { path: string; content: string; method: 'data-oid' | 'className' | 'llm' | 'keywords' }
+    | { path: string; content: string; method: 'data-oid' | 'className' | 'quoted-text' | 'named-file' | 'llm' | 'keywords' }
     | { clarify: string }
     | null
   > {
     // Universo de candidatos (usado por niveles 2/3, logueado para telemetría).
-    // Orden de prioridad: (a) imports de las páginas ruteadas — los que pintan
-    // píxeles; (b) intent.affected_files válidos — predicción del classifier;
-    // (c) selectRelevantFiles(...).slice(0, 5) — keywords, ahora al final.
+    // Orden de prioridad (bucket 6, 2026-09-30): (a) intent.affected_files
+    // válidos — predicción del classifier, ANTES que los imports de página: en
+    // Vertigo (30 componentes) el acierto del classifier quedaba detrás de las
+    // secciones de la página; (b) imports de las páginas ruteadas — los que
+    // pintan píxeles; (c) selectRelevantFiles(...).slice(0, 5) — keywords.
     // Deduplicado por path preservando el orden a→b→c. Cap total: 8.
     type CandidateSource = 'page-imports' | 'classifier' | 'keywords';
     const pageImportCandidates = getPageImportFiles(files);
@@ -2844,8 +2847,8 @@ export class AIOrchestrator {
         pool.push({ path: p, source });
       }
     };
-    addCandidates(pageImportCandidates, 'page-imports');
     addCandidates(affectedCandidates, 'classifier');
+    addCandidates(pageImportCandidates, 'page-imports');
     addCandidates(keywordCandidates, 'keywords');
 
     const cappedPool = pool.slice(0, 8);
@@ -2889,6 +2892,17 @@ export class AIOrchestrator {
     }
 
     // ----------------------------------------------------------------
+    // NIVEL 1.5 — pistas que el usuario ya dio (bucket 6, 2026-09-30): un
+    // texto citado que aparece en UN solo archivo, o un archivo nombrado que
+    // existe. Decide sin Haiku. Ver src/utils/targetHints.js.
+    // ----------------------------------------------------------------
+    const hinted = resolveHintedTarget(input, files, (p: string) => this.isSelectableSrcFile(p));
+    if (hinted) {
+      return { path: hinted.path, content: files.get(hinted.path)!, method: hinted.method };
+    }
+    const quotedTexts = extractQuotedTexts(input);
+
+    // ----------------------------------------------------------------
     // NIVEL 2 — targeting LLM
     // ----------------------------------------------------------------
     if (cappedCandidates.length === 1) {
@@ -2917,7 +2931,8 @@ export class AIOrchestrator {
         }
         for (const path of cappedCandidates) {
           const content = files.get(path) ?? '';
-          userMessage += `\n\n--- ${path} ---\n${content.slice(0, 1500)}`;
+          // El trozo donde aparece lo citado, no sólo el principio del archivo.
+          userMessage += `\n\n--- ${path} ---\n${snippetForTargeting(content, quotedTexts, 1500)}`;
         }
 
         const response = await platformService.callForgeChat({
