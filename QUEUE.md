@@ -328,6 +328,9 @@ chat esté trabado. Cuando se arregle el modal (ver 5.0 abajo), repetir en este 
    tarjeta "Aún no se puede publicar"; "Arreglar ahora" → la lista baja o desaparece.
 3. **Volver a publicar** → debe llegar a Vercel y construir; revisar los dos mundos pendientes del ítem 4
    (página en blanco por `dist/`; login de Deployment Protection en la URL).
+   **CERRADO (2026-09-30):** publica y construye; `dist/` NO ocurrió (el sitio se ve igual que el preview);
+   el login se resolvió entregando la dirección del proyecto (`7382c99`). Paso 1 también cerrado: la
+   revisión de tipos pasó a Vercel (`55424bf`) y "Arreglar ahora" desde Publicar está confirmado.
 4. **Ctrl+Espacio:** al principio abrió el chat bien, después abrió OTRA ventana del proyecto (Samuel,
    2026-09-29, proyecto `332f31d3-6a64-42c4-a587-4bd329f24f32`).
 5. **Proyectos antiguos:** el modal vuelve a responder (Vertigo quedó inservible para pruebas por esto; las
@@ -458,6 +461,8 @@ incógnito sin login ✓; (4) tras recargar, URL del proyecto + "Última publica
 (desactivado) hasta saber si ya se publicó y recuerda el estado por sesión del navegador (+2 tests).
 Pendiente CHECK. Sin investigar: por qué `/api/deploy/:id/status` tarda ~5 s en Render (0.5 CPU).
 Quedan redondas a propósito (son etiquetas, no botones): `.fc-creditos` y `.fc-turno-modo`.
+**Check 5 (Samuel, 2026-09-30): TODO OK — CONFIRMADO** (botones rectos, "Revisando…" → "Actualizar" sin
+pasar por "Publicar", al instante al reabrir, proyecto nuevo → "Publicar").
 
 **HECHO EN CÓDIGO (pendiente CHECK MANUAL, decisiones de Samuel: modo Plan "siempre pedir aprobación",
 historial en texto llano):**
