@@ -826,7 +826,11 @@ app.post('/api/credits/check', async (req, res) => {
     // Local-dev-only path (auth skipped) — never block.
     return res.json({ allowed: true, isFreePrompt: false, balance: null });
   }
+  // Medición (2026-09-30): el paso "credits" del navegador tardaba 4–12 s
+  // intermitente; esta línea dice cuánto de eso es la consulta de saldo.
+  const ctxStart = Date.now();
   const ctx = await getCreditContext(userId);
+  console.log(`[credits/check] saldo leído en ${((Date.now() - ctxStart) / 1000).toFixed(1)}s`);
   if (!ctx) {
     // Fail open on DB unavailability — do not block the user.
     return res.json({ allowed: true, isFreePrompt: false, balance: null });

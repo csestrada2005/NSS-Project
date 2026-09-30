@@ -1505,6 +1505,13 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   `[Timing] plan lane: credits 4.7s · memory 0.0s · classify 3.8s · architect 22.2s · implement 86.9s ·
   verify 17.4s · save 15.1s · total 150.2s`. En el plan lane el Implementer sigue escribiendo archivos
   completos (incluido Index.tsx al modificarlo) → candidato a la misma técnica de cambios exactos.
+  **Más corridas (Samuel):** `credits` 7.8 / 12.1 s y `design-context` 2.6 / 0.4 s; `total` 56.6 / 54.7 s.
+  El paso de créditos varía 4–12 s de forma intermitente. Consola con filtro "lock": sin avisos (descarta la
+  espera de turno de la sesión de Supabase Auth). Medición añadida (sólo mide): `[Timing]` separa
+  `session` (supabase.auth.getUser) de `credits` (POST /api/credits/check) y Render escribe
+  `[credits/check] saldo leído en Xs`. Visto de paso: el preview de Vertigo pide
+  `customer_reviews` a su Supabase (`ksjpiuajgjujsijbspig`) y recibe 404 — la tabla no existe en el
+  fixture (residuo conocido de las pruebas de funciones; Samuel: no es la causa).
 - **(HECHO EN CÓDIGO, pendiente CHECK MANUAL — desbloquea ítem 4) El código generado no pasaba `tsc -b`.**
   Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4). Decisiones de Samuel (2026-09-29):
   revisión en el SERVIDOR con copia exacta de las librerías; arreglo automático + IA + aviso con botón
