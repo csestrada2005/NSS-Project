@@ -1474,6 +1474,12 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   - C (pedido de Samuel): la página se scrollea con el chat abierto. CommandModal deja pasar el puntero
     siempre; tarjetas, typebar e historial abierto lo recuperan. Consecuencia: los clicks en el preview
     fuera de las tarjetas también llegan a la página.
+  **CHECK (Samuel, 2026-09-30): A, B y C CONFIRMADOS.** A: los `page-imports` ya son de la página de inicio
+  (Hero, Expeditions, Testimonials, StatsAndCTA, Recommendations, Index). C: scroll correcto.
+  B, primera medición real (Vertigo, "fondo de la sección de reseñas a naranja", 89 archivos):
+  `credits 4.1s · memory 1.5s · classify 5.3s · target 5.4s · design-context 3.9s · edit (Sonnet) 46.9s ·
+  verify 16.0s · save 2.6s · total 85.8s`. Más de la mitad es Sonnet reescribiendo el archivo ENTERO
+  para cambiar una clase; luego la compilación en Render (16 s) y ~15 s de pasos previos en serie.
 - **(HECHO EN CÓDIGO, pendiente CHECK MANUAL — desbloquea ítem 4) El código generado no pasaba `tsc -b`.**
   Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4). Decisiones de Samuel (2026-09-29):
   revisión en el SERVIDOR con copia exacta de las librerías; arreglo automático + IA + aviso con botón
