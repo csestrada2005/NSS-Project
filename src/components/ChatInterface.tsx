@@ -520,7 +520,13 @@ export function ChatInterface({
               <CanceladoCard
                 steps={lastAssistant.stepsSnapshot ?? []}
                 completedCount={lastAssistant.stepsCompletedSnapshot ?? 0}
-                onResume={() => inputRef.current?.focus()}
+                // "Retomar desde aquí" reenvía el pedido cancelado: lo ya escrito
+                // se conservó, así que la IA sigue desde ahí. Sin pedido que
+                // reenviar (p. ej. tras recargar), sólo enfoca la caja de texto.
+                onResume={() => {
+                  if (lastSentText && !isLoading) sendMessage(lastSentText);
+                  else inputRef.current?.focus();
+                }}
               />
             ) : lastAssistant?.errorType ? (
               <ErrorCard

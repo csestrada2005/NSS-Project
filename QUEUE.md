@@ -382,6 +382,18 @@ modificados · 116s", la respuesta SÓLO en el historial; (3) plan de 4 pasos �
 lane; fast/simple lane lo ignoraban); la aclaración de la IA ("¿Quieres cambiar el fondo de un componente
 Footer que no veo…?") tampoco apareció en la tarjeta; Ctrl+Espacio con el historial abierto no lo cerraba.
 
+**Check manual de lo anterior (Samuel, 2026-09-30, 332f31d3):** (1) pregunta → respuesta en la tarjeta ✓;
+(2) cambio chico → se quedó "Trabajando / Planeando…": log de Render sin línea `[typecheck]` tras el compile
+del Verifier → la revisión de tipos esperaba el límite de 60 s en 0.1 CPU (mundo de fallo pre-registrado
+"generación notoriamente más lenta"); cancelar → "Retomar desde aquí" no hacía nada (sólo enfocaba); (3) modo
+Plan → "Plan listo" + Construir ✓, 162 s para 1 archivo (misma espera); (4) Ctrl+Espacio con historial ✓.
+Samuel preguntó por qué se compila en cada turno. **Decisiones:** Render compute a 0.5 CPU (7 USD/mes,
+pagado 2026-09-30; el "Pro plan" de cuenta que compró antes NO da CPU); "Retomar" reenvía el pedido; quitar
+la compilación doble. Hecho: `server/compileCache.js` (+4 tests: LRU de 6, 10 min, clave = hash de archivos +
+credenciales de DB; en proyectos con DB el Verifier compila sin credenciales y no comparte entrada con el
+preview) y "Retomar desde aquí" reenvía `lastSentText`. **Pendiente de medir en 0.5 CPU:** duración de
+`[typecheck] …ms` (fría y caliente) y `[compile] cache hit` tras cada cambio.
+
 **HECHO EN CÓDIGO (pendiente CHECK MANUAL, decisiones de Samuel: modo Plan "siempre pedir aprobación",
 historial en texto llano):**
 - Tarjeta RESPUESTA (`RespuestaCard` + `MiniMarkdown`): respuestas y aclaraciones de la IA se ven en la
@@ -1338,7 +1350,10 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
 - RAG de UI/UX: PatternRetriever da `direct: 0 | vector: 0`. Primera pregunta: ¿pasa igual en producción?
 - Catálogo de componentes, con auditoría de licencia por componente.
 - B-restos: transparencia de plan en generación inicial, persistencia del bloque de plan al recargar (incluye el aviso que no persiste, de G-4), espaciado.
-- B4: edición de plan.
+- B4: edición de plan. Confirmado por Samuel (2026-09-30): el botón "Editar el plan" de la tarjeta "Plan listo"
+  sigue deshabilitado ("Próximamente"); pidió hacerlo funcional (prioridad a decidir, no urgente).
+- Detalle menor (2026-09-30): mientras la IA clasifica una PREGUNTA la tarjeta en vivo dice "Planeando"; para
+  preguntas "Pensando…" sería más honesto.
 - Que el plan imprima el nombre final de la migración, no el que dijo el modelo.
 - (de ítem 3, G-6) Cómo traducir el aviso técnico del guard de código de cliente
   ("mueve esto a una función de servidor") a algo que un usuario NO técnico pueda accionar solo.

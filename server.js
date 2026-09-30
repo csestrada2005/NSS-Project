@@ -16,6 +16,7 @@ import { deployEdgeFunctionViaManagement, validateEdgeFunctionDeployRequest } fr
 import { applyProductionSupabaseClient } from './src/utils/deploySupabaseClient.js';
 import { isPlatformAdmin, planRoleDecision } from './server/roleDecision.js';
 import { runTypecheck } from './server/typecheckPool.js';
+import { compileCacheKey, createCompileCache } from './server/compileCache.js';
 import {
   validateProjectRefRequest,
   validateLogsRequest,
@@ -1347,6 +1348,10 @@ app.post('/api/typecheck', async (req, res) => {
   res.json(result);
 });
 
+// Últimas compilaciones exitosas (server/compileCache.js): el Verifier y el
+// preview compilaban dos veces los mismos archivos tras cada cambio.
+const compileCache = createCompileCache();
+
 app.post('/api/compile', async (req, res) => {
   const { files, projectId } = req.body;
   req.setTimeout(30000);
@@ -1365,6 +1370,12 @@ app.post('/api/compile', async (req, res) => {
   // pero sí podemos loguear cada error REAL de compilación y cada compile de
   // duración anómala (>10s), que suele preceder a esos 502 bajo carga.
   const startedAt = Date.now();
+  const cacheKey = compileCacheKey(files, dbCredentials);
+  const cached = compileCache.get(cacheKey);
+  if (cached) {
+    console.log('[compile] cache hit (mismos archivos que una compilación reciente)');
+    return res.json(cached);
+  }
   try {
     const result = await compileFiles(files, dbCredentials);
     const durationMs = Date.now() - startedAt;
@@ -1378,7 +1389,9 @@ app.post('/api/compile', async (req, res) => {
     }
     // CAMBIO 2 — oidMap (slug → path completo) viaja junto al html para que el
     // consumidor (PR-2) pueda resolver un data-oid del DOM a su archivo real.
-    res.json({ html: result.html, oidMap: result.oidMap ?? {} });
+    const payload = { html: result.html, oidMap: result.oidMap ?? {} };
+    compileCache.set(cacheKey, payload);
+    res.json(payload);
   } catch (err) {
     const durationMs = Date.now() - startedAt;
     if (durationMs > 10000) {
