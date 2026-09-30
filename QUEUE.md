@@ -1522,6 +1522,17 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
     Los roles no salen de `req.user` (se leen de la DB), así que un cambio de rol no espera la caché.
   Pendiente CHECK: `session` < 0.2 s, `credits` < 1.5 s, total ~40 s; cerrar sesión / volver a entrar sin
   errores; ninguna "Session expired" estando conectado.
+  **CHECK 1 (Samuel, 2026-09-30):** `session 0.0s · credits 1.2s` ✓ (antes 4–6 s y 1–12 s). Total 54.7 s,
+  no ~40: `target 7.2s · design-context 10.0s` (≈17 s tras el targeting) y `verify 25.4s`. Pendiente: cerrar
+  sesión / volver a entrar y CRM (no reportados aún).
+  **Próximo cuello: `DesignContextService.getContext(input, …)`** — hasta 3 consultas en serie por tabla
+  (colors, ui_reasoning, styles, typography, products) desde el navegador, en CADA pedido, usando la frase
+  del usuario como `product_type` → casi nunca coincide y cae a la fila por defecto ("Modern SaaS", la
+  primera fila): lento Y contexto de diseño equivocado. Mismo tema que el PatternRetriever (UI/UX Pro Max
+  casi sin usar). Luego: compilar en Render (`verify` 16–25 s).
+  Visto de paso: el preview de Vertigo registra `TypeError: Failed to fetch` en `fetchRecomendaciones`
+  (llamada de la app a su propia Supabase). Hipótesis sin confirmar: el preview se recarga tras la edición
+  y corta la petición en vuelo. No relacionado con la sesión de Wyrd (el preview usa su propio cliente).
 - **(HECHO EN CÓDIGO, pendiente CHECK MANUAL — desbloquea ítem 4) El código generado no pasaba `tsc -b`.**
   Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4). Decisiones de Samuel (2026-09-29):
   revisión en el SERVIDOR con copia exacta de las librerías; arreglo automático + IA + aviso con botón
