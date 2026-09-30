@@ -58,7 +58,7 @@ import { cachedSystem, cachedSystemBlocks } from './promptCache';
 import { DesignBriefService } from './DesignBriefService';
 import { isAbortError } from '../utils/abort';
 import { canEnterFastLane, isSimpleEditIntent, planModeRequiresPlanLane, isTypeFixRequest } from '../utils/laneRouting.js';
-import { extractQuotedTexts, resolveHintedTarget, snippetForTargeting } from '../utils/targetHints.js';
+import { extractQuotedTexts, orderPageSeeds, resolveHintedTarget, snippetForTargeting } from '../utils/targetHints.js';
 import { KNOWN_DEP_VERSIONS } from '../utils/knownDepVersions';
 import { typeCheckTelemetry } from '../utils/typeRepairLoop';
 import type { TypeIssue } from './PlatformService';
@@ -303,12 +303,14 @@ function getPageImportFiles(files: Map<string, string>): string[] {
     if (path.startsWith('src/pages/') && path.endsWith('.tsx')) seeds.push(path);
   }
   if (files.has('src/App.tsx')) seeds.push('src/App.tsx');
+  // Inicio y App primero, admin / login / 404 al final (ver orderPageSeeds).
+  const orderedSeeds = orderPageSeeds(seeds);
 
   const importRe = /import\s+[^'"]*from\s+['"]([^'"]+)['"]/g;
   const result: string[] = [];
   const seen = new Set<string>();
 
-  for (const seed of seeds) {
+  for (const seed of orderedSeeds) {
     try {
       const content = files.get(seed) ?? '';
       const seedDir = seed.slice(0, seed.lastIndexOf('/')); // p. ej. 'src/pages'

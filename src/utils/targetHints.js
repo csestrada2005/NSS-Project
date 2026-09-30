@@ -93,3 +93,21 @@ export function snippetForTargeting(content, quotedTexts, size = 1500) {
   }
   return source.slice(0, size);
 }
+
+// Páginas que no son la web que ve el visitante: van al final de las semillas.
+const BACKSTAGE_PAGE = /(admin|dashboard|login|signin|signup|auth|notfound|404)/i;
+
+/**
+ * Orden de las semillas para los candidatos `page-imports` (2026-09-30): el
+ * Map venía en orden alfabético y `AdminPanel.tsx` llenaba el tope de 8 con
+ * componentes del admin antes de llegar a `Index.tsx`. Primero la página de
+ * inicio y App.tsx, luego las demás páginas, y al final admin / login / 404.
+ */
+export function orderPageSeeds(paths) {
+  const rank = (p) => {
+    if (p === 'src/pages/Index.tsx') return 0;
+    if (p === 'src/App.tsx') return 1;
+    return BACKSTAGE_PAGE.test(p.split('/').pop() ?? '') ? 3 : 2;
+  };
+  return [...paths].sort((a, b) => rank(a) - rank(b));
+}

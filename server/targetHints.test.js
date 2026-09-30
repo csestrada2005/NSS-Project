@@ -60,3 +60,11 @@ test('el trozo para el targeting se centra en lo citado cuando está lejos del p
   assert.equal(near, ('<h1>Choose Your Edge</h1>' + 'x'.repeat(3000)).slice(0, 1500), 'cerca del principio: igual que antes');
   assert.equal(snippetForTargeting('abc'.repeat(1000), []), 'abc'.repeat(1000).slice(0, 1500));
 });
+
+test('semillas de page-imports: inicio y App primero, admin / login / 404 al final', async () => {
+  const { orderPageSeeds } = await import('../src/utils/targetHints.js');
+  assert.deepEqual(
+    orderPageSeeds(['src/pages/AdminPanel.tsx', 'src/pages/About.tsx', 'src/pages/Index.tsx', 'src/pages/NotFound.tsx', 'src/pages/Login.tsx', 'src/App.tsx']),
+    ['src/pages/Index.tsx', 'src/App.tsx', 'src/pages/About.tsx', 'src/pages/AdminPanel.tsx', 'src/pages/NotFound.tsx', 'src/pages/Login.tsx'],
+  );
+});

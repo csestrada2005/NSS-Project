@@ -21,3 +21,4 @@ export function resolveHintedTarget(
   isSelectable: (path: string) => boolean
 ): { path: string; method: 'quoted-text' | 'named-file' } | null;
 export function snippetForTargeting(content: string, quotedTexts: string[], size?: number): string;
+export function orderPageSeeds(paths: string[]): string[];
