@@ -11,21 +11,24 @@ export type ProposalState =
   | 'superseded'
   | 'applied'
   | 'failed'
-  | 'skipped';
+  | 'skipped'
+  | 'dismissed';
 
 /** Raw runner verdict carried by a `[DDL_OUTCOME:]` mark (MigrationOutcome). */
-export type ProposalOutcome = 'applied' | 'failed' | 'unverified' | 'skipped';
+export type ProposalOutcome = 'applied' | 'failed' | 'unverified' | 'skipped' | 'dismissed';
 
 export const EXECUTABLE: 'executable';
 export const SUPERSEDED: 'superseded';
 export const APPLIED: 'applied';
 export const FAILED: 'failed';
 export const SKIPPED: 'skipped';
+export const DISMISSED: 'dismissed';
 
 export const OUTCOME_APPLIED: 'applied';
 export const OUTCOME_FAILED: 'failed';
 export const OUTCOME_UNVERIFIED: 'unverified';
 export const OUTCOME_SKIPPED: 'skipped';
+export const OUTCOME_DISMISSED: 'dismissed';
 
 /** One proposal found in the chat history, with its derived state. */
 export interface DdlProposal {

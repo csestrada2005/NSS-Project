@@ -1568,6 +1568,13 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   texto de aquel turno — no el resultado del cambio recién hecho. Es la decisión de diseño documentada en el
   ítem 10 ("la propuesta DDL ejecutable se busca en TODO el historial y sigue viva hasta resolverse"), que
   Samuel vive como "cuando hay que aplicar SQL no cambia el modal". Pendiente de diseño con Samuel.
+  **Opción B (Samuel) — HECHO EN CÓDIGO, pendiente CHECK MANUAL:** la tarjeta DDL sólo manda si la propuesta
+  es del ÚLTIMO turno; si es de uno anterior, manda el resultado nuevo y arriba sale `PendingDdlNotice`
+  ("Hay una migración pendiente de un cambio anterior: X · Revisar · Descartar"). Revisar abre la tarjeta DDL
+  de siempre. Descartar (con confirmación) escribe en el chat el veredicto nuevo `dismissed`
+  (`[DDL_OUTCOME:dismissed:…]`, estado `DISMISSED` en ddlProposalState.js, +3 tests): NO llama al runner ni
+  a la base, sobrevive al refresh, y una propuesta nueva vuelve a ser ejecutable. El archivo .sql sigue en
+  el proyecto. +2 tests del aviso.
 - **(HECHO EN CÓDIGO, pendiente CHECK MANUAL — desbloquea ítem 4) El código generado no pasaba `tsc -b`.**
   Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4). Decisiones de Samuel (2026-09-29):
   revisión en el SERVIDOR con copia exacta de las librerías; arreglo automático + IA + aviso con botón

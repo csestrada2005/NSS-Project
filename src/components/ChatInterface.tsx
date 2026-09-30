@@ -3,7 +3,10 @@ import {
   findExecutableProposal,
   stripDdlMarks,
   ddlProposedMark,
+  buildOutcomeMessage,
+  OUTCOME_DISMISSED,
 } from '@/utils/ddlProposalState.js';
+import { getForgeLang } from '@/i18n/forge/lang';
 import { appendModeMark, type ChatSendMode } from '@/utils/chatModeMark.js';
 import type { ProgressLine } from './chat/progressSummary';
 import { Typebar } from './chat/Typebar';
@@ -13,6 +16,7 @@ import { CreditsBadge } from './chat/CreditsBadge';
 import {
   ResumenCard,
   UltimoMensajeCard,
+  PendingDdlNotice,
   DDLCard,
   SeguridadCard,
   PlanCard,
@@ -157,6 +161,8 @@ export function ChatInterface({
   // prop. Mismo motivo por el que pendingPlanSteps tampoco es estado local.
   const mode: ChatSendMode = planModeEnabled ? 'plan' : 'auto';
   const [historyOpen, setHistoryOpen] = useState(false);
+  // "Revisar" de una migración pendiente de un turno anterior (PendingDdlNotice).
+  const [ddlReviewOpen, setDdlReviewOpen] = useState(false);
   useEffect(() => {
     if (typebarHidden) setHistoryOpen(false);
   }, [typebarHidden]);
@@ -437,6 +443,12 @@ export function ChatInterface({
     -1
   );
   const lastAssistant = lastAssistantIndex >= 0 ? messages[lastAssistantIndex] : null;
+  // La tarjeta DDL sólo manda si la propuesta es del ÚLTIMO turno. Si viene de
+  // uno anterior, manda el resultado nuevo y la migración queda como aviso
+  // (PendingDdlNotice) — 2026-09-30, Samuel: "cuando hay que aplicar SQL no
+  // cambia el modal".
+  const proposalIsLatest = !!executableProposal && executableProposal.messageIndex === lastAssistantIndex;
+  const olderPendingProposal = executableProposal && !proposalIsLatest ? executableProposal : null;
 
   // Campos "ricos" (filesModifiedCount, warning, cancelled, errorType) son
   // sólo de esta sesión — appendMessage persiste únicamente `content` (ver
@@ -444,7 +456,7 @@ export function ChatInterface({
   // rehidratado no los trae, y por diseño eso cae a 'reposo': no se inventa
   // una tarjeta con datos que no están.
   const hasResult =
-    !!executableProposal ||
+    proposalIsLatest ||
     !!lastAssistant?.cancelled ||
     !!lastAssistant?.errorType ||
     !!lastAssistant?.warning ||
@@ -484,6 +496,43 @@ export function ChatInterface({
             </div>
           )}
 
+          {olderPendingProposal && !hasPendingPlan && estado !== 'pensando' && (
+            <>
+              <PendingDdlNotice
+                paths={olderPendingProposal.paths}
+                reviewOpen={ddlReviewOpen}
+                onToggleReview={() => setDdlReviewOpen((v) => !v)}
+                disabled={isReadOnly || isLoading}
+                onDismiss={() => {
+                  setDdlReviewOpen(false);
+                  // Sólo escribe el veredicto 'dismissed' en el chat: no llama
+                  // al runner ni a la base. Sobrevive al refresh (va en el contenido).
+                  const content = buildOutcomeMessage(
+                    { outcome: OUTCOME_DISMISSED, paths: olderPendingProposal.paths },
+                    getForgeLang()
+                  );
+                  if (content) appendMessage({ role: 'assistant', content });
+                }}
+              />
+              {ddlReviewOpen && (
+                <DDLCard
+                  bodyText={proposalMessage ? stripDdlMarks(proposalMessage.content) : ''}
+                  proposal={olderPendingProposal}
+                  projectId={projectId}
+                  isReadOnly={isReadOnly}
+                  isLoading={isLoading}
+                  getMessages={getMessages}
+                  onOutcome={content => { setDdlReviewOpen(false); appendMessage({ role: 'assistant', content }); }}
+                  filesCount={proposalMessage?.filesModifiedCount ?? 0}
+                  durationSeconds={proposalMessage?.durationSeconds ?? 0}
+                  steps={proposalMessage?.stepsSnapshot ?? []}
+                  completedCount={proposalMessage?.stepsSnapshot?.length ?? 0}
+                  onOpenHistory={() => setHistoryOpen(true)}
+                />
+              )}
+            </>
+          )}
+
           {hasPendingPlan ? (
             <PlanCard
               steps={pendingPlanSteps!}
@@ -503,7 +552,7 @@ export function ChatInterface({
                 onFix={(prompt: string) => sendMessage(prompt)}
               />
             )}
-            {executableProposal ? (
+            {executableProposal && proposalIsLatest ? (
               <DDLCard
                 bodyText={proposalMessage ? stripDdlMarks(proposalMessage.content) : ''}
                 proposal={executableProposal}

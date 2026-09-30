@@ -112,6 +112,13 @@ export const APPLIED = 'applied';
 export const FAILED = 'failed';
 /** El proyecto no tiene base de datos: no se ejecutó nada. */
 export const SKIPPED = 'skipped';
+/**
+ * El usuario la descartó sin ejecutarla (2026-09-30, decisión de Samuel: una
+ * migración vieja sin aplicar tapaba el resultado de cada pedido nuevo). No se
+ * mandó NADA a la base; como las demás con veredicto, no vuelve a ser
+ * ejecutable — el camino es pedirla otra vez por chat.
+ */
+export const DISMISSED = 'dismissed';
 
 // --- Veredictos que el runner puede devolver ---------------------------------
 // Mismos valores que MigrationOutcome en MigrationRunner.ts: la marca del chat
@@ -122,12 +129,15 @@ export const OUTCOME_APPLIED = 'applied';
 export const OUTCOME_FAILED = 'failed';
 export const OUTCOME_UNVERIFIED = 'unverified';
 export const OUTCOME_SKIPPED = 'skipped';
+/** No es un veredicto del runner: lo escribe el botón "Descartar" del chat. */
+export const OUTCOME_DISMISSED = 'dismissed';
 
 const OUTCOMES = Object.freeze([
   OUTCOME_APPLIED,
   OUTCOME_FAILED,
   OUTCOME_UNVERIFIED,
   OUTCOME_SKIPPED,
+  OUTCOME_DISMISSED,
 ]);
 
 /** Estado que corresponde a cada veredicto ya emitido. */
@@ -138,6 +148,7 @@ const STATE_BY_OUTCOME = Object.freeze({
   // pero no comparte mensaje: ver la cabecera.
   [OUTCOME_UNVERIFIED]: FAILED,
   [OUTCOME_SKIPPED]: SKIPPED,
+  [OUTCOME_DISMISSED]: DISMISSED,
 });
 
 /** Una marca de cualquiera de las dos familias, con su carga sin parsear. */
@@ -495,6 +506,13 @@ export function buildOutcomeMessage(result, lang = 'es') {
         : 'Puede que se aplicara y el diff no lo vea (RLS, índices o permisos quedan fuera de lo que ' +
       'mide), o puede que no hiciera nada. Revísalo en tu base antes de volver a pedirlo: no ' +
       'reejecuto un DDL que quizá ya corrió.'
+    );
+  } else if (outcome === OUTCOME_DISMISSED) {
+    parts.push(en ? `Discarded the proposal ${names}.` : `Descarté la propuesta ${names}.`);
+    parts.push(
+      en
+        ? 'Nothing was run against your database. The migration file stays in the project; if you want it later, ask me again here.'
+        : 'No se ejecutó nada en tu base de datos. El archivo de la migración sigue en el proyecto; si luego la quieres, pídemela de nuevo por aquí.'
     );
   } else {
     parts.push(en ? "This project doesn't have a database yet, so I didn't run anything." : 'Este proyecto todavía no tiene base de datos, así que no ejecuté nada.');

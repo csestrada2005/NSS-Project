@@ -94,6 +94,61 @@ export function UltimoMensajeCard({ text, onOpenHistory }: { text: string; onOpe
 }
 
 // ---------------------------------------------------------------------------
+// MIGRACIÓN PENDIENTE DE UN TURNO ANTERIOR (2026-09-30, decisión de Samuel):
+// antes la tarjeta DDL de una migración vieja sin aplicar ganaba siempre y
+// tapaba el resultado de cada pedido nuevo. Ahora manda el resultado nuevo y
+// la migración vieja queda como esta línea: "Revisar" abre su tarjeta de
+// siempre; "Descartar" (con confirmación) la cierra SIN tocar la base.
+// ---------------------------------------------------------------------------
+export function PendingDdlNotice({
+  paths,
+  reviewOpen,
+  onToggleReview,
+  onDismiss,
+  disabled,
+}: {
+  paths: string[];
+  reviewOpen: boolean;
+  onToggleReview: () => void;
+  onDismiss: () => void;
+  disabled?: boolean;
+}) {
+  const { t } = useForgeLang();
+  const [confirming, setConfirming] = useState(false);
+  const names = paths.map((p) => p.split('/').pop() ?? p).join(', ');
+  return (
+    <div className="fc-pieza" style={{ padding: '10px 14px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, color: 'var(--fc-texto-2)' }}>
+          {confirming ? t('chat.ddl.dismissConfirm') : t('chat.ddl.pending', { names })}
+        </span>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {confirming ? (
+            <>
+              <button type="button" className="fc-pill" disabled={disabled} onClick={() => { setConfirming(false); onDismiss(); }}>
+                {t('chat.ddl.dismissYes')}
+              </button>
+              <button type="button" className="fc-pill" onClick={() => setConfirming(false)}>
+                {t('common.cancel')}
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" className="fc-pill" onClick={onToggleReview}>
+                {reviewOpen ? t('chat.ddl.hide') : t('chat.ddl.review')}
+              </button>
+              <button type="button" className="fc-pill" disabled={disabled} onClick={() => setConfirming(true)}>
+                {t('chat.ddl.dismiss')}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // 3.2 — DDL (aprobación de migración)
 // ---------------------------------------------------------------------------
 export function DDLCard({

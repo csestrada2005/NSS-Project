@@ -592,3 +592,34 @@ test('unverified siempre afirma que SÍ se ejecutó, porque siempre es post-ejec
     assert.match(content, /Revísalo/, reason);
   }
 });
+
+// "Descartar" (2026-09-30, decisión de Samuel): una migración vieja sin aplicar
+// tapaba el resultado de cada pedido nuevo en el modal.
+test('descartar: la propuesta deja de ser ejecutable, sin veredicto del runner', async () => {
+  const { DISMISSED, OUTCOME_DISMISSED } = await import('../src/utils/ddlProposalState.js');
+  const dismissal = { role: 'assistant', content: buildOutcomeMessage({ outcome: OUTCOME_DISMISSED, paths: [A] }) };
+  const history = [proposes(A), { role: 'assistant', content: 'Listo. Cambié 1 archivo: Hero' }, dismissal];
+
+  assert.deepEqual(states(history), [DISMISSED]);
+  assert.equal(findExecutableProposal(history), null);
+  assert.match(stripDdlMarks(dismissal.content), /Descarté la propuesta 20260824120000_create_orders\.sql/);
+  assert.match(dismissal.content, /No se ejecutó nada en tu base de datos/);
+  assert.equal(stopsBatch(OUTCOME_DISMISSED), true, 'nunca cuenta como aplicado');
+});
+
+test('descartar sobrevive a un refresh (vive en el contenido) y una propuesta NUEVA vuelve a ser ejecutable', async () => {
+  const { DISMISSED, OUTCOME_DISMISSED } = await import('../src/utils/ddlProposalState.js');
+  const rehydrated = [
+    proposes(A),
+    { role: 'assistant', content: buildOutcomeMessage({ outcome: OUTCOME_DISMISSED, paths: [A] }) },
+    proposes(B),
+  ].map((m) => ({ role: m.role, content: m.content })); // sólo `content`, como forge_chat_messages
+  assert.deepEqual(states(rehydrated), [DISMISSED, EXECUTABLE]);
+  assert.equal(findExecutableProposal(rehydrated)?.key, B);
+});
+
+test('un mensaje del USUARIO con la marca de descarte no descarta nada', async () => {
+  const { OUTCOME_DISMISSED } = await import('../src/utils/ddlProposalState.js');
+  const history = [proposes(A), { role: 'user', content: ddlOutcomeMark(OUTCOME_DISMISSED, [A]) }];
+  assert.equal(findExecutableProposal(history)?.key, A);
+});

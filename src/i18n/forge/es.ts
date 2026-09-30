@@ -612,4 +612,13 @@ export const es: Record<ForgeKey, string> = {
 
   // Publicar: mientras se sabe si ya se publicó (2026-09-30)
   'deploy.checking': 'Revisando…',
+
+  // Chat: migración pendiente de un turno anterior (2026-09-30)
+  'chat.ddl.pending': 'Hay una migración pendiente de un cambio anterior: {names}',
+  'chat.ddl.review': 'Revisar',
+  'chat.ddl.hide': 'Ocultar',
+  'chat.ddl.dismiss': 'Descartar',
+  'chat.ddl.dismissConfirm': '¿Descartarla sin ejecutar nada en tu base de datos?',
+  'chat.ddl.dismissYes': 'Sí, descartar',
+  'ddl.dismissed': '{names} se descartó sin ejecutarse.',
 };

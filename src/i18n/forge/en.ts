@@ -617,6 +617,15 @@ export const en = {
 
   // Publicar: mientras se sabe si ya se publicó (2026-09-30)
   'deploy.checking': 'Checking…',
+
+  // Chat: migración pendiente de un turno anterior (2026-09-30)
+  'chat.ddl.pending': 'A migration from an earlier change is still pending: {names}',
+  'chat.ddl.review': 'Review',
+  'chat.ddl.hide': 'Hide',
+  'chat.ddl.dismiss': 'Discard',
+  'chat.ddl.dismissConfirm': 'Discard it without running anything on your database?',
+  'chat.ddl.dismissYes': 'Yes, discard',
+  'ddl.dismissed': '{names} was discarded without running.',
 } as const;
 
 export type ForgeKey = keyof typeof en;

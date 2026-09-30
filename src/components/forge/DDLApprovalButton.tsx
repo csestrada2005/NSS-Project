@@ -56,6 +56,7 @@ import {
   stopsBatch,
   SKIPPED,
   SUPERSEDED,
+  DISMISSED,
   buildOutcomeMessage,
   isStillExecutable,
   type DdlProposal,
@@ -178,6 +179,18 @@ export function DDLApprovalButton({
           icon={<Database className="w-3.5 h-3.5" />}
           tone="text-muted-foreground"
           text={t('ddl.skipped', { names })}
+        />
+      </div>
+    );
+  }
+
+  if (proposal.state === DISMISSED) {
+    return (
+      <div className="mt-2 pt-2 border-t border-border/50">
+        <StatusRow
+          icon={<History className="w-3.5 h-3.5" />}
+          tone="text-muted-foreground"
+          text={t('ddl.dismissed', { names })}
         />
       </div>
     );
