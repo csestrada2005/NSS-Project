@@ -451,6 +451,14 @@ en la plantilla (bucket 14, dependencias), sin urgencia.
   actualización falla (el sitio anterior sigue arriba). +1 test.
 - Residuo conocido: 332f31d3 tiene guardada la dirección de versión (con login) hasta su primer Actualizar.
 
+**Check 4 (Samuel, 2026-09-30):** (3) Actualizar → `[deploy] dirección entregada: proyecto`, abre en
+incógnito sin login ✓; (4) tras recargar, URL del proyecto + "Última publicación: hace 3 min" ✓.
+(1) historial ✓ pero el botón era la píldora redonda; (2) decía "Publicar" ~5 s antes de "Actualizar".
+**Hecho:** `.fc-pill` con esquinas de 4px (también la tarjeta de resumen); Publicar muestra "Revisando…"
+(desactivado) hasta saber si ya se publicó y recuerda el estado por sesión del navegador (+2 tests).
+Pendiente CHECK. Sin investigar: por qué `/api/deploy/:id/status` tarda ~5 s en Render (0.5 CPU).
+Quedan redondas a propósito (son etiquetas, no botones): `.fc-creditos` y `.fc-turno-modo`.
+
 **HECHO EN CÓDIGO (pendiente CHECK MANUAL, decisiones de Samuel: modo Plan "siempre pedir aprobación",
 historial en texto llano):**
 - Tarjeta RESPUESTA (`RespuestaCard` + `MiniMarkdown`): respuestas y aclaraciones de la IA se ven en la

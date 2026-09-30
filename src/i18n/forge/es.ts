@@ -609,4 +609,7 @@ export const es: Record<ForgeKey, string> = {
   // Publicar: Actualizar un sitio ya publicado (2026-09-30)
   'deploy.update': 'Actualizar',
   'deploy.lastDeployed': 'Última publicación: {when}',
+
+  // Publicar: mientras se sabe si ya se publicó (2026-09-30)
+  'deploy.checking': 'Revisando…',
 };

@@ -28,6 +28,27 @@ interface DeployManagerProps {
   ) => Promise<{ success: boolean; changed: number }>;
 }
 
+// Lo último que se supo de la publicación de cada proyecto, por sesión del
+// navegador: al reabrir Publicar, "Actualizar" aparece sin esperar al servidor.
+const STATUS_CACHE_PREFIX = 'wyrd_deploy_status:';
+type SavedStatus = { url: string | null; lastDeployedAt: string | null };
+
+function readSavedStatus(projectId: string | null): SavedStatus | null {
+  if (!projectId) return null;
+  try {
+    const raw = sessionStorage.getItem(STATUS_CACHE_PREFIX + projectId);
+    return raw ? (JSON.parse(raw) as SavedStatus) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSavedStatus(projectId: string, status: SavedStatus) {
+  try {
+    sessionStorage.setItem(STATUS_CACHE_PREFIX + projectId, JSON.stringify(status));
+  } catch { /* sin storage: sólo se pierde el atajo */ }
+}
+
 type DeployStage = 'idle' | 'fixing' | 'packaging' | 'uploading' | 'building' | 'live' | 'error';
 
 const STAGE_MESSAGES: Partial<Record<DeployStage, ForgeKey>> = {
@@ -42,7 +63,9 @@ export function DeployManager({ files, projectId: propProjectId, onFixTypeErrors
   const [stage, setStage] = useState<DeployStage>('idle');
   const { t, lang } = useForgeLang();
   const stageMessage = STAGE_MESSAGES[stage] ? t(STAGE_MESSAGES[stage]!) : '';
-  const [deploymentUrl, setDeploymentUrl] = useState<string | null>(null);
+  const projectId = propProjectId ?? sessionStorage.getItem('forge_project_id');
+  const [saved] = useState(() => readSavedStatus(projectId));
+  const [deploymentUrl, setDeploymentUrl] = useState<string | null>(saved?.url ?? null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [typeErrors, setTypeErrors] = useState<TypeIssue[]>([]);
   const [inspectorUrl, setInspectorUrl] = useState<string | null>(null);
@@ -50,24 +73,30 @@ export function DeployManager({ files, projectId: propProjectId, onFixTypeErrors
   const [copied, setCopied] = useState(false);
   // Última publicación guardada (forge_projects): si existe, el botón es
   // "Actualizar" y la URL publicada se ve desde que se abre la pestaña.
-  const [lastDeployedAt, setLastDeployedAt] = useState<string | null>(null);
+  const [lastDeployedAt, setLastDeployedAt] = useState<string | null>(saved?.lastDeployedAt ?? null);
+  // Hasta saber si el proyecto ya se publicó, el botón no ofrece "Publicar"
+  // (2026-09-30, Samuel: decía "Publicar" 5 s y luego "Actualizar").
+  const [statusKnown, setStatusKnown] = useState(saved !== null || !projectId);
   // Los archivos por ref: tras "Arreglar ahora" se vuelve a publicar desde el
   // mismo handler, cuyo closure vería los archivos de ANTES del arreglo.
   const filesRef = useRef(files);
   filesRef.current = files;
-
-  const projectId = propProjectId ?? sessionStorage.getItem('forge_project_id');
 
   useEffect(() => {
     if (!projectId) return;
     let cancelled = false;
     platformService.getDeploymentStatus(projectId)
       .then((status) => {
-        if (cancelled || !status?.url) return;
-        setDeploymentUrl((current) => current ?? status.url);
-        setLastDeployedAt((current) => current ?? status.lastDeployedAt);
+        if (cancelled) return;
+        const next = { url: status?.url ?? null, lastDeployedAt: status?.lastDeployedAt ?? null };
+        writeSavedStatus(projectId, next);
+        if (next.url) {
+          setDeploymentUrl(next.url);
+          setLastDeployedAt(next.lastDeployedAt);
+        }
       })
-      .catch(() => { /* sin estado: se ofrece "Publicar" como siempre */ });
+      .catch(() => { /* sin estado: se ofrece "Publicar" como siempre */ })
+      .finally(() => { if (!cancelled) setStatusKnown(true); });
     return () => { cancelled = true; };
   }, [projectId]);
 
@@ -106,8 +135,10 @@ export function DeployManager({ files, projectId: propProjectId, onFixTypeErrors
       setStage('building');
 
       // The deploy endpoint polls until READY, so by the time we get a response it's done
+      const now = new Date().toISOString();
       setDeploymentUrl(result.url ?? null);
-      setLastDeployedAt(new Date().toISOString());
+      setLastDeployedAt(now);
+      writeSavedStatus(projectId, { url: result.url ?? null, lastDeployedAt: now });
       setStage('live');
     } catch (err: any) {
       setErrorMessage(err?.message || t('deploy.failed'));
@@ -212,16 +243,18 @@ export function DeployManager({ files, projectId: propProjectId, onFixTypeErrors
         <div className="flex items-center gap-3 flex-wrap">
           <button
             onClick={handleDeploy}
-            disabled={isBusy}
+            disabled={isBusy || !statusKnown}
             className="nebu-cta px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
           >
-            {isBusy
+            {isBusy || !statusKnown
               ? <LoadingSquares size={16} />
               : stage === 'error'
               ? <RefreshCw size={16} />
               : <Rocket size={16} />}
             {isBusy
               ? stageMessage
+              : !statusKnown
+              ? t('deploy.checking')
               : stage === 'error'
               ? t('common.retry')
               : deploymentUrl

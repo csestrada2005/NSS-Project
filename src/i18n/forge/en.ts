@@ -614,6 +614,9 @@ export const en = {
   // Publicar: Actualizar un sitio ya publicado (2026-09-30)
   'deploy.update': 'Update',
   'deploy.lastDeployed': 'Last published {when}',
+
+  // Publicar: mientras se sabe si ya se publicó (2026-09-30)
+  'deploy.checking': 'Checking…',
 } as const;
 
 export type ForgeKey = keyof typeof en;
