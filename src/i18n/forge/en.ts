@@ -610,6 +610,10 @@ export const en = {
 
   // Publicar: mensaje de errores de tipos del build (2026-09-30)
   'deploy.typecheckFailedVercel': 'Vercel could not build this project because of type errors, so nothing was published. "Fix now" fixes them here and publishes again:',
+
+  // Publicar: Actualizar un sitio ya publicado (2026-09-30)
+  'deploy.update': 'Update',
+  'deploy.lastDeployed': 'Last published {when}',
 } as const;
 
 export type ForgeKey = keyof typeof en;

@@ -11,11 +11,15 @@ import { isTypeFixRequest } from '@/utils/laneRouting';
 
 const typeErrors = [{ file: 'src/A.tsx', line: 3, column: 5, code: 2339, message: "Property 'x' does not exist." }];
 
+const neverDeployed = () =>
+  vi.spyOn(platformService, 'getDeploymentStatus').mockResolvedValue({ url: null, lastDeployedAt: null, status: 'never' });
+
 describe('DeployManager — arreglar y volver a publicar', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('lista los errores de Vercel, arregla y republica con los archivos nuevos', async () => {
     setForgeLang('es');
+    neverDeployed();
     const deploy = vi.spyOn(platformService, 'deployProject')
       .mockResolvedValueOnce({ error: 'typecheck', typeErrors, inspectorUrl: 'https://vercel.com/log' })
       .mockResolvedValueOnce({ url: 'https://nebu-p.vercel.app' });
@@ -45,6 +49,7 @@ describe('DeployManager — arreglar y volver a publicar', () => {
 
   it('si el arreglo no cambió nada, no republica y deja los errores a la vista', async () => {
     setForgeLang('es');
+    neverDeployed();
     const deploy = vi.spyOn(platformService, 'deployProject')
       .mockResolvedValueOnce({ error: 'typecheck', typeErrors, inspectorUrl: null });
     const onFix = vi.fn(async () => ({ success: true, changed: 0 }));
@@ -55,5 +60,21 @@ describe('DeployManager — arreglar y volver a publicar', () => {
     expect(await screen.findByText(/no pudo arreglar estos errores/)).toBeInTheDocument();
     expect(deploy).toHaveBeenCalledTimes(1);
     expect(screen.getByText(/src\/A\.tsx:3/)).toBeInTheDocument();
+  });
+
+  it('un proyecto ya publicado muestra su URL y "Actualizar" publica los cambios en la misma', async () => {
+    setForgeLang('es');
+    const url = 'https://nebu-p.vercel.app';
+    vi.spyOn(platformService, 'getDeploymentStatus')
+      .mockResolvedValue({ url, lastDeployedAt: new Date(Date.now() - 5 * 60000).toISOString(), status: 'deployed' });
+    const deploy = vi.spyOn(platformService, 'deployProject').mockResolvedValue({ url });
+    render(<DeployManager files={new Map([['src/A.tsx', 'cambio nuevo']])} projectId="p" />);
+
+    expect(await screen.findByText(url)).toBeInTheDocument();
+    expect(screen.getByText(/Última publicación: hace 5 min/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Actualizar/ }));
+    await waitFor(() => expect(deploy).toHaveBeenCalledTimes(1));
+    expect(deploy.mock.calls[0][1]).toEqual({ 'src/A.tsx': 'cambio nuevo' });
+    expect(await screen.findByText('¡Publicado correctamente!')).toBeInTheDocument();
   });
 });

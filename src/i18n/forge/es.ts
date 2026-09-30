@@ -605,4 +605,8 @@ export const es: Record<ForgeKey, string> = {
 
   // Publicar: mensaje de errores de tipos del build (2026-09-30)
   'deploy.typecheckFailedVercel': 'Vercel no pudo construir este proyecto por errores de tipos, así que no se publicó nada. "Arreglar ahora" los arregla aquí mismo y vuelve a publicar:',
+
+  // Publicar: Actualizar un sitio ya publicado (2026-09-30)
+  'deploy.update': 'Actualizar',
+  'deploy.lastDeployed': 'Última publicación: {when}',
 };

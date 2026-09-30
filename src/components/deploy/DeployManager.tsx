@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Rocket, ExternalLink, Copy, RefreshCw, CheckCircle, Wrench } from 'lucide-react';
 import { platformService } from '../../services/PlatformService';
 import LoadingSquares from '../brand/LoadingSquares';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
+import { formatRelativeDate } from '@/i18n/forge/format';
 import type { ForgeKey } from '@/i18n/forge/en';
 import type { TypeIssue } from '../../services/PlatformService';
 import { buildTypeFixPrompt } from '../chat/ResultCards';
@@ -39,7 +40,7 @@ const STAGE_MESSAGES: Partial<Record<DeployStage, ForgeKey>> = {
 
 export function DeployManager({ files, projectId: propProjectId, onFixTypeErrors }: DeployManagerProps) {
   const [stage, setStage] = useState<DeployStage>('idle');
-  const { t } = useForgeLang();
+  const { t, lang } = useForgeLang();
   const stageMessage = STAGE_MESSAGES[stage] ? t(STAGE_MESSAGES[stage]!) : '';
   const [deploymentUrl, setDeploymentUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -47,12 +48,28 @@ export function DeployManager({ files, projectId: propProjectId, onFixTypeErrors
   const [inspectorUrl, setInspectorUrl] = useState<string | null>(null);
   const [fixProgress, setFixProgress] = useState<TypeFixProgress | null>(null);
   const [copied, setCopied] = useState(false);
+  // Última publicación guardada (forge_projects): si existe, el botón es
+  // "Actualizar" y la URL publicada se ve desde que se abre la pestaña.
+  const [lastDeployedAt, setLastDeployedAt] = useState<string | null>(null);
   // Los archivos por ref: tras "Arreglar ahora" se vuelve a publicar desde el
   // mismo handler, cuyo closure vería los archivos de ANTES del arreglo.
   const filesRef = useRef(files);
   filesRef.current = files;
 
   const projectId = propProjectId ?? sessionStorage.getItem('forge_project_id');
+
+  useEffect(() => {
+    if (!projectId) return;
+    let cancelled = false;
+    platformService.getDeploymentStatus(projectId)
+      .then((status) => {
+        if (cancelled || !status?.url) return;
+        setDeploymentUrl((current) => current ?? status.url);
+        setLastDeployedAt((current) => current ?? status.lastDeployedAt);
+      })
+      .catch(() => { /* sin estado: se ofrece "Publicar" como siempre */ });
+    return () => { cancelled = true; };
+  }, [projectId]);
 
   const handleDeploy = async () => {
     if (!projectId) {
@@ -65,7 +82,6 @@ export function DeployManager({ files, projectId: propProjectId, onFixTypeErrors
     setErrorMessage(null);
     setTypeErrors([]);
     setInspectorUrl(null);
-    setDeploymentUrl(null);
 
     try {
       const current = filesRef.current;
@@ -91,6 +107,7 @@ export function DeployManager({ files, projectId: propProjectId, onFixTypeErrors
 
       // The deploy endpoint polls until READY, so by the time we get a response it's done
       setDeploymentUrl(result.url ?? null);
+      setLastDeployedAt(new Date().toISOString());
       setStage('live');
     } catch (err: any) {
       setErrorMessage(err?.message || t('deploy.failed'));
@@ -203,7 +220,13 @@ export function DeployManager({ files, projectId: propProjectId, onFixTypeErrors
               : stage === 'error'
               ? <RefreshCw size={16} />
               : <Rocket size={16} />}
-            {isBusy ? stageMessage : stage === 'error' ? t('common.retry') : t('settings.tab.deploy')}
+            {isBusy
+              ? stageMessage
+              : stage === 'error'
+              ? t('common.retry')
+              : deploymentUrl
+              ? t('deploy.update')
+              : t('settings.tab.deploy')}
           </button>
 
           {deploymentUrl && (
@@ -233,6 +256,11 @@ export function DeployManager({ files, projectId: propProjectId, onFixTypeErrors
         <div className="bg-background/50 rounded-lg border border-border border-l-4 border-l-primary p-3">
           <p className="text-xs text-muted-foreground mb-1">{t('deploy.url')}</p>
           <p className="text-sm font-mono text-foreground break-all">{deploymentUrl}</p>
+          {lastDeployedAt && (
+            <p className="text-xs text-muted-foreground mt-2">
+              {t('deploy.lastDeployed', { when: formatRelativeDate(lastDeployedAt, lang) })}
+            </p>
+          )}
         </div>
       )}
     </div>

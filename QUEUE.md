@@ -438,6 +438,19 @@ Avisos del build de Vercel, inofensivos (el build pasó): `eslint@9.39.5` deprec
 no aprobado por `allowScripts` de npm (esbuild funciona con su binario de plataforma). Candidato a limpiar
 en la plantilla (bucket 14, dependencias), sin urgencia.
 
+**Tras el check 3 (Samuel, 2026-09-30), 3 bloques — HECHO EN CÓDIGO, pendiente CHECK MANUAL:**
+- `12e8a81` Modal: al abrir un proyecto con historial se ve el último mensaje de la IA (3 líneas) + "Ver
+  historial completo" (`UltimoMensajeCard`, +1 test). Sin archivos/segundos/pasos. Proyecto nuevo: nada.
+- `7382c99` Publicar entrega la dirección del **proyecto** (alias de producción, pública y fija), no la de
+  la versión (tras "Log in to Vercel" en incógnito; Samuel confirmó que la del proyecto abre sin login).
+  `pickProjectUrl` (+2 tests); sin alias espera 3 s una vez y si no, la de versión. Render: `[deploy]
+  dirección entregada: proyecto|versión`.
+- Bloque 3: Publicar lee la última publicación guardada (`forge_projects.deployment_url`/`last_deployed_at`,
+  vía `/api/deploy/:id/status`): muestra la URL, "Última publicación: …" y el botón **Actualizar** (republica
+  los cambios del editor en la misma dirección; nada se publica solo). La URL vieja sigue a la vista si la
+  actualización falla (el sitio anterior sigue arriba). +1 test.
+- Residuo conocido: 332f31d3 tiene guardada la dirección de versión (con login) hasta su primer Actualizar.
+
 **HECHO EN CÓDIGO (pendiente CHECK MANUAL, decisiones de Samuel: modo Plan "siempre pedir aprobación",
 historial en texto llano):**
 - Tarjeta RESPUESTA (`RespuestaCard` + `MiniMarkdown`): respuestas y aclaraciones de la IA se ven en la
@@ -2198,6 +2211,8 @@ buenos resultados la primera vez que se usó en este ítem (ver Bloque 1, "Halla
 - Quitar los botones "Próximamente" que no hacen nada (chat: Adjuntar, Dictar, Editar el plan; créditos:
   Comprar créditos). Decisión de Samuel (2026-09-29): se quedan mientras él sea el único usuario, porque le
   sirven como recordatorio de lo que falta.
+- **Dominios dentro de Wyrd** (ver bucket 15): aplicar una vez que Wyrd sea público para todos, no sólo
+  para uso interno de Nebu.
 
 ## 14. BUCKET Agentes de revisión y protección contra regresiones (pedido de Samuel, 2026-09-30)
 
@@ -2210,6 +2225,19 @@ Sin empezar. Diseño en frío propio con Samuel antes de tocar nada.
 - **Agente de SEO** del sitio publicado.
 - **Agente de velocidad de la página** (hay base: LighthousePanel / PageSpeed en Ajustes → Analíticas).
 - **Agente de seguridad** del proyecto generado (hay base: guards RLS y de código de cliente).
+
+## 15. BUCKET Dominios — APLICAR CUANDO WYRD SEA PÚBLICO (decisión de Samuel, 2026-09-30)
+
+Hoy sólo los trabajadores de Nebu usan Wyrd: los dominios se compran y conectan **directo en Vercel** (sólo
+el admin tiene acceso). Nada de esto se construye por ahora.
+- Todo por Vercel (no Cloudflare): el sitio ya vive ahí; su API compra dominios, los conecta al proyecto y
+  da HTTPS. El usuario nunca ve Vercel: todo desde la pestaña Dominios de Wyrd.
+- **Fase 1 — conectar un dominio propio:** Wyrd lo agrega al proyecto en Vercel, muestra los 1–2 registros
+  DNS que el usuario pone en su proveedor (GoDaddy, Namecheap…) y avisa cuando queda activo. Sin dinero.
+- **Fase 2 — comprar un dominio:** buscador + precio + compra. El cargo va a la tarjeta de Vercel del admin
+  → requiere ANTES el cobro al usuario (créditos / pagos, hoy "Próximamente").
+- Al empezar la fase 1: quitar el código de Cloudflare (`server.js` /api/domains, `DomainsPanel.tsx`), que
+  sólo sirve si el dominio vive en la cuenta de Cloudflare del admin.
 
 ## APARCADO hasta después de lanzar
 - **A+**: quitar el botón de aprobación cuando el guard no pudo inspeccionar. Aparcado: `unparseable` no tiene causa conocida tras G-3; sólo verificable con SQL fabricado a mano (choca con medir por comportamiento).
