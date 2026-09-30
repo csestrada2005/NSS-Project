@@ -19,6 +19,7 @@ import { runTypecheck } from './server/typecheckPool.js';
 import { compileCacheKey, createCompileCache } from './server/compileCache.js';
 import { describeLogFetch, fetchVercelTypeErrors } from './server/vercelBuildLog.js';
 import { pickProjectUrl } from './server/vercelDeployUrl.js';
+import { createAuthCache } from './server/authCache.js';
 import {
   validateProjectRefRequest,
   validateLogsRequest,
@@ -142,6 +143,9 @@ app.use((req, res, next) => {
 // ---------------------------------------------------------------------------
 const IS_PRODUCTION = process.env.NODE_ENV === 'production' || !!process.env.RENDER;
 
+// Sesiones ya verificadas, recordadas hasta 60 s (server/authCache.js).
+const authCache = createAuthCache();
+
 async function requireAuth(req, res, next) {
   const authHeader = req.headers['authorization'];
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -158,11 +162,18 @@ async function requireAuth(req, res, next) {
     req.userId = null;
     return next();
   }
+  const remembered = authCache.get(token);
+  if (remembered) {
+    req.user = remembered;
+    req.userId = remembered.id;
+    return next();
+  }
   try {
     const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
     if (error || !user) {
       return res.status(401).json({ error: 'Invalid or expired session' });
     }
+    authCache.set(token, user);
     req.user = user;
     req.userId = user.id;
     next();

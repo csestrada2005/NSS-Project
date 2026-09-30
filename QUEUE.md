@@ -1512,6 +1512,16 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   `[credits/check] saldo leído en Xs`. Visto de paso: el preview de Vertigo pide
   `customer_reviews` a su Supabase (`ksjpiuajgjujsijbspig`) y recibe 404 — la tabla no existe en el
   fixture (residuo conocido de las pruebas de funciones; Samuel: no es la causa).
+  **Resultado de la medición (Samuel):** `[credits/check] saldo leído en 0.5 / 0.4s`, pero `session 5.8 /
+  4.0s` y `credits 3.8 / 1.1s` → la espera es VERIFICAR LA SESIÓN: el navegador preguntaba a Supabase Auth
+  en cada pedido y el servidor (`requireAuth`) en CADA llamada autenticada. Decisión de Samuel: A + B.
+  - `8d9f356` A: `getSessionUser()` lee la sesión guardada (sin red) en el camino del pedido (créditos,
+    logIntent, mensaje del chat, snapshot). La verificación real la siguen haciendo servidor y RLS.
+  - B: `server/authCache.js` (+4 tests): `requireAuth` recuerda sesiones YA verificadas hasta 60 s (nunca
+    más allá del vencimiento del token). Costo aceptado: tras cerrar sesión, el token se acepta hasta 60 s.
+    Los roles no salen de `req.user` (se leen de la DB), así que un cambio de rol no espera la caché.
+  Pendiente CHECK: `session` < 0.2 s, `credits` < 1.5 s, total ~40 s; cerrar sesión / volver a entrar sin
+  errores; ninguna "Session expired" estando conectado.
 - **(HECHO EN CÓDIGO, pendiente CHECK MANUAL — desbloquea ítem 4) El código generado no pasaba `tsc -b`.**
   Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4). Decisiones de Samuel (2026-09-29):
   revisión en el SERVIDOR con copia exacta de las librerías; arreglo automático + IA + aviso con botón
