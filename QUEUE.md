@@ -1548,6 +1548,17 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   frase en su cabecera) → el prefijo cacheado de Anthropic se reutiliza de verdad.
   Límite conocido: un pedido inicial en español ("una web para mi panadería") no coincide con nombres en
   inglés → sin ficha hasta que exista el DESIGN.md.
+  **CHECK (Samuel, 2026-09-30):** velocidad ✓ (`design-context 0.0s` en los dos pedidos; total 41.7 s, antes
+  86 s). Ficha ✗: Vertigo → `product: 'Photo Editor & Filters'`. Causa (evidencia): la lista de imágenes del
+  DESIGN.md dice "Photo by…" ×12 y sus URLs "crop=" ×12 (keywords de Photo Editor); y la sección Brand
+  ("Vertigo Expeditions / map / explorer / leap") no comparte NINGUNA palabra con las keywords de
+  Travel/Tourism (agency, booking, flight, hotel, tourism, travel, vacation). Comparar palabras no alcanza.
+  **Opción A (Samuel) — HECHO EN CÓDIGO, pendiente CHECK:** Haiku elige tipo de producto y categoría de UI
+  entre los nombres exactos de la base, con SÓLO la sección Brand (`businessText`, `parseTypeChoice`, +2
+  tests), una vez por proyecto y sesión, en paralelo con el targeting. Estilo y tipografía salen de lo que
+  recomienda la ficha elegida (+ marca). Respaldo si la IA falla: palabras con la sección Brand. Consola:
+  `match: {…, via: 'ai' | 'words'}`. Mundos: Vertigo → Travel/Tourism Agency (+ Outdoor / Adventure o
+  Travel / Tourism); Crumb and Hearth (`ecd7929b`) → Bakery/Cafe.
 - **(HECHO EN CÓDIGO, pendiente CHECK MANUAL — desbloquea ítem 4) El código generado no pasaba `tsc -b`.**
   Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4). Decisiones de Samuel (2026-09-29):
   revisión en el SERVIDOR con copia exacta de las librerías; arreglo automático + IA + aviso con botón
@@ -1570,6 +1581,12 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   pedir cualquier cambio chico → si quedan errores, aparece la tarjeta; "Arreglar ahora" → la lista baja
   o desaparece; (4) Publicar de nuevo → llega a Vercel (retoma el ítem 4 y sus dos mundos pendientes:
   página en blanco por `dist/`, login de Deployment Protection).
+- **(Decisión de Samuel, 2026-09-30) Rehacer desde cero cómo se decide el tipo de negocio de un proyecto
+  (opción C del contexto de diseño):** decidirlo UNA vez al crear el proyecto (a partir del pedido inicial),
+  guardarlo en la DB (columna nueva en `forge_projects` o en `forge_project_memory` — cambio de estructura
+  aditivo, con su propio diseño en frío) y que DesignContextService / PatternRetriever lo lean de ahí en vez
+  de adivinarlo en cada sesión. Junto con: por qué PatternRetriever da siempre `direct: 1 | vector: 4`, y
+  pedidos iniciales en español contra una base en inglés.
 - Bug de recomendaciones: no muestra filas que SÍ están en la DB; la IA respondió dos veces "compila y no encuentro errores".
 - Reglas duras incumplidas: tocó `package.json` pese a prohibición explícita; añadió comportamiento no pedido dos veces.
 - Detectar que lo pedido YA EXISTE y responder "ya está construido". OJO: rompe la batería de regresión sobre fixtures ya construidos → necesita plan de checkpoints con fixtures vírgenes.

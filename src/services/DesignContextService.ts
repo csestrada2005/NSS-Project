@@ -1,5 +1,6 @@
 import { SupabaseService } from './SupabaseService';
-import { pickBestMatch } from '../utils/designMatch.js';
+import { businessText, parseTypeChoice, pickBestMatch } from '../utils/designMatch.js';
+import { platformService } from './PlatformService';
 
 // Filas de la base de diseño (UI/UX Pro Max), leídas UNA vez por sesión del
 // navegador: son ~630 filas fijas. Antes eran hasta 3 consultas en serie por
@@ -18,7 +19,7 @@ function loadDesignTables(): Promise<DesignTables> {
       return (data ?? []) as unknown as Row[];
     };
     const loading = Promise.all([
-      all('products', 'product_type, keywords, landing_page_pattern, dashboard_style, key_considerations'),
+      all('products', 'product_type, keywords, primary_style_recommendation, secondary_styles, landing_page_pattern, dashboard_style, key_considerations'),
       all('colors', '*'),
       all('ui_reasoning', 'ui_category, recommended_pattern, style_priority, color_mood, typography_mood, key_effects, anti_patterns'),
       all('styles', 'id, style_category, keywords, best_for, ai_prompt_keywords, css_technical_keywords, design_system_variables'),
@@ -29,6 +30,38 @@ function loadDesignTables(): Promise<DesignTables> {
     tablesPromise = loading;
   }
   return tablesPromise;
+}
+
+/**
+ * La IA barata elige el tipo de negocio y la categoría de UI entre los nombres
+ * EXACTOS de la base (2026-09-30: comparar palabras no alcanza — la marca de
+ * Vertigo dice "expedition / explorer / map", ninguna palabra de "Travel/
+ * Tourism"). Una vez por proyecto y sesión (contextCache). null si falla.
+ */
+async function chooseTypesWithAI(
+  text: string,
+  productTypes: string[],
+  uiCategories: string[]
+): Promise<{ product: string | null; ui: string | null } | null> {
+  try {
+    const response = await platformService.callForgeChat({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 200,
+      system:
+        'You classify a business so the right design guidance is used. From the lists below, pick the ONE ' +
+        'product type and the ONE UI category that best describe what this business IS (its industry and ' +
+        'audience), not how its website looks. Use the exact names from the lists; use null if nothing fits. ' +
+        'Respond with ONLY a JSON object: {"reasoning": "<1 sentence>", "product": "<name or null>", "ui": "<name or null>"}.\n\n' +
+        `PRODUCT TYPES:\n${productTypes.join('\n')}\n\nUI CATEGORIES:\n${uiCategories.join('\n')}`,
+      messages: [{ role: 'user', content: `BUSINESS DESCRIPTION:\n${text}` }],
+    });
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+    return parseTypeChoice(data.content?.[0]?.text ?? '', productTypes, uiCategories);
+  } catch (err) {
+    console.warn('[DesignContextService] AI choice failed, falling back to word matching:', err);
+    return null;
+  }
 }
 
 function hashText(text: string): string {
@@ -67,30 +100,56 @@ export class DesignContextService {
     }
     try {
       const tables = await loadDesignTables();
+      // Sólo lo que describe el negocio (sección Brand), no la lista de imágenes.
+      const brandText = businessText(matchText);
 
-      const product = pickBestMatch(
-        matchText,
-        tables.products.map((r) => ({ key: r.product_type, name: r.product_type, detail: r.keywords ?? '' }))
+      const aiChoice = await chooseTypesWithAI(
+        brandText,
+        tables.products.map((r) => r.product_type),
+        tables.ui.map((r) => r.ui_category)
       );
+      const via = aiChoice ? 'ai' : 'words';
+      const product = aiChoice?.product
+        ? { key: aiChoice.product, score: 0 }
+        : aiChoice
+        ? null
+        : pickBestMatch(
+            brandText,
+            tables.products.map((r) => ({ key: r.product_type, name: r.product_type, detail: r.keywords ?? '' }))
+          );
       const productsRow = product ? tables.products.find((r) => r.product_type === product.key) ?? null : null;
       // Colores: la paleta del tipo elegido; sin tipo, la genérica de siempre.
       const colorsRow =
         tables.colors.find((r) => r.product_type === (product?.key ?? 'SaaS (General)')) ??
         tables.colors.find((r) => r.product_type === 'SaaS (General)') ??
         null;
-      const ui = pickBestMatch(
-        matchText,
-        tables.ui.map((r) => ({ key: r.ui_category, name: r.ui_category, detail: r.color_mood ?? '' }))
-      );
+      const ui = aiChoice?.ui
+        ? { key: aiChoice.ui, score: 0 }
+        : aiChoice
+        ? null
+        : pickBestMatch(
+            brandText,
+            tables.ui.map((r) => ({ key: r.ui_category, name: r.ui_category, detail: r.color_mood ?? '' }))
+          );
       const uiRow = ui ? tables.ui.find((r) => r.ui_category === ui.key) ?? null : null;
+      // Estilo y tipografía: según lo que la ficha del negocio recomienda
+      // (estilo sugerido del tipo de producto, ánimo de la categoría de UI) y
+      // la marca — nunca la lista de imágenes.
+      const styleText = [
+        brandText,
+        productsRow?.primary_style_recommendation,
+        productsRow?.secondary_styles,
+        uiRow?.style_priority,
+      ].filter(Boolean).join('\n');
+      const typographyText = [brandText, uiRow?.typography_mood].filter(Boolean).join('\n');
       const style = pickBestMatch(
-        matchText,
+        styleText,
         tables.styles.map((r) => ({ key: String(r.id), name: r.style_category ?? '', detail: `${r.best_for ?? ''} ${r.keywords ?? ''}` })),
         { minScore: 3 }
       );
       const stylesRow = style ? tables.styles.find((r) => String(r.id) === style.key) ?? null : null;
       const typo = pickBestMatch(
-        matchText,
+        typographyText,
         tables.typography.map((r) => ({ key: String(r.id), name: r.font_pairing_name ?? '', detail: `${r.best_for ?? ''} ${r.mood_keywords ?? ''}` })),
         { minScore: 3 }
       );
@@ -154,6 +213,7 @@ export class DesignContextService {
         ui: ui?.key ?? null,
         style: stylesRow?.style_category ?? null,
         typography: typographyRow?.font_pairing_name ?? null,
+        via,
         brief: briefBlock.length > 0,
       });
 

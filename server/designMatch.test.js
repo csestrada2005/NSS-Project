@@ -46,3 +46,30 @@ test('tokenize ignora relleno y compara por raíz', () => {
   assert.deepEqual([...tokenize('travelers')], [...tokenize('travel')]);
   assert.deepEqual([...tokenize('adventurous')], [...tokenize('adventure')]);
 });
+
+test('businessText: sólo la sección de marca, sin la lista de imágenes', async () => {
+  const { businessText } = await import('../src/utils/designMatch.js');
+  const brief = [
+    '# Design Brief', '', '## Brand', '', '- **Name:** Vertigo Expeditions', '- **Tone of copy:** like a seasoned explorer',
+    '', '## Palette', '| `--brand-bg` | `220 18% 8%` |', '', '## Approved Image Pool',
+    '| https://images.unsplash.com/photo-1?crop=entropy | photo of man climbing mountain (Photo by Brad Barmore) |',
+  ].join('\n');
+  const text = businessText(brief);
+  assert.match(text, /Vertigo Expeditions/);
+  assert.match(text, /explorer/);
+  assert.doesNotMatch(text, /Photo by|crop=|brand-bg/);
+  assert.equal(businessText('Create a website for my bakery'), 'Create a website for my bakery');
+});
+
+test('parseTypeChoice: sólo acepta nombres exactos de la base', async () => {
+  const { parseTypeChoice } = await import('../src/utils/designMatch.js');
+  const products = ['Travel/Tourism Agency', 'Bakery/Cafe'];
+  const ui = ['Outdoor / Adventure', 'Travel / Tourism'];
+  assert.deepEqual(
+    parseTypeChoice('{"reasoning":"adventure trips","product":"Travel/Tourism Agency","ui":"Outdoor / Adventure"}', products, ui),
+    { product: 'Travel/Tourism Agency', ui: 'Outdoor / Adventure' },
+  );
+  assert.deepEqual(parseTypeChoice('Sure! {"product":"Adventure Travel","ui":"Travel / Tourism"}', products, ui), { product: null, ui: 'Travel / Tourism' });
+  assert.equal(parseTypeChoice('{"product":"X","ui":"Y"}', products, ui), null);
+  assert.equal(parseTypeChoice('no json', products, ui), null);
+});

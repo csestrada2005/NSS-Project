@@ -58,3 +58,32 @@ export function pickBestMatch(text, candidates, { minScore = 2, nameWeight = 3 }
   }
   return best && best.score >= minScore ? best : null;
 }
+
+/**
+ * Sólo la parte que describe el NEGOCIO: la sección "## Brand" del DESIGN.md
+ * (nombre, lema, tono). El resto (paleta, tipografía, lista de imágenes con
+ * "Photo by …" y URLs con "crop=") describe el diseño y confundía la búsqueda:
+ * Vertigo salía "Photo Editor & Filters". Sin sección de marca, el texto tal
+ * cual (p. ej. el pedido de la primera generación), recortado.
+ */
+export function businessText(text) {
+  const source = String(text ?? '');
+  const brand = /^##\s*Brand\s*$([\s\S]*?)(?=^##\s|(?![\s\S]))/im.exec(source);
+  return (brand ? brand[1] : source).trim().slice(0, 1500);
+}
+
+/**
+ * Respuesta de la IA → nombres EXACTOS de la base, o null si no son de la
+ * lista (la IA no puede inventar una categoría).
+ */
+export function parseTypeChoice(reply, productTypes, uiCategories) {
+  try {
+    const json = /\{[\s\S]*\}/.exec(String(reply ?? ''));
+    const parsed = json ? JSON.parse(json[0]) : null;
+    const product = productTypes.includes(parsed?.product) ? parsed.product : null;
+    const ui = uiCategories.includes(parsed?.ui) ? parsed.ui : null;
+    return product || ui ? { product, ui } : null;
+  } catch {
+    return null;
+  }
+}
