@@ -1559,6 +1559,15 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   recomienda la ficha elegida (+ marca). Respaldo si la IA falla: palabras con la sección Brand. Consola:
   `match: {…, via: 'ai' | 'words'}`. Mundos: Vertigo → Travel/Tourism Agency (+ Outdoor / Adventure o
   Travel / Tourism); Crumb and Hearth (`ecd7929b`) → Bakery/Cafe.
+  **CHECK (Samuel, 2026-09-30): CONFIRMADO.** Vertigo → `Travel/Tourism Agency` + `Travel / Tourism`, `via:
+  'ai'`; 2º pedido sin llamada (cache) y `total 30.9s` (esta mañana 85.8 s). Crumb and Hearth → `Bakery/Cafe`
+  + `Restaurant / Food`, `via: 'ai'`. Observación para el bucket 6: el ESTILO salió `Vibrant & Block-based`
+  en los dos (agencia de aventura oscura y panadería) → la elección de estilo por palabras es débil.
+  **Reportado en el mismo check (Crumb):** el cambio se aplicó, pero el modal mostró la tarjeta "Cambio en
+  base de datos" de una migración VIEJA (`20260912081021_create_user_profiles.sql`, sin aplicar) con el
+  texto de aquel turno — no el resultado del cambio recién hecho. Es la decisión de diseño documentada en el
+  ítem 10 ("la propuesta DDL ejecutable se busca en TODO el historial y sigue viva hasta resolverse"), que
+  Samuel vive como "cuando hay que aplicar SQL no cambia el modal". Pendiente de diseño con Samuel.
 - **(HECHO EN CÓDIGO, pendiente CHECK MANUAL — desbloquea ítem 4) El código generado no pasaba `tsc -b`.**
   Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4). Decisiones de Samuel (2026-09-29):
   revisión en el SERVIDOR con copia exacta de las librerías; arreglo automático + IA + aviso con botón
