@@ -58,6 +58,7 @@ import { cachedSystem, cachedSystemBlocks } from './promptCache';
 import { DesignBriefService } from './DesignBriefService';
 import { isAbortError } from '../utils/abort';
 import { canEnterFastLane, isSimpleEditIntent, planModeRequiresPlanLane, isTypeFixRequest } from '../utils/laneRouting.js';
+import { createStageTimer, type StageTimer } from '../utils/stageTimer.js';
 import { extractQuotedTexts, orderPageSeeds, resolveHintedTarget, snippetForTargeting } from '../utils/targetHints.js';
 import { KNOWN_DEP_VERSIONS } from '../utils/knownDepVersions';
 import { typeCheckTelemetry } from '../utils/typeRepairLoop';
@@ -1184,6 +1185,8 @@ export class AIOrchestrator {
   ): Promise<OrchestratorResult> {
     this.retryCount = 0;
     const startTime = Date.now();
+    // Tiempos por etapa en la consola (bucket 6: 72–96 s por edición simple).
+    const timer = createStageTimer();
 
     // ------------------------------------------------------------------
     // Legacy shortcut commands (preserved for backward compatibility)
@@ -1233,6 +1236,7 @@ export class AIOrchestrator {
     // Out of credits → stop before any LLM call. The UI renders the honest
     // "top up credits" message for this error code, choosing the wording from
     // errorReason (free-build-used vs insufficient-balance).
+    timer.mark('credits');
     if (creditUserId && !creditAllowed) {
       return {
         modifiedFiles: [],
@@ -1249,6 +1253,7 @@ export class AIOrchestrator {
     if (!memory && projectId) {
       memory = await ProjectMemoryService.buildFromFiles(projectId, files);
     }
+    timer.mark('memory');
 
     // ------------------------------------------------------------------
     // LAYER 2 — IntentClassifier: classify the user prompt
@@ -1270,6 +1275,7 @@ export class AIOrchestrator {
           needs_server: noMemoryNeedsServer,
           server_reason: noMemoryNeedsServer ? 'deterministic signal' : '',
         };
+    timer.mark('classify');
 
     // Tag the open intent with its classified type so the server records it on
     // the credit transaction (audit metadata only — billing derives userId and
@@ -1281,7 +1287,7 @@ export class AIOrchestrator {
     // ------------------------------------------------------------------
     // "Arreglar ahora" nunca se contesta como pregunta: hay que cambiar código.
     if (intent.type === 'question' && !isTypeFixRequest(input)) {
-      return await this.answerQuestion(
+      const answer = await this.answerQuestion(
         input,
         files,
         memory,
@@ -1292,6 +1298,9 @@ export class AIOrchestrator {
         intent,
         signal
       );
+      timer.mark('answer');
+      console.log('[Timing] question lane:', timer.summary());
+      return answer;
     }
 
     // ------------------------------------------------------------------
@@ -1425,7 +1434,7 @@ export class AIOrchestrator {
     const isSimpleEdit = isSimpleEditIntent(intent, input);
 
     if (!forcePlanLane && isSimpleEdit && files.size > 0) {
-      const result = await this.runSimpleLane(input, files, selectedElement, intent, projectId, signal, previousClarifyQuestion);
+      const result = await this.runSimpleLane(input, files, selectedElement, intent, projectId, signal, previousClarifyQuestion, timer);
       if (result.outcome === 'success' && creditUserId) {
         await this.settleCredits(intent.type, result.tokensInput ?? 0, result.tokensOutput ?? 0, projectId);
       }
@@ -1449,6 +1458,8 @@ export class AIOrchestrator {
           needsServer: intent.needs_server,
         });
       }
+      timer.mark('save');
+      console.log('[Timing] simple lane:', timer.summary());
       return result;
     }
 
@@ -1509,6 +1520,7 @@ export class AIOrchestrator {
       isInitialBuild,
       signal
     );
+    timer.mark('architect');
 
     // Cancelación durante la clasificación/planificación: nada se escribió aún.
     // Cerramos el intent como cancelado (0 archivos) y evitamos que un plan
@@ -1627,7 +1639,9 @@ export class AIOrchestrator {
     if (onPlanDecision && shouldGatePlan(steps, planModeEnabled)) {
       let decision: 'approved' | 'rejected';
       try {
+        timer.mark('before-approval');
         decision = await onPlanDecision(steps);
+        timer.mark('approval (user)');
       } catch {
         // Fail-closed: si la promesa del callback revienta o se rechaza, no
         // sabemos qué contestó el usuario. Ante la ambigüedad no se ejecuta —
@@ -1784,8 +1798,10 @@ export class AIOrchestrator {
     // LAYER 5 — Verifier: compile-check and auto-fix
     // ------------------------------------------------------------------
     let verifyResult;
+    timer.mark('implement');
     try {
       verifyResult = await Verifier.verify(modifiedFilesMap, files, onRetry, signal, 3, designContext, blueprint, deletedPaths);
+      timer.mark('verify');
     } catch (e) {
       // Cancelación durante el verify: no se lanzan más fixes. Persistimos los
       // steps ya completos (los archivos que el Implementer terminó) y cerramos
@@ -2384,6 +2400,8 @@ export class AIOrchestrator {
           needsServer: intent.needs_server,
         });
       }
+      timer.mark('save');
+      console.log('[Timing] plan lane:', timer.summary());
 
       this.lastModifiedFiles = persistedPaths;
 
@@ -2597,9 +2615,11 @@ export class AIOrchestrator {
     intent: Intent,
     projectId?: string,
     signal?: AbortSignal,
-    previousClarifyQuestion?: string | null
+    previousClarifyQuestion?: string | null,
+    timer?: StageTimer
   ): Promise<OrchestratorResult> {
     const target = await this.resolveTarget(input, files, selectedElement, intent, signal, previousClarifyQuestion);
+    timer?.mark('target');
     if (!target) return { modifiedFiles: [] };
 
     // Targeting pidió aclaración (ambigüedad genuina): no editamos nada, no
@@ -2621,6 +2641,7 @@ export class AIOrchestrator {
     // lane edit too, so a one-off tweak still honors the project's palette,
     // fonts and anti-template rules. Non-blocking: getContext swallows failures.
     const designContext = await DesignContextService.getContext(input, files);
+    timer?.mark('design-context');
 
     // Site data contract: always surface src/data/site.ts (single source of
     // truth for contact/brand facts, ~15 lines, fixed shape) so a one-off edit
@@ -2668,6 +2689,7 @@ export class AIOrchestrator {
 
       const data = await response.json();
       if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+      timer?.mark('edit (Sonnet)');
 
       const rawText: string = data.content?.[0]?.text ?? '';
       if (!rawText) return { modifiedFiles: [] };
@@ -2704,6 +2726,7 @@ export class AIOrchestrator {
         designContext,
         blueprint
       );
+      timer?.mark('verify');
 
       if (verifyResult.success) {
         // Diff real: cualquier path cuyo contenido difiera del original. El
