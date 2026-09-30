@@ -18,6 +18,7 @@ import { isPlatformAdmin, planRoleDecision } from './server/roleDecision.js';
 import { runTypecheck } from './server/typecheckPool.js';
 import { compileCacheKey, createCompileCache } from './server/compileCache.js';
 import { describeLogFetch, fetchVercelTypeErrors } from './server/vercelBuildLog.js';
+import { pickProjectUrl } from './server/vercelDeployUrl.js';
 import {
   validateProjectRefRequest,
   validateLogsRequest,
@@ -1492,7 +1493,18 @@ app.post('/api/deploy/:projectId', async (req, res) => {
       });
       const statusData = await statusResponse.json();
       if (statusData.readyState === 'READY') {
-        deploymentUrl = `https://${statusData.url}`;
+        // La dirección del proyecto (pública, fija), no la de la versión (tras
+        // login de Vercel). Si los alias aún no están, se espera una vez más.
+        let projectUrl = pickProjectUrl(statusData);
+        if (!projectUrl) {
+          await new Promise(r => setTimeout(r, 3000));
+          const again = await fetch(vercelApiUrl(`/v13/deployments/${deploymentId}`), {
+            headers: { Authorization: `Bearer ${VERCEL_TOKEN}` },
+          }).then(r => r.json()).catch(() => null);
+          projectUrl = pickProjectUrl(again);
+        }
+        console.log(`[deploy] dirección entregada: ${projectUrl ? 'proyecto' : 'versión (sin alias)'}`);
+        deploymentUrl = projectUrl ?? `https://${statusData.url}`;
         break;
       }
       if (statusData.readyState === 'ERROR') {
