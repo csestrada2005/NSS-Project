@@ -623,3 +623,33 @@ test('un mensaje del USUARIO con la marca de descarte no descarta nada', async (
   const history = [proposes(A), { role: 'user', content: ddlOutcomeMark(OUTCOME_DISMISSED, [A]) }];
   assert.equal(findExecutableProposal(history)?.key, A);
 });
+
+// Fase 1 (2026-09-30, decisión de Samuel): las migraciones que ya no se van a
+// aplicar salen del proyecto; sólo se quedan las que son historia real.
+test('migrationFilesToRemove: qué sale del proyecto según el veredicto', async () => {
+  const { migrationFilesToRemove, OUTCOME_DISMISSED } = await import('../src/utils/ddlProposalState.js');
+  assert.deepEqual(migrationFilesToRemove({ outcome: OUTCOME_DISMISSED, paths: [A, B] }), [A, B]);
+  // Lote que la base cortó en B: A ya se aplicó (se queda), B falló y C ni se intentó.
+  assert.deepEqual(
+    migrationFilesToRemove({ outcome: OUTCOME_FAILED, paths: [A, B, C], appliedPaths: [A], reason: 'error: syntax error' }),
+    [B, C],
+  );
+  assert.deepEqual(migrationFilesToRemove({ outcome: OUTCOME_FAILED, paths: [A], reason: 'schema_before: fetch failed' }), [A]);
+  // Pudo haber corrido: el archivo es la única pista → se queda.
+  assert.deepEqual(migrationFilesToRemove({ outcome: OUTCOME_UNVERIFIED, paths: [A], reason: 'no_schema_change' }), []);
+  assert.deepEqual(migrationFilesToRemove({ outcome: OUTCOME_FAILED, paths: [A], reason: 'motivo_desconocido' }), []);
+  assert.deepEqual(migrationFilesToRemove({ outcome: OUTCOME_APPLIED, paths: [A] }), []);
+  assert.deepEqual(migrationFilesToRemove({ outcome: OUTCOME_SKIPPED, paths: [A] }), []);
+  // Nunca algo fuera de supabase/migrations.
+  assert.deepEqual(migrationFilesToRemove({ outcome: OUTCOME_DISMISSED, paths: ['src/App.tsx', A] }), [A]);
+});
+
+test('el mensaje dice exactamente qué archivos quitó (misma regla)', async () => {
+  const { OUTCOME_DISMISSED } = await import('../src/utils/ddlProposalState.js');
+  const dismissed = buildOutcomeMessage({ outcome: OUTCOME_DISMISSED, paths: [A] });
+  assert.match(dismissed, /Quité del proyecto el archivo de migración que no se va a aplicar: 20260824120000_create_orders\.sql/);
+  const rejected = buildOutcomeMessage({ outcome: OUTCOME_FAILED, paths: [A, B], appliedPaths: [A], failedPath: B, reason: 'error: boom' });
+  assert.match(rejected, /Quité del proyecto el archivo de migración que no se va a aplicar: 20260824130000_add_status\.sql/);
+  const unverified = buildOutcomeMessage({ outcome: OUTCOME_UNVERIFIED, paths: [A], reason: 'no_schema_change' });
+  assert.doesNotMatch(unverified, /Quité del proyecto/);
+});

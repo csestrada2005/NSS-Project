@@ -92,3 +92,11 @@ export function buildOutcomeMessage(result: {
 
 /** True when this per-file verdict stops the batch: anything but 'applied'. */
 export function stopsBatch(outcome: string): boolean;
+
+/** Migraciones que ya no sirven tras este veredicto (sólo supabase/migrations/*.sql). */
+export function migrationFilesToRemove(result: {
+  outcome: string;
+  paths: Iterable<string>;
+  appliedPaths?: Iterable<string>;
+  reason?: string | null;
+}): string[];

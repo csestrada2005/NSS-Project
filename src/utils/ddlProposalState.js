@@ -410,6 +410,34 @@ function executionReach(reason) {
 }
 
 /**
+ * ¿Qué archivos de migración ya no sirven y se quitan del proyecto?
+ * (2026-09-30, decisión de Samuel: una migración que no se va a aplicar sólo
+ * genera fricción — y es un riesgo: otra herramienta que aplique la carpeta
+ * `supabase/migrations` entera la correría.)
+ *
+ *   dismissed                  → todos los de la propuesta (nunca llegaron a la base).
+ *   failed, la base la rechazó → el que falló y los que ni se intentaron; los ya
+ *   o nunca se ejecutó            aplicados del lote se QUEDAN (son historia real).
+ *   unverified                 → ninguno: pudo haber corrido, y el archivo es la
+ *                                única pista de qué cambió en la base.
+ *   applied / skipped          → ninguno (historia real / sigue pendiente de base).
+ *
+ * Sólo devuelve `supabase/migrations/*.sql` (normalizeProposalPaths).
+ *
+ * @param {{ outcome: string, paths: Iterable<string>, appliedPaths?: Iterable<string>, reason?: string|null }} result
+ * @returns {string[]}
+ */
+export function migrationFilesToRemove(result) {
+  const paths = normalizeProposalPaths(result?.paths);
+  if (result?.outcome === OUTCOME_DISMISSED) return paths;
+  if (result?.outcome !== OUTCOME_FAILED) return [];
+  const reach = executionReach(result?.reason);
+  if (reach !== 'rejected' && reach !== 'never_ran') return [];
+  const applied = normalizeProposalPaths(result?.appliedPaths);
+  return paths.filter((p) => !applied.includes(p));
+}
+
+/**
  * El mensaje que el botón escribe en el chat tras ejecutar: el texto que lee el
  * usuario MÁS la marca que cierra la propuesta.
  *
@@ -511,8 +539,8 @@ export function buildOutcomeMessage(result, lang = 'es') {
     parts.push(en ? `Discarded the proposal ${names}.` : `Descarté la propuesta ${names}.`);
     parts.push(
       en
-        ? 'Nothing was run against your database. The migration file stays in the project; if you want it later, ask me again here.'
-        : 'No se ejecutó nada en tu base de datos. El archivo de la migración sigue en el proyecto; si luego la quieres, pídemela de nuevo por aquí.'
+        ? 'Nothing was run against your database.'
+        : 'No se ejecutó nada en tu base de datos.'
     );
   } else {
     parts.push(en ? "This project doesn't have a database yet, so I didn't run anything." : 'Este proyecto todavía no tiene base de datos, así que no ejecuté nada.');
@@ -532,6 +560,16 @@ export function buildOutcomeMessage(result, lang = 'es') {
   }
   if (untouched.length > 0) {
     parts.push(en ? `And I never touched: ${untouched.map(fileName).join(', ')}.` : `Y no llegué a tocar: ${untouched.map(fileName).join(', ')}.`);
+  }
+  // Lo que se quita del proyecto se DICE, con la misma regla que lo quita.
+  const removed = migrationFilesToRemove(result);
+  if (removed.length > 0) {
+    const list = removed.map(fileName).join(', ');
+    parts.push(
+      en
+        ? `I removed from the project the migration file${removed.length === 1 ? '' : 's'} that won't be applied: ${list} (recoverable from the version history).`
+        : `Quité del proyecto ${removed.length === 1 ? 'el archivo de migración que' : 'los archivos de migración que'} no se ${removed.length === 1 ? 'va' : 'van'} a aplicar: ${list} (se puede recuperar desde el historial de versiones).`
+    );
   }
 
   return `${parts.join(' ')}${mark}`;

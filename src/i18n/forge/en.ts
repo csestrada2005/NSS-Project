@@ -623,7 +623,7 @@ export const en = {
   'chat.ddl.review': 'Review',
   'chat.ddl.hide': 'Hide',
   'chat.ddl.dismiss': 'Discard',
-  'chat.ddl.dismissConfirm': 'Discard it without running anything on your database?',
+  'chat.ddl.dismissConfirm': "Discard it? Nothing runs on your database and the migration file is deleted.",
   'chat.ddl.dismissYes': 'Yes, discard',
   'ddl.dismissed': '{names} was discarded without running.',
 } as const;

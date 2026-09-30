@@ -4,8 +4,10 @@ import {
   stripDdlMarks,
   ddlProposedMark,
   buildOutcomeMessage,
+  migrationFilesToRemove,
   OUTCOME_DISMISSED,
 } from '@/utils/ddlProposalState.js';
+import { AIOrchestrator } from '../services/AIOrchestrator';
 import { getForgeLang } from '@/i18n/forge/lang';
 import { appendModeMark, type ChatSendMode } from '@/utils/chatModeMark.js';
 import type { ProgressLine } from './chat/progressSummary';
@@ -511,7 +513,12 @@ export function ChatInterface({
                     { outcome: OUTCOME_DISMISSED, paths: olderPendingProposal.paths },
                     getForgeLang()
                   );
-                  if (content) appendMessage({ role: 'assistant', content });
+                  if (content) {
+                    appendMessage({ role: 'assistant', content });
+                    AIOrchestrator.removeProjectFiles(
+                      migrationFilesToRemove({ outcome: OUTCOME_DISMISSED, paths: olderPendingProposal.paths })
+                    );
+                  }
                 }}
               />
               {ddlReviewOpen && (

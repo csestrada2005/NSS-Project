@@ -618,7 +618,7 @@ export const es: Record<ForgeKey, string> = {
   'chat.ddl.review': 'Revisar',
   'chat.ddl.hide': 'Ocultar',
   'chat.ddl.dismiss': 'Descartar',
-  'chat.ddl.dismissConfirm': '¿Descartarla sin ejecutar nada en tu base de datos?',
+  'chat.ddl.dismissConfirm': '¿Descartarla? No se ejecuta nada en tu base de datos y se borra el archivo de la migración.',
   'chat.ddl.dismissYes': 'Sí, descartar',
   'ddl.dismissed': '{names} se descartó sin ejecutarse.',
 };

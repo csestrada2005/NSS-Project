@@ -1575,6 +1575,19 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   (`[DDL_OUTCOME:dismissed:…]`, estado `DISMISSED` en ddlProposalState.js, +3 tests): NO llama al runner ni
   a la base, sobrevive al refresh, y una propuesta nueva vuelve a ser ejecutable. El archivo .sql sigue en
   el proyecto. +2 tests del aviso.
+  **CHECK (Samuel, 2026-10-01): descartar CONFIRMADO** (al recargar se ve el mensaje "Descarté la
+  propuesta…"). Decisión nueva de Samuel: las migraciones que no se aplican salen del proyecto; sólo se
+  quedan las aplicadas; y una migración reemplazada por otra debe fusionarse en UNA.
+  **Fase 1 — HECHO EN CÓDIGO, pendiente CHECK:** `migrationFilesToRemove` (ddlProposalState.js, +2 tests):
+  descartada → todos sus archivos; rechazada por la base o nunca ejecutada → el que falló y los que ni se
+  intentaron (los ya aplicados del lote se quedan); `unverified`, aplicada y sin-base → ninguno. El chat
+  (Descartar) y DDLApprovalButton los quitan con `AIOrchestrator.removeProjectFiles` (mismo puente que el
+  pipeline: memoria + forge_files), y el mensaje dice cuáles, con la misma regla. Recuperables desde el
+  historial de versiones.
+  **Fase 2 — PENDIENTE, diseño en frío propio:** cuando la IA propone una migración mientras otra sigue
+  pendiente, fusionarlas en UN archivo (la nueva puede dar por hecha la vieja: borrar la vieja sin fusionar
+  rompería la nueva) y quitar la vieja. Toca plan lane + instrucciones del modelo. Aparte: limpieza de los
+  archivos que ya quedaron en fixtures (Vertigo, Crumb), caso por caso con Samuel.
 - **(HECHO EN CÓDIGO, pendiente CHECK MANUAL — desbloquea ítem 4) El código generado no pasaba `tsc -b`.**
   Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4). Decisiones de Samuel (2026-09-29):
   revisión en el SERVIDOR con copia exacta de las librerías; arreglo automático + IA + aviso con botón

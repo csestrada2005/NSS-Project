@@ -23,7 +23,7 @@ describe('PendingDdlNotice', () => {
     const onDismiss = vi.fn();
     render(<PendingDdlNotice paths={PATHS} reviewOpen={false} onToggleReview={() => {}} onDismiss={onDismiss} />);
     await userEvent.click(screen.getByRole('button', { name: 'Descartar' }));
-    expect(screen.getByText(/sin ejecutar nada en tu base de datos/)).toBeInTheDocument();
+    expect(screen.getByText(/No se ejecuta nada en tu base de datos y se borra el archivo/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
     expect(onDismiss).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button', { name: 'Descartar' }));

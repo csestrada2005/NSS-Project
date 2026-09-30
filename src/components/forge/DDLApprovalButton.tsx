@@ -46,6 +46,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { MigrationRunner } from '@/services/MigrationRunner';
+import { AIOrchestrator } from '@/services/AIOrchestrator';
 import { destructiveTargets, findDestructiveDDL } from '@/utils/ddlGuard.js';
 import {
   APPLIED,
@@ -58,6 +59,7 @@ import {
   SUPERSEDED,
   DISMISSED,
   buildOutcomeMessage,
+  migrationFilesToRemove,
   isStillExecutable,
   type DdlProposal,
   type ProposalSourceMessage,
@@ -342,6 +344,11 @@ export function DDLApprovalButton({
     setPhase('idle');
     if (content) {
       onOutcome(content);
+      // Las migraciones que ya no se van a aplicar salen del proyecto; el
+      // mensaje de arriba ya lo dice con la misma regla.
+      AIOrchestrator.removeProjectFiles(
+        migrationFilesToRemove({ outcome, paths: proposal.paths, appliedPaths, reason: reason ?? null })
+      );
     } else {
       // Inalcanzable con un veredicto del runner y paths ya validados, pero un
       // veredicto que no se escribe es una propuesta que sigue viva tras haber

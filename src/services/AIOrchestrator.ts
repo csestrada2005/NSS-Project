@@ -577,6 +577,16 @@ export class AIOrchestrator {
     this.fileDeleteCallback?.(path);
   }
 
+  /**
+   * Quita archivos del proyecto por el mismo puente que usa el pipeline
+   * (StudioEngine → deleteFile: memoria + forge_files). Lo usan el chat y el
+   * botón de migraciones para las que ya no se van a aplicar
+   * (migrationFilesToRemove, 2026-09-30).
+   */
+  static removeProjectFiles(paths: string[]) {
+    for (const path of paths) this.notifyFileDelete(path);
+  }
+
   // -------------------------------------------------------------------------
   // Dependency audit (P0-2) — keep package.json in sync with imports so the
   // exported zip builds outside Wyrd. Deterministic, no LLM.
