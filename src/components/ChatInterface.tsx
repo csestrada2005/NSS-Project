@@ -262,7 +262,12 @@ export function ChatInterface({
     setLastSentText(userMessage);
 
     startTimeRef.current = Date.now();
-    setProgressLines([{ text: tNow('chat.progress.planning'), status: 'pending', kind: 'planning' }]);
+    // "Planeando…" sólo en modo Plan; en Automático no se planea nada visible.
+    setProgressLines([{
+      text: tNow(mode === 'plan' ? 'chat.progress.planning' : 'chat.progress.working'),
+      status: 'pending',
+      kind: 'planning',
+    }]);
 
     try {
       const result = await onSendMessage(
@@ -556,6 +561,7 @@ export function ChatInterface({
               />
             ) : lastAssistant ? (
               <ResumenCard
+                text={stripDdlMarks(lastAssistant.content)}
                 filesCount={lastAssistant.filesModifiedCount ?? 0}
                 durationSeconds={lastAssistant.durationSeconds ?? 0}
                 steps={lastAssistant.stepsSnapshot ?? []}

@@ -598,6 +598,12 @@ export const en = {
   // Chat: mensaje final en texto llano (5.0)
   'chat.done.changed_one': 'Done. I changed 1 file: {names}',
   'chat.done.changed_other': 'Done. I changed {count} files: {names}',
+
+  // Publicar: arreglar desde el log de Vercel (2026-09-30)
+  'deploy.typecheckFailedVercel': 'Vercel could not build this project because of type errors. Nothing was published. "Fix now" sends them to the AI in the chat; then publish again:',
+
+  // Chat: línea inicial en modo Automático (2026-09-30)
+  'chat.progress.working': 'Working on your request…',
 } as const;
 
 export type ForgeKey = keyof typeof en;

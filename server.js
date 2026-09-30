@@ -17,6 +17,7 @@ import { applyProductionSupabaseClient } from './src/utils/deploySupabaseClient.
 import { isPlatformAdmin, planRoleDecision } from './server/roleDecision.js';
 import { runTypecheck } from './server/typecheckPool.js';
 import { compileCacheKey, createCompileCache } from './server/compileCache.js';
+import { extractTypeErrorsFromBuildLog } from './server/vercelBuildLog.js';
 import {
   validateProjectRefRequest,
   validateLogsRequest,
@@ -1333,7 +1334,17 @@ async function getDbCredentialsForProject(projectId) {
 // Vercel, con las librerías exactas de la plantilla (server/typeenv). Corre en
 // un hilo aparte (server/typecheckPool.js). Fail-open: si no está disponible
 // responde { available: false } y el Verifier sigue como antes.
+//
+// APAGADA POR DEFECTO (2026-09-30): en Render 512 MB una revisión necesita
+// >230 MB de heap y el hilo moría con ERR_WORKER_OUT_OF_MEMORY tras ~80 s de
+// espera por turno. Decisión de Samuel: Vercel revisa al publicar (ver
+// /api/deploy). WYRD_TYPECHECK=on la vuelve a prender (instancia con más RAM).
+const TYPECHECK_ENABLED = (process.env.WYRD_TYPECHECK ?? '').toLowerCase() === 'on';
+
 app.post('/api/typecheck', async (req, res) => {
+  if (!TYPECHECK_ENABLED) {
+    return res.json({ available: false, reason: 'disabled (WYRD_TYPECHECK != on)' });
+  }
   const { files, autoFix } = req.body ?? {};
   if (!files || typeof files !== 'object') {
     return res.status(400).json({ error: 'files object is required' });
@@ -1431,9 +1442,11 @@ app.post('/api/deploy/:projectId', async (req, res) => {
     // proyecto tiene errores, se devuelven legibles y no se gasta un build.
     // Fail-open: si la revisión no está disponible, se publica como antes.
     // Sin arreglo automático: publicar nunca reescribe el proyecto.
-    const typecheck = await runTypecheck(deployFiles, { autoFix: false });
-    if (typecheck.available && typecheck.errors.length > 0) {
-      return res.status(422).json({ error: 'typecheck', typeErrors: typecheck.errors });
+    if (TYPECHECK_ENABLED) {
+      const typecheck = await runTypecheck(deployFiles, { autoFix: false });
+      if (typecheck.available && typecheck.errors.length > 0) {
+        return res.status(422).json({ error: 'typecheck', typeErrors: typecheck.errors });
+      }
     }
 
     // Build Vercel file list with base64 encoding
@@ -1483,6 +1496,23 @@ app.post('/api/deploy/:projectId', async (req, res) => {
         break;
       }
       if (statusData.readyState === 'ERROR') {
+        // Vercel es el revisor de tipos (2026-09-30): si su build falló por
+        // `tsc`, se leen los errores de su log para mostrarlos legibles y que
+        // "Arreglar ahora" se los mande a la IA. Si el log no se puede leer o
+        // el fallo es otro, queda el mensaje genérico con el enlace al log.
+        let typeErrors = [];
+        try {
+          const eventsResponse = await fetch(
+            vercelApiUrl(`/v3/deployments/${deploymentId}/events?limit=-1&builds=1`),
+            { headers: { Authorization: `Bearer ${VERCEL_TOKEN}` } }
+          );
+          if (eventsResponse.ok) typeErrors = extractTypeErrorsFromBuildLog(await eventsResponse.json());
+        } catch (logErr) {
+          console.warn('[deploy] no se pudo leer el log de Vercel:', logErr?.message ?? logErr);
+        }
+        if (typeErrors.length > 0) {
+          return res.status(422).json({ error: 'typecheck', typeErrors, inspectorUrl });
+        }
         return res.status(502).json({ error: 'Vercel deployment failed during build', inspectorUrl });
       }
     }

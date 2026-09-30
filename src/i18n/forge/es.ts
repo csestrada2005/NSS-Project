@@ -593,4 +593,10 @@ export const es: Record<ForgeKey, string> = {
   // Chat: mensaje final en texto llano (5.0)
   'chat.done.changed_one': 'Listo. Cambié 1 archivo: {names}',
   'chat.done.changed_other': 'Listo. Cambié {count} archivos: {names}',
+
+  // Publicar: arreglar desde el log de Vercel (2026-09-30)
+  'deploy.typecheckFailedVercel': 'Vercel no pudo construir este proyecto por errores de tipos. No se publicó nada. "Arreglar ahora" se los manda a la IA en el chat; después vuelve a publicar:',
+
+  // Chat: línea inicial en modo Automático (2026-09-30)
+  'chat.progress.working': 'Trabajando en tu pedido…',
 };

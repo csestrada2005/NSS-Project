@@ -5,10 +5,13 @@ import LoadingSquares from '../brand/LoadingSquares';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
 import type { ForgeKey } from '@/i18n/forge/en';
 import type { TypeIssue } from '../../services/PlatformService';
+import { buildTypeFixPrompt } from '../chat/ResultCards';
 
 interface DeployManagerProps {
   files?: Map<string, string>;
   projectId?: string | null;
+  /** Abre el chat y le manda a la IA el pedido de arreglar estos errores. */
+  onFixTypeErrors?: (prompt: string) => void;
 }
 
 type DeployStage = 'idle' | 'packaging' | 'uploading' | 'building' | 'live' | 'error';
@@ -20,7 +23,7 @@ const STAGE_MESSAGES: Partial<Record<DeployStage, ForgeKey>> = {
   live: 'deploy.stage.live',
 };
 
-export function DeployManager({ files, projectId: propProjectId }: DeployManagerProps) {
+export function DeployManager({ files, projectId: propProjectId, onFixTypeErrors }: DeployManagerProps) {
   const [stage, setStage] = useState<DeployStage>('idle');
   const { t } = useForgeLang();
   const stageMessage = STAGE_MESSAGES[stage] ? t(STAGE_MESSAGES[stage]!) : '';
@@ -58,7 +61,7 @@ export function DeployManager({ files, projectId: propProjectId }: DeployManager
         // a Vercel. Se explican en lenguaje llano y se listan.
         if (result.error === 'typecheck' && result.typeErrors?.length) {
           setTypeErrors(result.typeErrors);
-          setErrorMessage(t('deploy.typecheckFailed'));
+          setErrorMessage(t('deploy.typecheckFailedVercel'));
         } else {
           setErrorMessage(result.error);
         }
@@ -124,6 +127,15 @@ export function DeployManager({ files, projectId: propProjectId }: DeployManager
                 ))}
                 {typeErrors.length > 8 && <li className="list-none">{t('chat.types.more', { count: typeErrors.length - 8 })}</li>}
               </ul>
+            )}
+            {typeErrors.length > 0 && onFixTypeErrors && (
+              <button
+                type="button"
+                onClick={() => onFixTypeErrors(buildTypeFixPrompt(typeErrors))}
+                className="nebu-cta inline-flex items-center gap-2 px-3 py-1.5 bg-primary hover:bg-primary/90 text-white rounded text-xs font-medium"
+              >
+                {t('chat.types.fix')}
+              </button>
             )}
             {inspectorUrl && (
               <a href={inspectorUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs underline">

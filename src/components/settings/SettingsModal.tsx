@@ -27,6 +27,8 @@ interface SettingsModalProps {
   projectId?: string | null;
   /** Con qué pestaña abrir — el botón "Publicar" del navbar la abre directo en 'deploy'. */
   initialTab?: MainTab;
+  /** "Arreglar ahora" en Publicar: vuelve al preview, abre el chat y manda el pedido. */
+  onFixTypeErrors?: (prompt: string) => void;
 }
 
 export type MainTab = 'secrets' | 'github' | 'deploy' | 'domains' | 'database' | 'email' | 'analytics';
@@ -46,7 +48,7 @@ const DB_SUB_TABS: { id: DbSubTab; label: ForgeKey }[] = [
   { id: 'usage', label: 'settings.db.usage' },
 ];
 
-export function SettingsModal({ onClose, fileTree, files, projectId: propProjectId, initialTab = 'secrets' }: SettingsModalProps) {
+export function SettingsModal({ onClose, fileTree, files, projectId: propProjectId, initialTab = 'secrets', onFixTypeErrors }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<MainTab>(initialTab);
   const { t } = useForgeLang();
   const [dbSubTab, setDbSubTab] = useState<DbSubTab>('schema');
@@ -172,7 +174,7 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
 
           {/* Deploy tab */}
           {activeTab === 'deploy' && (
-            <DeployManager files={files} projectId={projectId} />
+            <DeployManager files={files} projectId={projectId} onFixTypeErrors={onFixTypeErrors} />
           )}
 
           {/* Domains tab */}

@@ -394,6 +394,20 @@ credenciales de DB; en proyectos con DB el Verifier compila sin credenciales y n
 preview) y "Retomar desde aquí" reenvía `lastSentText`. **Pendiente de medir en 0.5 CPU:** duración de
 `[typecheck] …ms` (fría y caliente) y `[compile] cache hit` tras cada cambio.
 
+**Medición en 0.5 CPU (Samuel, 2026-09-30):** Node 22.12.0 ✓; esbuild 1.9 s (antes 9.2 s); `[compile] cache hit`
+en el compile del preview ✓; "Retomar" ✓. En los 3 intentos: `[typecheck] worker error: ERR_WORKER_OUT_OF_MEMORY
+… JS heap out of memory` → turnos de 76–84 s. **Causa real: memoria, no tiempo** (en 0.1 CPU moría antes por
+el timeout). Medido en local (scratchpad, plantilla de proyecto): una revisión necesita >256 MB de heap vivo
+(con `types: ["node"]` baja a ~232 MB); retenido entre revisiones ~28 MB (sin fuga). La instancia es 512 MB
+para servidor + hilo. **Decisión de Samuel: Vercel revisa al publicar** (no pagar 2 GB = 25 USD/mes).
+Hecho: revisión de tipos del servidor APAGADA por defecto (`WYRD_TYPECHECK=on` la prende; `/api/typecheck`
+responde "disabled" al instante → el Verifier marca `[TYPECHECK_OFF]` sin esperar); al fallar el build en
+Vercel se lee `GET /v3/deployments/{id}/events` y `server/vercelBuildLog.js` (+3 tests, con el log real)
+extrae los errores de `tsc` → 422 con la lista + `inspectorUrl`; DeployManager muestra la lista y el botón
+"Arreglar ahora" (vuelve al preview, abre el chat y manda el pedido, mismo camino que "Completar proyecto").
+Tarjeta final: "Listo. Cambié 1 archivo: HeroSection · Ns" (texto del historial); en modo Automático la línea
+en vivo dice "Trabajando en tu pedido…" ("Planeando…" sólo en modo Plan).
+
 **HECHO EN CÓDIGO (pendiente CHECK MANUAL, decisiones de Samuel: modo Plan "siempre pedir aprobación",
 historial en texto llano):**
 - Tarjeta RESPUESTA (`RespuestaCard` + `MiniMarkdown`): respuestas y aclaraciones de la IA se ven en la
@@ -2154,6 +2168,18 @@ buenos resultados la primera vez que se usó en este ítem (ver Bloque 1, "Halla
 - Quitar los botones "Próximamente" que no hacen nada (chat: Adjuntar, Dictar, Editar el plan; créditos:
   Comprar créditos). Decisión de Samuel (2026-09-29): se quedan mientras él sea el único usuario, porque le
   sirven como recordatorio de lo que falta.
+
+## 14. BUCKET Agentes de revisión y protección contra regresiones (pedido de Samuel, 2026-09-30)
+
+Sin empezar. Diseño en frío propio con Samuel antes de tocar nada.
+- **Protección contra regresiones:** asegurar que los cambios de la IA (incluido "Arreglar ahora") no rompan
+  el diseño, las funciones, la integración con Supabase ni la IA que el usuario haya añadido a su app. Hoy
+  existen: contrato de reparación no destructivo del Verifier, compilación obligatoria, guards (RLS, DDL,
+  borrados, código de cliente) y, al publicar, el build de Vercel. Falta algo que compruebe COMPORTAMIENTO
+  (que lo que funcionaba siga funcionando), no sólo que compile.
+- **Agente de SEO** del sitio publicado.
+- **Agente de velocidad de la página** (hay base: LighthousePanel / PageSpeed en Ajustes → Analíticas).
+- **Agente de seguridad** del proyecto generado (hay base: guards RLS y de código de cliente).
 
 ## APARCADO hasta después de lanzar
 - **A+**: quitar el botón de aprobación cuando el guard no pudo inspeccionar. Aparcado: `unparseable` no tiene causa conocida tras G-3; sólo verificable con SQL fabricado a mano (choca con medir por comportamiento).

@@ -2117,6 +2117,13 @@ export function StudioEngine() {
                       files={files}
                       projectId={projectId ?? null}
                       initialTab={settingsInitialTab}
+                      onFixTypeErrors={(prompt) => {
+                        // Mismo camino que "Completar proyecto": preview + chat
+                        // abierto + pedido inyectado (se envía solo).
+                        setPanelMode('preview');
+                        setIsCommandModalOpen(true);
+                        setPendingChatSend(prompt);
+                      }}
                     />
                   ) : (
                   <>

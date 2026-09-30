@@ -41,18 +41,23 @@ interface StepsProps {
 // 3.1 — RESUMEN
 // ---------------------------------------------------------------------------
 export function ResumenCard({
+  text,
   filesCount,
   durationSeconds,
   steps,
   completedCount,
   onOpenHistory,
-}: StepsProps & { filesCount: number; durationSeconds: number; onOpenHistory: () => void }) {
+}: StepsProps & { text?: string; filesCount: number; durationSeconds: number; onOpenHistory: () => void }) {
   const { t, tn } = useForgeLang();
   return (
     <div className="fc-pieza">
       <div className="fc-resumen">
         <div className="fc-resumen-texto">
-          <b>{tn('chat.files.modified', filesCount)}</b> · {t('chat.files.compiled')} · {durationSeconds}s
+          {/* 2026-09-30 (Samuel): la tarjeta dice lo mismo que el historial
+              ("Listo. Cambié 1 archivo: HeroSection"); sin texto, el conteo. */}
+          {text
+            ? <>{text} · {durationSeconds}s</>
+            : <><b>{tn('chat.files.modified', filesCount)}</b> · {t('chat.files.compiled')} · {durationSeconds}s</>}
         </div>
         <button type="button" className="fc-pill" onClick={onOpenHistory}>{t('chat.card.fullHistory')}</button>
       </div>
