@@ -1533,6 +1533,21 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   Visto de paso: el preview de Vertigo registra `TypeError: Failed to fetch` en `fetchRecomendaciones`
   (llamada de la app a su propia Supabase). Hipótesis sin confirmar: el preview se recarga tras la edición
   y corta la petición en vuelo. No relacionado con la sesión de Wyrd (el preview usa su propio cliente).
+  **Sesión (Samuel):** cerrar sesión / volver a entrar OK; CRM OK. Observación sin tocar: al entrar sale
+  3–5 s "confirma con el administrador tu rol" y luego carga bien (probable: la pantalla se pinta antes de
+  que llegue el perfil; no viene de la caché del servidor, el perfil lo lee el navegador). Preguntado a
+  Samuel si ya pasaba antes de hoy.
+  **Contexto de diseño — HECHO EN CÓDIGO, pendiente CHECK MANUAL (decisión de Samuel: A).** Evidencia (DB
+  principal): products/colors 161 filas (incluye "Travel/Tourism Agency"), ui_reasoning 161 ("Outdoor /
+  Adventure", "Travel / Tourism"), styles 70, typography 73. `src/utils/designMatch.js` (+5 tests): elige
+  la fila por palabras compartidas (por raíz de 6 letras) entre el texto del proyecto y el nombre/keywords
+  de cada fila. `DesignContextService`: busca con el DESIGN.md del proyecto (o con el pedido si aún no
+  hay), lee las 5 tablas UNA vez por sesión y recuerda la ficha por proyecto; sin coincidencia omite la
+  sección (colores: la genérica de siempre). Consola: `[DesignContextService] match: {product, ui, style,
+  typography}` o `cache hit`. Efecto extra: el contexto ya no cambia en cada pedido (antes llevaba la
+  frase en su cabecera) → el prefijo cacheado de Anthropic se reutiliza de verdad.
+  Límite conocido: un pedido inicial en español ("una web para mi panadería") no coincide con nombres en
+  inglés → sin ficha hasta que exista el DESIGN.md.
 - **(HECHO EN CÓDIGO, pendiente CHECK MANUAL — desbloquea ítem 4) El código generado no pasaba `tsc -b`.**
   Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4). Decisiones de Samuel (2026-09-29):
   revisión en el SERVIDOR con copia exacta de las librerías; arreglo automático + IA + aviso con botón

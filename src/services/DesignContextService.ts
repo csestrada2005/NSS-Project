@@ -1,4 +1,41 @@
 import { SupabaseService } from './SupabaseService';
+import { pickBestMatch } from '../utils/designMatch.js';
+
+// Filas de la base de diseño (UI/UX Pro Max), leídas UNA vez por sesión del
+// navegador: son ~630 filas fijas. Antes eran hasta 3 consultas en serie por
+// tabla en CADA pedido (medido: 4–17 s).
+type Row = Record<string, any>;
+interface DesignTables { products: Row[]; colors: Row[]; ui: Row[]; styles: Row[]; typography: Row[] }
+let tablesPromise: Promise<DesignTables> | null = null;
+const contextCache = new Map<string, string>();
+
+function loadDesignTables(): Promise<DesignTables> {
+  if (!tablesPromise) {
+    const supabase = SupabaseService.getInstance().client;
+    const all = async (table: string, columns: string) => {
+      const { data, error } = await supabase.from(table).select(columns);
+      if (error) throw new Error(`${table}: ${error.message}`);
+      return (data ?? []) as unknown as Row[];
+    };
+    const loading = Promise.all([
+      all('products', 'product_type, keywords, landing_page_pattern, dashboard_style, key_considerations'),
+      all('colors', '*'),
+      all('ui_reasoning', 'ui_category, recommended_pattern, style_priority, color_mood, typography_mood, key_effects, anti_patterns'),
+      all('styles', 'id, style_category, keywords, best_for, ai_prompt_keywords, css_technical_keywords, design_system_variables'),
+      all('typography', 'id, font_pairing_name, best_for, mood_keywords, heading_font, body_font, css_import, tailwind_config'),
+    ]).then(([products, colors, ui, styles, typography]) => ({ products, colors, ui, styles, typography }));
+    // Si falla, el siguiente pedido lo vuelve a intentar.
+    loading.catch(() => { if (tablesPromise === loading) tablesPromise = null; });
+    tablesPromise = loading;
+  }
+  return tablesPromise;
+}
+
+function hashText(text: string): string {
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
+  return `${text.length}:${h}`;
+}
 
 export class DesignContextService {
   /**
@@ -9,7 +46,8 @@ export class DesignContextService {
    * so the brief always survives — it is never subject to the RAG truncation cap
    * and takes precedence over the generic product-type design context below.
    *
-   * @param productType  the user prompt / product type used for RAG lookup
+   * @param productType  the user prompt; only used for the lookup when the
+   *                     project has no DESIGN.md yet (first generation)
    * @param files        optional project files map, used to surface DESIGN.md
    */
   public static async getContext(
@@ -17,53 +55,48 @@ export class DesignContextService {
     files?: Map<string, string>
   ): Promise<string> {
     const briefBlock = this.buildBriefBlock(files);
+    // Texto con el que se busca la ficha (bucket 6, 2026-09-30): el DESIGN.md
+    // del proyecto si existe; si no (primera generación), el pedido, que ahí
+    // sí describe el negocio. Antes era siempre la frase del pedido.
+    const matchText = files?.get('DESIGN.md')?.trim() || productType;
+    const cacheKey = hashText(matchText);
+    const cached = contextCache.get(cacheKey);
+    if (cached !== undefined) {
+      console.log('[DesignContextService] cache hit');
+      return briefBlock + cached;
+    }
     try {
-      const supabase = SupabaseService.getInstance().client;
+      const tables = await loadDesignTables();
 
-      let hasTypographyMatch = false;
+      const product = pickBestMatch(
+        matchText,
+        tables.products.map((r) => ({ key: r.product_type, name: r.product_type, detail: r.keywords ?? '' }))
+      );
+      const productsRow = product ? tables.products.find((r) => r.product_type === product.key) ?? null : null;
+      // Colores: la paleta del tipo elegido; sin tipo, la genérica de siempre.
+      const colorsRow =
+        tables.colors.find((r) => r.product_type === (product?.key ?? 'SaaS (General)')) ??
+        tables.colors.find((r) => r.product_type === 'SaaS (General)') ??
+        null;
+      const ui = pickBestMatch(
+        matchText,
+        tables.ui.map((r) => ({ key: r.ui_category, name: r.ui_category, detail: r.color_mood ?? '' }))
+      );
+      const uiRow = ui ? tables.ui.find((r) => r.ui_category === ui.key) ?? null : null;
+      const style = pickBestMatch(
+        matchText,
+        tables.styles.map((r) => ({ key: String(r.id), name: r.style_category ?? '', detail: `${r.best_for ?? ''} ${r.keywords ?? ''}` })),
+        { minScore: 3 }
+      );
+      const stylesRow = style ? tables.styles.find((r) => String(r.id) === style.key) ?? null : null;
+      const typo = pickBestMatch(
+        matchText,
+        tables.typography.map((r) => ({ key: String(r.id), name: r.font_pairing_name ?? '', detail: `${r.best_for ?? ''} ${r.mood_keywords ?? ''}` })),
+        { minScore: 3 }
+      );
+      const typographyRow = typo ? tables.typography.find((r) => String(r.id) === typo.key) ?? null : null;
 
-      const [productsRes, colorsRes, uiRes, stylesRes, typographyRes] = await Promise.allSettled([
-        supabase.from('products').select('*').eq('product_type', productType).maybeSingle(),
-        (async () => {
-          let res = await supabase.from('colors').select('*').eq('product_type', productType).maybeSingle();
-          if (!res.data && !res.error) res = await supabase.from('colors').select('*').eq('product_type', 'SaaS (General)').maybeSingle();
-          if (!res.data && !res.error) res = await supabase.from('colors').select('*').limit(1).maybeSingle();
-          return res;
-        })(),
-        (async () => {
-          let res = await supabase.from('ui_reasoning').select('*').eq('ui_category', productType).maybeSingle();
-          if (!res.data && !res.error) res = await supabase.from('ui_reasoning').select('*').limit(1).maybeSingle();
-          return res;
-        })(),
-        (async () => {
-          const isSaaS = /saas|app|software|b2b|cloud/i.test(productType);
-          const styleMatchKeyword = isSaaS ? '%SaaS%' : `%${productType.split(' ')[0]}%`;
-          let res = await supabase.from('styles').select('*').ilike('best_for', styleMatchKeyword).maybeSingle();
-          if (!res.data && !res.error) res = await supabase.from('styles').select('*').limit(1).maybeSingle();
-          return res;
-        })(),
-        (async () => {
-          const res = await supabase.from('typography').select('*').ilike('best_for', `%${productType}%`).maybeSingle();
-          if (res.data && !res.error) {
-            hasTypographyMatch = true;
-            return res;
-          }
-          const fb1 = await supabase.from('typography').select('*').ilike('font_pairing_name', '%Modern SaaS%').maybeSingle();
-          if (fb1.data && !fb1.error) return fb1;
-          return supabase.from('typography').select('*').limit(1).maybeSingle();
-        })()
-      ]);
-
-      const productsRow = productsRes.status === 'fulfilled' && !productsRes.value.error ? productsRes.value.data : null;
-      const colorsRow = colorsRes.status === 'fulfilled' && !colorsRes.value.error ? colorsRes.value.data : null;
-      const uiRow = uiRes.status === 'fulfilled' && !uiRes.value.error ? uiRes.value.data : null;
-
-      const stylesRow = stylesRes.status === 'fulfilled' && !stylesRes.value.error ? stylesRes.value.data : null;
-      const stylesGate = !!stylesRow && typeof stylesRow.best_for === 'string' && stylesRow.best_for.toLowerCase().includes(productType.toLowerCase());
-
-      const typographyRow = typographyRes.status === 'fulfilled' && !typographyRes.value.error ? typographyRes.value.data : null;
-
-      let resultString = `=== DESIGN CONTEXT FOR ${productType} ===\n\n`;
+      let resultString = `=== DESIGN CONTEXT FOR ${product?.key ?? 'General'} ===\n\n`;
 
       if (colorsRow) {
         resultString += `COLORS:\n`;
@@ -86,7 +119,7 @@ export class DesignContextService {
         resultString += `avoid: ${uiRow.anti_patterns}\n\n`;
       }
 
-      if (stylesGate && stylesRow) {
+      if (stylesRow) {
         const promptKeywords = (stylesRow.ai_prompt_keywords || '').slice(0, 500);
         const cssKeywords = stylesRow.css_technical_keywords || '';
         const variables = stylesRow.design_system_variables || '';
@@ -96,7 +129,7 @@ export class DesignContextService {
         resultString += `variables: ${variables}\n\n`;
       }
 
-      if (hasTypographyMatch && typographyRow) {
+      if (typographyRow) {
         resultString += `TYPOGRAPHY:\n`;
         resultString += `heading: ${typographyRow.heading_font} | body: ${typographyRow.body_font}\n`;
         resultString += `import: ${typographyRow.css_import}\n`;
@@ -116,7 +149,18 @@ export class DesignContextService {
         resultString = resultString.substring(0, 2500);
       }
 
-      console.log('[DesignContextService] injected sections:', { colors: !!colorsRow, uiReasoning: !!uiRow, styles: stylesGate, typography: hasTypographyMatch, products: !!productsRow, brief: briefBlock.length > 0 });
+      console.log('[DesignContextService] match:', {
+        product: product?.key ?? null,
+        ui: ui?.key ?? null,
+        style: stylesRow?.style_category ?? null,
+        typography: typographyRow?.font_pairing_name ?? null,
+        brief: briefBlock.length > 0,
+      });
+
+      // Mismo proyecto → misma ficha: se recuerda por el texto buscado. Además
+      // deja el contexto byte-idéntico entre pedidos (prefijo cacheable).
+      contextCache.set(cacheKey, resultString);
+      if (contextCache.size > 50) contextCache.delete(contextCache.keys().next().value!);
 
       // The mandatory project brief is prepended AFTER the RAG cap so it is
       // never truncated and always leads the context.
