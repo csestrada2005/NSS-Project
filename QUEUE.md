@@ -1480,6 +1480,15 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   `credits 4.1s · memory 1.5s · classify 5.3s · target 5.4s · design-context 3.9s · edit (Sonnet) 46.9s ·
   verify 16.0s · save 2.6s · total 85.8s`. Más de la mitad es Sonnet reescribiendo el archivo ENTERO
   para cambiar una clase; luego la compilación en Render (16 s) y ~15 s de pasos previos en serie.
+  **Ronda de velocidad — HECHO EN CÓDIGO, pendiente CHECK MANUAL:**
+  - `b763909` A (con la condición de Samuel): ediciones simples como cambios exactos SEARCH/REPLACE
+    (`src/utils/searchReplace.js`, +6 tests). Hasta 3 intentos; cada fallo vuelve al modelo con el bloque que
+    no encajó. Archivo completo SÓLO si el pedido lo dice ("reescribe / rehaz / desde cero / rewrite…") o si
+    se agotan los intentos. Consola: `patch aplicado | patch no encajó | archivo completo: <motivo>`.
+  - B: la memoria del proyecto se lee en paralelo con los créditos (construirla, que puede llamar al
+    modelo, sigue esperando a los créditos) y el contexto de diseño en paralelo con el targeting.
+    En `[Timing]`, `credits` ya incluye la lectura de memoria y `design-context` sale casi en 0.
+  - C (compilar 16 s en Render) queda para después.
 - **(HECHO EN CÓDIGO, pendiente CHECK MANUAL — desbloquea ítem 4) El código generado no pasaba `tsc -b`.**
   Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4). Decisiones de Samuel (2026-09-29):
   revisión en el SERVIDOR con copia exacta de las librerías; arreglo automático + IA + aviso con botón

@@ -1215,6 +1215,15 @@ export class AIOrchestrator {
     // ------------------------------------------------------------------
     // CREDIT CHECK — must pass before any LLM call
     // ------------------------------------------------------------------
+    // En paralelo con la revisión de créditos (bucket 6, 2026-09-30: iban en
+    // serie, ~5.6 s): LEER la memoria del proyecto no llama a ningún modelo.
+    // Construirla (buildFromFiles) sí puede, así que eso sigue esperando a
+    // que los créditos alcancen.
+    const memoryRead = projectId ? ProjectMemoryService.get(projectId) : Promise.resolve(null);
+    // Si los créditos cortan antes de esperarla, que su fallo no quede suelto;
+    // quien la espera abajo sigue recibiendo el error como antes.
+    memoryRead.catch(() => {});
+
     let creditUserId: string | null = null;
     let creditAllowed = true;
     let creditReason: string | undefined;
@@ -1250,7 +1259,7 @@ export class AIOrchestrator {
     // ------------------------------------------------------------------
     // LAYER 1 — ProjectMemoryService: get or build project memory
     // ------------------------------------------------------------------
-    let memory = projectId ? await ProjectMemoryService.get(projectId) : null;
+    let memory = await memoryRead;
     if (!memory && projectId) {
       memory = await ProjectMemoryService.buildFromFiles(projectId, files);
     }
@@ -2619,6 +2628,12 @@ export class AIOrchestrator {
     previousClarifyQuestion?: string | null,
     timer?: StageTimer
   ): Promise<OrchestratorResult> {
+    // El contexto de diseño no depende del archivo elegido: se pide en paralelo
+    // con el targeting (bucket 6, 2026-09-30: iban en serie, ~9 s).
+    const designContextPending = DesignContextService.getContext(input, files);
+    // Si el targeting termina antes (aclaración, cancelación), que un fallo
+    // suyo no quede suelto; el await de abajo lo sigue recibiendo.
+    designContextPending.catch(() => {});
     const target = await this.resolveTarget(input, files, selectedElement, intent, signal, previousClarifyQuestion);
     timer?.mark('target');
     if (!target) return { modifiedFiles: [] };
@@ -2641,7 +2656,7 @@ export class AIOrchestrator {
     // Design context (incl. the mandatory DESIGN.md brief) must reach the simple
     // lane edit too, so a one-off tweak still honors the project's palette,
     // fonts and anti-template rules. Non-blocking: getContext swallows failures.
-    const designContext = await DesignContextService.getContext(input, files);
+    const designContext = await designContextPending;
     timer?.mark('design-context');
 
     // Site data contract: always surface src/data/site.ts (single source of
