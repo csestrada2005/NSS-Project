@@ -428,6 +428,16 @@ códigos de color, acepta el formato "pretty" de tsc, lee lista JSON / objeto / 
 errores reintenta una vez a los 2 s. Pendiente CHECK: esperado = lista de 4 + botón y `status 200 … 4
 errores`; F1 = status 401/403/404 (permisos, no código); F2 = status 200 y 0 errores (leer el fragmento).
 
+**Check 3 (Samuel, 2026-09-30) — CONFIRMADO (mundo esperado E1):** Render `[deploy] log de Vercel: status
+200, 29 eventos, 4 errores de tipos`; lista + botón; "Arreglando los errores… (paso 4 de 4) — resumen";
+republicó solo → "¡Publicado correctamente!"; el sitio publicado se ve igual que el preview (→ el mundo
+"página en blanco por `dist/`" del punto 4 NO ocurrió). Pendiente menor: (a) confirmar en ventana de
+incógnito que el sitio abre sin login de Vercel (Deployment Protection; Samuel tiene sesión de Vercel, así
+que su navegador no lo prueba); (b) que el historial del chat tenga el mensaje del arreglo (E3, no reportado).
+Avisos del build de Vercel, inofensivos (el build pasó): `eslint@9.39.5` deprecado y `esbuild` postinstall
+no aprobado por `allowScripts` de npm (esbuild funciona con su binario de plataforma). Candidato a limpiar
+en la plantilla (bucket 14, dependencias), sin urgencia.
+
 **HECHO EN CÓDIGO (pendiente CHECK MANUAL, decisiones de Samuel: modo Plan "siempre pedir aprobación",
 historial en texto llano):**
 - Tarjeta RESPUESTA (`RespuestaCard` + `MiniMarkdown`): respuestas y aclaraciones de la IA se ven en la
