@@ -12,6 +12,7 @@ import { HistoryOverlay } from './chat/HistoryOverlay';
 import { CreditsBadge } from './chat/CreditsBadge';
 import {
   ResumenCard,
+  UltimoMensajeCard,
   DDLCard,
   SeguridadCard,
   PlanCard,
@@ -566,6 +567,13 @@ export function ChatInterface({
               />
             ) : null}
             </>
+          ) : lastAssistant && lastAssistant.content !== INITIAL_GREETING ? (
+            // Reposo con historial (p. ej. recién abierto el proyecto): el
+            // último mensaje de la IA + acceso al historial completo.
+            <UltimoMensajeCard
+              text={stripDdlMarks(lastAssistant.content)}
+              onOpenHistory={() => setHistoryOpen(true)}
+            />
           ) : null}
         </div>
 

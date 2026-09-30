@@ -72,6 +72,28 @@ export function ResumenCard({
 }
 
 // ---------------------------------------------------------------------------
+// ÚLTIMO MENSAJE — al abrir un proyecto con historial (2026-09-30, Samuel:
+// sin tarjeta no había forma de llegar al historial). Tras recargar sólo
+// existe el texto: no se muestran archivos, segundos ni pasos.
+// ---------------------------------------------------------------------------
+export function UltimoMensajeCard({ text, onOpenHistory }: { text: string; onOpenHistory: () => void }) {
+  const { t } = useForgeLang();
+  return (
+    <div className="fc-pieza">
+      <div className="fc-resumen">
+        <div
+          className="fc-resumen-texto"
+          style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+        >
+          {text}
+        </div>
+        <button type="button" className="fc-pill" onClick={onOpenHistory}>{t('chat.card.fullHistory')}</button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // 3.2 — DDL (aprobación de migración)
 // ---------------------------------------------------------------------------
 export function DDLCard({
