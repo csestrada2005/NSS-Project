@@ -1454,6 +1454,15 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   que imports de página; el Haiku ve el trozo donde aparece lo citado, no el principio. Residuo del
   fixture: el título hoy es `text-[#ff0000]` (intento anterior). Pendiente aparte: el caso del Footer de
   arriba (332f31d3) no traía comillas ni nombre de archivo: lo cubre sólo el cambio de orden, sin probar.
+  **CHECK (Samuel, 2026-09-30): CONFIRMADO.** (1) `"Choose your edge"` → `method: quoted-text` →
+  ExpeditionsSection, "Listo. Cambié 1 archivo · 96s"; (2) "haz más grande el botón del hero" → classifier
+  primero → Haiku elige HeroSection (`method: llm`), 72s.
+  **Hallazgo nuevo en la consola (sin tocar):** los 7 candidatos `page-imports` son TODOS de
+  `src/pages/AdminPanel.tsx` (SEO, AdminUsersTable, InviteUserForm, MonthlyAnalysisSection,
+  AdminClientCheckPanel, utils, site): `getPageImportFiles` (`AIOrchestrator.ts:287`) recorre las páginas en
+  el orden del Map (AdminPanel < Index alfabéticamente) y el tope de 8 deja fuera las secciones de la
+  página de inicio. Probable causa del caso Footer. Diseño pendiente: Index/App primero.
+  **También:** 72–96 s para una edición simple es lento — medir dónde se va el tiempo (bucket 6).
 - **(HECHO EN CÓDIGO, pendiente CHECK MANUAL — desbloquea ítem 4) El código generado no pasaba `tsc -b`.**
   Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4). Decisiones de Samuel (2026-09-29):
   revisión en el SERVIDOR con copia exacta de las librerías; arreglo automático + IA + aviso con botón
@@ -2274,6 +2283,12 @@ el admin tiene acceso). Nada de esto se construye por ahora.
 Hoy, al cerrar un proyecto con un cliente, el equipo le da el PDF a Claude externo, que lo analiza y devuelve
 los prompts para Lovable. Samuel pregunta si puede hacerse todo dentro de Wyrd. Opciones presentadas en
 chat (pendiente de decisión y diseño en frío): ver resumen de cierre de la sesión del 2026-09-30.
+**Decisiones de Samuel (2026-09-30):** se deja para después, porque quiere pulirla muy bien. Quiere
+"skills" al estilo de las de Claude (prompt-refiner y similares). Dónde vive: NO en el modal de chat de un
+proyecto ya creado, porque el prompt "maestro" se necesita ANTES de empezar. Dos opciones viables: una
+pantalla propia previa al proyecto, o el modal en una pantalla donde aún no se ha creado nada.
+Recomendación: después de cerrar los arreglos del bucket 6. Para diseñar hacen falta un PDF de ejemplo
+sin datos sensibles y el mensaje que hoy se le manda a Claude externo.
 
 ## APARCADO hasta después de lanzar
 - **A+**: quitar el botón de aprobación cuando el guard no pudo inspeccionar. Aparcado: `unparseable` no tiene causa conocida tras G-3; sólo verificable con SQL fabricado a mano (choca con medir por comportamiento).
