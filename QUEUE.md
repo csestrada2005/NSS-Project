@@ -1423,6 +1423,12 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
 
 ### Resto del bucket (sin tocar esta sesión)
 - RAG de UI/UX: PatternRetriever da `direct: 0 | vector: 0`. Primera pregunta: ¿pasa igual en producción?
+  **Actualización (Samuel, 2026-09-30, producción):** ahora da SIEMPRE `direct: 1 | vector: 4` (5545 chars),
+  aunque la base de patrones es grande (basada en la skill UI/UX Pro Max). Samuel cree que debería traer
+  más. Pendiente de revisar después: ¿los topes (1 directo / 4 vector) son fijos en el código, o la
+  búsqueda realmente sólo encuentra eso? Y `DesignContextService.getContext(input, …)` usa el pedido
+  ENTERO como `product_type` en sus consultas (`colors`, `ui_reasoning`, `styles`…) → casi siempre cae
+  a la fila por defecto.
 - Catálogo de componentes, con auditoría de licencia por componente.
 - B-restos: transparencia de plan en generación inicial, persistencia del bloque de plan al recargar (incluye el aviso que no persiste, de G-4), espaciado.
 - B4: edición de plan. Confirmado por Samuel (2026-09-30): el botón "Editar el plan" de la tarjeta "Plan listo"
@@ -1489,6 +1495,16 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
     modelo, sigue esperando a los créditos) y el contexto de diseño en paralelo con el targeting.
     En `[Timing]`, `credits` ya incluye la lectura de memoria y `design-context` sale casi en 0.
   - C (compilar 16 s en Render) queda para después.
+  **CHECK (Samuel, 2026-09-30):** (1) "fondo de reseñas a negro": `edit (patch) 5.1s` (antes 46.9 s),
+  `total 62.8s` (antes 85.8). Mundo esperado "total < 45 s" NO cumplido: `credits 12.7s` (antes 4.1) y
+  `design-context 12.2s` (antes 3.9; ahora es lo que falta tras el targeting, o sea ~17 s en total).
+  Hipótesis sin confirmar: latencia puntual de la DB principal (los dos pasos consultan Supabase; en la
+  prueba siguiente credits volvió a 4.7 s) → repetir el mismo pedido para medir. Créditos: no verificables
+  con la cuenta admin (créditos ilimitados). (2) "rehaz la sección de FAQ": Vertigo NO tiene FAQSection →
+  plan lane que la crea (crear `src/data/faq.ts`, crear FAQSection, modificar Index) — correcto.
+  `[Timing] plan lane: credits 4.7s · memory 0.0s · classify 3.8s · architect 22.2s · implement 86.9s ·
+  verify 17.4s · save 15.1s · total 150.2s`. En el plan lane el Implementer sigue escribiendo archivos
+  completos (incluido Index.tsx al modificarlo) → candidato a la misma técnica de cambios exactos.
 - **(HECHO EN CÓDIGO, pendiente CHECK MANUAL — desbloquea ítem 4) El código generado no pasaba `tsc -b`.**
   Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4). Decisiones de Samuel (2026-09-29):
   revisión en el SERVIDOR con copia exacta de las librerías; arreglo automático + IA + aviso con botón
