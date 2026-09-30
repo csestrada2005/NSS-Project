@@ -336,10 +336,8 @@ export function StudioEngine() {
   const [selectedFileContent, setSelectedFileContent] = useState<string>('');
   const [isCommandModalOpen, setIsCommandModalOpen] = useState(false);
   // "Peek" del chat (Ctrl+Espacio con el chat ya abierto): esconde la typebar/
-  // tarjetas para ver el preview completo sin cerrar el modal. Vive aquí (no
-  // en ChatInterface) porque CommandModal también necesita saberlo — su
-  // backdrop invisible (fixed inset-0) seguía bloqueando el scroll del
-  // preview mientras se veía "vacío".
+  // tarjetas para ver el preview completo sin cerrar el modal. Vive aquí
+  // porque también lo alterna el atajo global de Ctrl+Espacio de abajo.
   const [chatPeeking, setChatPeeking] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isReadOnly, setIsReadOnly] = useState(false);
@@ -2337,7 +2335,7 @@ export function StudioEngine() {
 
         <AnimatePresence>
         {isCommandModalOpen && (
-          <CommandModal peeking={chatPeeking}>
+          <CommandModal>
             <ChatInterface
               isLoading={isGenerating}
               onSendMessage={handleSendMessage}

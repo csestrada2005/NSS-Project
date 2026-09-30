@@ -1463,6 +1463,17 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   el orden del Map (AdminPanel < Index alfabéticamente) y el tope de 8 deja fuera las secciones de la
   página de inicio. Probable causa del caso Footer. Diseño pendiente: Index/App primero.
   **También:** 72–96 s para una edición simple es lento — medir dónde se va el tiempo (bucket 6).
+  **Footer (Samuel, 2026-09-30): CONFIRMADO** — con el classifier primero, Footer.tsx encabeza la lista y el
+  Haiku lo elige (`method: llm`); el footer quedó azul.
+  **Ronda siguiente — HECHO EN CÓDIGO, pendiente CHECK MANUAL:**
+  - `343119c` A: `orderPageSeeds` — `page-imports` recorre Index.tsx y App.tsx primero, admin / login / 404
+    al final (+1 test).
+  - `b4ddc89` B: `[Timing] simple lane | plan lane | question lane: credits · memory · classify · target ·
+    design-context · edit (Sonnet) · verify · save · total` en la consola (sólo mide). El tiempo que pase
+    después del orquestador (guardar, compilar el preview) = total de la tarjeta − total de la línea.
+  - C (pedido de Samuel): la página se scrollea con el chat abierto. CommandModal deja pasar el puntero
+    siempre; tarjetas, typebar e historial abierto lo recuperan. Consecuencia: los clicks en el preview
+    fuera de las tarjetas también llegan a la página.
 - **(HECHO EN CÓDIGO, pendiente CHECK MANUAL — desbloquea ítem 4) El código generado no pasaba `tsc -b`.**
   Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4). Decisiones de Samuel (2026-09-29):
   revisión en el SERVIDOR con copia exacta de las librerías; arreglo automático + IA + aviso con botón

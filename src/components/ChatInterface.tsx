@@ -97,8 +97,8 @@ interface ChatInterfaceProps {
    * "Peek" (Ctrl+Espacio): esconde la typebar/tarjetas para revelar el
    * preview completo, sin cerrar el chat. Controlado desde StudioEngine
    * (QUEUE.md ítem 5.3 Bloque 6) — antes era estado local de este
-   * componente, pero CommandModal también necesita saber este valor para
-   * dejar de bloquear el scroll del preview mientras está escondido.
+   * componente. (Desde 2026-09-30 CommandModal ya no lo necesita: deja pasar
+   * el scroll al preview siempre.)
    */
   typebarHidden?: boolean;
 }

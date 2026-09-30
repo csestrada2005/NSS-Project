@@ -13,30 +13,24 @@ import { modalBackdropMotion, bottomSheetMotion } from "@/components/ui/modalMot
 // base.
 interface CommandModalProps {
   children: React.ReactNode;
-  /**
-   * "Peek" (Ctrl+Espacio con el chat ya abierto, QUEUE.md ítem 5.3 Bloque 6):
-   * ChatInterface esconde su typebar/tarjetas para revelar el preview
-   * completo, pero este backdrop (invisible) seguía cubriendo toda la
-   * pantalla y bloqueando el scroll/click del preview aunque no se viera
-   * nada encima. Con `peeking`, tanto el backdrop como el contenedor del
-   * bottom sheet dejan pasar el puntero.
-   */
-  peeking?: boolean;
 }
 
 // Sin botón X ni cierre al hacer click fuera (pedido explícito de Samuel,
 // 2026-09-23): el chat sólo se cierra con Ctrl+Espacio o haciendo click en
 // "Chat" del navbar (StudioEngine.tsx, handleOpenChat) — un único par de
-// vías documentado, no tres. El backdrop se queda (sigue bloqueando clicks
-// sobre el preview mientras el chat está visible), sólo perdió el onClick.
-export const CommandModal = ({ children, peeking = false }: CommandModalProps) => {
+// vías documentado, no tres.
+// 2026-09-30 (Samuel): la página se puede scrollear con el chat abierto. El
+// backdrop y el contenedor dejan pasar el puntero SIEMPRE (antes sólo en
+// "peek"); lo que se ve del chat — tarjetas, typebar (`.fc-modal-layer > *`) y
+// el historial abierto (`.fc-historial.fc-abierto`) — lo recupera en CSS.
+export const CommandModal = ({ children }: CommandModalProps) => {
   return (
     <>
       <motion.div
         {...modalBackdropMotion}
-        className={`fixed inset-0 z-[60] ${peeking ? 'pointer-events-none' : ''}`}
+        className="fixed inset-0 z-[60] pointer-events-none"
       />
-      <div className={`fixed z-[70] inset-x-4 bottom-4 h-[88vh] max-h-[920px] ${peeking ? 'pointer-events-none' : ''}`}>
+      <div className="fixed z-[70] inset-x-4 bottom-4 h-[88vh] max-h-[920px] pointer-events-none">
       <motion.div
         {...bottomSheetMotion}
         className="h-full rounded-2xl flex flex-col overflow-hidden border-0 bg-transparent shadow-none"

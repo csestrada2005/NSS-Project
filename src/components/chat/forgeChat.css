@@ -325,6 +325,10 @@
   transition: opacity .3s ease, visibility .3s;
 }
 .fc-historial.fc-abierto { opacity: 1; visibility: visible; }
+/* El contenedor del modal deja pasar el puntero (CommandModal.tsx) para que
+   la página se scrollee con el chat abierto; el historial abierto cubre todo
+   y sí debe recibir clicks y scroll. */
+.fc-historial.fc-abierto { pointer-events: auto; }
 .fc-historial-panel {
   width: min(760px, 100%); display: flex; flex-direction: column; overflow: hidden;
   transform: translateY(18px) scale(.99); opacity: 0;
