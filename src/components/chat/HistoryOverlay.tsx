@@ -4,6 +4,7 @@ import { stripDdlMarks } from '@/utils/ddlProposalState.js';
 import { parseModeMark } from '@/utils/chatModeMark.js';
 import type { Message } from './types';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
+import { MiniMarkdown } from './MiniMarkdown';
 
 /**
  * HistoryOverlay — Bloque 4 del rediseño: overlay a pantalla completa sobre
@@ -69,7 +70,7 @@ export function HistoryOverlay({
                   {isUser ? t('chat.history.you') : 'Wyrd'}
                   {mode && <span className="fc-turno-modo">{mode === 'plan' ? t('chat.mode.plan').toLowerCase() : t('chat.mode.auto').toLowerCase()}</span>}
                 </div>
-                <p>{shown}</p>
+                {isUser ? <p>{shown}</p> : <MiniMarkdown text={shown} />}
               </div>
             );
           })}

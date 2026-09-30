@@ -42,6 +42,11 @@ export interface Message {
    * Efímero en sesión, como planSteps/suggestedAction.
    */
   typeErrors?: TypeIssue[];
+  /**
+   * El turno terminó con TEXTO de la IA (respuesta a una pregunta o pregunta de
+   * aclaración), no con cambios: la tarjeta final muestra ese texto. Efímero.
+   */
+  reply?: boolean;
   errorType?: 'insufficient_credits' | 'compile_error' | 'generic';
   errorDetail?: string;
   suggestedAction?: string;

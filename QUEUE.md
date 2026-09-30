@@ -375,6 +375,27 @@ Dos bugs de presentación, no un bloqueo:
    recibió la app generada o el navegador. Falta reproducir anotando dónde estaba el foco.
 Hipótesis de `saveSnapshot` colgado: REFUTADA por la evidencia.
 
+**Prueba de Samuel con 4 prompts (2026-09-30, proyecto 332f31d3):** (1) pregunta → tarjeta "0 archivos
+modificados · 116s", la respuesta SÓLO en el historial; (3) plan de 4 pasos → bien en vivo, pero líneas
+"Creando Crea los datos…" (verbo duplicado: el `summary` ya empieza con verbo); historial "Listo. Modificado:
+<rutas>"; (4) en modo PLAN un cambio chico se AUTO-APLICÓ sin "Plan listo" (el gate sólo existe en el plan
+lane; fast/simple lane lo ignoraban); la aclaración de la IA ("¿Quieres cambiar el fondo de un componente
+Footer que no veo…?") tampoco apareció en la tarjeta; Ctrl+Espacio con el historial abierto no lo cerraba.
+
+**HECHO EN CÓDIGO (pendiente CHECK MANUAL, decisiones de Samuel: modo Plan "siempre pedir aprobación",
+historial en texto llano):**
+- Tarjeta RESPUESTA (`RespuestaCard` + `MiniMarkdown`): respuestas y aclaraciones de la IA se ven en la
+  tarjeta, con negrita/código/listas y botón si la IA sugiere una acción. Mismo formato en el historial.
+- "Planeando..." ya no se guarda como paso del turno (`kind: 'planning'` filtrado).
+- Duración real: del reloj al terminar (se quitó el contador en estado que el closure leía en 0).
+- Pasos en vivo: si el paso trae `summary` se muestra solo, sin "Creando/Actualizando" delante.
+- Ctrl+Espacio (esconder el chat) cierra el historial; al volver se ve el chat.
+- Modo Plan: `planModeRequiresPlanLane` (laneRouting.js, +test) — con modo Plan y quien apruebe, el fast
+  lane y el simple lane se saltan; todo cambio pasa por "Plan listo". Las preguntas siguen yendo a la
+  question lane (se rutean antes). Sin quien apruebe (generación inicial) no aplica.
+- Mensaje final: "Listo. Cambié N archivos: FAQSection, Index…" (nombres, no rutas; sólo mensajes nuevos).
+Verificación: tsc 0 · server 702/702 · vitest 66/66 · vite build OK.
+
 ### 5.1 HECHO Y CONFIRMADO — Panel Cloud, alcance A completo (2026-09-19)
 
 **CHECK MANUAL — CONFIRMADO.** Evidencia cruda (Samuel, contra Vertigo, desplegado en Render vía rama
@@ -1326,6 +1347,11 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   como están o hay una decisión de producto pendiente ahí?
 
 ## 6. BUCKET Calidad del modelo
+- **La IA no encuentra archivos que existen.** Prueba 2026-09-30 (332f31d3, modo Plan): "Cambia el color de
+  fondo del footer a negro" → respondió "¿Quieres cambiar el fondo de un componente Footer que no veo en los
+  archivos proporcionados…?" aunque `src/components/layout/Footer.tsx` existe. El targeting del simple lane
+  sólo recibe candidatos preseleccionados (`selectRelevantFiles`) y el layout parece quedar fuera. Samuel:
+  "hay que mejorar la IA en general… sigue siendo ineficiente a la hora de leer el código".
 - **(HECHO EN CÓDIGO, pendiente CHECK MANUAL — desbloquea ítem 4) El código generado no pasaba `tsc -b`.**
   Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4). Decisiones de Samuel (2026-09-29):
   revisión en el SERVIDOR con copia exacta de las librerías; arreglo automático + IA + aviso con botón

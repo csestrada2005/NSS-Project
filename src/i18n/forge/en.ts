@@ -594,6 +594,10 @@ export const en = {
   // Publicar: revisión de tipos previa y log de Vercel (bucket 6)
   'deploy.typecheckFailed': 'This project has type errors that would make the build fail on Vercel, so nothing was published. Fix them from the chat ("Fix now") and publish again:',
   'deploy.viewLog': 'View the Vercel log',
+
+  // Chat: mensaje final en texto llano (5.0)
+  'chat.done.changed_one': 'Done. I changed 1 file: {names}',
+  'chat.done.changed_other': 'Done. I changed {count} files: {names}',
 } as const;
 
 export type ForgeKey = keyof typeof en;

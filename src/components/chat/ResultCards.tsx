@@ -9,6 +9,7 @@ import LoadingSquares from '../brand/LoadingSquares';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
 import type { TypeIssue } from '../../services/PlatformService';
 import { t as tNow } from '@/i18n/forge/lang';
+import { MiniMarkdown } from './MiniMarkdown';
 
 /**
  * ResultCards — las 5 variantes de tarjeta de resultado (Bloque 3 del
@@ -235,6 +236,50 @@ export function PlanCard({
           {t('chat.card.fullHistory')}
         </button>
         <button type="button" className="fc-accion-btn fc-rechazar" onClick={onReject}>{t('chat.card.plan.reject')}</button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// RESPUESTA — el turno terminó con TEXTO de la IA (respuesta a una pregunta o
+// pregunta de aclaración), no con cambios. Antes caía en RESUMEN y mostraba
+// "0 archivos modificados" sin el texto: "el modal no dice nada". Si la IA
+// propone una acción (SUGGESTED_ACTION), va como botón.
+// ---------------------------------------------------------------------------
+export function RespuestaCard({
+  text,
+  suggestedAction,
+  isLoading,
+  onSuggestedAction,
+  onOpenHistory,
+}: {
+  text: string;
+  suggestedAction?: string;
+  isLoading: boolean;
+  onSuggestedAction: (action: string) => void;
+  onOpenHistory: () => void;
+}) {
+  const { t } = useForgeLang();
+  return (
+    <div className="fc-pieza">
+      <div className="fc-accion-cuerpo fc-respuesta">
+        <MiniMarkdown text={text} />
+      </div>
+      <div className="fc-accion-fila">
+        {suggestedAction && (
+          <button
+            type="button"
+            className="fc-accion-btn"
+            disabled={isLoading}
+            onClick={() => onSuggestedAction(suggestedAction)}
+          >
+            {suggestedAction}
+          </button>
+        )}
+        <button type="button" className="fc-accion-btn fc-secundario" onClick={onOpenHistory}>
+          {t('chat.card.fullHistory')}
+        </button>
       </div>
     </div>
   );

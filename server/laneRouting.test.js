@@ -5,7 +5,17 @@ import {
   canEnterFastLane,
   isPlanLaneOnly,
   isSimpleEditIntent,
+  planModeRequiresPlanLane,
 } from '../src/utils/laneRouting.js';
+
+test('modo Plan con quien apruebe: los cambios no toman atajos (fast/simple lane)', () => {
+  assert.equal(planModeRequiresPlanLane({ planModeEnabled: true, canAskApproval: true }), true);
+  // Automático: los atajos siguen como siempre.
+  assert.equal(planModeRequiresPlanLane({ planModeEnabled: false, canAskApproval: true }), false);
+  // Generación inicial (nadie puede aprobar): nunca se espera una aprobación imposible.
+  assert.equal(planModeRequiresPlanLane({ planModeEnabled: true, canAskApproval: false }), false);
+  assert.equal(planModeRequiresPlanLane({}), false);
+});
 
 // ---------------------------------------------------------------------------
 // laneRouting — el destino de un database_change no puede depender del dado.

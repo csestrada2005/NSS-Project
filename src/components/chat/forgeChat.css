@@ -358,3 +358,12 @@
   }
   .fc-enviar:hover, .fc-accion-btn:hover { transform: none !important; }
 }
+
+/* Respuestas de texto de la IA (MiniMarkdown): tarjeta RESPUESTA e historial. */
+.fc-markdown p { margin: 0 0 8px; }
+.fc-markdown p:last-child { margin-bottom: 0; }
+.fc-markdown ul { margin: 0 0 8px; padding-left: 18px; }
+.fc-markdown li { margin-bottom: 4px; }
+.fc-markdown strong { color: var(--fc-texto); font-weight: 600; }
+.fc-inline-code { font-family: var(--fc-mono); font-size: 12px; background: rgba(245, 240, 235, .06); padding: 1px 5px; border-radius: 4px; }
+.fc-respuesta { margin: 0 0 12px; max-height: 40vh; overflow-y: auto; }

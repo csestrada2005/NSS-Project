@@ -150,3 +150,18 @@ export function isSimpleEditIntent(intent, prompt) {
     hasNoRequiredPatterns(intent)
   );
 }
+
+/**
+ * Modo Plan (2026-09-30, decisión de Samuel: "siempre pedir aprobación"). El
+ * gate de aprobación sólo existe en el plan lane; el fast lane y el simple lane
+ * aplicaban un cambio chico directo aunque el usuario hubiera elegido Plan
+ * ("Wyrd te enseña qué va a hacer y espera tu visto bueno"). Con modo Plan Y
+ * alguien que pueda aprobar (hay UI de chat), esos dos atajos se saltan y todo
+ * cambio va al plan lane. Sin quien apruebe (generación inicial) no aplica:
+ * nunca se espera una aprobación que nadie puede dar.
+ *
+ * @param {{ planModeEnabled?: boolean, canAskApproval?: boolean }} args
+ */
+export function planModeRequiresPlanLane({ planModeEnabled, canAskApproval }) {
+  return planModeEnabled === true && canAskApproval === true;
+}

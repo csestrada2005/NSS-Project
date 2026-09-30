@@ -18,11 +18,12 @@ import {
   CanceladoCard,
   ErrorCard,
   TypeErrorsCard,
+  RespuestaCard,
 } from './chat/ResultCards';
 import type { ChatPlanStep, Message } from './chat/types';
 import './chat/forgeChat.css';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
-import { t as tNow } from '@/i18n/forge/lang';
+import { t as tNow, tn as tnNow } from '@/i18n/forge/lang';
 import type { TypeIssue } from '../services/PlatformService';
 
 // Re-exportados desde ./chat/types — ver ese archivo para el porqué (evita un
@@ -37,6 +38,11 @@ export type { ChatPlanStep, Message };
 // gate de aprobación sostiene — el usuario aprueba un plan y ve ejecutarse otro.
 const actionVerb = (action: ChatPlanStep['action']): string =>
   tNow(action === 'delete' ? 'chat.verb.delete' : action === 'modify' ? 'chat.verb.modify' : 'chat.verb.create');
+
+// Nombres legibles de los archivos cambiados para el mensaje final:
+// "src/components/sections/FAQSection.tsx" → "FAQSection". Sin duplicados.
+const changedNames = (paths: string[]): string =>
+  [...new Set(paths.map((p) => (p.split('/').pop() ?? p).replace(/\.[^./]+$/, '')))].join(', ');
 
 // Label de una línea de progreso: la description real del step truncada a 60
 // chars y, si no hay description (callers viejos), el nombre de archivo.
@@ -143,7 +149,6 @@ export function ChatInterface({
   useEffect(() => { progressLinesSnapshotRef.current = progressLines; }, [progressLines]);
   const planLineIndexRef = useRef<Map<string, { index: number; action: ChatPlanStep['action'] }>>(new Map());
   const isRetryingRef = useRef(false);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const startTimeRef = useRef<number | null>(null);
   // Último prompt enviado — el "eco" de la tarjeta de proceso (fc-prompt-eco).
   const [lastSentText, setLastSentText] = useState('');
@@ -155,6 +160,9 @@ export function ChatInterface({
   // prop. Mismo motivo por el que pendingPlanSteps tampoco es estado local.
   const mode: ChatSendMode = planModeEnabled ? 'plan' : 'auto';
   const [historyOpen, setHistoryOpen] = useState(false);
+  useEffect(() => {
+    if (typebarHidden) setHistoryOpen(false);
+  }, [typebarHidden]);
 
   const onHistoryUpdateRef = useRef(onHistoryUpdate);
   useEffect(() => { onHistoryUpdateRef.current = onHistoryUpdate; }, [onHistoryUpdate]);
@@ -237,7 +245,7 @@ export function ChatInterface({
       return { content: result.chatResponse, warning: result.warning, suggestedAction: result.suggestedAction, planSteps: result.planSteps, typeErrors: result.typeErrors };
     }
     if (result.modifiedFiles.length > 0) {
-      return { content: tNow('chat.done.modified', { files: result.modifiedFiles.join(', ') }), warning: result.warning, suggestedAction: result.suggestedAction, planSteps: result.planSteps, typeErrors: result.typeErrors };
+      return { content: tnNow('chat.done.changed', result.modifiedFiles.length, { names: changedNames(result.modifiedFiles) }), warning: result.warning, suggestedAction: result.suggestedAction, planSteps: result.planSteps, typeErrors: result.typeErrors };
     }
     return { content: tNow('chat.done.none'), warning: result.warning, suggestedAction: result.suggestedAction, planSteps: result.planSteps, typeErrors: result.typeErrors };
   };
@@ -254,14 +262,7 @@ export function ChatInterface({
     setLastSentText(userMessage);
 
     startTimeRef.current = Date.now();
-    setElapsedSeconds(0);
     setProgressLines([{ text: tNow('chat.progress.planning'), status: 'pending', kind: 'planning' }]);
-
-    const intervalId = setInterval(() => {
-      if (startTimeRef.current) {
-        setElapsedSeconds(Math.floor((Date.now() - startTimeRef.current) / 1000));
-      }
-    }, 1000);
 
     try {
       const result = await onSendMessage(
@@ -304,20 +305,26 @@ export function ChatInterface({
           });
           planLineIndexRef.current = index;
           setProgressLines(ordered.map(step => ({
-            text: `${actionVerb(step.action)} ${progressLabel(step.summary || step.description, step.file_path)}`,
+            // El resumen del Architect ya es una acción ("Crea la sección…"):
+            // anteponerle "Creando" la duplicaba. Sin resumen, verbo + descripción.
+            text: step.summary
+              ? progressLabel(step.summary, step.file_path)
+              : `${actionVerb(step.action)} ${progressLabel(step.description, step.file_path)}`,
             status: 'pending' as const,
           })));
         }
       );
 
-      clearInterval(intervalId);
       planLineIndexRef.current = new Map();
       isRetryingRef.current = false;
 
       // Instantánea de los pasos de ESTE turno para el colapsable de la
       // tarjeta de resultado (Bloque 3) — mismas líneas que se vieron en vivo
       // en la tarjeta de proceso (Bloque 2), no un modelo nuevo.
-      const finalLines = progressLinesSnapshotRef.current;
+      // La línea inicial "Planeando..." sólo existe mientras se decide qué
+      // hacer; no es un paso del turno (en un cambio chico era la única línea
+      // y la tarjeta final la listaba como "1 paso completado").
+      const finalLines = progressLinesSnapshotRef.current.filter(l => l.kind !== 'planning');
       const stepsSnapshot = finalLines.map(l => l.text);
       const stepsCompletedSnapshot = result.success
         ? finalLines.length
@@ -348,12 +355,16 @@ export function ChatInterface({
         planSteps,
         typeErrors,
         filesModifiedCount: result.success ? result.modifiedFiles.length : undefined,
-        durationSeconds: result.success ? elapsedSeconds : undefined,
+        // Del reloj al terminar: antes se leía un contador en estado desde el
+        // closure de sendMessage, que veía el valor de cuando arrancó (0).
+        durationSeconds: result.success && startTimeRef.current
+          ? Math.max(0, Math.round((Date.now() - startTimeRef.current) / 1000))
+          : undefined,
+        reply: result.success && !!result.chatResponse,
         stepsSnapshot,
         stepsCompletedSnapshot,
       });
     } catch (error) {
-      clearInterval(intervalId);
       planLineIndexRef.current = new Map();
       isRetryingRef.current = false;
       console.error('Error in chat:', error);
@@ -519,6 +530,14 @@ export function ChatInterface({
                 actionLabel={lastAssistant.actionLabel}
                 isLoading={isLoading}
                 onSuggestedAction={action => sendMessage(action)}
+              />
+            ) : lastAssistant?.reply ? (
+              <RespuestaCard
+                text={lastAssistant.content}
+                suggestedAction={lastAssistant.suggestedAction}
+                isLoading={isLoading}
+                onSuggestedAction={action => sendMessage(action)}
+                onOpenHistory={() => setHistoryOpen(true)}
               />
             ) : lastAssistant?.warning ? (
               <SeguridadCard

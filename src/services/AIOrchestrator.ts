@@ -57,7 +57,7 @@ import {
 import { cachedSystem, cachedSystemBlocks } from './promptCache';
 import { DesignBriefService } from './DesignBriefService';
 import { isAbortError } from '../utils/abort';
-import { canEnterFastLane, isSimpleEditIntent } from '../utils/laneRouting.js';
+import { canEnterFastLane, isSimpleEditIntent, planModeRequiresPlanLane } from '../utils/laneRouting.js';
 import { KNOWN_DEP_VERSIONS } from '../utils/knownDepVersions';
 import { typeCheckTelemetry } from '../utils/typeRepairLoop';
 import type { TypeIssue } from './PlatformService';
@@ -1350,8 +1350,15 @@ export class AIOrchestrator {
     // es un .sql de supabase/migrations/, y esta lane sólo toca el archivo de la
     // selección, siempre bajo src/).
     // ------------------------------------------------------------------
+    // Modo Plan (2026-09-30): con quien pueda aprobar, ningún cambio toma los
+    // atajos de abajo — el gate de aprobación sólo existe en el plan lane.
+    const forcePlanLane = planModeRequiresPlanLane({
+      planModeEnabled,
+      canAskApproval: Boolean(onPlanDecision),
+    });
     const fastLaneFilePath = (selectedElement as { filePath?: string } | null)?.filePath;
     if (
+      !forcePlanLane &&
       // `selectedElement &&` va delante para que TS lo estreche a no-nulo de cara
       // a runFastLane; canEnterFastLane vuelve a mirarlo vía hasSelection.
       selectedElement &&
@@ -1410,7 +1417,7 @@ export class AIOrchestrator {
     // sin salida en vez de escribir el .sql.
     const isSimpleEdit = isSimpleEditIntent(intent, input);
 
-    if (isSimpleEdit && files.size > 0) {
+    if (!forcePlanLane && isSimpleEdit && files.size > 0) {
       const result = await this.runSimpleLane(input, files, selectedElement, intent, projectId, signal, previousClarifyQuestion);
       if (result.outcome === 'success' && creditUserId) {
         await this.settleCredits(intent.type, result.tokensInput ?? 0, result.tokensOutput ?? 0, projectId);

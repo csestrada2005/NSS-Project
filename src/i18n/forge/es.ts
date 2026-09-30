@@ -589,4 +589,8 @@ export const es: Record<ForgeKey, string> = {
   // Publicar: revisión de tipos previa y log de Vercel (bucket 6)
   'deploy.typecheckFailed': 'Este proyecto tiene errores de tipos que harían fallar el build en Vercel, así que no se publicó nada. Arréglalos desde el chat ("Arreglar ahora") y vuelve a publicar:',
   'deploy.viewLog': 'Ver el log de Vercel',
+
+  // Chat: mensaje final en texto llano (5.0)
+  'chat.done.changed_one': 'Listo. Cambié 1 archivo: {names}',
+  'chat.done.changed_other': 'Listo. Cambié {count} archivos: {names}',
 };
