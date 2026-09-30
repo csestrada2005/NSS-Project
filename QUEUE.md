@@ -335,6 +335,11 @@ chat esté trabado. Cuando se arregle el modal (ver 5.0 abajo), repetir en este 
    2026-09-29, proyecto `332f31d3-6a64-42c4-a587-4bd329f24f32`).
 5. **Proyectos antiguos:** el modal vuelve a responder (Vertigo quedó inservible para pruebas por esto; las
    pruebas se hicieron con `332f31d3-6a64-42c4-a587-4bd329f24f32`).
+   **CERRADOS 4 y 5 (Samuel, 2026-09-30):** Ctrl+Espacio probado en preview / barra / fuera: nunca abrió otra
+   ventana → no reproducible, se cierra como evento único. Vertigo: el modal responde ("cómo estás" →
+   respuesta + acción sugerida). Pero la acción sugerida ("cambiar el título 'Choose your edge' a
+   orange-500") respondió "No veo ExpeditionsSection.tsx en los archivos proporcionados" → evidencia nueva
+   para el bucket 6 (la IA no encuentra archivos), en investigación.
 
 ## 5. BUCKET Producto y UX
 Una sola sesión de decisión, con mockup delante. Orden acordado con Samuel (2026-09-19): 1 (Panel Cloud) →
