@@ -59,6 +59,7 @@ import { DesignBriefService } from './DesignBriefService';
 import { isAbortError } from '../utils/abort';
 import { canEnterFastLane, isSimpleEditIntent, planModeRequiresPlanLane, isTypeFixRequest } from '../utils/laneRouting.js';
 import { createStageTimer, type StageTimer } from '../utils/stageTimer.js';
+import { applyEditBlocks, describeFailures, parseEditBlocks, wantsFullRewrite } from '../utils/searchReplace.js';
 import { extractQuotedTexts, orderPageSeeds, resolveHintedTarget, snippetForTargeting } from '../utils/targetHints.js';
 import { KNOWN_DEP_VERSIONS } from '../utils/knownDepVersions';
 import { typeCheckTelemetry } from '../utils/typeRepairLoop';
@@ -2666,43 +2667,85 @@ export class AIOrchestrator {
     const blueprint = generateBlueprintFromFiles(files);
     const stablePrefix = buildProjectContextPrefix(designContext);
     const blueprintBlock = buildBlueprintBlock(blueprint);
-    const roleBlock =
+    const fullRoleBlock =
       'You are a React/Tailwind expert. The user wants a simple change. ' +
       'Return ONLY the complete updated file content. No explanation, ' +
       'no markdown fences. Just the raw file starting from line 1. ' +
       'Never write the file path as the first line of the file content. File ' +
       'content must start directly with code (imports, comments, or declarations).' +
       siteBlock;
+    // Cambios exactos (bucket 6, 2026-09-30): 47 de 86 s eran reescribir el
+    // archivo entero para cambiar una clase. Decisión de Samuel: archivo
+    // completo SÓLO si el usuario lo pide o tras agotar los intentos.
+    const patchRoleBlock =
+      'You are a React/Tailwind expert. The user wants a simple change. ' +
+      'Do NOT return the whole file. Return ONLY SEARCH/REPLACE blocks, exactly in this format:\n' +
+      '<<<<<<< SEARCH\n<exact lines copied from the file>\n=======\n<the new lines>\n>>>>>>> REPLACE\n' +
+      'Rules: copy SEARCH text character by character from CONTENT, including indentation; include ' +
+      'enough lines that it matches exactly ONE place; use several blocks for changes in several ' +
+      'places; an empty REPLACE deletes the lines; change only what the request needs. No explanation.' +
+      siteBlock;
+    const taskMessage = `FILE: ${target.path}\n\nCONTENT:\n${target.content}\n\nCHANGE REQUESTED: ${input}`;
+    const MAX_PATCH_ATTEMPTS = 3;
 
     try {
-      const response = await platformService.callForgeChat({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 8192,
-        system: cachedSystemBlocks(stablePrefix, blueprintBlock, roleBlock),
-        messages: [
-          {
-            role: 'user',
-            content: `FILE: ${target.path}\n\nCONTENT:\n${target.content}\n\nCHANGE REQUESTED: ${input}`,
-          },
-        ],
-      }, signal);
+      let tokensIn = 0;
+      let tokensOut = 0;
+      const callEdit = async (roleBlock: string, messages: { role: 'user' | 'assistant'; content: string }[], maxTokens: number) => {
+        const response = await platformService.callForgeChat({
+          model: 'claude-sonnet-4-6',
+          max_tokens: maxTokens,
+          system: cachedSystemBlocks(stablePrefix, blueprintBlock, roleBlock),
+          messages,
+        }, signal);
+        const data = await response.json();
+        if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+        tokensIn += data.usage?.input_tokens ?? 0;
+        tokensOut += data.usage?.output_tokens ?? 0;
+        return (data.content?.[0]?.text ?? '') as string;
+      };
 
-      const data = await response.json();
-      if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-      timer?.mark('edit (Sonnet)');
+      let newContent: string | null = null;
+      let fullReason: string | null = wantsFullRewrite(input) ? 'pedido explícito del usuario' : null;
 
-      const rawText: string = data.content?.[0]?.text ?? '';
-      if (!rawText) return { modifiedFiles: [] };
-      let newContent = this.stripCodeFences(rawText);
-      newContent = AIOrchestrator.sanitizeFileContent(newContent);
-      if (!newContent) return { modifiedFiles: [] };
+      if (!fullReason) {
+        const messages: { role: 'user' | 'assistant'; content: string }[] = [{ role: 'user', content: taskMessage }];
+        for (let attempt = 1; attempt <= MAX_PATCH_ATTEMPTS && newContent === null; attempt++) {
+          const replyText = await callEdit(patchRoleBlock, messages, 4096);
+          const blocks = parseEditBlocks(replyText);
+          const applied = blocks.length > 0 ? applyEditBlocks(target.content, blocks) : null;
+          if (applied?.content != null && applied.content !== target.content) {
+            newContent = applied.content;
+            console.log(`[SimpleLane] patch aplicado (intento ${attempt}, ${blocks.length} bloque${blocks.length === 1 ? '' : 's'})`);
+            break;
+          }
+          const feedback = blocks.length === 0
+            ? 'Your reply had no SEARCH/REPLACE blocks. Reply ONLY with blocks in the required format.'
+            : applied?.content === target.content
+            ? 'Your blocks did not change anything. Make the requested change.'
+            : describeFailures(applied!.failures, blocks);
+          console.log(`[SimpleLane] patch no encajó (intento ${attempt}): ${feedback.split('\n')[0]}`);
+          messages.push({ role: 'assistant', content: replyText || '(empty)' }, { role: 'user', content: feedback });
+        }
+        timer?.mark('edit (patch)');
+        if (newContent === null) fullReason = `${MAX_PATCH_ATTEMPTS} intentos de cambio exacto fallidos`;
+      }
+
+      if (newContent === null) {
+        console.log(`[SimpleLane] archivo completo: ${fullReason}`);
+        const rawText = await callEdit(fullRoleBlock, [{ role: 'user', content: taskMessage }], 8192);
+        timer?.mark('edit (archivo completo)');
+        if (!rawText) return { modifiedFiles: [] };
+        newContent = AIOrchestrator.sanitizeFileContent(this.stripCodeFences(rawText));
+        if (!newContent) return { modifiedFiles: [] };
+      }
 
       if (!this.looksLikeCode(newContent)) {
         console.warn('[AIOrchestrator] Simple lane: model returned non-code output, aborting write');
         return {
           modifiedFiles: [],
           outcome: 'failed',
-          error: `Model returned prose instead of code: ${rawText.slice(0, 300)}`,
+          error: `Model returned prose instead of code: ${newContent.slice(0, 300)}`,
         };
       }
 
@@ -2763,8 +2806,8 @@ export class AIOrchestrator {
         return {
           modifiedFiles: diffPaths,
           outcome: 'success',
-          tokensInput: data.usage?.input_tokens ?? 0,
-          tokensOutput: data.usage?.output_tokens ?? 0,
+          tokensInput: tokensIn,
+          tokensOutput: tokensOut,
           compileAttempts: verifyResult.attempts,
           warning: otherPaths.length > 0
             ? tr('orch.alsoRepaired', { files: otherPaths.join(', ') })
