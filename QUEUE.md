@@ -408,6 +408,16 @@ extrae los errores de `tsc` → 422 con la lista + `inspectorUrl`; DeployManager
 Tarjeta final: "Listo. Cambié 1 archivo: HeroSection · Ns" (texto del historial); en modo Automático la línea
 en vivo dice "Trabajando en tu pedido…" ("Planeando…" sólo en modo Plan).
 
+**Check (Samuel, 2026-09-30):** (1) cambio chico rápido ✓; (2) Publicar lista los errores de Vercel con
+"Arreglar ahora" ✓; (3) el botón volvió al preview con el chat escondido y la IA respondió "El proyecto
+compila y no encuentro errores activos" → el atajo fix_bug de `AIOrchestrator.ts:1303` (si compila, no hay
+nada que arreglar) descartaba los errores de tipos, que no rompen la compilación. Samuel pidió que todo se
+haga desde la pestaña Publicar. **Hecho:** `isTypeFixRequest` (laneRouting.js, +test; anclado al diccionario
+por `typeFixRequest.test.ts`): el pedido de "Arreglar ahora" salta el atajo, no se contesta como pregunta y
+va siempre al plan lane. DeployManager corre el arreglo ahí mismo (progreso "Arreglando los errores… (paso n
+de m) — resumen"), y si cambió archivos vuelve a publicar con los archivos nuevos (ref; +2 tests); si no
+cambió nada lo dice y deja la lista. El pedido y el resultado quedan en el historial del chat.
+
 **HECHO EN CÓDIGO (pendiente CHECK MANUAL, decisiones de Samuel: modo Plan "siempre pedir aprobación",
 historial en texto llano):**
 - Tarjeta RESPUESTA (`RespuestaCard` + `MiniMarkdown`): respuestas y aclaraciones de la IA se ven en la

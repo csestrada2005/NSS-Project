@@ -592,7 +592,6 @@ export const en = {
   'chat.types.fixPrompt': "Fix these TypeScript type errors so the project can be published, without removing any feature:\n{list}",
 
   // Publicar: revisión de tipos previa y log de Vercel (bucket 6)
-  'deploy.typecheckFailed': 'This project has type errors that would make the build fail on Vercel, so nothing was published. Fix them from the chat ("Fix now") and publish again:',
   'deploy.viewLog': 'View the Vercel log',
 
   // Chat: mensaje final en texto llano (5.0)
@@ -600,10 +599,17 @@ export const en = {
   'chat.done.changed_other': 'Done. I changed {count} files: {names}',
 
   // Publicar: arreglar desde el log de Vercel (2026-09-30)
-  'deploy.typecheckFailedVercel': 'Vercel could not build this project because of type errors. Nothing was published. "Fix now" sends them to the AI in the chat; then publish again:',
 
   // Chat: línea inicial en modo Automático (2026-09-30)
   'chat.progress.working': 'Working on your request…',
+
+  // Publicar: arreglar sin salir de la pestaña (2026-09-30)
+  'deploy.stage.fixing': 'Fixing the errors…',
+  'deploy.fixStep': '(step {step} of {total})',
+  'deploy.fixFailed': "The AI couldn't fix these errors automatically. Try again, or ask for it in the chat.",
+
+  // Publicar: mensaje de errores de tipos del build (2026-09-30)
+  'deploy.typecheckFailedVercel': 'Vercel could not build this project because of type errors, so nothing was published. "Fix now" fixes them here and publishes again:',
 } as const;
 
 export type ForgeKey = keyof typeof en;

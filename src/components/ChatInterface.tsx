@@ -25,6 +25,7 @@ import './chat/forgeChat.css';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
 import { t as tNow, tn as tnNow } from '@/i18n/forge/lang';
 import type { TypeIssue } from '../services/PlatformService';
+import { changedNames } from '../utils/changedNames';
 
 // Re-exportados desde ./chat/types — ver ese archivo para el porqué (evita un
 // ciclo de módulos con las tarjetas, que también necesitan estos tipos). El
@@ -38,11 +39,6 @@ export type { ChatPlanStep, Message };
 // gate de aprobación sostiene — el usuario aprueba un plan y ve ejecutarse otro.
 const actionVerb = (action: ChatPlanStep['action']): string =>
   tNow(action === 'delete' ? 'chat.verb.delete' : action === 'modify' ? 'chat.verb.modify' : 'chat.verb.create');
-
-// Nombres legibles de los archivos cambiados para el mensaje final:
-// "src/components/sections/FAQSection.tsx" → "FAQSection". Sin duplicados.
-const changedNames = (paths: string[]): string =>
-  [...new Set(paths.map((p) => (p.split('/').pop() ?? p).replace(/\.[^./]+$/, '')))].join(', ');
 
 // Label de una línea de progreso: la description real del step truncada a 60
 // chars y, si no hay description (callers viejos), el nombre de archivo.

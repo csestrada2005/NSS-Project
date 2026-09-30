@@ -41,3 +41,6 @@ export function isSimpleEditIntent(intent: LaneIntent, prompt?: string): boolean
 
 /** Modo Plan con alguien que pueda aprobar: los cambios no toman atajos (fast/simple lane). */
 export function planModeRequiresPlanLane(args: { planModeEnabled?: boolean; canAskApproval?: boolean }): boolean;
+
+/** ¿Es el pedido de "Arreglar ahora" (errores de tipos del build de Vercel)? */
+export function isTypeFixRequest(prompt?: string): boolean;

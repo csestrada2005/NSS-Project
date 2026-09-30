@@ -27,8 +27,8 @@ interface SettingsModalProps {
   projectId?: string | null;
   /** Con qué pestaña abrir — el botón "Publicar" del navbar la abre directo en 'deploy'. */
   initialTab?: MainTab;
-  /** "Arreglar ahora" en Publicar: vuelve al preview, abre el chat y manda el pedido. */
-  onFixTypeErrors?: (prompt: string) => void;
+  /** "Arreglar ahora" en Publicar: corre el arreglo sin salir de la pestaña. */
+  onFixTypeErrors?: React.ComponentProps<typeof DeployManager>['onFixTypeErrors'];
 }
 
 export type MainTab = 'secrets' | 'github' | 'deploy' | 'domains' | 'database' | 'email' | 'analytics';

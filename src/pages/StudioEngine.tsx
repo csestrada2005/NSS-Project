@@ -57,6 +57,7 @@ import type { ViewportMode, PanelMode } from '../components/studio/types';
 import LoadingSquares from '../components/brand/LoadingSquares';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
 import { t as tNow, tn as tnNow, getForgeLang } from '@/i18n/forge/lang';
+import { changedNames } from '../utils/changedNames';
 
 // Navbar del preview (bucket 5 ítem 3, 2026-09-20): Visual/Código/Navegar se
 // promovieron a PreviewNavbar, persistente arriba del preview en vez de una
@@ -2117,12 +2118,34 @@ export function StudioEngine() {
                       files={files}
                       projectId={projectId ?? null}
                       initialTab={settingsInitialTab}
-                      onFixTypeErrors={(prompt) => {
-                        // Mismo camino que "Completar proyecto": preview + chat
-                        // abierto + pedido inyectado (se envía solo).
-                        setPanelMode('preview');
-                        setIsCommandModalOpen(true);
-                        setPendingChatSend(prompt);
+                      onFixTypeErrors={async (prompt, onProgress) => {
+                        // "Arreglar ahora" desde Publicar (2026-09-30): el mismo
+                        // pipeline que un mensaje del chat (Verifier, guards,
+                        // contrato de reparación no destructivo), sin gate de
+                        // aprobación — no hay chat abierto donde darla. El
+                        // progreso va a la pestaña; el resultado, al historial.
+                        const summaries = new Map<string, string>();
+                        const result = await handleSendMessage(
+                          prompt,
+                          (step, total, file, description) =>
+                            onProgress({ step, total, summary: summaries.get(file) ?? description }),
+                          undefined,
+                          (steps) => {
+                            for (const s of steps as { file_path: string; summary?: string; description: string }[]) {
+                              summaries.set(s.file_path, s.summary || s.description);
+                            }
+                          },
+                          undefined,
+                          false
+                        );
+                        const ok = result.success && !result.cancelled;
+                        const changed = ok ? result.modifiedFiles.length : 0;
+                        const content = changed > 0
+                          ? tn('chat.done.changed', changed, { names: changedNames(result.modifiedFiles) })
+                          : result.chatResponse ?? t(ok ? 'chat.done.none' : 'chat.error.generic');
+                        setChatHistory(prev => [...prev, { role: 'assistant', content } as Message].slice(-30));
+                        persistChatMessage('assistant', content);
+                        return { success: ok, changed };
                       }}
                     />
                   ) : (

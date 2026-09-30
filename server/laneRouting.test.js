@@ -6,7 +6,17 @@ import {
   isPlanLaneOnly,
   isSimpleEditIntent,
   planModeRequiresPlanLane,
+  isTypeFixRequest,
 } from '../src/utils/laneRouting.js';
+
+test('"Arreglar ahora" se reconoce en los dos idiomas, y nada más', () => {
+  assert.equal(isTypeFixRequest('Arregla estos errores de tipos de TypeScript para que el proyecto se pueda publicar, sin quitar ninguna funcionalidad:\n- src/A.tsx(1,1): TS6133 x'), true);
+  assert.equal(isTypeFixRequest('Fix these TypeScript type errors so the project can be published, without removing any feature:\n- x'), true);
+  assert.equal(isTypeFixRequest('  Arregla estos errores de tipos de TypeScript para que el proyecto se pueda publicar'), true);
+  assert.equal(isTypeFixRequest('arregla el botón del hero'), false);
+  assert.equal(isTypeFixRequest('¿Por qué no se puede publicar? Arregla estos errores de tipos de TypeScript para que el proyecto se pueda publicar'), false, 'sólo al inicio');
+  assert.equal(isTypeFixRequest(undefined), false);
+});
 
 test('modo Plan con quien apruebe: los cambios no toman atajos (fast/simple lane)', () => {
   assert.equal(planModeRequiresPlanLane({ planModeEnabled: true, canAskApproval: true }), true);

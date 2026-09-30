@@ -165,3 +165,22 @@ export function isSimpleEditIntent(intent, prompt) {
 export function planModeRequiresPlanLane({ planModeEnabled, canAskApproval }) {
   return planModeEnabled === true && canAskApproval === true;
 }
+
+// Frase fija con la que empieza el pedido de "Arreglar ahora" (diccionario:
+// chat.types.fixPrompt, en los dos idiomas). typeFixRequest.test.ts la ancla
+// contra el diccionario para que no se desincronicen.
+const TYPE_FIX_REQUEST = /^(?:Fix these TypeScript type errors so the project can be published|Arregla estos errores de tipos de TypeScript para que el proyecto se pueda publicar)/;
+
+/**
+ * ¿Es el pedido de "Arreglar ahora" (errores de tipos que tumban el build de
+ * Vercel)? (2026-09-30.) Esos errores NO rompen la compilación del preview, así
+ * que el atajo "fix_bug sobre un proyecto que compila → no hay errores activos"
+ * los descartaba ("El proyecto compila y no encuentro errores activos"). Un
+ * pedido así salta ese atajo, no se contesta como pregunta y va al plan lane
+ * (suele tocar varios archivos).
+ *
+ * @param {string} [prompt]
+ */
+export function isTypeFixRequest(prompt) {
+  return typeof prompt === 'string' && TYPE_FIX_REQUEST.test(prompt.trim());
+}

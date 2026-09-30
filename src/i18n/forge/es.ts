@@ -587,7 +587,6 @@ export const es: Record<ForgeKey, string> = {
   'chat.types.fixPrompt': "Arregla estos errores de tipos de TypeScript para que el proyecto se pueda publicar, sin quitar ninguna funcionalidad:\n{list}",
 
   // Publicar: revisión de tipos previa y log de Vercel (bucket 6)
-  'deploy.typecheckFailed': 'Este proyecto tiene errores de tipos que harían fallar el build en Vercel, así que no se publicó nada. Arréglalos desde el chat ("Arreglar ahora") y vuelve a publicar:',
   'deploy.viewLog': 'Ver el log de Vercel',
 
   // Chat: mensaje final en texto llano (5.0)
@@ -595,8 +594,15 @@ export const es: Record<ForgeKey, string> = {
   'chat.done.changed_other': 'Listo. Cambié {count} archivos: {names}',
 
   // Publicar: arreglar desde el log de Vercel (2026-09-30)
-  'deploy.typecheckFailedVercel': 'Vercel no pudo construir este proyecto por errores de tipos. No se publicó nada. "Arreglar ahora" se los manda a la IA en el chat; después vuelve a publicar:',
 
   // Chat: línea inicial en modo Automático (2026-09-30)
   'chat.progress.working': 'Trabajando en tu pedido…',
+
+  // Publicar: arreglar sin salir de la pestaña (2026-09-30)
+  'deploy.stage.fixing': 'Arreglando los errores…',
+  'deploy.fixStep': '(paso {step} de {total})',
+  'deploy.fixFailed': 'La IA no pudo arreglar estos errores automáticamente. Inténtalo de nuevo o pídelo en el chat.',
+
+  // Publicar: mensaje de errores de tipos del build (2026-09-30)
+  'deploy.typecheckFailedVercel': 'Vercel no pudo construir este proyecto por errores de tipos, así que no se publicó nada. "Arreglar ahora" los arregla aquí mismo y vuelve a publicar:',
 };
