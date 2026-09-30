@@ -418,6 +418,16 @@ va siempre al plan lane. DeployManager corre el arreglo ahí mismo (progreso "Ar
 de m) — resumen"), y si cambió archivos vuelve a publicar con los archivos nuevos (ref; +2 tests); si no
 cambió nada lo dice y deja la lista. El pedido y el resultado quedan en el historial del chat.
 
+**Check 2 (Samuel, 2026-09-30) — MUNDO INESPERADO:** Publicar mostró el genérico "Vercel deployment failed
+during build" SIN lista ni botón, aunque el panel de Vercel sí tenía 4 errores `tsc` (Header TS6133,
+ContactSection TS2322/TS2353, WhyUsSection TS2322). Render: ninguna línea `[deploy]`. El lector con esas
+líneas exactas da 2/2 → el fallo está en lo que devuelve la API, y el código callaba un status != 200.
+**Opción B (Samuel):** `fetchVercelTypeErrors` + `describeLogFetch` (vercelBuildLog.js, +5 tests): siempre
+escribe `[deploy] log de Vercel: status X, N eventos, M errores de tipos` (+ final del log si M=0); quita
+códigos de color, acepta el formato "pretty" de tsc, lee lista JSON / objeto / stream NDJSON, y si no salen
+errores reintenta una vez a los 2 s. Pendiente CHECK: esperado = lista de 4 + botón y `status 200 … 4
+errores`; F1 = status 401/403/404 (permisos, no código); F2 = status 200 y 0 errores (leer el fragmento).
+
 **HECHO EN CÓDIGO (pendiente CHECK MANUAL, decisiones de Samuel: modo Plan "siempre pedir aprobación",
 historial en texto llano):**
 - Tarjeta RESPUESTA (`RespuestaCard` + `MiniMarkdown`): respuestas y aclaraciones de la IA se ven en la

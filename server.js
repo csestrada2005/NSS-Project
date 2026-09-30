@@ -17,7 +17,7 @@ import { applyProductionSupabaseClient } from './src/utils/deploySupabaseClient.
 import { isPlatformAdmin, planRoleDecision } from './server/roleDecision.js';
 import { runTypecheck } from './server/typecheckPool.js';
 import { compileCacheKey, createCompileCache } from './server/compileCache.js';
-import { extractTypeErrorsFromBuildLog } from './server/vercelBuildLog.js';
+import { describeLogFetch, fetchVercelTypeErrors } from './server/vercelBuildLog.js';
 import {
   validateProjectRefRequest,
   validateLogsRequest,
@@ -1500,16 +1500,14 @@ app.post('/api/deploy/:projectId', async (req, res) => {
         // `tsc`, se leen los errores de su log para mostrarlos legibles y que
         // "Arreglar ahora" se los mande a la IA. Si el log no se puede leer o
         // el fallo es otro, queda el mensaje genérico con el enlace al log.
-        let typeErrors = [];
-        try {
-          const eventsResponse = await fetch(
-            vercelApiUrl(`/v3/deployments/${deploymentId}/events?limit=-1&builds=1`),
-            { headers: { Authorization: `Bearer ${VERCEL_TOKEN}` } }
-          );
-          if (eventsResponse.ok) typeErrors = extractTypeErrorsFromBuildLog(await eventsResponse.json());
-        } catch (logErr) {
-          console.warn('[deploy] no se pudo leer el log de Vercel:', logErr?.message ?? logErr);
-        }
+        // Siempre deja una línea en Render: antes, un status != 200 no dejaba
+        // rastro y el fallo era invisible (check de Samuel, 2026-09-30).
+        const logFetch = await fetchVercelTypeErrors({
+          url: vercelApiUrl(`/v3/deployments/${deploymentId}/events?limit=-1&builds=1`),
+          token: VERCEL_TOKEN,
+        });
+        console.log(describeLogFetch(logFetch));
+        const typeErrors = logFetch.typeErrors;
         if (typeErrors.length > 0) {
           return res.status(422).json({ error: 'typecheck', typeErrors, inspectorUrl });
         }
