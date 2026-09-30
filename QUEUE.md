@@ -337,7 +337,7 @@ chat esté trabado. Cuando se arregle el modal (ver 5.0 abajo), repetir en este 
 Una sola sesión de decisión, con mockup delante. Orden acordado con Samuel (2026-09-19): 1 (Panel Cloud) →
 2 (variantes de diseño) → 3 (rediseño cosmético). El resto de la lista se queda en el bucket para después.
 
-### 5.0 BUG PRIORITARIO — el modal de chat se queda en "Planeando" (reportado por Samuel, 2026-09-29)
+### 5.0 REENCUADRADO (2026-09-30) — el modal NO se traba: la tarjeta final muestra "Planeando..." como paso completado + duración "0s" (reportado por Samuel, 2026-09-29)
 
 **Síntoma (literal de Samuel):** en proyectos antiguos, al mandar un mensaje el modal se queda en
 "Planeando" y ya no cambia nada — "de hecho el modal no sirve en ningún proyecto antiguo". En el proyecto
@@ -360,6 +360,20 @@ curated escapes…", "Cambia amazing landsights…") tienen `outcome: success` y
 orquestador TERMINÓ y devolvió resultado, así que el atasco en "Planeando" ocurre del lado del navegador,
 después. Consola sin errores rojos; `/api/compile` y `/api/typecheck` en 200. → La hipótesis "la revisión de
 tipos cuelga el turno" queda DESCARTADA; apunta al modal (ítem 10), como sospechaba Samuel.
+
+**Evidencia 2026-09-30 → REENCUADRE:** `forge_snapshots` de 332f31d3 tiene las versiones de los dos turnos
+(10:42:36 y 10:57:14, ~2 s después de su fila de intent log): `saveSnapshot` terminó, nada se atora (Network
+sin pendientes). Lo que Samuel ve es la TARJETA FINAL (ResumenCard), literal:
+"1 archivo modificado · compiló sin errores · 0s / Ver historial completo / 1 paso completado ▶ Planeando...".
+Dos bugs de presentación, no un bloqueo:
+1. En el simple lane (sin plan) la única línea de progreso es la inicial "Planeando..." (`kind: 'planning'`),
+   y la tarjeta final la lista como "1 paso completado" — parece que sigue planeando.
+2. "0s": `ChatInterface.tsx:351` guarda `elapsedSeconds` leído del closure de `sendMessage` (vale 0 al
+   empezar); el contador en vivo avanza pero la tarjeta final lee el valor viejo.
+3. Ctrl+Espacio abriendo otra ventana: ningún código de Wyrd abre ventanas (el atajo sólo abre/esconde el
+   chat, `StudioEngine.tsx:998`). Hipótesis: el foco estaba dentro del iframe del preview y el atajo lo
+   recibió la app generada o el navegador. Falta reproducir anotando dónde estaba el foco.
+Hipótesis de `saveSnapshot` colgado: REFUTADA por la evidencia.
 
 ### 5.1 HECHO Y CONFIRMADO — Panel Cloud, alcance A completo (2026-09-19)
 
