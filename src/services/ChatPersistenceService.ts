@@ -48,9 +48,7 @@ export class ChatPersistenceService {
   ): Promise<void> {
     try {
       const supabase = SupabaseService.getInstance().client;
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const user = await SupabaseService.getInstance().getSessionUser();
       if (!user) return; // sin sesión no hay a quién atribuir el mensaje.
 
       const { error } = await supabase.from('forge_chat_messages').insert({

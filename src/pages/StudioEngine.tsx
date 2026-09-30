@@ -1021,7 +1021,7 @@ export function StudioEngine() {
     if (currentFiles.size === 0) return;
     try {
       const supabase = SupabaseService.getInstance().client;
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await SupabaseService.getInstance().getSessionUser();
       if (!user) return;
 
       // Flush all pending debounced writes before capturing the snapshot

@@ -825,7 +825,7 @@ export class AIOrchestrator {
   }): Promise<IntentLogResult> {
     try {
       const supabase = SupabaseService.getInstance().client;
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await SupabaseService.getInstance().getSessionUser();
       if (!user) return intentLogResult('no_session');
 
       const { error } = await supabase.from('forge_intent_log').insert({
@@ -1228,10 +1228,8 @@ export class AIOrchestrator {
     let creditAllowed = true;
     let creditReason: string | undefined;
     try {
-      const supabase = SupabaseService.getInstance().client;
-      const { data: { user } } = await supabase.auth.getUser();
-      // Medición (2026-09-30): "credits" salía 4–12 s intermitente; se separa
-      // la sesión (Supabase Auth) del preflight del servidor.
+      // Sesión local, sin red (antes auth.getUser(): 4–6 s por pedido).
+      const user = await SupabaseService.getInstance().getSessionUser();
       timer.mark('session');
       if (user) {
         creditUserId = user.id;

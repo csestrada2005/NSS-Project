@@ -42,12 +42,14 @@ import type { BuildStep } from '@/services/Architect';
 //      plan del Architect) para fijar intent.type y el plan por test, sin
 //      tocar fakeFetch.ts.
 //
-// Sin sesión, `supabase.auth.getUser()` resuelve `user: null` y logIntent()
+// Sin sesión, `getSessionUser()` resuelve `null` y logIntent()
 // corta ANTES del insert (`if (!user) return intentLogResult('no_session')`)
 // — comprobado en vivo: con fakeFetch a secas, forge_intent_log nunca
 // aparece ni en `calls` ni en `denied`. Por eso se mockea SOLO aquí, con
 // `vi.spyOn` sobre la instancia real de SupabaseService, para que el insert
-// llegue a emitirse y haya un body que capturar.
+// llegue a emitirse y haya un body que capturar. (2026-09-30: el cliente lee
+// la sesión guardada con getSessionUser() en vez de auth.getUser() por red;
+// se simula esa costura, lo comprobado no cambia.)
 // ---------------------------------------------------------------------------
 
 function claudeTextResponse(text: string) {
@@ -101,13 +103,10 @@ function installRig(intentType: string, planSteps: BuildStep[]): Rig {
   let intentLogBody: Record<string, unknown> | null = null;
 
   const getUserSpy = vi
-    .spyOn(SupabaseService.getInstance().client.auth, 'getUser')
-    .mockResolvedValue({
-      data: {
-        user: { id: 'g4-test-user' },
-      },
-      error: null,
-    } as unknown as Awaited<ReturnType<typeof SupabaseService.prototype.client.auth.getUser>>);
+    .spyOn(SupabaseService.getInstance(), 'getSessionUser')
+    .mockResolvedValue(
+      { id: 'g4-test-user' } as unknown as Awaited<ReturnType<typeof SupabaseService.prototype.getSessionUser>>
+    );
 
   globalThis.fetch = (async (input: string | Request | URL, init?: RequestInit) => {
     const url = toUrlString(input);

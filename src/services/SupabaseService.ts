@@ -46,6 +46,18 @@ export class SupabaseService {
     });
   }
 
+  /**
+   * El usuario de la sesión guardada en el navegador, SIN ir a la red
+   * (bucket 6, 2026-09-30: `auth.getUser()` preguntaba a Supabase Auth en cada
+   * pedido y tardaba 4–6 s). Sirve para saber quién es el usuario en el
+   * cliente; la verificación de verdad la hacen el servidor (requireAuth) y
+   * la RLS de la base de datos con el mismo token.
+   */
+  public async getSessionUser() {
+    const { data } = await this.client.auth.getSession();
+    return data.session?.user ?? null;
+  }
+
   public static getInstance(): SupabaseService {
     if (!SupabaseService.instance) {
       SupabaseService.instance = new SupabaseService();
