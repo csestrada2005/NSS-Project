@@ -17,6 +17,13 @@ const ES = {
   renombra: 'Renombrando', usa: 'Usando', integra: 'Integrando', implementa: 'Implementando',
   construye: 'Construyendo', genera: 'Generando', diseña: 'Diseñando', convierte: 'Convirtiendo',
   separa: 'Separando', junta: 'Juntando', ordena: 'Ordenando', limpia: 'Limpiando', revisa: 'Revisando',
+  // Verbos típicos de los resúmenes de los pasos del plan.
+  modifica: 'Modificando', edita: 'Editando', define: 'Definiendo', exporta: 'Exportando',
+  importa: 'Importando', incluye: 'Incluyendo', envuelve: 'Envolviendo', carga: 'Cargando',
+  guarda: 'Guardando', valida: 'Validando', configura: 'Configurando', habilita: 'Habilitando',
+  protege: 'Protegiendo', restringe: 'Restringiendo', consume: 'Consumiendo', renderiza: 'Renderizando',
+  reescribe: 'Reescribiendo', mapea: 'Mapeando', lee: 'Leyendo', verifica: 'Verificando',
+  sincroniza: 'Sincronizando', registra: 'Registrando', inserta: 'Insertando', declara: 'Declarando',
 };
 const EN = {
   change: 'Changing', add: 'Adding', create: 'Creating', remove: 'Removing', delete: 'Deleting',
@@ -25,6 +32,10 @@ const EN = {
   connect: 'Connecting', improve: 'Improving', redesign: 'Redesigning', write: 'Writing',
   increase: 'Increasing', reduce: 'Reducing', center: 'Centering', align: 'Aligning', use: 'Using',
   set: 'Setting', put: 'Putting', turn: 'Turning', clean: 'Cleaning', review: 'Reviewing',
+  modify: 'Modifying', edit: 'Editing', define: 'Defining', export: 'Exporting', import: 'Importing',
+  include: 'Including', wrap: 'Wrapping', load: 'Loading', save: 'Saving', validate: 'Validating',
+  configure: 'Configuring', enable: 'Enabling', protect: 'Protecting', restrict: 'Restricting',
+  render: 'Rendering', rewrite: 'Rewriting', read: 'Reading', verify: 'Verifying', insert: 'Inserting',
 };
 // Cortesía que va delante del verbo y no aporta a la línea.
 const POLITE = /^(?:por\s+favor[,\s]+|porfa[,\s]+|please[,\s]+|ahora[,\s]+|now[,\s]+|ok[,\s]+|oye[,\s]+)+/i;
@@ -32,9 +43,11 @@ const MAX_CHARS = 72;
 
 /**
  * @param {string} prompt lo que escribió el usuario
+ * @param {'es' | 'en'} [lang] idioma de la interfaz: decide si un verbo existe en
+ *   los dos ("reduce" → "Reduciendo" / "Reducing")
  * @returns {string | null} "Cambiando el título "Choose your edge" por ……" o null
  */
-export function progressHeadline(prompt) {
+export function progressHeadline(prompt, lang = 'es') {
   const text = String(prompt ?? '').trim().replace(POLITE, '').trim();
   if (!text || /^[¿?]/.test(text) || text.endsWith('?')) return null;
   const match = /^([\p{L}]+)(?:\s+|$)([\s\S]*)$/u.exec(text);
@@ -42,7 +55,9 @@ export function progressHeadline(prompt) {
   const verb = match[1].toLowerCase();
   // "Cámbialo", "agrégale": el pronombre pegado cuenta como el verbo.
   const base = ES[verb] ? verb : verb.replace(/(lo|la|los|las|le|les|me|nos)$/, '').normalize('NFD').replace(/[̀-ͯ]/g, '');
-  const gerund = ES[verb] ?? ES[base] ?? EN[verb] ?? null;
+  const gerund = lang === 'en'
+    ? EN[verb] ?? ES[verb] ?? ES[base] ?? null
+    : ES[verb] ?? ES[base] ?? EN[verb] ?? null;
   if (!gerund) return null;
   const rest = match[2].replace(/\s+/g, ' ').trim();
   const line = rest ? `${gerund} ${rest}` : gerund;

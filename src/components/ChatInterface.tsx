@@ -279,7 +279,7 @@ export function ChatInterface({
       // no "Trabajando en tu pedido" (2026-10-01, Samuel).
       text: mode === 'plan'
         ? tNow('chat.progress.planning')
-        : progressHeadline(userMessage) ?? tNow('chat.progress.working'),
+        : progressHeadline(userMessage, getForgeLang()) ?? tNow('chat.progress.working'),
       status: 'pending',
       kind: 'planning',
     }]);
@@ -326,9 +326,13 @@ export function ChatInterface({
           planLineIndexRef.current = index;
           setProgressLines(ordered.map(step => ({
             // El resumen del Architect ya es una acción ("Crea la sección…"):
-            // anteponerle "Creando" la duplicaba. Sin resumen, verbo + descripción.
+            // anteponerle "Creando" la duplicaba; se pasa a gerundio ("Creando
+            // la sección…", Samuel 2026-10-01). Sin resumen, verbo + descripción.
             text: step.summary
-              ? progressLabel(step.summary, step.file_path)
+              ? (() => {
+                  const label = progressLabel(step.summary, step.file_path);
+                  return progressHeadline(label, getForgeLang()) ?? label;
+                })()
               : `${actionVerb(step.action)} ${progressLabel(step.description, step.file_path)}`,
             status: 'pending' as const,
           })));

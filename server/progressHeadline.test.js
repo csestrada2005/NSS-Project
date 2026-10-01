@@ -26,3 +26,18 @@ test('preguntas o pedidos sin verbo conocido: el texto genérico de siempre', ()
   assert.equal(progressHeadline('el footer está muy grande'), null);
   assert.equal(progressHeadline(''), null);
 });
+
+// Las líneas de los pasos del plan (resumen del Architect, ya recortado).
+test('un resumen de paso recortado también pasa a gerundio', () => {
+  assert.equal(
+    progressHeadline('Crea la tabla de suscriptores al newsletter con lectura públ…'),
+    'Creando la tabla de suscriptores al newsletter con lectura públ…',
+  );
+  assert.equal(progressHeadline('Modifica el footer para usar siteInfo'), 'Modificando el footer para usar siteInfo…');
+  assert.equal(progressHeadline('Footer con siteInfo'), null, 'sin verbo conocido: queda tal cual');
+});
+
+test('un verbo de los dos idiomas sigue al idioma de la interfaz', () => {
+  assert.equal(progressHeadline('reduce el padding', 'es'), 'Reduciendo el padding…');
+  assert.equal(progressHeadline('Reduce the padding', 'en'), 'Reducing the padding…');
+});

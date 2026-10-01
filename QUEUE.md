@@ -352,6 +352,16 @@ Mundos pre-registrados:
   `[deploy] bloqueado por seguridad: N graves`. Base ilegible → no bloquea. Publicar muestra "Publicación
   bloqueada por seguridad: N problemas graves" + lista + "Ir a Seguridad" (abre la pestaña con el resultado ya
   guardado). +1 test.
+  **CHECK S3 (Samuel, 2026-10-01): CONFIRMADO** (publica limpio; con un grave creado a propósito se bloquea;
+  "Ir a Seguridad" → Arreglar → publica).
+  Nota de Samuel (HECHO, verificado por tests): las líneas de los pasos del plan también en gerundio
+  ("Crea la tabla…" → "Creando la tabla…"); `progressHeadline` con más verbos de resúmenes (modifica, edita,
+  define…) y el idioma de la interfaz decide los verbos de los dos idiomas ("reduce").
+- **Hallazgo de Samuel (2026-10-01) — PENDIENTE, sin diagnóstico:** las fuentes y el acomodo de los objetos
+  del sitio PUBLICADO no son iguales a los del preview (estilos y quizá HTML). Sospechas a revisar: el preview
+  compila con esbuild + Tailwind del servidor y Vercel con `vite build` del proyecto (otra versión/config de
+  Tailwind, fuentes de Google cargadas distinto, `index.css`/`tailwind.config` del proyecto vs. los del
+  compilador del preview).
 - **CRM sin datos tras un redeploy (Samuel, 2026-10-01) — PENDIENTE, sin diagnóstico:** al entrar al CRM
   después de un deploy de Render todo sale en 0 y en Network no hay llamadas a Supabase; recargar NO lo
   arregla; entrar a Wyrd (sesión presente, sidebar "Samuel Estrada · Admin") y volver al CRM sí carga.
