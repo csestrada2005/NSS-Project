@@ -304,6 +304,18 @@ Mundos pre-registrados:
   tests): en todo pedido de "Arreglar ahora", el orquestador añade bajo cada error el código real de esa
   línea ±2, marcada con ">", y pide citar el renglón exacto en cada paso. Pendiente CHECK: Publicar Vertigo →
   "Arreglar ahora" arregla la 366 en una ronda y publica; luego el check del Bloque 1.
+- **BLOQUE 1 (1a + 1b) — CONFIRMADO (2026-10-01).** Vertigo publicado tras "Arreglar ahora" en
+  https://nebu-087ddaf3-6236-47ae-ba72-bc9688.vercel.app/ — Render: `dirección entregada: proyecto` +
+  `credenciales de Supabase en el sitio: incluidas`. Revisión del bundle publicado (`index-DgheYunS.js`, curl):
+  URL `ksjpiuajgjujsijbspig.supabase.co` presente; única llave = JWT `role: anon`, ref del fixture; 0
+  `service_role`; 0 `autoRefreshToken:false`; `persistSession` sólo con los valores por defecto de la librería
+  (true). REST con esa llave: `recomendaciones` 200 (5 filas, TODAS `status: pending`; la sección publicada
+  pide `.eq("status","approved")` → vacía, comportamiento correcto) y `customer_reviews` 404 PGRST205 (la
+  tabla no existe en el fixture — residuo conocido). El log de Supabase con un 401 a las 13:23:42 no se
+  reproduce con la llave publicada (404); sin explicar, sin impacto.
+  **Hallazgo para el agente de seguridad:** el formulario publicado inserta en `recomendaciones` con
+  `status: "approved"` desde el navegador — se salta la moderación (la política de INSERT lo permite).
+  **Nota de Samuel:** quitar "Ver el log de Vercel" en Publicar (sólo el admin tiene Vercel) — HECHO.
 
 **Actualización 2026-09-29 — desbloqueo de Vercel y nuevo bloqueo:**
 - Samuel compró Vercel Pro (cuenta = Team) y configuró en Render `NEBU_STUDIO_VERCEL_TOKEN` y `VERCEL_TEAM_ID`.

@@ -41,7 +41,8 @@ describe('DeployManager — arreglar y volver a publicar', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: /Publicar/ }));
     expect(await screen.findByText(/src\/A\.tsx:3/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Ver el log de Vercel/ })).toHaveAttribute('href', 'https://vercel.com/log');
+    // Sólo el admin tiene acceso a Vercel: no se ofrece el enlace a su log.
+    expect(screen.queryByRole('link', { name: /Ver el log de Vercel/ })).toBeNull();
 
     await userEvent.click(screen.getByRole('button', { name: /Arreglar ahora/ }));
     await waitFor(() => expect(deploy).toHaveBeenCalledTimes(2));

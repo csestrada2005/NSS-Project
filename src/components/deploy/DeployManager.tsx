@@ -68,7 +68,6 @@ export function DeployManager({ files, projectId: propProjectId, onFixTypeErrors
   const [deploymentUrl, setDeploymentUrl] = useState<string | null>(saved?.url ?? null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [typeErrors, setTypeErrors] = useState<TypeIssue[]>([]);
-  const [inspectorUrl, setInspectorUrl] = useState<string | null>(null);
   const [fixProgress, setFixProgress] = useState<TypeFixProgress | null>(null);
   const [copied, setCopied] = useState(false);
   // Última publicación guardada (forge_projects): si existe, el botón es
@@ -110,7 +109,6 @@ export function DeployManager({ files, projectId: propProjectId, onFixTypeErrors
     setStage('packaging');
     setErrorMessage(null);
     setTypeErrors([]);
-    setInspectorUrl(null);
 
     try {
       const current = filesRef.current;
@@ -127,7 +125,6 @@ export function DeployManager({ files, projectId: propProjectId, onFixTypeErrors
         } else {
           setErrorMessage(result.error);
         }
-        setInspectorUrl(result.inspectorUrl ?? null);
         setStage('error');
         return;
       }
@@ -231,12 +228,9 @@ export function DeployManager({ files, projectId: propProjectId, onFixTypeErrors
                 {t('chat.types.fix')}
               </button>
             )}
-            {inspectorUrl && (
-              <a href={inspectorUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs underline">
-                <ExternalLink size={12} />
-                {t('deploy.viewLog')}
-              </a>
-            )}
+            {/* Sin "Ver el log de Vercel" (2026-10-01, Samuel): sólo el admin
+                tiene acceso a Vercel; los desarrolladores no. El arreglo va por
+                "Arreglar ahora". */}
           </div>
         )}
 
