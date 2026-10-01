@@ -47,3 +47,50 @@ test('checkMigrationPlan: fusionó, no fusionó, o tocó una aplicada', () => {
     { notMerged: [], touchesApplied: [] },
   );
 });
+
+// Fase 2b — el caso de Samuel: una migración aplicada creó una función; más
+// tarde hay que cambiarla. Se corrige con una migración NUEVA, sabiendo cómo
+// está hoy.
+const FN_V1 = 'supabase/migrations/20260912074104_add_moderation_to_recomendaciones.sql';
+const FN_V2 = 'supabase/migrations/20260920000000_tweak_moderation.sql';
+const withFunctions = new Map([
+  ...files,
+  [FN_V1, [
+    '-- moderation',
+    "alter table public.recomendaciones add column status text default 'pending';",
+    'create or replace function public.moderate_comment(body text) returns boolean as $$ begin return length(body) < 500; end; $$ language plpgsql;',
+    'create policy "public read" on public.recomendaciones for select using (true);',
+  ].join('\n')],
+  [FN_V2, 'create or replace function moderate_comment(body text) returns boolean as $$ begin return length(body) < 800; end; $$ language plpgsql;'],
+]);
+
+test('indexMigrationObjects: qué objeto se definió en qué migración, en orden', async () => {
+  const { indexMigrationObjects } = await import('../src/utils/migrationContext.js');
+  const index = indexMigrationObjects(withFunctions, [PENDING]);
+  assert.deepEqual(index.get('function moderate_comment').paths, [FN_V1, FN_V2]);
+  assert.deepEqual(index.get('table recomendaciones').paths, [FN_V1]);
+  assert.deepEqual(index.get('table customer_reviews').paths, [APPLIED]);
+  assert.equal(index.has('table newsletter_subscribers'), false, 'la pendiente no cuenta como historia aplicada');
+});
+
+test('la nota del Architect lista los objetos y prohíbe editar migraciones aplicadas', async () => {
+  const { buildMigrationObjectsNote } = await import('../src/utils/migrationContext.js');
+  const note = buildMigrationObjectsNote(withFunctions, [PENDING]);
+  assert.match(note, /- function moderate_comment: 20260912074104_add_moderation_to_recomendaciones\.sql, 20260920000000_tweak_moderation\.sql/);
+  assert.match(note, /never modify those files/);
+  assert.match(note, /plan a NEW migration file/);
+  assert.equal(buildMigrationObjectsNote(new Map([['src/App.tsx', 'x']]), []), '');
+});
+
+test('el paso que escribe la migración nueva recibe la definición ACTUAL (la más reciente primero)', async () => {
+  const { relatedMigrationDefinitions } = await import('../src/utils/migrationContext.js');
+  const block = relatedMigrationDefinitions(
+    'Creates a migration that alters function moderate_comment to also reject links',
+    withFunctions,
+    ['supabase/migrations/20261001100000_reject_links.sql'],
+  );
+  assert.ok(block.indexOf(FN_V2) < block.indexOf(FN_V1), 'la versión vigente va primero');
+  assert.match(block, /length\(body\) < 800/);
+  assert.match(block, /do NOT re-create them/);
+  assert.equal(relatedMigrationDefinitions('updates the hero copy', withFunctions), '');
+});

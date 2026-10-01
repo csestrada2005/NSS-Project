@@ -1593,6 +1593,20 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   en la fila de la tarjeta DDL junto a "Aplicar" (`PendingDdlActions`, mismo estilo que "Ver el SQL"; la
   línea chica se esconde mientras la tarjeta está abierta). Una tarjeta DDL del último pedido NO los lleva.
   Verificado por tests (Samuel pidió no hacer check manual de este ajuste): +2 tests.
+  **Fase 2 — HECHO EN CÓDIGO, pendiente CHECK MANUAL.** Decisión de Samuel + regla acordada: una migración
+  APLICADA nunca se edita (la base ya la ejecutó; editar el archivo no cambia la base y los desincroniza);
+  lo que cambie algo que ella creó va en una migración NUEVA de corrección, escrita SABIENDO cómo está hoy.
+  - `59caba9` 2a: con una migración pendiente (propuesta, sin aplicar, de UN archivo), el Architect recibe su
+    SQL y la regla: si el pedido toca la base, modificar ESE archivo (una sola migración con todo). La
+    pendiente se busca en el historial completo del chat. Consola: `migración fusionada` / `migración no
+    fusionada` / `el plan modifica una migración que NO está pendiente`. Wyrd no pega SQL a ciegas.
+  - 2b: `indexMigrationObjects` (tablas, funciones, vistas, triggers, policies → migraciones que los
+    definen). En pedidos `database_change` / `needs_server`, el Architect recibe la lista + "APPLIED
+    MIGRATION RULE"; el paso que CREA una migración recibe el contenido de las migraciones que definen los
+    objetos que nombra su descripción (la más reciente primero). Antes la IA veía sólo 400 caracteres del
+    schema y el paso que escribe el SQL no veía ninguno. +6 tests en total (`server/migrationContext.test.js`).
+  Límite conocido: los nombres se buscan en la descripción del paso (en inglés, con el nombre exacto del
+  objeto); si el Architect no nombra el objeto, el paso no recibe su definición.
 - **(HECHO EN CÓDIGO, pendiente CHECK MANUAL — desbloquea ítem 4) El código generado no pasaba `tsc -b`.**
   Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4). Decisiones de Samuel (2026-09-29):
   revisión en el SERVIDOR con copia exacta de las librerías; arreglo automático + IA + aviso con botón

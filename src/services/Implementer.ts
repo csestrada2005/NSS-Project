@@ -1,4 +1,6 @@
 import type { BuildStep } from './Architect';
+import { relatedMigrationDefinitions } from '../utils/migrationContext.js';
+import { isMigrationPath } from '../utils/migrationPath.js';
 import type { ProjectMemory } from './ProjectMemoryService';
 import { SupabaseService } from './SupabaseService';
 import { platformService } from './PlatformService';
@@ -541,6 +543,18 @@ export class Implementer {
     parts.push(`STEP ${step.order}: ${step.description}`);
     parts.push(`ACTION: ${step.action}`);
     parts.push(`FILE: ${step.file_path}`);
+
+    // Fase 2b (2026-10-01): el paso que ESCRIBE una migración nueva recibe la
+    // definición actual de lo que va a cambiar (las migraciones existentes que
+    // definen los objetos que nombra su descripción). Antes no veía ninguna y
+    // corregía a ciegas una función o tabla que ya existía.
+    if (step.action === 'create' && isMigrationPath(step.file_path)) {
+      const definitions = relatedMigrationDefinitions(step.description, files, [step.file_path]);
+      if (definitions) {
+        console.log('[Implementer] definiciones actuales para', step.file_path, '—', definitions.length, 'chars');
+        parts.push(`\n${definitions}`);
+      }
+    }
 
     if (planFiles.length > 0) {
       const planList = planFiles

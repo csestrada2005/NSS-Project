@@ -59,7 +59,7 @@ import { DesignBriefService } from './DesignBriefService';
 import { isAbortError } from '../utils/abort';
 import { canEnterFastLane, isSimpleEditIntent, planModeRequiresPlanLane, isTypeFixRequest } from '../utils/laneRouting.js';
 import { createStageTimer, type StageTimer } from '../utils/stageTimer.js';
-import { buildPendingMigrationNote, checkMigrationPlan } from '../utils/migrationContext.js';
+import { buildMigrationObjectsNote, buildPendingMigrationNote, checkMigrationPlan } from '../utils/migrationContext.js';
 import { applyEditBlocks, describeFailures, parseEditBlocks, wantsFullRewrite } from '../utils/searchReplace.js';
 import { extractQuotedTexts, orderPageSeeds, resolveHintedTarget, snippetForTargeting } from '../utils/targetHints.js';
 import { KNOWN_DEP_VERSIONS } from '../utils/knownDepVersions';
@@ -1532,7 +1532,13 @@ export class AIOrchestrator {
     const isInitialBuild = headerContent.includes('App Name');
     // Fase 2a (2026-10-01): con una migración pendiente, el Architect la
     // modifica en vez de crear otra (una sola migración con todo).
-    const migrationNote = buildPendingMigrationNote(pendingMigrationPaths, files);
+    // Fase 2b: en pedidos de base de datos o de servidor, además, "qué objeto
+    // se definió en qué migración" y la regla de no editar las aplicadas.
+    const touchesDatabase = intent.type === 'database_change' || intent.needs_server === true;
+    const migrationNote = [
+      buildPendingMigrationNote(pendingMigrationPaths, files),
+      touchesDatabase ? buildMigrationObjectsNote(files, pendingMigrationPaths) : '',
+    ].filter(Boolean).join('\n\n');
     // `let` y no `const`: la guardia estructural de más abajo puede sustituir
     // el payload entero por el del reintento. Los cinco campos viajan juntos
     // porque describen UN plan: adoptar los steps de un replan y conservar los
@@ -1679,7 +1685,7 @@ export class AIOrchestrator {
         console.warn('[AIOrchestrator] el plan modifica una migración que NO está pendiente (¿ya aplicada?):',
           migrationCheck.touchesApplied);
       }
-      if (migrationNote && migrationCheck.notMerged.length === 0 &&
+      if (migrationCheck.notMerged.length === 0 &&
           steps.some(s => pendingMigrationPaths?.includes(s.file_path))) {
         console.log('[AIOrchestrator] migración fusionada en', pendingMigrationPaths);
       }
