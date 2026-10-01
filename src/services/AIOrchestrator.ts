@@ -58,6 +58,7 @@ import { cachedSystem, cachedSystemBlocks } from './promptCache';
 import { DesignBriefService } from './DesignBriefService';
 import { isAbortError } from '../utils/abort';
 import { canEnterFastLane, isSimpleEditIntent, planModeRequiresPlanLane, isTypeFixRequest } from '../utils/laneRouting.js';
+import { withTypeErrorContext } from '../utils/typeErrorContext.js';
 import { createStageTimer, type StageTimer } from '../utils/stageTimer.js';
 import { buildMigrationObjectsNote, buildPendingMigrationNote, checkMigrationPlan } from '../utils/migrationContext.js';
 import { applyEditBlocks, describeFailures, parseEditBlocks, wantsFullRewrite } from '../utils/searchReplace.js';
@@ -1208,6 +1209,13 @@ export class AIOrchestrator {
     const startTime = Date.now();
     // Tiempos por etapa en la consola (bucket 6: 72–96 s por edición simple).
     const timer = createStageTimer();
+
+    // "Arreglar ahora" (Publicar o la tarjeta del chat): junto a cada error, el
+    // código REAL de esa línea. La IA ve los archivos sin números de línea y,
+    // con sólo "línea 366", adivinaba y cambiaba otra parte (2026-10-01).
+    if (isTypeFixRequest(input)) {
+      input = withTypeErrorContext(input, files);
+    }
 
     // ------------------------------------------------------------------
     // Legacy shortcut commands (preserved for backward compatibility)

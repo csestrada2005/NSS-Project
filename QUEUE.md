@@ -295,6 +295,16 @@ Mundos pre-registrados:
   públicos, llaves secretas en el navegador). Más: reglas nuevas para que la IA genere login real + Edge
   Function que verifica identidad y rol (2b) y el dominio en Supabase Auth al publicar (2c).
 
+- **Check del Bloque 1 (Samuel, 2026-10-01) — BLOQUEADO por "Arreglar ahora":** Render `[deploy] credenciales
+  de Supabase en el sitio: incluidas` ✓, pero Vercel rechazó Vertigo por 3 errores de tipos; 2 se arreglaron y
+  `AdminUsersTable.tsx:366` (`status?` opcional en `AppUser`, src/lib/adminUsers.ts, pasado a `AppUserStatus`)
+  siguió tras 2 rondas. Evidencia: la línea 366 seguía `<StatusBadge status={user.status} />`; el arreglo hizo
+  `edits=1` en OTRA parte del archivo. Causa: la IA recibe los archivos sin números de línea y "línea 366" no
+  le dice nada. **Arreglo — HECHO EN CÓDIGO:** `withTypeErrorContext` (src/utils/typeErrorContext.js, +3
+  tests): en todo pedido de "Arreglar ahora", el orquestador añade bajo cada error el código real de esa
+  línea ±2, marcada con ">", y pide citar el renglón exacto en cada paso. Pendiente CHECK: Publicar Vertigo →
+  "Arreglar ahora" arregla la 366 en una ronda y publica; luego el check del Bloque 1.
+
 **Actualización 2026-09-29 — desbloqueo de Vercel y nuevo bloqueo:**
 - Samuel compró Vercel Pro (cuenta = Team) y configuró en Render `NEBU_STUDIO_VERCEL_TOKEN` y `VERCEL_TEAM_ID`.
   `6a0e5ee`: `server.js` lee ese nombre (respaldo `VERCEL_TOKEN`) y añade `?teamId=` a crear/consultar la
