@@ -276,6 +276,25 @@ Mundos pre-registrados:
   apareciendo en el bundle publicado, o el preview del builder se rompe/tira SecurityError donde antes no
   lo hacía.
 
+**Actualización 2026-10-01 — publicar ya funciona; análisis "al 100%" (con Samuel):**
+- Hallazgo NUEVO (grave): el sitio publicado no recibía la URL ni la llave anon de su Supabase (el preview
+  las inyecta con `define` en server/compiler.js; el paquete a Vercel no llevaba nada) → `supabase = null`
+  en producción: nada con datos funcionaba publicado. **Bloque 1b — HECHO EN CÓDIGO:**
+  `withProductionSupabaseEnv` (deploySupabaseClient.js, +2 tests) añade `.env.production` con
+  VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY (sólo URL `*.supabase.co` + token; nunca service_role). Render:
+  `[deploy] credenciales de Supabase en el sitio: incluidas | no (proyecto sin base)`.
+- La guardia RLS sólo cubre tablas con columna de rol: hoy `newsletter_subscribers` salió con
+  `allow_public_select USING (true)` (emails legibles por cualquiera) y no se frenó.
+- Falta decirle a Supabase Auth el dominio publicado (correos de confirmación).
+- **Decisión de Samuel: el Bloque 2 se entrega como AGENTE DE SEGURIDAD** (bucket 14): Ajustes → pestaña
+  "Seguridad / Security" → "Chequeo de seguridad" → lista de amenazas → "Arreglar" (mismo mecanismo que
+  "Arreglar ahora" en Publicar) → re-chequeo. Decisiones: (1) revisa contra la BASE REAL (políticas activas
+  vía Management API), no contra los .sql; (2) reglas fijas en la fase 1 + botón opcional **"Deep scan"** con
+  IA que avisa que cuesta créditos y los descuenta (sus hallazgos son sugerencias, no bloquean);
+  (3) Publicar se bloquea sólo por lo GRAVE (datos personales legibles por cualquiera, escritura/borrado
+  públicos, llaves secretas en el navegador). Más: reglas nuevas para que la IA genere login real + Edge
+  Function que verifica identidad y rol (2b) y el dominio en Supabase Auth al publicar (2c).
+
 **Actualización 2026-09-29 — desbloqueo de Vercel y nuevo bloqueo:**
 - Samuel compró Vercel Pro (cuenta = Team) y configuró en Render `NEBU_STUDIO_VERCEL_TOKEN` y `VERCEL_TEAM_ID`.
   `6a0e5ee`: `server.js` lee ese nombre (respaldo `VERCEL_TOKEN`) y añade `?teamId=` a crear/consultar la

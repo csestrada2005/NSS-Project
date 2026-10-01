@@ -13,7 +13,7 @@ import { computeCreditsFromTokens } from './server/credits.js';
 import { createIntentAccumulator } from './server/intentAccumulator.js';
 import { bootstrapProject } from './server/bootstrapProject.js';
 import { deployEdgeFunctionViaManagement, validateEdgeFunctionDeployRequest } from './server/edgeFunctionDeploy.js';
-import { applyProductionSupabaseClient } from './src/utils/deploySupabaseClient.js';
+import { applyProductionSupabaseClient, withProductionSupabaseEnv } from './src/utils/deploySupabaseClient.js';
 import { isPlatformAdmin, planRoleDecision } from './server/roleDecision.js';
 import { runTypecheck } from './server/typecheckPool.js';
 import { compileCacheKey, createCompileCache } from './server/compileCache.js';
@@ -1463,7 +1463,12 @@ app.post('/api/deploy/:projectId', async (req, res) => {
     // (StudioEngine.tsx) — no hace falta el cliente Supabase modo-preview
     // (persistSession/autoRefreshToken en false) que sí es obligatorio ahí.
     // Ver src/utils/deploySupabaseClient.js para el porqué completo.
-    const deployFiles = applyProductionSupabaseClient(files);
+    // Bloque 1b (2026-10-01): el sitio publicado necesita la URL y la llave
+    // ANON de su Supabase (en el preview las inyecta el compilador). Sin esto
+    // arrancaba con supabase = null y nada con datos funcionaba publicado.
+    const dbCredentials = supabaseAdmin ? await getDbCredentialsForProject(projectId) : null;
+    const deployFiles = withProductionSupabaseEnv(applyProductionSupabaseClient(files), dbCredentials);
+    console.log(`[deploy] credenciales de Supabase en el sitio: ${deployFiles['.env.production'] ? 'incluidas' : 'no (proyecto sin base)'}`);
 
     // Bucket 6 — revisión de tipos ANTES de publicar: Vercel corre `tsc -b` y
     // un error de tipos lo tumba con un "failed during build" opaco. Si el

@@ -76,3 +76,24 @@ test('applyProductionSupabaseClient — null/undefined pasan sin lanzar', () => 
   assert.equal(applyProductionSupabaseClient(null), null);
   assert.equal(applyProductionSupabaseClient(undefined), undefined);
 });
+
+// Bloque 1b (2026-10-01): el sitio publicado no recibía las credenciales de su
+// Supabase y arrancaba con supabase = null.
+test('withProductionSupabaseEnv añade la URL y la llave anon para vite build', async () => {
+  const { withProductionSupabaseEnv, PRODUCTION_ENV_PATH } = await import('../src/utils/deploySupabaseClient.js');
+  const files = { 'src/App.tsx': 'x' };
+  const anonKey = 'eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiJ9.abcDEF123_-';
+  const out = withProductionSupabaseEnv(files, { url: 'https://ksjpiuajgjujsijbspig.supabase.co/', anonKey });
+  assert.equal(out[PRODUCTION_ENV_PATH],
+    `VITE_SUPABASE_URL=https://ksjpiuajgjujsijbspig.supabase.co\nVITE_SUPABASE_ANON_KEY=${anonKey}\n`);
+  assert.equal(files[PRODUCTION_ENV_PATH], undefined, 'no muta la entrada');
+});
+
+test('sin credenciales válidas no añade nada (y nunca algo que no sea URL de Supabase + token)', async () => {
+  const { withProductionSupabaseEnv } = await import('../src/utils/deploySupabaseClient.js');
+  const files = { 'src/App.tsx': 'x' };
+  assert.equal(withProductionSupabaseEnv(files, null), files);
+  assert.equal(withProductionSupabaseEnv(files, { url: 'https://evil.example.com', anonKey: 'eyJhbGciOiJIUzI1NiJ9.x.yyyyyyyyyyyy' }), files);
+  assert.equal(withProductionSupabaseEnv(files, { url: 'https://abc.supabase.co', anonKey: 'x\nVITE_OTRA=1' }), files);
+  assert.equal(withProductionSupabaseEnv(null, { url: 'https://abc.supabase.co', anonKey: 'k'.repeat(30) }), null);
+});

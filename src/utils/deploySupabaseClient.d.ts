@@ -22,3 +22,12 @@ export const PRODUCTION_SUPABASE_CLIENT_SOURCE: string;
 export function applyProductionSupabaseClient<T extends Record<string, string> | null | undefined>(
   files: T
 ): T;
+
+/** `.env.production`: what `vite build` reads on Vercel. */
+export const PRODUCTION_ENV_PATH: string;
+
+/** Adds `.env.production` with the project's Supabase URL + anon key (never the service role). */
+export function withProductionSupabaseEnv<T extends Record<string, string> | null | undefined>(
+  files: T,
+  credentials: { url?: string; anonKey?: string } | null | undefined
+): T;
