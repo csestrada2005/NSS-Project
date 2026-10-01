@@ -1625,6 +1625,11 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   descartada); `checkMigrationPlan` distingue fusionada / nueva junto a la pendiente / toca una aplicada;
   "No aplicar" en la tarjeta del último pedido; "Aceptar"; SQL con altura limitada y columna del chat
   desplazable. +6 tests. Limpieza de Vertigo pendiente (Samuel).
+  **CHECK 3 (Samuel, 2026-10-01): CONFIRMADO.** (1) `CREATE TABLE newsletter_subscribers`; (2) `migración
+  fusionada` → un solo archivo con email + nombre; (3) `migración nueva junto a la pendiente`, archivo nuevo
+  `ALTER TABLE recomendaciones ADD COLUMN fecha_revision`, `definiciones actuales … 4617 chars`, tarjeta
+  "Aplicar 2 migraciones"; (4) "No aplicar" → "Descarté la propuesta … Quité del proyecto … (2 archivos)".
+  Nueva petición: que el texto que escribe Wyrd en el modal aparezca con animación de escritura (como Claude).
 - **(HECHO EN CÓDIGO, pendiente CHECK MANUAL — desbloquea ítem 4) El código generado no pasaba `tsc -b`.**
   Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4). Decisiones de Samuel (2026-09-29):
   revisión en el SERVIDOR con copia exacta de las librerías; arreglo automático + IA + aviso con botón
