@@ -227,7 +227,9 @@ class PlatformService {
       const headers = await this.getHeaders();
       const response = await fetch('/api/compile', {
         method: 'POST',
-        headers,
+        // Medición (2026-10-01): distinguir en Render la compilación del
+        // Verifier de la del preview.
+        headers: { ...headers, 'X-Compile-Purpose': 'verify' },
         body: JSON.stringify({ files }),
         signal,
       });

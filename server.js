@@ -1379,7 +1379,12 @@ app.post('/api/typecheck', async (req, res) => {
 // preview compilaban dos veces los mismos archivos tras cada cambio.
 const compileCache = createCompileCache();
 
+// Medición (2026-10-01): verify tardaba 13–35 s en el camino simple y ~5.5 s
+// en el de planes. Cuántas compilaciones corren a la vez en esta instancia.
+let compilesInFlight = 0;
+
 app.post('/api/compile', async (req, res) => {
+  const arrivedAt = Date.now();
   const { files, projectId } = req.body;
   req.setTimeout(30000);
   if (!files || typeof files !== 'object') {
@@ -1399,13 +1404,18 @@ app.post('/api/compile', async (req, res) => {
   const startedAt = Date.now();
   const cacheKey = compileCacheKey(files, dbCredentials);
   const cached = compileCache.get(cacheKey);
+  const fileCount = Object.keys(files).length;
+  const purpose = String(req.headers['x-compile-purpose'] ?? 'otro').slice(0, 16);
   if (cached) {
-    console.log('[compile] cache hit (mismos archivos que una compilación reciente)');
+    console.log(`[compile] ${purpose} · cache hit · ${fileCount} archivos · preparación ${((startedAt - arrivedAt) / 1000).toFixed(1)}s`);
     return res.json(cached);
   }
+  compilesInFlight++;
+  const inFlightAtStart = compilesInFlight;
   try {
     const result = await compileFiles(files, dbCredentials);
     const durationMs = Date.now() - startedAt;
+    console.log(`[compile] ${purpose} · ${fileCount} archivos · preparación ${((startedAt - arrivedAt) / 1000).toFixed(1)}s · esbuild ${(durationMs / 1000).toFixed(1)}s · a la vez: ${inFlightAtStart}${result.error ? ' · con error' : ''}`);
     if (durationMs > 10000) {
       console.warn(`[compile] SLOW: ${durationMs}ms (file count: ${Object.keys(files).length})`);
     }
@@ -1426,6 +1436,8 @@ app.post('/api/compile', async (req, res) => {
     }
     console.error('[compile] ERROR:', String(err?.message || err).slice(0, 200));
     res.status(500).json({ error: err.message || 'Unexpected compile error' });
+  } finally {
+    compilesInFlight--;
   }
 });
 

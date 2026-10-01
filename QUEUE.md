@@ -1639,6 +1639,11 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   qué hace en vez de "Trabajando en tu pedido" — `progressHeadline` (src/utils/progressHeadline.js, +3
   tests): verbo del pedido en imperativo → gerundio ("Cambia el título…" → "Cambiando el título…"); preguntas
   o verbos desconocidos → el texto genérico.
+  **Siguiente — compilar más rápido (`verify`).** Evidencia: camino simple 13.1 / 20.3 / 25.4 / 35.6 s; camino
+  de planes 5.2–6.4 s, con el mismo Verifier y el mismo proyecto. Medición añadida (sólo mide): consola
+  `[Verifier] tiempos | compilar Xs (n×) · tipos Ys · reparar Zs · total`; Render `[compile] verify|preview ·
+  N archivos · preparación Xs · esbuild Ys · a la vez: K` (o `cache hit`). Dato de paso: la compilación del
+  Verifier NO manda projectId (sin credenciales de DB) y la del preview sí → nunca comparten la caché.
 - **(HECHO EN CÓDIGO, pendiente CHECK MANUAL — desbloquea ítem 4) El código generado no pasaba `tsc -b`.**
   Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4). Decisiones de Samuel (2026-09-29):
   revisión en el SERVIDOR con copia exacta de las librerías; arreglo automático + IA + aviso con botón

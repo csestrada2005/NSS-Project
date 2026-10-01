@@ -217,6 +217,7 @@ async function compileRequest(files: Map<string, string>, opts?: CompileOptions)
         headers: {
           'Content-Type': 'application/json',
           Authorization,
+          'X-Compile-Purpose': 'preview',
         },
         body,
         signal: controller.signal,

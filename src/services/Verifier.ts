@@ -176,6 +176,12 @@ export class Verifier {
     // CAMBIO 2 — telemetría del batching, acumulada a lo largo de los intentos.
     let totalErrors = 0;
     let fixCalls = 0;
+    // Medición (2026-10-01): dónde se va el tiempo de verify (camino simple
+    // 13–35 s vs plan ~5.5 s). Sólo mide.
+    let compileMs = 0;
+    let compileCount = 0;
+    let typeMs = 0;
+    const verifyStart = Date.now();
     // Paths que una reparación escribió estando ausentes (recreaciones). Los
     // deletes se aplican UNA sola vez, arriba, y el bucle no vuelve a tocarlos:
     // un archivo recreado por el repair sobrevive dentro del verify. Lo que hay
@@ -199,7 +205,10 @@ export class Verifier {
       // compilación y NO persista ni lance fixes post-cancelación.
       if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
 
+      const compileStart = Date.now();
       const result = await this.tryCompile(currentFiles, signal);
+      compileMs += Date.now() - compileStart;
+      compileCount++;
 
       // ------------------------------------------------------------------
       // ESCANEO DETERMINISTA DE REFERENCIAS POST-DELETE — la puerta al verde.
@@ -230,10 +239,15 @@ export class Verifier {
         // otra que también compila y tiene menos errores. Las rondas de tipos
         // siguen la proporción del lane: plan 3 intentos → 2 rondas, simple
         // 2 → 1.
+        const typeStart = Date.now();
         const typed = await this.typePhase(
           currentFiles, originalFiles, signal, designContext, blueprint,
           new Set(restoredPaths), Math.max(0, MAX_RETRIES - 1)
         );
+        typeMs += Date.now() - typeStart;
+        const sec = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
+        console.log(`[Verifier] tiempos | compilar ${sec(compileMs)} (${compileCount}×) · tipos ${sec(typeMs)} · ` +
+          `reparar ${sec(Date.now() - verifyStart - compileMs - typeMs)} · total ${sec(Date.now() - verifyStart)}`);
         currentFiles = typed.files;
         fixCalls += typed.fixCalls;
         console.log('[Verifier] telemetry | totalErrors:', totalErrors, '| fixCalls:', fixCalls,
