@@ -1630,6 +1630,10 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   `ALTER TABLE recomendaciones ADD COLUMN fecha_revision`, `definiciones actuales … 4617 chars`, tarjeta
   "Aplicar 2 migraciones"; (4) "No aplicar" → "Descarté la propuesta … Quité del proyecto … (2 archivos)".
   Nueva petición: que el texto que escribe Wyrd en el modal aparezca con animación de escritura (como Claude).
+  **Opción B (Samuel) — HECHO EN CÓDIGO, pendiente CHECK:** `useTypewriter` / `TypewriterText`
+  (src/components/chat/useTypewriter.tsx, +4 tests): las líneas de progreso (ProcessCard) y las respuestas
+  (RespuestaCard, markdown sobre lo ya escrito) se escriben a ~70 caracteres/s, máximo 2 s por texto; cada
+  texto se anima una sola vez por sesión; sin animación con "reducir movimiento".
 - **(HECHO EN CÓDIGO, pendiente CHECK MANUAL — desbloquea ítem 4) El código generado no pasaba `tsc -b`.**
   Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4). Decisiones de Samuel (2026-09-29):
   revisión en el SERVIDOR con copia exacta de las librerías; arreglo automático + IA + aviso con botón

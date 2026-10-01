@@ -10,6 +10,12 @@ import { useForgeLang } from '@/i18n/forge/useForgeLang';
 import type { TypeIssue } from '../../services/PlatformService';
 import { t as tNow } from '@/i18n/forge/lang';
 import { MiniMarkdown } from './MiniMarkdown';
+import { useTypewriter } from './useTypewriter';
+
+/** La respuesta de la IA se escribe sola (2026-10-01); el formato se aplica sobre lo ya escrito. */
+function TypedMarkdown({ text }: { text: string }) {
+  return <MiniMarkdown text={useTypewriter(text)} />;
+}
 
 /**
  * ResultCards — las 5 variantes de tarjeta de resultado (Bloque 3 del
@@ -404,7 +410,7 @@ export function RespuestaCard({
   return (
     <div className="fc-pieza">
       <div className="fc-accion-cuerpo fc-respuesta">
-        <MiniMarkdown text={text} />
+        <TypedMarkdown text={text} />
       </div>
       <div className="fc-accion-fila">
         {suggestedAction && (

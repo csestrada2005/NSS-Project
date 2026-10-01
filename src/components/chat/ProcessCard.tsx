@@ -1,4 +1,5 @@
 import type { ProgressLine } from './progressSummary';
+import { TypewriterText } from './useTypewriter';
 
 /**
  * ProcessCard — Bloque 2 del rediseño: la tarjeta de proceso, con la lista de
@@ -39,7 +40,7 @@ export function ProcessCard({
           return (
             <li key={i} className={`fc-paso ${cls}`}>
               <span className="fc-marca" />
-              <span>{line.text}</span>
+              <span><TypewriterText text={line.text} /></span>
             </li>
           );
         })}
