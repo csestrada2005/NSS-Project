@@ -654,4 +654,15 @@ export const es: Record<ForgeKey, string> = {
   'security.kind.client_role_write.why': 'Los roles sólo deben cambiar en el servidor; si no, cualquiera puede hacerse admin.',
   'security.kind.edge_no_caller_check': 'Una función de servidor no verifica quién la llama ({path})',
   'security.kind.edge_no_caller_check.why': 'Usa permisos totales de la base sin verificar la sesión, así que cualquiera podría usarla.',
+
+  // Seguridad: Arreglar y estado guardado, S2 (2026-10-01)
+  'security.fixPrompt': "Arregla estos problemas de seguridad del proyecto, sin quitar ninguna funcionalidad:\n{list}",
+  'security.fix': 'Arreglar',
+  'security.fixing': 'Arreglando…',
+  'security.fixStep': '(paso {step} de {total})',
+  'security.fixFailed': 'La IA no pudo arreglar estos problemas automáticamente. Inténtalo de nuevo o pídelo en el chat.',
+  'security.applyTitle': 'Aplica el cambio en la base de datos para terminar',
+  'security.applyBody': 'El arreglo creó una migración ({names}). Tu base de datos no cambia hasta que la apliques.',
+  'security.stale': 'Este chequeo se hizo antes de los últimos cambios. Vuelve a revisar.',
+  'security.before': 'Antes: {count} hallazgos',
 };

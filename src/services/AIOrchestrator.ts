@@ -59,6 +59,12 @@ import { DesignBriefService } from './DesignBriefService';
 import { isAbortError } from '../utils/abort';
 import { canEnterFastLane, isSimpleEditIntent, planModeRequiresPlanLane, isTypeFixRequest } from '../utils/laneRouting.js';
 import { withTypeErrorContext } from '../utils/typeErrorContext.js';
+import { isSecurityFixRequest } from '../utils/securityFix.js';
+
+// Pedidos de los botones "Arreglar ahora" (tipos, Publicar) y "Arreglar"
+// (Seguridad, S2 2026-10-01): hay que cambiar código; nunca se contestan como
+// pregunta ni caen en el atajo "compila, no hay nada que arreglar".
+const isFixButtonRequest = (input: string) => isTypeFixRequest(input) || isSecurityFixRequest(input);
 import { createStageTimer, type StageTimer } from '../utils/stageTimer.js';
 import { buildMigrationObjectsNote, buildPendingMigrationNote, checkMigrationPlan } from '../utils/migrationContext.js';
 import { applyEditBlocks, describeFailures, parseEditBlocks, wantsFullRewrite } from '../utils/searchReplace.js';
@@ -1325,7 +1331,7 @@ export class AIOrchestrator {
     // Question intent — answer in chat, no file changes
     // ------------------------------------------------------------------
     // "Arreglar ahora" nunca se contesta como pregunta: hay que cambiar código.
-    if (intent.type === 'question' && !isTypeFixRequest(input)) {
+    if (intent.type === 'question' && !isFixButtonRequest(input)) {
       const answer = await this.answerQuestion(
         input,
         files,
@@ -1358,7 +1364,7 @@ export class AIOrchestrator {
       !this.hasReportedRuntimeError(input, chatHistory) &&
       // Los errores de tipos no rompen la compilación del preview: "compila"
       // no significa "no hay nada que arreglar" para "Arreglar ahora".
-      !isTypeFixRequest(input)
+      !isFixButtonRequest(input)
     ) {
       const compiles = await this.currentStateCompiles(files, signal);
       if (signal?.aborted) {
@@ -1410,7 +1416,7 @@ export class AIOrchestrator {
     const forcePlanLane =
       planModeRequiresPlanLane({ planModeEnabled, canAskApproval: Boolean(onPlanDecision) }) ||
       // "Arreglar ahora" suele tocar varios archivos: siempre plan lane.
-      isTypeFixRequest(input);
+      isFixButtonRequest(input);
     const fastLaneFilePath = (selectedElement as { filePath?: string } | null)?.filePath;
     if (
       !forcePlanLane &&

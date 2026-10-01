@@ -17,3 +17,14 @@ describe('pedido de "Arreglar ahora"', () => {
     expect(isTypeFixRequest(buildTypeFixPrompt(errors))).toBe(true);
   });
 });
+
+// Seguridad (S2, 2026-10-01): el "Arreglar" de la pestaña Seguridad también se
+// reconoce por su frase fija; si el diccionario cambia, este test lo frena.
+describe('pedido de "Arreglar" en Seguridad', () => {
+  it('se reconoce en los dos idiomas', async () => {
+    const { isSecurityFixRequest } = await import('./securityFix.js');
+    for (const lang of ['es', 'en'] as const) {
+      expect(isSecurityFixRequest(t('security.fixPrompt', { list: '- x' }, lang))).toBe(true);
+    }
+  });
+});

@@ -24,7 +24,7 @@ import type { TypeIssue } from '../services/PlatformService';
 import { SupabaseService } from '../services/SupabaseService';
 import { compileWithMeta, classifyCompileResult, isPreviewError, type OidMap } from '../services/BrowserCompiler';
 import { isAbortError } from '../utils/abort';
-import { ddlProposedMark, findExecutableProposal, unappliedMigrationPaths } from '../utils/ddlProposalState.js';
+import { ddlProposedMark, findExecutableProposal, unappliedMigrationPaths, nextProposalPaths } from '../utils/ddlProposalState.js';
 import { appendModeMark } from '../utils/chatModeMark.js';
 import { updateCode, type TargetElement } from '../utils/ast';
 import { fileSystemTreeToMap, mapToFileSystemTree } from '../utils/context';
@@ -295,6 +295,10 @@ export function StudioEngine() {
   // opcionales warning/suggestedAction/errorType/errorDetail) que maneja
   // ChatInterface, no la versión pelada {role, content}.
   const [chatHistory, setChatHistory] = useState<Message[]>([]);
+  // El historial vigente para handlers que terminan varios renders después de
+  // pulsarse (los arreglos desde Ajustes): su closure vería el de entonces.
+  const chatHistoryRef = useRef<Message[]>([]);
+  chatHistoryRef.current = chatHistory;
   // CIRUGÍA B3 — la decisión de plan pendiente vive AQUÍ, no en el chat, por el
   // mismo motivo que chatHistory y cancelledInfo: ChatInterface se desmonta al
   // cerrar el modal, y un useState suyo se llevaría por delante los resolvers de
@@ -1774,6 +1778,48 @@ export function StudioEngine() {
   // botón se deshabilita durante el cierre para evitar dobles cancelaciones. El
   // AbortController aborta todas las llamadas fetch del run; el orchestrator
   // conserva lo completado y devuelve el mensaje honesto.
+  // "Arreglar ahora" (Publicar) y "Arreglar" (Seguridad): el mismo pipeline que
+  // un mensaje del chat (Verifier, guards, contrato de reparación no
+  // destructivo), sin gate de aprobación — no hay chat abierto donde darla. El
+  // progreso va a la pestaña; el resultado, al historial, CON la marca de
+  // propuesta si escribió migraciones (S2 2026-10-01: así se pueden aplicar
+  // desde la pestaña de Seguridad).
+  const runSettingsFix = async (
+    prompt: string,
+    onProgress: (p: { step: number; total: number; summary?: string }) => void
+  ): Promise<{ success: boolean; changed: number }> => {
+    const summaries = new Map<string, string>();
+    const result = await handleSendMessage(
+      prompt,
+      (step, total, file, description) =>
+        onProgress({ step, total, summary: summaries.get(file) ?? description }),
+      undefined,
+      (steps) => {
+        for (const s of steps as { file_path: string; summary?: string; description: string }[]) {
+          summaries.set(s.file_path, s.summary || s.description);
+        }
+      },
+      undefined,
+      false
+    );
+    const ok = result.success && !result.cancelled;
+    const changed = ok ? result.modifiedFiles.length : 0;
+    const text = changed > 0
+      ? tn('chat.done.changed', changed, { names: changedNames(result.modifiedFiles) })
+      : result.chatResponse ?? t(ok ? 'chat.done.none' : 'chat.error.generic');
+    const mark = ok
+      ? ddlProposedMark(nextProposalPaths(
+          findExecutableProposal(chatHistoryRef.current),
+          result.modifiedFiles,
+          result.removedFiles ?? []
+        ))
+      : '';
+    const content = `${text}${mark}`;
+    setChatHistory(prev => [...prev, { role: 'assistant', content } as Message].slice(-30));
+    persistChatMessage('assistant', content);
+    return { success: ok, changed };
+  };
+
   const handleCancelGeneration = useCallback(() => {
     const controller = abortControllerRef.current;
     if (!controller || controller.signal.aborted) return;
@@ -2121,34 +2167,15 @@ export function StudioEngine() {
                       files={files}
                       projectId={projectId ?? null}
                       initialTab={settingsInitialTab}
-                      onFixTypeErrors={async (prompt, onProgress) => {
-                        // "Arreglar ahora" desde Publicar (2026-09-30): el mismo
-                        // pipeline que un mensaje del chat (Verifier, guards,
-                        // contrato de reparación no destructivo), sin gate de
-                        // aprobación — no hay chat abierto donde darla. El
-                        // progreso va a la pestaña; el resultado, al historial.
-                        const summaries = new Map<string, string>();
-                        const result = await handleSendMessage(
-                          prompt,
-                          (step, total, file, description) =>
-                            onProgress({ step, total, summary: summaries.get(file) ?? description }),
-                          undefined,
-                          (steps) => {
-                            for (const s of steps as { file_path: string; summary?: string; description: string }[]) {
-                              summaries.set(s.file_path, s.summary || s.description);
-                            }
-                          },
-                          undefined,
-                          false
-                        );
-                        const ok = result.success && !result.cancelled;
-                        const changed = ok ? result.modifiedFiles.length : 0;
-                        const content = changed > 0
-                          ? tn('chat.done.changed', changed, { names: changedNames(result.modifiedFiles) })
-                          : result.chatResponse ?? t(ok ? 'chat.done.none' : 'chat.error.generic');
-                        setChatHistory(prev => [...prev, { role: 'assistant', content } as Message].slice(-30));
-                        persistChatMessage('assistant', content);
-                        return { success: ok, changed };
+                      onFixTypeErrors={runSettingsFix}
+                      onFixSecurity={runSettingsFix}
+                      securityDdl={{
+                        proposal: findExecutableProposal(chatHistory),
+                        getMessages: () => chatHistoryRef.current,
+                        onOutcome: (content: string) => {
+                          setChatHistory(prev => [...prev, { role: 'assistant', content } as Message].slice(-30));
+                          persistChatMessage('assistant', content);
+                        },
                       }}
                     />
                   ) : (

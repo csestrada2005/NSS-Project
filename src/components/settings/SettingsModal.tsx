@@ -30,6 +30,10 @@ interface SettingsModalProps {
   initialTab?: MainTab;
   /** "Arreglar ahora" en Publicar: corre el arreglo sin salir de la pestaña. */
   onFixTypeErrors?: React.ComponentProps<typeof DeployManager>['onFixTypeErrors'];
+  /** "Arreglar" de Seguridad (S2): mismo mecanismo que "Arreglar ahora". */
+  onFixSecurity?: React.ComponentProps<typeof SecurityPanel>['onFix'];
+  /** La migración pendiente del chat, para aplicarla desde Seguridad. */
+  securityDdl?: React.ComponentProps<typeof SecurityPanel>['ddl'];
 }
 
 export type MainTab = 'secrets' | 'github' | 'deploy' | 'security' | 'domains' | 'database' | 'email' | 'analytics';
@@ -49,7 +53,7 @@ const DB_SUB_TABS: { id: DbSubTab; label: ForgeKey }[] = [
   { id: 'usage', label: 'settings.db.usage' },
 ];
 
-export function SettingsModal({ onClose, fileTree, files, projectId: propProjectId, initialTab = 'secrets', onFixTypeErrors }: SettingsModalProps) {
+export function SettingsModal({ onClose, fileTree, files, projectId: propProjectId, initialTab = 'secrets', onFixTypeErrors, onFixSecurity, securityDdl }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<MainTab>(initialTab);
   const { t } = useForgeLang();
   const [dbSubTab, setDbSubTab] = useState<DbSubTab>('schema');
@@ -181,7 +185,7 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
 
           {/* Security tab — agente de seguridad (S1) */}
           {activeTab === 'security' && (
-            <SecurityPanel projectId={projectId} />
+            <SecurityPanel projectId={projectId} files={files} onFix={onFixSecurity} ddl={securityDdl} />
           )}
 
           {/* Domains tab */}

@@ -325,6 +325,20 @@ Mundos pre-registrados:
   aviso. `POST /api/projects/:id/security-check` (Render: `[security] <id> · base: checked|none|error ·
   N graves · M avisos`). Ajustes → pestaña "Seguridad / Security" (`SecurityPanel`, +3 tests). Siguen: S2
   "Arreglar", S3 bloqueo en Publicar, S4 Deep scan, S5 prevención.
+  **CHECK S1 (Samuel, 2026-10-01): CONFIRMADO, 4/4 reales, 0 falsos positivos.** Vertigo: grave `app_users`
+  "wyrd_public_read" (email; confirmado con pg_policies: SELECT `{anon}` qual `true`), graves del fixture de G-6
+  en `AdminClientCheckPanel.tsx` / `client_check_g6` (llave + escritura de roles), aviso `manage-users`. Sin
+  base: Horizons Travel (332f31d3) y Bakery → "no tiene base de datos… Sin amenazas". El aviso esperado de
+  `recomendaciones` NO salió y era correcto: no tiene NINGUNA política de INSERT (nadie inserta). Efecto
+  aparte (bug de la app de Vertigo, no de seguridad): el formulario publicado de recomendaciones falla siempre.
+  **S2 — HECHO EN CÓDIGO, pendiente CHECK (decisiones: guardar en el navegador; arreglar todo en Vertigo,
+  incluido el fixture de G-6).** Último chequeo guardado por proyecto en localStorage con `filesFingerprint`;
+  si los archivos cambian → "Este chequeo se hizo antes de los últimos cambios. Vuelve a revisar." "Arreglar"
+  (`buildSecurityFixPrompt`, instrucción concreta por tipo de hallazgo; `isSecurityFixRequest` → plan lane,
+  nunca pregunta) con el mismo mecanismo que "Arreglar ahora" (`runSettingsFix` en StudioEngine, que ahora
+  deja la marca de propuesta DDL en el chat). Si crea migración, la tarjeta de aplicar sale EN la pestaña y al
+  aplicar vuelve a revisar sola; si sólo cambió código, revisa ya. "Antes: N hallazgos". +4 tests de panel,
+  +4 de securityFix, +1 de frase anclada al diccionario. Limitación: el estado es por navegador.
 
 **Actualización 2026-09-29 — desbloqueo de Vercel y nuevo bloqueo:**
 - Samuel compró Vercel Pro (cuenta = Team) y configuró en Render `NEBU_STUDIO_VERCEL_TOKEN` y `VERCEL_TEAM_ID`.

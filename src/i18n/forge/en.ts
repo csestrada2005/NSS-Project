@@ -659,6 +659,17 @@ export const en = {
   'security.kind.client_role_write.why': 'Roles must only change on the server; otherwise anyone can make themselves admin.',
   'security.kind.edge_no_caller_check': "Server function doesn't check who calls it ({path})",
   'security.kind.edge_no_caller_check.why': 'It uses full database permissions without checking the session, so anyone could use it.',
+
+  // Seguridad: Arreglar y estado guardado, S2 (2026-10-01)
+  'security.fixPrompt': "Fix these security issues in the project, without removing any feature:\n{list}",
+  'security.fix': 'Fix',
+  'security.fixing': 'Fixing…',
+  'security.fixStep': '(step {step} of {total})',
+  'security.fixFailed': "The AI couldn't fix these issues automatically. Try again, or ask for it in the chat.",
+  'security.applyTitle': 'Apply the database change to finish',
+  'security.applyBody': 'The fix created a migration ({names}). Nothing changes in your database until you apply it.',
+  'security.stale': 'This check was made before the latest changes. Check again.',
+  'security.before': 'Before: {count} findings',
 } as const;
 
 export type ForgeKey = keyof typeof en;
