@@ -1644,6 +1644,14 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   `[Verifier] tiempos | compilar Xs (n×) · tipos Ys · reparar Zs · total`; Render `[compile] verify|preview ·
   N archivos · preparación Xs · esbuild Ys · a la vez: K` (o `cache hit`). Dato de paso: la compilación del
   Verifier NO manda projectId (sin credenciales de DB) y la del preview sí → nunca comparten la caché.
+  **Resultado (Samuel, 2026-10-01, Vertigo, 2 cambios simples) — CERRADO, sin arreglo:**
+  `[Verifier] tiempos | compilar 4.8s (1×) · tipos 0.7s · reparar 0.0s · total 5.5s` y `… 4.7s · 0.9s · total
+  5.6s`; Render `[compile] verify · 91 archivos · preparación 0.0s · esbuild 2.9s · a la vez: 1` y `preview ·
+  esbuild 1.9 / 2.9s · a la vez: 1`. `[Timing] simple lane … total 17.7s / 16.1s` (esta mañana 85.8 s).
+  Los 13–35 s de antes ya no se reproducen: coinciden con la verificación de sesión en CADA llamada
+  (`requireAuth` → Supabase Auth), que la caché de 60 s (`8b4d618`) quitó. Sin contención (a la vez: 1).
+  Ganancia posible aparcada: que el preview reutilice la compilación del Verifier (~2–3 s menos hasta ver el
+  cambio; hoy compilan dos veces porque sólo el preview manda projectId / credenciales).
 - **(HECHO EN CÓDIGO, pendiente CHECK MANUAL — desbloquea ítem 4) El código generado no pasaba `tsc -b`.**
   Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4). Decisiones de Samuel (2026-09-29):
   revisión en el SERVIDOR con copia exacta de las librerías; arreglo automático + IA + aviso con botón
