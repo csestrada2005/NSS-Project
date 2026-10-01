@@ -31,6 +31,11 @@ function loadSaved(projectId?: string | null): Saved | null {
   }
 }
 
+/** Para Publicar (S3): guarda el resultado del chequeo con que se bloqueó. */
+export function saveSecurityResult(projectId: string, result: SecurityCheckResult, files?: Map<string, string>) {
+  saveResult(projectId, { result, fingerprint: files ? filesFingerprint(files) : '' });
+}
+
 function saveResult(projectId: string, saved: Saved) {
   try {
     localStorage.setItem(STORAGE_PREFIX + projectId, JSON.stringify(saved));

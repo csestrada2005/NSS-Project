@@ -299,6 +299,10 @@ class PlatformService {
     typeErrors?: TypeIssue[];
     /** Enlace al log de Vercel de esta publicación, cuando falla. */
     inspectorUrl?: string | null;
+    /** S3: publicación bloqueada por hallazgos graves de seguridad. */
+    findings?: SecurityFinding[];
+    database?: string;
+    checkedAt?: string;
   }> {
     try {
       const headers = await this.getHeaders();

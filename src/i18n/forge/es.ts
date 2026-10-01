@@ -665,4 +665,8 @@ export const es: Record<ForgeKey, string> = {
   'security.applyBody': 'El arreglo creó una migración ({names}). Tu base de datos no cambia hasta que la apliques.',
   'security.stale': 'Este chequeo se hizo antes de los últimos cambios. Vuelve a revisar.',
   'security.before': 'Antes: {count} hallazgos',
+
+  // Publicar: bloqueo por seguridad, S3 (2026-10-01)
+  'deploy.securityBlocked': 'Publicación bloqueada por seguridad: {count} problemas graves. Arréglalos en Seguridad y vuelve a publicar:',
+  'deploy.goToSecurity': 'Ir a Seguridad',
 };

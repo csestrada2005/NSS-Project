@@ -180,7 +180,12 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
 
           {/* Deploy tab */}
           {activeTab === 'deploy' && (
-            <DeployManager files={files} projectId={projectId} onFixTypeErrors={onFixTypeErrors} />
+            <DeployManager
+              files={files}
+              projectId={projectId}
+              onFixTypeErrors={onFixTypeErrors}
+              onOpenSecurity={() => setActiveTab('security')}
+            />
           )}
 
           {/* Security tab — agente de seguridad (S1) */}

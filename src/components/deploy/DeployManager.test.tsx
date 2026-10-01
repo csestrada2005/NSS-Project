@@ -112,3 +112,35 @@ describe('DeployManager — arreglar y volver a publicar', () => {
     expect(await screen.findByRole('button', { name: /Publicar/ })).toBeEnabled();
   });
 });
+
+// Agente de seguridad — S3 (2026-10-01): lo grave bloquea la publicación.
+describe('DeployManager — bloqueo por seguridad', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    sessionStorage.clear();
+    localStorage.clear();
+  });
+
+  it('muestra los problemas graves, guarda el resultado y "Ir a Seguridad" abre la pestaña', async () => {
+    setForgeLang('es');
+    vi.spyOn(platformService, 'getDeploymentStatus').mockResolvedValue({ url: null, lastDeployedAt: null, status: 'never' });
+    vi.spyOn(platformService, 'deployProject').mockResolvedValue({
+      error: 'security',
+      database: 'checked',
+      checkedAt: '2026-10-01T15:00:00.000Z',
+      findings: [
+        { severity: 'grave', kind: 'public_pii_read', table: 'newsletter_subscribers', policy: 'p', columns: ['email'] },
+        { severity: 'aviso', kind: 'edge_no_caller_check', path: 'supabase/functions/x/index.ts' },
+      ],
+    });
+    const onOpenSecurity = vi.fn();
+    render(<DeployManager files={new Map([['src/A.tsx', 'x']])} projectId="p" onOpenSecurity={onOpenSecurity} />);
+    await userEvent.click(await screen.findByRole('button', { name: /Publicar/ }));
+    expect(await screen.findByText(/Publicación bloqueada por seguridad: 1 problemas graves/)).toBeInTheDocument();
+    expect(screen.getByText(/Cualquiera puede leer datos personales de "newsletter_subscribers" \(email\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/no verifica quién la llama/)).toBeNull();
+    expect(JSON.parse(localStorage.getItem('wyrd_security:p') ?? '{}').result.findings).toHaveLength(2);
+    await userEvent.click(screen.getByRole('button', { name: /Ir a Seguridad/ }));
+    expect(onOpenSecurity).toHaveBeenCalledTimes(1);
+  });
+});

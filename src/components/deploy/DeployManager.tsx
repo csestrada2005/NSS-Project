@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Rocket, ExternalLink, Copy, RefreshCw, CheckCircle, Wrench } from 'lucide-react';
+import { Rocket, ExternalLink, Copy, RefreshCw, CheckCircle, Wrench, ShieldAlert } from 'lucide-react';
 import { platformService } from '../../services/PlatformService';
 import LoadingSquares from '../brand/LoadingSquares';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
@@ -7,6 +7,8 @@ import { formatRelativeDate } from '@/i18n/forge/format';
 import type { ForgeKey } from '@/i18n/forge/en';
 import type { TypeIssue } from '../../services/PlatformService';
 import { buildTypeFixPrompt } from '../chat/ResultCards';
+import { saveSecurityResult } from '../settings/SecurityPanel';
+import type { SecurityFinding } from '../../services/PlatformService';
 
 export interface TypeFixProgress {
   step: number;
@@ -26,6 +28,8 @@ interface DeployManagerProps {
     prompt: string,
     onProgress: (progress: TypeFixProgress) => void
   ) => Promise<{ success: boolean; changed: number }>;
+  /** S3: "Ir a Seguridad" cuando la publicación se bloquea por hallazgos graves. */
+  onOpenSecurity?: () => void;
 }
 
 // Lo último que se supo de la publicación de cada proyecto, por sesión del
@@ -59,7 +63,7 @@ const STAGE_MESSAGES: Partial<Record<DeployStage, ForgeKey>> = {
   live: 'deploy.stage.live',
 };
 
-export function DeployManager({ files, projectId: propProjectId, onFixTypeErrors }: DeployManagerProps) {
+export function DeployManager({ files, projectId: propProjectId, onFixTypeErrors, onOpenSecurity }: DeployManagerProps) {
   const [stage, setStage] = useState<DeployStage>('idle');
   const { t, lang } = useForgeLang();
   const stageMessage = STAGE_MESSAGES[stage] ? t(STAGE_MESSAGES[stage]!) : '';
@@ -68,6 +72,7 @@ export function DeployManager({ files, projectId: propProjectId, onFixTypeErrors
   const [deploymentUrl, setDeploymentUrl] = useState<string | null>(saved?.url ?? null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [typeErrors, setTypeErrors] = useState<TypeIssue[]>([]);
+  const [securityBlock, setSecurityBlock] = useState<SecurityFinding[]>([]);
   const [fixProgress, setFixProgress] = useState<TypeFixProgress | null>(null);
   const [copied, setCopied] = useState(false);
   // Última publicación guardada (forge_projects): si existe, el botón es
@@ -109,6 +114,7 @@ export function DeployManager({ files, projectId: propProjectId, onFixTypeErrors
     setStage('packaging');
     setErrorMessage(null);
     setTypeErrors([]);
+    setSecurityBlock([]);
 
     try {
       const current = filesRef.current;
@@ -119,7 +125,18 @@ export function DeployManager({ files, projectId: propProjectId, onFixTypeErrors
 
       if (result.error) {
         // El build de Vercel falló por tipos: la lista viene de su propio log.
-        if (result.error === 'typecheck' && result.typeErrors?.length) {
+        if (result.error === 'security' && result.findings?.length) {
+          // Lo grave bloquea la publicación (S3). El resultado queda guardado
+          // para que la pestaña Seguridad lo muestre al abrirla.
+          const graves = result.findings.filter((f) => f.severity === 'grave');
+          setSecurityBlock(graves);
+          setErrorMessage(t('deploy.securityBlocked', { count: graves.length }));
+          saveSecurityResult(projectId, {
+            database: result.database ?? 'checked',
+            findings: result.findings,
+            checkedAt: result.checkedAt ?? new Date().toISOString(),
+          }, filesRef.current);
+        } else if (result.error === 'typecheck' && result.typeErrors?.length) {
           setTypeErrors(result.typeErrors);
           setErrorMessage(t('deploy.typecheckFailedVercel'));
         } else {
@@ -217,6 +234,30 @@ export function DeployManager({ files, projectId: propProjectId, onFixTypeErrors
                 ))}
                 {typeErrors.length > 8 && <li className="list-none">{t('chat.types.more', { count: typeErrors.length - 8 })}</li>}
               </ul>
+            )}
+            {securityBlock.length > 0 && (
+              <>
+                <ul className="list-disc pl-5 text-xs space-y-1">
+                  {securityBlock.map((f, i) => (
+                    <li key={i}>
+                      {t(`security.kind.${f.kind}` as ForgeKey, {
+                        table: f.table ?? '', policy: f.policy ?? '', columns: (f.columns ?? []).join(', '),
+                        path: f.path ?? '', identifier: f.identifier ?? '',
+                      })}
+                    </li>
+                  ))}
+                </ul>
+                {onOpenSecurity && (
+                  <button
+                    type="button"
+                    onClick={onOpenSecurity}
+                    className="nebu-cta inline-flex items-center gap-2 px-3 py-1.5 bg-primary hover:bg-primary/90 text-white rounded text-xs font-medium"
+                  >
+                    <ShieldAlert size={12} />
+                    {t('deploy.goToSecurity')}
+                  </button>
+                )}
+              </>
             )}
             {typeErrors.length > 0 && onFixTypeErrors && (
               <button

@@ -670,6 +670,10 @@ export const en = {
   'security.applyBody': 'The fix created a migration ({names}). Nothing changes in your database until you apply it.',
   'security.stale': 'This check was made before the latest changes. Check again.',
   'security.before': 'Before: {count} findings',
+
+  // Publicar: bloqueo por seguridad, S3 (2026-10-01)
+  'deploy.securityBlocked': 'Publishing is blocked for security: {count} serious issues. Fix them in Security and publish again:',
+  'deploy.goToSecurity': 'Go to Security',
 } as const;
 
 export type ForgeKey = keyof typeof en;

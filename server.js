@@ -1483,6 +1483,22 @@ app.post('/api/deploy/:projectId', async (req, res) => {
       }
     }
 
+    // Agente de seguridad — S3 (2026-10-01, decisión de Samuel): lo GRAVE
+    // bloquea la publicación. Revisa los archivos guardados del proyecto y su
+    // base real. Si la base no se pudo leer, no bloquea (no lo sabemos).
+    if (supabaseAdmin) {
+      const security = await runProjectSecurityCheck(projectId);
+      if (security.graves > 0) {
+        console.warn(`[deploy] bloqueado por seguridad: ${security.graves} graves`);
+        return res.status(422).json({
+          error: 'security',
+          findings: security.findings,
+          database: security.database,
+          checkedAt: security.checkedAt,
+        });
+      }
+    }
+
     // Build Vercel file list with base64 encoding
     const vercelFiles = Object.entries(deployFiles).map(([filePath, content]) => ({
       file: filePath,
@@ -2156,16 +2172,13 @@ app.get('/api/projects/:projectId/logs', async (req, res) => {
 
 // Agente de seguridad — S1 (2026-10-01): revisa la BASE REAL del proyecto (una
 // consulta SELECT vía Management API) y su código, con reglas fijas. Sólo lee.
-app.post('/api/projects/:projectId/security-check', async (req, res) => {
-  const { projectId } = req.params;
-  if (!(await requireProjectOwnership(req, res, projectId))) return;
-  if (!supabaseAdmin) return res.status(503).json({ error: 'Database not configured' });
-
+// Una sola implementación del chequeo para el endpoint de la pestaña y para
+// el bloqueo de Publicar (S3).
+async function runProjectSecurityCheck(projectId) {
   const [{ data: project }, { data: fileRows }] = await Promise.all([
     supabaseAdmin.from('forge_projects').select('supabase_project_ref').eq('id', projectId).single(),
     supabaseAdmin.from('forge_files').select('path, content').eq('project_id', projectId),
   ]);
-
   let database = 'none';
   let report = null;
   const ref = project?.supabase_project_ref;
@@ -2185,7 +2198,15 @@ app.post('/api/projects/:projectId/security-check', async (req, res) => {
   const findings = runSecurityCheck({ report, files: fileRows ?? [] });
   const graves = findings.filter((f) => f.severity === 'grave').length;
   console.log(`[security] ${projectId} · base: ${database} · ${graves} graves · ${findings.length - graves} avisos`);
-  res.json({ database, findings, checkedAt: new Date().toISOString() });
+  return { database, findings, graves, checkedAt: new Date().toISOString() };
+}
+
+app.post('/api/projects/:projectId/security-check', async (req, res) => {
+  const { projectId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Database not configured' });
+  const { database, findings, checkedAt } = await runProjectSecurityCheck(projectId);
+  res.json({ database, findings, checkedAt });
 });
 
 app.get('/api/projects/:projectId/usage', async (req, res) => {

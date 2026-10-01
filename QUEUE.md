@@ -339,6 +339,23 @@ Mundos pre-registrados:
   deja la marca de propuesta DDL en el chat). Si crea migración, la tarjeta de aplicar sale EN la pestaña y al
   aplicar vuelve a revisar sola; si sólo cambió código, revisa ya. "Antes: N hallazgos". +4 tests de panel,
   +4 de securityFix, +1 de frase anclada al diccionario. Limitación: el estado es por navegador.
+  **CHECK S2 (Samuel, 2026-10-01): CONFIRMADO.** Vertigo: `3 graves · 1 avisos` → "Arreglar" (migración +
+  `assign-client-role` + `manage-users` con getUser + AdminClientCheckPanel sin llave) → la migración falló
+  (`column "created_at" does not exist`) y se borró sola (fase 1) → segunda vuelta: vista `app_users_public`
+  sin emails, aplicada desde la pestaña (confirmación destructiva "app_users") → `0 graves · 0 avisos`.
+  Publicar → error de tipos → Arreglar → publicado.
+  **Hallazgo para S5:** `[FUNCTION_DEPLOY_FAILED:assign-client-role] … Requires import access to
+  "cdn.skypack.dev:443" … deno.land/x/httpcache@0.1.2` — la IA usó una librería que el bundler de Supabase ya
+  no permite; la función quedó escrita pero NO desplegada. Regla para la IA: sólo imports `npm:` / `jsr:`.
+  **S3 — HECHO EN CÓDIGO, pendiente CHECK:** `/api/deploy` corre `runProjectSecurityCheck` (misma función que
+  el endpoint de la pestaña) antes de Vercel; con graves → 422 `{error:'security', findings}` y Render
+  `[deploy] bloqueado por seguridad: N graves`. Base ilegible → no bloquea. Publicar muestra "Publicación
+  bloqueada por seguridad: N problemas graves" + lista + "Ir a Seguridad" (abre la pestaña con el resultado ya
+  guardado). +1 test.
+- **CRM sin datos tras un redeploy (Samuel, 2026-10-01) — PENDIENTE, sin diagnóstico:** al entrar al CRM
+  después de un deploy de Render todo sale en 0 y en Network no hay llamadas a Supabase; recargar NO lo
+  arregla; entrar a Wyrd (sesión presente, sidebar "Samuel Estrada · Admin") y volver al CRM sí carga.
+  Hipótesis: los hooks del CRM corren antes de que la sesión/perfil esté listo y no reintentan.
 
 **Actualización 2026-09-29 — desbloqueo de Vercel y nuevo bloqueo:**
 - Samuel compró Vercel Pro (cuenta = Team) y configuró en Render `NEBU_STUDIO_VERCEL_TOKEN` y `VERCEL_TEAM_ID`.
