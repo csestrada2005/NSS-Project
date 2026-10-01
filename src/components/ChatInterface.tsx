@@ -5,6 +5,8 @@ import {
   ddlProposedMark,
   buildOutcomeMessage,
   migrationFilesToRemove,
+  nextProposalPaths,
+  ddlOutcomeMark,
   OUTCOME_DISMISSED,
 } from '@/utils/ddlProposalState.js';
 import { AIOrchestrator } from '../services/AIOrchestrator';
@@ -72,6 +74,8 @@ interface ChatInterfaceProps {
   ) => Promise<{
     success: boolean;
     modifiedFiles: string[];
+    /** Archivos que el turno borró (para no seguir ofreciendo una migración borrada). */
+    removedFiles?: string[];
     error?: string;
     errorReason?: string;
     warning?: string;
@@ -355,7 +359,18 @@ export function ChatInterface({
       }
 
       const { content, warning, errorType, errorDetail, suggestedAction, planSteps, typeErrors } = buildAssistantMessage(result);
-      const proposedMark = result.success ? ddlProposedMark(result.modifiedFiles ?? []) : '';
+      // La propuesta del turno INCLUYE la pendiente (se aplican juntas) y no
+      // ofrece lo que el turno borró. Si el turno borró la pendiente, queda
+      // registrada como descartada (2026-10-01).
+      const previousProposal = findExecutableProposal(messagesRef.current);
+      const removed = result.removedFiles ?? [];
+      const proposalPaths = result.success
+        ? nextProposalPaths(previousProposal, result.modifiedFiles ?? [], removed)
+        : [];
+      const pendingRemoved = !!previousProposal && previousProposal.paths.some((p) => removed.includes(p));
+      const proposedMark =
+        (pendingRemoved ? ddlOutcomeMark(OUTCOME_DISMISSED, previousProposal!.paths) : '') +
+        ddlProposedMark(proposalPaths);
       appendMessage({
         role: 'assistant',
         content: `${content}${proposedMark}`,
@@ -458,6 +473,18 @@ export function ChatInterface({
   // comentario en ChatPersistenceService). Tras un refresh, el último mensaje
   // rehidratado no los trae, y por diseño eso cae a 'reposo': no se inventa
   // una tarjeta con datos que no están.
+  // "Descartar" / "No aplicar": escribe el veredicto 'dismissed' en el chat y
+  // quita los .sql del proyecto. No llama al runner ni a la base; sobrevive al
+  // refresh (va en el contenido).
+  const dismissProposal = (paths: string[]) => {
+    setDdlReviewOpen(false);
+    const content = buildOutcomeMessage({ outcome: OUTCOME_DISMISSED, paths }, getForgeLang());
+    if (content) {
+      appendMessage({ role: 'assistant', content });
+      AIOrchestrator.removeProjectFiles(migrationFilesToRemove({ outcome: OUTCOME_DISMISSED, paths }));
+    }
+  };
+
   const hasResult =
     proposalIsLatest ||
     !!lastAssistant?.cancelled ||
@@ -502,19 +529,7 @@ export function ChatInterface({
           {olderPendingProposal && !hasPendingPlan && estado !== 'pensando' && (() => {
             // Sólo escribe el veredicto 'dismissed' en el chat y quita el .sql del
             // proyecto: no llama al runner ni a la base. Sobrevive al refresh.
-            const dismiss = () => {
-              setDdlReviewOpen(false);
-              const content = buildOutcomeMessage(
-                { outcome: OUTCOME_DISMISSED, paths: olderPendingProposal.paths },
-                getForgeLang()
-              );
-              if (content) {
-                appendMessage({ role: 'assistant', content });
-                AIOrchestrator.removeProjectFiles(
-                  migrationFilesToRemove({ outcome: OUTCOME_DISMISSED, paths: olderPendingProposal.paths })
-                );
-              }
-            };
+            const dismiss = () => dismissProposal(olderPendingProposal.paths);
             // Con "Revisar" abierto, la tarjeta DDL trae Ocultar / Descartar en su
             // propia fila (2026-10-01) y la línea chica se esconde.
             return ddlReviewOpen ? (
@@ -531,6 +546,7 @@ export function ChatInterface({
                 steps={proposalMessage?.stepsSnapshot ?? []}
                 completedCount={proposalMessage?.stepsSnapshot?.length ?? 0}
                 onOpenHistory={() => setHistoryOpen(true)}
+                hideHistory
                 extraActions={
                   <PendingDdlActions
                     onHide={() => setDdlReviewOpen(false)}
@@ -583,6 +599,14 @@ export function ChatInterface({
                 steps={proposalMessage?.stepsSnapshot ?? []}
                 completedCount={proposalMessage?.stepsSnapshot?.length ?? 0}
                 onOpenHistory={() => setHistoryOpen(true)}
+                // "No aplicar" en la migración del último pedido (2026-10-01, Samuel).
+                extraActions={
+                  <PendingDdlActions
+                    onDismiss={() => dismissProposal(executableProposal.paths)}
+                    disabled={isReadOnly || isLoading}
+                    dismissLabel={t('chat.ddl.reject')}
+                  />
+                }
               />
             ) : lastAssistant?.cancelled ? (
               <CanceladoCard

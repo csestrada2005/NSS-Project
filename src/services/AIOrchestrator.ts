@@ -119,6 +119,8 @@ export interface OrchestratorResult {
    * Vacío/undefined si quedó limpio o no se pudo revisar.
    */
   typeErrors?: TypeIssue[];
+  /** Archivos que el turno BORRÓ (plan lane). */
+  removedFiles?: string[];
   /** Sufijo ' [TYPE_ERRORS:n]' / ' [TYPECHECK_OFF]' para forge_intent_log (simple lane). */
   typeCheckMark?: string;
   tokensInput?: number;
@@ -1197,7 +1199,10 @@ export class AIOrchestrator {
     // Paths de la migración propuesta y aún NO aplicada (la ejecutable del
     // historial del chat completo, no sólo de los últimos 10 mensajes que
     // recibe `chatHistory`). Ver src/utils/migrationContext.js.
-    pendingMigrationPaths: string[] | null = null
+    pendingMigrationPaths: string[] | null = null,
+    // Migraciones propuestas y NO aplicadas según el chat (pendiente,
+    // reemplazadas, descartadas…): no cuentan como historia de la base.
+    unappliedMigrationPaths: string[] = []
   ): Promise<OrchestratorResult> {
     this.retryCount = 0;
     const startTime = Date.now();
@@ -1537,7 +1542,9 @@ export class AIOrchestrator {
     const touchesDatabase = intent.type === 'database_change' || intent.needs_server === true;
     const migrationNote = [
       buildPendingMigrationNote(pendingMigrationPaths, files),
-      touchesDatabase ? buildMigrationObjectsNote(files, pendingMigrationPaths) : '',
+      touchesDatabase
+        ? buildMigrationObjectsNote(files, [...(pendingMigrationPaths ?? []), ...unappliedMigrationPaths])
+        : '',
     ].filter(Boolean).join('\n\n');
     // `let` y no `const`: la guardia estructural de más abajo puede sustituir
     // el payload entero por el del reintento. Los cinco campos viajan juntos
@@ -1677,17 +1684,16 @@ export class AIOrchestrator {
     // Revisión de la regla de migraciones (sólo diagnóstico, en consola).
     {
       const migrationCheck = checkMigrationPlan(steps, pendingMigrationPaths, files);
-      if (migrationCheck.notMerged.length > 0) {
-        console.warn('[AIOrchestrator] migración no fusionada: el plan crea', migrationCheck.notMerged,
-          'habiendo una pendiente', pendingMigrationPaths);
+      if (migrationCheck.merged.length > 0) {
+        console.log('[AIOrchestrator] migración fusionada en', migrationCheck.merged);
+      }
+      if (migrationCheck.alongside.length > 0) {
+        console.log('[AIOrchestrator] migración nueva junto a la pendiente (se proponen juntas):',
+          migrationCheck.alongside, '+', pendingMigrationPaths);
       }
       if (migrationCheck.touchesApplied.length > 0) {
         console.warn('[AIOrchestrator] el plan modifica una migración que NO está pendiente (¿ya aplicada?):',
           migrationCheck.touchesApplied);
-      }
-      if (migrationCheck.notMerged.length === 0 &&
-          steps.some(s => pendingMigrationPaths?.includes(s.file_path))) {
-        console.log('[AIOrchestrator] migración fusionada en', pendingMigrationPaths);
       }
     }
 
@@ -1757,7 +1763,9 @@ export class AIOrchestrator {
       // Capa 1 → Capa 2: lo que el usuario nombró para eliminar. Es la
       // referencia EXTERNA al plan contra la que el guard mide cada delete; sin
       // ella el plan sólo puede borrar lo que ya estaba huérfano pre-intent.
-      deletionTargets
+      deletionTargets,
+      // Fase 2b: no son historia de la base (no darlas como "definición actual").
+      [...(pendingMigrationPaths ?? []), ...unappliedMigrationPaths]
     );
     const modifiedFilesMap = implResult.files;
     const { failedSteps, skippedSteps, deletedPaths, rejectedDeletes } = implResult;
@@ -2540,6 +2548,9 @@ export class AIOrchestrator {
 
       return {
         modifiedFiles: persistedPaths,
+        // Lo que este turno borró: el chat lo necesita para no seguir ofreciendo
+        // una migración cuyo archivo ya no existe (2026-10-01).
+        removedFiles: removedPaths,
         steps,
         outcome: 'success',
         warning: warnings.length > 0 ? warnings.join(' ') : undefined,

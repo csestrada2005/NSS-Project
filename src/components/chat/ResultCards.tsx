@@ -157,10 +157,14 @@ export function PendingDdlActions({
   onHide,
   onDismiss,
   disabled,
+  dismissLabel,
 }: {
-  onHide: () => void;
+  /** Sólo en "Revisar" de una migración de un turno anterior. */
+  onHide?: () => void;
   onDismiss: () => void;
   disabled?: boolean;
+  /** "No aplicar" en la tarjeta del último pedido; "Descartar" por defecto. */
+  dismissLabel?: string;
 }) {
   const { t } = useForgeLang();
   const [confirming, setConfirming] = useState(false);
@@ -179,11 +183,13 @@ export function PendingDdlActions({
   }
   return (
     <>
-      <button type="button" className="fc-accion-btn fc-secundario" onClick={onHide}>
-        {t('chat.ddl.hide')}
-      </button>
+      {onHide && (
+        <button type="button" className="fc-accion-btn fc-secundario" onClick={onHide}>
+          {t('chat.ddl.hide')}
+        </button>
+      )}
       <button type="button" className="fc-accion-btn fc-rechazar" disabled={disabled} onClick={() => setConfirming(true)}>
-        {t('chat.ddl.dismiss')}
+        {dismissLabel ?? t('chat.ddl.dismiss')}
       </button>
     </>
   );
@@ -206,9 +212,12 @@ export function DDLCard({
   completedCount,
   onOpenHistory,
   extraActions,
+  hideHistory,
 }: StepsProps & {
-  /** Sólo en "Revisar" de una migración de un turno anterior: Ocultar / Descartar. */
+  /** "No aplicar" (último pedido) u Ocultar / Descartar (Revisar de un turno anterior). */
   extraActions?: React.ReactNode;
+  /** En "Revisar" el historial no cabe en la fila: se quita. */
+  hideHistory?: boolean;
   bodyText: string;
   proposal: DdlProposal;
   projectId?: string | null;
@@ -241,7 +250,8 @@ export function DDLCard({
         <button type="button" className="fc-accion-btn fc-secundario" onClick={sql.toggle} disabled={sql.loading}>
           {sql.loading ? t('chat.card.ddl.reading') : sql.open ? t('chat.card.ddl.hideSql') : t('chat.card.ddl.showSql')}
         </button>
-        {extraActions ?? (
+        {extraActions}
+        {!hideHistory && (
           <button type="button" className="fc-accion-btn fc-secundario" onClick={onOpenHistory}>
             {t('chat.card.fullHistory')}
           </button>
@@ -257,7 +267,9 @@ export function DDLCard({
               <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--fc-texto-3)', marginBottom: 4 }}>
                 {sql.fileName(path)}
               </div>
-              <pre className="fc-accion-cuerpo" style={{ margin: 0, whiteSpace: 'pre-wrap', overflowX: 'auto', fontFamily: 'var(--fc-mono)', fontSize: 11 }}>
+              {/* Altura limitada con su propio scroll (2026-10-01, Samuel: un SQL
+                  largo dejaba "Aplicar" fuera de la vista). */}
+              <pre className="fc-accion-cuerpo fc-sql" style={{ margin: 0, whiteSpace: 'pre-wrap', overflow: 'auto', maxHeight: '32vh', fontFamily: 'var(--fc-mono)', fontSize: 11 }}>
                 {text}
               </pre>
             </div>

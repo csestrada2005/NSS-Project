@@ -1607,6 +1607,24 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
     schema y el paso que escribe el SQL no veía ninguno. +6 tests en total (`server/migrationContext.test.js`).
   Límite conocido: los nombres se buscan en la descripción del paso (en inglés, con el nombre exacto del
   objeto); si el Architect no nombra el objeto, el paso no recibe su definición.
+  **CHECK 1 de la fase 2 (Samuel, 2026-10-01):** inválido — la pestaña tenía el bundle viejo
+  (`index-C4DdQTR0.js`; tras Ctrl+Shift+R, `index-CevYb_mH.js`). Lección: tras un deploy, recargar forzado
+  antes de un check.
+  **CHECK 2:** fusión ✓ (columna nombre → `modify` de la pendiente). Tres errores: (1) GRAVE — "crea tabla de
+  suscriptores" produjo un ALTER `add_email_unique_…` sobre una tabla que NO existe en la base, porque dos
+  `.sql` nunca aplicados de la prueba anterior contaron como historia aplicada; (2) el pedido de
+  `recomendaciones` se metió en la migración de suscriptores (la regla decía "si toca la base, modifica la
+  pendiente"); (3) borrar la pendiente por chat se contó como "fusionada", y el aviso siguió ofreciendo la
+  migración borrada (el turno no informaba lo que borró). Notas de Samuel: botón "No aplicar"; "Construir" →
+  "Aceptar"; Revisar/Ver el SQL tapaban "Aplicar".
+  **Arreglo — HECHO EN CÓDIGO, pendiente CHECK:** `unappliedMigrationPaths` (lo propuesto y no aplicado según
+  el chat, salvo `unverified`) se excluye de "qué se definió dónde" y de las definiciones del Implementer;
+  regla de fusión por OBJETOS (mismos objetos → modificar la pendiente; otros → archivo nuevo); la propuesta
+  del turno INCLUYE la pendiente (`nextProposalPaths`: se aplican juntas, en orden) y no ofrece lo que el
+  turno borró (`removedFiles` en el resultado del plan lane; si borró la pendiente, se registra como
+  descartada); `checkMigrationPlan` distingue fusionada / nueva junto a la pendiente / toca una aplicada;
+  "No aplicar" en la tarjeta del último pedido; "Aceptar"; SQL con altura limitada y columna del chat
+  desplazable. +6 tests. Limpieza de Vertigo pendiente (Samuel).
 - **(HECHO EN CÓDIGO, pendiente CHECK MANUAL — desbloquea ítem 4) El código generado no pasaba `tsc -b`.**
   Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4). Decisiones de Samuel (2026-09-29):
   revisión en el SERVIDOR con copia exacta de las librerías; arreglo automático + IA + aviso con botón

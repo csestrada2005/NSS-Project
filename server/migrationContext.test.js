@@ -16,7 +16,12 @@ test('la nota nombra la pendiente, trae su SQL y la regla de fusión', () => {
   assert.ok(note.includes(PENDING));
   assert.match(note, /email text not null/);
   assert.match(note, /action "modify" on supabase\/migrations\/20261001075237/);
-  assert.match(note, /Never modify any OTHER file under supabase\/migrations/);
+  // 2026-10-01: sólo se fusiona lo que toca los MISMOS objetos; lo demás va en
+  // un archivo nuevo que se aplica junto a la pendiente.
+  assert.match(note, /It defines: table newsletter_subscribers\./);
+  assert.match(note, /If it changes OTHER objects, create a NEW file/);
+  assert.match(note, /Do NOT put unrelated changes into the pending file/);
+  assert.match(note, /does NOT exist in the database/);
 });
 
 test('sin pendiente, con varias, o si el archivo ya no existe: sin nota', () => {
@@ -27,24 +32,23 @@ test('sin pendiente, con varias, o si el archivo ya no existe: sin nota', () => 
   assert.equal(buildPendingMigrationNote(['src/App.tsx'], files), '');
 });
 
-test('checkMigrationPlan: fusionó, no fusionó, o tocó una aplicada', () => {
-  const merged = checkMigrationPlan([{ action: 'modify', file_path: PENDING }], [PENDING], files);
-  assert.deepEqual(merged, { notMerged: [], touchesApplied: [] });
-
-  const created = checkMigrationPlan(
-    [{ action: 'create', file_path: 'supabase/migrations/20261001090000_add_name.sql' }],
-    [PENDING],
-    files,
+test('checkMigrationPlan: fusionó, nueva junto a la pendiente, o tocó una aplicada', () => {
+  assert.deepEqual(
+    checkMigrationPlan([{ action: 'modify', file_path: PENDING }], [PENDING], files),
+    { merged: [PENDING], alongside: [], touchesApplied: [] },
   );
-  assert.deepEqual(created.notMerged, ['supabase/migrations/20261001090000_add_name.sql']);
-
-  const applied = checkMigrationPlan([{ action: 'modify', file_path: APPLIED }], [PENDING], files);
-  assert.deepEqual(applied.touchesApplied, [APPLIED]);
-
+  const NEW = 'supabase/migrations/20261001090000_add_review_date.sql';
+  assert.deepEqual(
+    checkMigrationPlan([{ action: 'create', file_path: NEW }], [PENDING], files),
+    { merged: [], alongside: [NEW], touchesApplied: [] },
+  );
+  assert.deepEqual(checkMigrationPlan([{ action: 'modify', file_path: APPLIED }], [PENDING], files).touchesApplied, [APPLIED]);
+  // Borrar la pendiente NO es fusionar (la consola lo contaba así).
+  assert.deepEqual(checkMigrationPlan([{ action: 'delete', file_path: PENDING }], [PENDING], files).merged, []);
   // Sin pendiente, crear una migración nueva es lo normal.
   assert.deepEqual(
-    checkMigrationPlan([{ action: 'create', file_path: 'supabase/migrations/20261001090000_x.sql' }], [], files),
-    { notMerged: [], touchesApplied: [] },
+    checkMigrationPlan([{ action: 'create', file_path: NEW }], [], files),
+    { merged: [], alongside: [], touchesApplied: [] },
   );
 });
 
@@ -93,4 +97,15 @@ test('el paso que escribe la migración nueva recibe la definición ACTUAL (la m
   assert.match(block, /length\(body\) < 800/);
   assert.match(block, /do NOT re-create them/);
   assert.equal(relatedMigrationDefinitions('updates the hero copy', withFunctions), '');
+});
+
+// 2026-10-01 — check de Samuel: un .sql nunca aplicado se tomó como historia
+// de la base y la IA escribió un ALTER sobre una tabla inexistente.
+test('las migraciones nunca aplicadas no cuentan como definición actual', async () => {
+  const { buildMigrationObjectsNote, relatedMigrationDefinitions } = await import('../src/utils/migrationContext.js');
+  const OLD = 'supabase/migrations/20261001083029_create_newsletter_subscribers.sql';
+  const project = new Map([...files, [OLD, 'create table newsletter_subscribers (id uuid);']]);
+  assert.match(buildMigrationObjectsNote(project, []), /- table newsletter_subscribers/);
+  assert.doesNotMatch(buildMigrationObjectsNote(project, [OLD, PENDING]), /- table newsletter_subscribers/);
+  assert.equal(relatedMigrationDefinitions('alters table newsletter_subscribers', project, [OLD, PENDING]), '');
 });

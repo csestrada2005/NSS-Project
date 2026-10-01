@@ -93,6 +93,16 @@ export function buildOutcomeMessage(result: {
 /** True when this per-file verdict stops the batch: anything but 'applied'. */
 export function stopsBatch(outcome: string): boolean;
 
+/** Migraciones propuestas y no aplicadas según el chat (excluye 'unverified'). */
+export function unappliedMigrationPaths(messages: ProposalSourceMessage[]): string[];
+
+/** Paths de la propuesta del turno: la pendiente + las nuevas, sin las borradas. */
+export function nextProposalPaths(
+  previous: { paths: string[] } | null | undefined,
+  modifiedFiles: Iterable<string>,
+  removedFiles?: Iterable<string>
+): string[];
+
 /** Migraciones que ya no sirven tras este veredicto (sólo supabase/migrations/*.sql). */
 export function migrationFilesToRemove(result: {
   outcome: string;

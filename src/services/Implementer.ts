@@ -251,7 +251,9 @@ export class Implementer {
     // los emitió el Architect junto al plan. Es la única referencia externa al
     // plan que puede autorizar un delete sobre un archivo vivo; se expande aquí
     // con las huérfanas exclusivas pre-plan y nunca se toma del modelo expandida.
-    deletionTargets: string[] = []
+    deletionTargets: string[] = [],
+    // Migraciones propuestas y NO aplicadas: no son "definición actual".
+    unappliedMigrations: string[] = []
   ): Promise<ImplementerResult> {
     const modifiedFiles = new Map<string, string>(files);
     const completed = new Set<number>();
@@ -395,7 +397,7 @@ export class Implementer {
         }));
 
         this.lastApiFailure = null;
-        const newContent = await this.executeStep(step, modifiedFiles, memory, planFiles, patternContext, designContext, signal, blueprint);
+        const newContent = await this.executeStep(step, modifiedFiles, memory, planFiles, patternContext, designContext, signal, blueprint, unappliedMigrations);
 
         // El step en vuelo se abortó: se descarta (no se escribe un archivo a
         // medias) y NO se contabiliza como fallo del modelo. Salimos del plan.
@@ -488,7 +490,8 @@ export class Implementer {
     patternContext: string = '',
     designContext: string = '',
     signal?: AbortSignal,
-    blueprint: string = ''
+    blueprint: string = '',
+    unappliedMigrations: string[] = []
   ): Promise<string | null> {
     console.log('[Implementer] patternContext chars:', patternContext?.length ?? 0, '| preview:', patternContext?.slice(0, 200)); // TODO: remove after RAG verification
     const rawContent      = files.get(step.file_path) ?? '';
@@ -549,7 +552,7 @@ export class Implementer {
     // definen los objetos que nombra su descripción). Antes no veía ninguna y
     // corregía a ciegas una función o tabla que ya existía.
     if (step.action === 'create' && isMigrationPath(step.file_path)) {
-      const definitions = relatedMigrationDefinitions(step.description, files, [step.file_path]);
+      const definitions = relatedMigrationDefinitions(step.description, files, [step.file_path, ...unappliedMigrations]);
       if (definitions) {
         console.log('[Implementer] definiciones actuales para', step.file_path, '—', definitions.length, 'chars');
         parts.push(`\n${definitions}`);

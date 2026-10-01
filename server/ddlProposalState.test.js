@@ -653,3 +653,28 @@ test('el mensaje dice exactamente qué archivos quitó (misma regla)', async () 
   const unverified = buildOutcomeMessage({ outcome: OUTCOME_UNVERIFIED, paths: [A], reason: 'no_schema_change' });
   assert.doesNotMatch(unverified, /Quité del proyecto/);
 });
+
+// 2026-10-01 — qué cuenta como "no aplicada" y qué propone cada turno.
+test('unappliedMigrationPaths: pendiente, reemplazada y descartada sí; aplicada y unverified no', async () => {
+  const { unappliedMigrationPaths, OUTCOME_DISMISSED } = await import('../src/utils/ddlProposalState.js');
+  const history = [
+    proposes(A), resolves(OUTCOME_APPLIED, A),                    // aplicada
+    proposes(B),                                                   // reemplazada por C
+    proposes(C), resolves(OUTCOME_DISMISSED, C),                   // descartada
+    proposes('supabase/migrations/20260824150000_maybe.sql'),
+    resolves(OUTCOME_UNVERIFIED, 'supabase/migrations/20260824150000_maybe.sql'), // pudo correr
+    proposes('supabase/migrations/20260824160000_pending.sql'),    // pendiente
+  ];
+  assert.deepEqual(unappliedMigrationPaths(history).sort(), [B, C, 'supabase/migrations/20260824160000_pending.sql'].sort());
+});
+
+test('nextProposalPaths: la pendiente viaja con la nueva, en orden; lo borrado no se ofrece', async () => {
+  const { nextProposalPaths } = await import('../src/utils/ddlProposalState.js');
+  const pending = { paths: [B] };
+  assert.deepEqual(nextProposalPaths(pending, [C, 'src/App.tsx']), [B, C]);
+  assert.deepEqual(nextProposalPaths(pending, [A]), [A, B], 'orden por prefijo temporal');
+  assert.deepEqual(nextProposalPaths(pending, [B]), [B], 'fusionada en la misma: una sola');
+  assert.deepEqual(nextProposalPaths(pending, ['src/App.tsx']), [], 'sin migraciones nuevas: sin propuesta nueva');
+  assert.deepEqual(nextProposalPaths(pending, [C], [B]), [C], 'la pendiente borrada no se ofrece');
+  assert.deepEqual(nextProposalPaths(null, [C]), [C]);
+});

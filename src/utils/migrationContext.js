@@ -34,15 +34,16 @@ export function buildPendingMigrationNote(pendingPaths, files) {
   const sql = files?.get(path);
   if (typeof sql !== 'string') return '';
   const body = sql.length > MAX_SQL_CHARS ? `${sql.slice(0, MAX_SQL_CHARS)}\n-- (truncated)` : sql;
+  const objects = [...indexMigrationObjects(new Map([[path, sql]])).values()].map((o) => `${o.kind} ${o.name}`);
   return [
-    'PENDING MIGRATION — proposed earlier and NOT applied to the database yet:',
+    'PENDING MIGRATION — proposed earlier and NOT applied to the database yet (what it creates does NOT exist in the database):',
     `--- ${path} ---`,
     body.trim(),
     '---',
-    'MIGRATION MERGE RULE: if this request changes the database, do NOT create a new file under supabase/migrations/.',
-    `Instead plan ONE step with action "modify" on ${path}, whose description says it rewrites that file as a single migration`,
-    'containing BOTH its current statements and the new change (fold new columns into the CREATE TABLE when the table is created there).',
-    'Never modify any OTHER file under supabase/migrations/: those are already applied to the database.',
+    `It defines: ${objects.length > 0 ? objects.join(', ') : '(no recognizable objects)'}.`,
+    'MIGRATION MERGE RULE — decide by the objects the request changes:',
+    `- If it changes the SAME objects as the pending migration, do NOT create a new file: plan ONE step with action "modify" on ${path} that rewrites it as a single migration with BOTH its current statements and the change (fold new columns into the CREATE TABLE when the table is created there).`,
+    '- If it changes OTHER objects, create a NEW file under supabase/migrations/ for them only. It will be applied together with the pending one, after it. Do NOT put unrelated changes into the pending file.',
   ].join('\n');
 }
 
@@ -58,16 +59,19 @@ export function buildPendingMigrationNote(pendingPaths, files) {
  */
 export function checkMigrationPlan(steps, pendingPaths, files) {
   const pending = new Set((pendingPaths ?? []).filter((p) => isMigrationPath(p)));
-  const notMerged = [];
+  const merged = [];
+  const alongside = [];
   const touchesApplied = [];
   for (const step of steps ?? []) {
     const path = typeof step?.file_path === 'string' ? step.file_path : '';
     if (!isMigrationPath(path)) continue;
     const existed = files?.has(path) === true;
-    if (!existed && pending.size > 0) notMerged.push(path);
+    // Borrar la pendiente NO es fusionar (2026-10-01: la consola lo contaba así).
+    if (pending.has(path) && step.action === 'modify') merged.push(path);
+    if (!existed && pending.size > 0) alongside.push(path);
     if (existed && !pending.has(path) && step.action !== 'delete') touchesApplied.push(path);
   }
-  return { notMerged, touchesApplied };
+  return { merged, alongside, touchesApplied };
 }
 
 // ---------------------------------------------------------------------------

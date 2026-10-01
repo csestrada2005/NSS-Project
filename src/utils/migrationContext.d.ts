@@ -7,7 +7,7 @@ export function checkMigrationPlan(
   steps: { action?: string; file_path?: string }[],
   pendingPaths: string[] | null | undefined,
   files: Map<string, string>
-): { notMerged: string[]; touchesApplied: string[] };
+): { merged: string[]; alongside: string[]; touchesApplied: string[] };
 export function indexMigrationObjects(
   files: Map<string, string>,
   exclude?: Iterable<string>

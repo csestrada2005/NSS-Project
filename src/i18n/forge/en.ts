@@ -301,7 +301,7 @@ export const en = {
   'chat.card.plan.title': "Here's what Wyrd would do",
   'chat.card.plan.deletes': "this also deletes {file} — it can't be easily undone",
   'chat.card.plan.deleteNote': 'Approving sets the ceiling of what can be deleted, not the floor: an internal guard still reviews every deletion and may reject any of these.',
-  'chat.card.plan.build': 'Build',
+  'chat.card.plan.build': 'Accept',
   'chat.card.plan.edit': 'Edit the plan',
   'chat.card.plan.reject': 'Reject',
   'chat.card.cancelled.tag': 'Stopped by you',
@@ -626,6 +626,9 @@ export const en = {
   'chat.ddl.dismissConfirm': "Discard it? Nothing runs on your database and the migration file is deleted.",
   'chat.ddl.dismissYes': 'Yes, discard',
   'ddl.dismissed': '{names} was discarded without running.',
+
+  // Chat: no aplicar la migración del último pedido (2026-10-01)
+  'chat.ddl.reject': "Don't apply",
 } as const;
 
 export type ForgeKey = keyof typeof en;

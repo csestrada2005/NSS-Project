@@ -64,7 +64,13 @@
    clicks/scroll en su franja inferior (pointer-events:auto de la regla de
    arriba no distingue oculto de visible). */
 .fc-modal-layer.fc-hidden > * { pointer-events: none; }
-.fc-stack { width: min(720px, 100%); display: flex; flex-direction: column; gap: 10px; }
+.fc-stack {
+  width: min(720px, 100%); display: flex; flex-direction: column; gap: 10px;
+  /* 2026-10-01 (Samuel): una tarjeta alta (Revisar + "Ver el SQL") se salía por
+     arriba y tapaba sus propios botones. La columna se desplaza. */
+  max-height: calc(88vh - 96px); overflow-y: auto; overscroll-behavior: contain;
+  scrollbar-width: thin; scrollbar-color: var(--linea-fuerte) transparent;
+}
 
 /* ---------- typebar ---------- */
 .typebar {

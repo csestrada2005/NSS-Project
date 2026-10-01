@@ -576,6 +576,49 @@ export function buildOutcomeMessage(result, lang = 'es') {
 }
 
 /**
+ * Migraciones que el chat registra como propuestas y NO aplicadas: pendiente,
+ * reemplazada, descartada, sin base, o rechazada por la base. NO incluye
+ * 'unverified' (pudo haber corrido). Sirve para que la lista de "qué objeto
+ * se definió dónde" no trate como historia de la base lo que nunca llegó a
+ * ella (2026-10-01: la IA escribió un ALTER sobre una tabla que sólo existía
+ * en un .sql nunca aplicado).
+ *
+ * @param {{ role?: string, content?: string }[]} messages
+ * @returns {string[]}
+ */
+export function unappliedMigrationPaths(messages) {
+  const applied = new Set();
+  const unapplied = [];
+  for (const proposal of resolveDdlProposals(messages)) {
+    const maybeRan = proposal.state === APPLIED || proposal.outcome === OUTCOME_UNVERIFIED;
+    for (const path of proposal.paths) {
+      if (maybeRan) applied.add(path);
+      else if (!unapplied.includes(path)) unapplied.push(path);
+    }
+  }
+  return unapplied.filter((p) => !applied.has(p));
+}
+
+/**
+ * Paths de la propuesta que deja este turno. Si ya había una pendiente, la
+ * nueva la INCLUYE (se aplican juntas, en orden de su prefijo temporal), en vez
+ * de dejarla reemplazada: así un cambio sin relación no la mata.
+ * Lo que este turno borró no entra.
+ *
+ * @param {{ paths: string[] } | null | undefined} previous la ejecutable antes del turno
+ * @param {Iterable<string>} modifiedFiles archivos escritos en el turno
+ * @param {Iterable<string>} [removedFiles] archivos borrados en el turno
+ * @returns {string[]} [] si el turno no escribió migraciones
+ */
+export function nextProposalPaths(previous, modifiedFiles, removedFiles = []) {
+  const removed = new Set(removedFiles ?? []);
+  const fresh = normalizeProposalPaths(modifiedFiles).filter((p) => !removed.has(p));
+  if (fresh.length === 0) return [];
+  const carried = normalizeProposalPaths(previous?.paths ?? []).filter((p) => !removed.has(p));
+  return normalizeProposalPaths([...carried, ...fresh]).sort();
+}
+
+/**
  * La propuesta ejecutable del historial, si la hay.
  *
  * Es lo que el botón vuelve a llamar EN EL MOMENTO DEL CLICK: entre el render y

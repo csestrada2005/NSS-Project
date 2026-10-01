@@ -62,7 +62,7 @@ describe('DDLCard + PendingDdlActions', () => {
     const onHide = vi.fn();
     const onDismiss = vi.fn();
     const { container } = render(
-      <DDLCard {...base} extraActions={<PendingDdlActions onHide={onHide} onDismiss={onDismiss} />} />
+      <DDLCard {...base} hideHistory extraActions={<PendingDdlActions onHide={onHide} onDismiss={onDismiss} />} />
     );
     const row = container.querySelector('.fc-accion-fila')!;
     const labels = [...row.querySelectorAll('button')].map((b) => b.textContent);
@@ -83,5 +83,16 @@ describe('DDLCard + PendingDdlActions', () => {
     expect(screen.queryByRole('button', { name: 'Ocultar' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Descartar' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Ver historial completo' })).toBeInTheDocument();
+  });
+
+  it('migración del último pedido: "No aplicar" (con confirmación) junto a Aplicar, sin Ocultar', async () => {
+    setForgeLang('es');
+    const onDismiss = vi.fn();
+    render(<DDLCard {...base} extraActions={<PendingDdlActions onDismiss={onDismiss} dismissLabel="No aplicar" />} />);
+    expect(screen.queryByRole('button', { name: 'Ocultar' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Ver historial completo' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'No aplicar' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Sí, descartar' }));
+    expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 });

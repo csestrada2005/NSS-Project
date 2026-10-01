@@ -296,7 +296,7 @@ export const es: Record<ForgeKey, string> = {
   'chat.card.plan.title': 'Esto es lo que Wyrd haría',
   'chat.card.plan.deletes': 'esto también borra {file} — no se puede deshacer fácilmente',
   'chat.card.plan.deleteNote': 'Aprobar es el techo de lo que puede borrarse, no el piso: una guardia interna revisa cada borrado igual y puede rechazar cualquiera de estos.',
-  'chat.card.plan.build': 'Construir',
+  'chat.card.plan.build': 'Aceptar',
   'chat.card.plan.edit': 'Editar el plan',
   'chat.card.plan.reject': 'Rechazar',
   'chat.card.cancelled.tag': 'Detenido por ti',
@@ -621,4 +621,7 @@ export const es: Record<ForgeKey, string> = {
   'chat.ddl.dismissConfirm': '¿Descartarla? No se ejecuta nada en tu base de datos y se borra el archivo de la migración.',
   'chat.ddl.dismissYes': 'Sí, descartar',
   'ddl.dismissed': '{names} se descartó sin ejecutarse.',
+
+  // Chat: no aplicar la migración del último pedido (2026-10-01)
+  'chat.ddl.reject': 'No aplicar',
 };

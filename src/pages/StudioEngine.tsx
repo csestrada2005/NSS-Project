@@ -24,7 +24,7 @@ import type { TypeIssue } from '../services/PlatformService';
 import { SupabaseService } from '../services/SupabaseService';
 import { compileWithMeta, classifyCompileResult, isPreviewError, type OidMap } from '../services/BrowserCompiler';
 import { isAbortError } from '../utils/abort';
-import { ddlProposedMark, findExecutableProposal } from '../utils/ddlProposalState.js';
+import { ddlProposedMark, findExecutableProposal, unappliedMigrationPaths } from '../utils/ddlProposalState.js';
 import { appendModeMark } from '../utils/chatModeMark.js';
 import { updateCode, type TargetElement } from '../utils/ast';
 import { fileSystemTreeToMap, mapToFileSystemTree } from '../utils/context';
@@ -1610,7 +1610,7 @@ export function StudioEngine() {
     // construcción que sella el acta de #290, y se expresa aquí como lo que es,
     // un argumento, y no como una condición que pueda cambiar sola.
     allowPlanGate: boolean = true
-  ): Promise<{ success: boolean; modifiedFiles: string[]; error?: string; errorReason?: string; warning?: string; chatResponse?: string; suggestedAction?: string; planSteps?: { order: number; description: string; file_path: string; action: 'create' | 'modify' | 'delete' }[]; cancelled?: boolean; typeErrors?: TypeIssue[] }> => {
+  ): Promise<{ success: boolean; modifiedFiles: string[]; removedFiles?: string[]; error?: string; errorReason?: string; warning?: string; chatResponse?: string; suggestedAction?: string; planSteps?: { order: number; description: string; file_path: string; action: 'create' | 'modify' | 'delete' }[]; cancelled?: boolean; typeErrors?: TypeIssue[] }> => {
     if (isReadOnly) return { success: false, modifiedFiles: [] };
 
     // Persistencia del mensaje del usuario: embudo común de TODOS los envíos.
@@ -1691,7 +1691,8 @@ export function StudioEngine() {
         planModeEnabled,
         // La migración pendiente se busca en el historial completo (el mismo
         // que usa el modal), no en los 10 mensajes que recibe el modelo.
-        findExecutableProposal(chatHistory)?.paths ?? null
+        findExecutableProposal(chatHistory)?.paths ?? null,
+        unappliedMigrationPaths(chatHistory)
       );
       if (result.modifiedFiles.length > 0) {
         const promptLabel = truncateLabel(message, 80);
@@ -1720,6 +1721,7 @@ export function StudioEngine() {
       return {
         success,
         modifiedFiles: result.modifiedFiles,
+        removedFiles: result.removedFiles ?? [],
         error: result.error,
         errorReason: result.errorReason,
         warning: result.warning,
