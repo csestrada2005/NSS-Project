@@ -1588,6 +1588,11 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   pendiente, fusionarlas en UN archivo (la nueva puede dar por hecha la vieja: borrar la vieja sin fusionar
   rompería la nueva) y quitar la vieja. Toca plan lane + instrucciones del modelo. Aparte: limpieza de los
   archivos que ya quedaron en fixtures (Vertigo, Crumb), caso por caso con Samuel.
+  **CHECK fase 1 (Samuel, 2026-10-01): CONFIRMADO** (newsletter_subscribers descartada, archivo quitado).
+  Ajuste pedido: con "Revisar" abierto, Ocultar / Descartar casi no se veían en la línea chica → ahora viven
+  en la fila de la tarjeta DDL junto a "Aplicar" (`PendingDdlActions`, mismo estilo que "Ver el SQL"; la
+  línea chica se esconde mientras la tarjeta está abierta). Una tarjeta DDL del último pedido NO los lleva.
+  Verificado por tests (Samuel pidió no hacer check manual de este ajuste): +2 tests.
 - **(HECHO EN CÓDIGO, pendiente CHECK MANUAL — desbloquea ítem 4) El código generado no pasaba `tsc -b`.**
   Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4). Decisiones de Samuel (2026-09-29):
   revisión en el SERVIDOR con copia exacta de las librerías; arreglo automático + IA + aviso con botón

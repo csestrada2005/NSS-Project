@@ -148,6 +148,47 @@ export function PendingDdlNotice({
   );
 }
 
+/**
+ * Ocultar / Descartar dentro de la fila de acciones de la tarjeta DDL, SÓLO
+ * cuando la tarjeta se abrió con "Revisar" desde PendingDdlNotice (2026-10-01,
+ * Samuel: en la línea chica casi no se veían). Mismo estilo que "Ver el SQL".
+ */
+export function PendingDdlActions({
+  onHide,
+  onDismiss,
+  disabled,
+}: {
+  onHide: () => void;
+  onDismiss: () => void;
+  disabled?: boolean;
+}) {
+  const { t } = useForgeLang();
+  const [confirming, setConfirming] = useState(false);
+  if (confirming) {
+    return (
+      <>
+        <span className="fc-accion-cuerpo" style={{ margin: 0, fontSize: 12 }}>{t('chat.ddl.dismissConfirm')}</span>
+        <button type="button" className="fc-accion-btn fc-rechazar" disabled={disabled} onClick={() => { setConfirming(false); onDismiss(); }}>
+          {t('chat.ddl.dismissYes')}
+        </button>
+        <button type="button" className="fc-accion-btn fc-secundario" onClick={() => setConfirming(false)}>
+          {t('common.cancel')}
+        </button>
+      </>
+    );
+  }
+  return (
+    <>
+      <button type="button" className="fc-accion-btn fc-secundario" onClick={onHide}>
+        {t('chat.ddl.hide')}
+      </button>
+      <button type="button" className="fc-accion-btn fc-rechazar" disabled={disabled} onClick={() => setConfirming(true)}>
+        {t('chat.ddl.dismiss')}
+      </button>
+    </>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // 3.2 — DDL (aprobación de migración)
 // ---------------------------------------------------------------------------
@@ -164,7 +205,10 @@ export function DDLCard({
   steps,
   completedCount,
   onOpenHistory,
+  extraActions,
 }: StepsProps & {
+  /** Sólo en "Revisar" de una migración de un turno anterior: Ocultar / Descartar. */
+  extraActions?: React.ReactNode;
   bodyText: string;
   proposal: DdlProposal;
   projectId?: string | null;
@@ -197,9 +241,11 @@ export function DDLCard({
         <button type="button" className="fc-accion-btn fc-secundario" onClick={sql.toggle} disabled={sql.loading}>
           {sql.loading ? t('chat.card.ddl.reading') : sql.open ? t('chat.card.ddl.hideSql') : t('chat.card.ddl.showSql')}
         </button>
-        <button type="button" className="fc-accion-btn fc-secundario" onClick={onOpenHistory}>
-          {t('chat.card.fullHistory')}
-        </button>
+        {extraActions ?? (
+          <button type="button" className="fc-accion-btn fc-secundario" onClick={onOpenHistory}>
+            {t('chat.card.fullHistory')}
+          </button>
+        )}
       </div>
       {sql.open && (
         <div style={{ marginTop: 10 }}>

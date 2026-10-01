@@ -19,6 +19,7 @@ import {
   ResumenCard,
   UltimoMensajeCard,
   PendingDdlNotice,
+  PendingDdlActions,
   DDLCard,
   SeguridadCard,
   PlanCard,
@@ -498,47 +499,56 @@ export function ChatInterface({
             </div>
           )}
 
-          {olderPendingProposal && !hasPendingPlan && estado !== 'pensando' && (
-            <>
+          {olderPendingProposal && !hasPendingPlan && estado !== 'pensando' && (() => {
+            // Sólo escribe el veredicto 'dismissed' en el chat y quita el .sql del
+            // proyecto: no llama al runner ni a la base. Sobrevive al refresh.
+            const dismiss = () => {
+              setDdlReviewOpen(false);
+              const content = buildOutcomeMessage(
+                { outcome: OUTCOME_DISMISSED, paths: olderPendingProposal.paths },
+                getForgeLang()
+              );
+              if (content) {
+                appendMessage({ role: 'assistant', content });
+                AIOrchestrator.removeProjectFiles(
+                  migrationFilesToRemove({ outcome: OUTCOME_DISMISSED, paths: olderPendingProposal.paths })
+                );
+              }
+            };
+            // Con "Revisar" abierto, la tarjeta DDL trae Ocultar / Descartar en su
+            // propia fila (2026-10-01) y la línea chica se esconde.
+            return ddlReviewOpen ? (
+              <DDLCard
+                bodyText={proposalMessage ? stripDdlMarks(proposalMessage.content) : ''}
+                proposal={olderPendingProposal}
+                projectId={projectId}
+                isReadOnly={isReadOnly}
+                isLoading={isLoading}
+                getMessages={getMessages}
+                onOutcome={content => { setDdlReviewOpen(false); appendMessage({ role: 'assistant', content }); }}
+                filesCount={proposalMessage?.filesModifiedCount ?? 0}
+                durationSeconds={proposalMessage?.durationSeconds ?? 0}
+                steps={proposalMessage?.stepsSnapshot ?? []}
+                completedCount={proposalMessage?.stepsSnapshot?.length ?? 0}
+                onOpenHistory={() => setHistoryOpen(true)}
+                extraActions={
+                  <PendingDdlActions
+                    onHide={() => setDdlReviewOpen(false)}
+                    onDismiss={dismiss}
+                    disabled={isReadOnly || isLoading}
+                  />
+                }
+              />
+            ) : (
               <PendingDdlNotice
                 paths={olderPendingProposal.paths}
-                reviewOpen={ddlReviewOpen}
-                onToggleReview={() => setDdlReviewOpen((v) => !v)}
+                reviewOpen={false}
+                onToggleReview={() => setDdlReviewOpen(true)}
                 disabled={isReadOnly || isLoading}
-                onDismiss={() => {
-                  setDdlReviewOpen(false);
-                  // Sólo escribe el veredicto 'dismissed' en el chat: no llama
-                  // al runner ni a la base. Sobrevive al refresh (va en el contenido).
-                  const content = buildOutcomeMessage(
-                    { outcome: OUTCOME_DISMISSED, paths: olderPendingProposal.paths },
-                    getForgeLang()
-                  );
-                  if (content) {
-                    appendMessage({ role: 'assistant', content });
-                    AIOrchestrator.removeProjectFiles(
-                      migrationFilesToRemove({ outcome: OUTCOME_DISMISSED, paths: olderPendingProposal.paths })
-                    );
-                  }
-                }}
+                onDismiss={dismiss}
               />
-              {ddlReviewOpen && (
-                <DDLCard
-                  bodyText={proposalMessage ? stripDdlMarks(proposalMessage.content) : ''}
-                  proposal={olderPendingProposal}
-                  projectId={projectId}
-                  isReadOnly={isReadOnly}
-                  isLoading={isLoading}
-                  getMessages={getMessages}
-                  onOutcome={content => { setDdlReviewOpen(false); appendMessage({ role: 'assistant', content }); }}
-                  filesCount={proposalMessage?.filesModifiedCount ?? 0}
-                  durationSeconds={proposalMessage?.durationSeconds ?? 0}
-                  steps={proposalMessage?.stepsSnapshot ?? []}
-                  completedCount={proposalMessage?.stepsSnapshot?.length ?? 0}
-                  onOpenHistory={() => setHistoryOpen(true)}
-                />
-              )}
-            </>
-          )}
+            );
+          })()}
 
           {hasPendingPlan ? (
             <PlanCard
