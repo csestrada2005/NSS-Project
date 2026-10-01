@@ -7,6 +7,9 @@
 // Gravedad (decisión 3A): lo "grave" bloqueará Publicar (S3); lo demás avisa.
 // ---------------------------------------------------------------------------
 import { evaluateClientCode } from '../src/utils/clientCodeGuard.js';
+// Datos personales o secretos: leerlos "para cualquiera" es grave. Misma
+// regla que la guardia de migraciones nuevas (piiPublicGuard.js).
+import { PII_COLUMN } from '../src/utils/piiPublicGuard.js';
 
 /** Una sola consulta de lectura: tablas (RLS), políticas y columnas de `public`. */
 export const SECURITY_REPORT_SQL = `
@@ -44,8 +47,6 @@ export async function fetchSecurityReport(ref, managementToken, fetchImpl = fetc
   return report;
 }
 
-// Datos personales o secretos: leerlos "para cualquiera" es grave.
-const PII_COLUMN = /(^|_)(e?mail|correo|phone|telefono|tel|mobile|movil|celular|whatsapp|address|direccion|domicilio|password|contrasena|token|secret|dni|ssn|rfc|curp|nif|birth|nacimiento|ip_address)(_|$)/i;
 // Columnas que deciden privilegios o estado: insertar "para cualquiera" se salta controles.
 const PRIVILEGED_COLUMN = /^(status|estado|role|rol|roles|is_admin|admin|approved|aprobad[oa]|is_active|activo|verified|verificad[oa]|moderated_at)$/i;
 const PUBLIC_ROLES = new Set(['public', 'anon']);
@@ -91,6 +92,8 @@ export function evaluateDatabase(report) {
 }
 
 const SERVICE_ROLE_USE = /SUPABASE_SERVICE_ROLE_KEY|service_role/;
+// Imports por URL que el bundler de Supabase rechaza (la función no se instala).
+const BAD_EDGE_IMPORT = /from\s+['"]https?:\/\/(?:deno\.land\/x|cdn\.skypack\.dev|esm\.sh)\//;
 const CALLER_CHECK = /auth\.getUser\s*\(|getClaims\s*\(|jwtVerify\s*\(|createRemoteJWKSet\s*\(/;
 
 /**
@@ -109,6 +112,9 @@ export function evaluateCode(files, roleTables = new Set()) {
     if (!/^supabase\/functions\/[^/]+\/index\.ts$/.test(f?.path ?? '') || typeof f.content !== 'string') continue;
     if (SERVICE_ROLE_USE.test(f.content) && !CALLER_CHECK.test(f.content)) {
       findings.push({ severity: 'aviso', kind: 'edge_no_caller_check', path: f.path });
+    }
+    if (BAD_EDGE_IMPORT.test(f.content)) {
+      findings.push({ severity: 'aviso', kind: 'edge_bad_import', path: f.path });
     }
   }
   return findings;

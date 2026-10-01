@@ -60,6 +60,7 @@ import { isAbortError } from '../utils/abort';
 import { canEnterFastLane, isSimpleEditIntent, planModeRequiresPlanLane, isTypeFixRequest } from '../utils/laneRouting.js';
 import { withTypeErrorContext } from '../utils/typeErrorContext.js';
 import { isSecurityFixRequest } from '../utils/securityFix.js';
+import { stripPiiPublicRead } from '../utils/piiPublicGuard.js';
 
 // Pedidos de los botones "Arreglar ahora" (tipos, Publicar) y "Arreglar"
 // (Seguridad, S2 2026-10-01): hay que cambiar código; nunca se contestan como
@@ -2183,6 +2184,17 @@ export class AIOrchestrator {
             dangerousPolicies.map((f) => `${f.table}:${f.policy}`).join(', ')
           );
         }
+      }
+      // S5 (2026-10-01): una tabla con datos personales nunca queda legible
+      // para cualquiera, diga lo que diga la IA (piiPublicGuard.js).
+      for (const [target, source] of rlsSourceByTarget) {
+        const current = finalFiles.get(source) ?? files.get(source);
+        if (typeof current !== 'string') continue;
+        const guarded = stripPiiPublicRead(current);
+        if (guarded.tables.length === 0) continue;
+        finalFiles.set(source, guarded.sql);
+        this.notifyFileUpdate(target, guarded.sql);
+        console.warn('[AIOrchestrator] lectura pública quitada (datos personales) en', target, ':', guarded.tables.join(', '));
       }
       const rlsPolicyBlockedMark = rlsPolicyBlockedTelemetry(rlsVerdict.findings);
       const rlsEnabledMark = rlsEnabledTelemetry(rlsVerdict.findings);

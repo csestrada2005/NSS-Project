@@ -77,3 +77,12 @@ test('fetchSecurityReport lee el "report" de la respuesta y lanza si la API fall
   const ko = async () => ({ ok: false, status: 403, text: async () => 'forbidden' });
   await assert.rejects(fetchSecurityReport('ref', 'tok', ko), /Management API 403/);
 });
+
+test('función de servidor con imports que Supabase rechaza → aviso', () => {
+  const files = [
+    { path: 'supabase/functions/assign-client-role/index.ts', content: "import { cache } from 'https://deno.land/x/httpcache@0.1.2/mod.ts';\nimport { createClient } from 'npm:@supabase/supabase-js@2';" },
+    { path: 'supabase/functions/ok/index.ts', content: "import { createClient } from 'npm:@supabase/supabase-js@2';" },
+  ];
+  const kinds = evaluateCode(files).map((x) => `${x.kind}:${x.path}`);
+  assert.deepEqual(kinds, ['edge_bad_import:supabase/functions/assign-client-role/index.ts']);
+});

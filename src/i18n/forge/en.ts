@@ -674,6 +674,10 @@ export const en = {
   // Publicar: bloqueo por seguridad, S3 (2026-10-01)
   'deploy.securityBlocked': 'Publishing is blocked for security: {count} serious issues. Fix them in Security and publish again:',
   'deploy.goToSecurity': 'Go to Security',
+
+  // Seguridad: imports no permitidos en funciones de servidor, S5 (2026-10-01)
+  'security.kind.edge_bad_import': "Server function won't install ({path})",
+  'security.kind.edge_bad_import.why': 'It imports a library from a site Supabase no longer allows, so it never goes live.',
 } as const;
 
 export type ForgeKey = keyof typeof en;

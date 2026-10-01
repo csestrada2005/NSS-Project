@@ -669,4 +669,8 @@ export const es: Record<ForgeKey, string> = {
   // Publicar: bloqueo por seguridad, S3 (2026-10-01)
   'deploy.securityBlocked': 'Publicación bloqueada por seguridad: {count} problemas graves. Arréglalos en Seguridad y vuelve a publicar:',
   'deploy.goToSecurity': 'Ir a Seguridad',
+
+  // Seguridad: imports no permitidos en funciones de servidor, S5 (2026-10-01)
+  'security.kind.edge_bad_import': 'Una función de servidor no se va a instalar ({path})',
+  'security.kind.edge_bad_import.why': 'Importa una librería de un sitio que Supabase ya no permite, así que nunca queda viva.',
 };

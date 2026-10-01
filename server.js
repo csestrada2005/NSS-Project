@@ -21,6 +21,7 @@ import { describeLogFetch, fetchVercelTypeErrors } from './server/vercelBuildLog
 import { pickProjectUrl } from './server/vercelDeployUrl.js';
 import { createAuthCache } from './server/authCache.js';
 import { fetchSecurityReport, runSecurityCheck } from './server/securityCheck.js';
+import { configureAuthSiteUrl } from './server/authSiteUrl.js';
 import {
   validateProjectRefRequest,
   validateLogsRequest,
@@ -1578,6 +1579,21 @@ app.post('/api/deploy/:projectId', async (req, res) => {
 
     if (!deploymentUrl) {
       return res.status(504).json({ error: 'Deployment timed out', inspectorUrl });
+    }
+
+    // S5 (2026-10-01): Supabase Auth del proyecto conoce el dominio publicado
+    // (correos de confirmación / recuperación). No bloquea si falla.
+    if (supabaseAdmin && SUPABASE_MANAGEMENT_TOKEN) {
+      const { data: authProject } = await supabaseAdmin
+        .from('forge_projects').select('supabase_project_ref').eq('id', projectId).single();
+      if (authProject?.supabase_project_ref) {
+        try {
+          await configureAuthSiteUrl(authProject.supabase_project_ref, SUPABASE_MANAGEMENT_TOKEN, deploymentUrl);
+          console.log(`[deploy] Supabase Auth: dominio del sitio configurado (${deploymentUrl})`);
+        } catch (err) {
+          console.warn('[deploy] Supabase Auth: no se pudo configurar el dominio:', err?.message ?? err);
+        }
+      }
     }
 
     // Update forge_projects with deployment info

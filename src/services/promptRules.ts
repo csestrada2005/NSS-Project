@@ -19,14 +19,25 @@ REACT/TAILWIND RULES:
 - \`supabase\` may be null when the project has no database provisioned.
   ALWAYS guard: if (!supabase) return null (or render an empty state).
   Never assume it exists.
-- NEVER use supabase.auth — the preview runs in a sandboxed iframe with
-  no localStorage, so end-user login is not supported. Data reads and
-  writes work; sessions do not.
+- Login (supabase.auth) — use it ONLY when the request needs real identity
+  (an admin area, user accounts, "only X can…"). Sessions work ONLY on the
+  published site: inside the editor preview there is no session. So the page
+  must still render completely in the preview — NEVER hide the whole page
+  behind \`if (!session) return null\`; show the login form, and let only the
+  privileged action fail there with a clear message (the user tests login on
+  the published site). Never use auth for public features.
+- NEVER open data "so it works without a session": no public UPDATE/DELETE
+  policies, no public read of personal data, and never let a visitor choose
+  status/role/approval columns. Privileged actions go through an Edge
+  Function that verifies the caller (see BACKEND RULES).
 - Row Level Security is enforced automatically on every table. A table is
   PRIVATE by default. To make a table publicly readable, the migration
   MUST include, right after the CREATE TABLE:
   comment on table public.<name> is 'wyrd:read=public';
   Without that comment the table is invisible to the site.
+  NEVER mark public a table with personal data (email, phone, address,
+  password, tokens…). If the site must show part of it, create a VIEW with
+  only the non-personal columns and make that view readable instead.
 - The global CSS entry file is ALWAYS src/index.css. Never import globals.css, global.css, or any other CSS filename. Never create a new CSS entry file.
 - Fonts are already loaded via <link> in index.html. NEVER import fonts — no @import in CSS, no URL imports in JS/TS.
 - Export convention: every component file uses a named export matching the filename (export function ServicesSection...). Importers use the matching named import. Never mix default and named exports for components.
@@ -206,4 +217,6 @@ export const BACKEND_RULES = `BACKEND RULES:
    a. It needs a secret the browser must never hold (a service-role key, a third-party API key such as an AI provider's).
    b. It needs to verify identity or permissions in a way the client cannot forge.
    c. It is logic the user must not be able to alter (moderation, calculations with real consequences, privileged writes).
-6. If you need a Shadcn component (e.g., sheet, accordion, dialog) that is not currently in the src/components/ui folder, you MUST include 'npx shadcn-ui@latest add [component-name]' in the 'installCommands' array in your JSON response.`;
+6. If you need a Shadcn component (e.g., sheet, accordion, dialog) that is not currently in the src/components/ui folder, you MUST include 'npx shadcn-ui@latest add [component-name]' in the 'installCommands' array in your JSON response.
+7. Edge Functions (Deno): import ONLY with \`npm:\` or \`jsr:\` specifiers (e.g. import { createClient } from 'npm:@supabase/supabase-js@2'). NEVER import from deno.land/x, cdn.skypack.dev, esm.sh or any other URL — Supabase's bundler rejects them and the function is never deployed.
+8. Every Edge Function that uses SUPABASE_SERVICE_ROLE_KEY MUST verify the caller FIRST: read the Authorization header, call supabase.auth.getUser(token), check the user's role in the project's roles table, and reply 401/403 otherwise. Never trust a role, id or permission sent by the browser.`;

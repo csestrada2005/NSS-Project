@@ -357,6 +357,19 @@ Mundos pre-registrados:
   Nota de Samuel (HECHO, verificado por tests): las líneas de los pasos del plan también en gerundio
   ("Crea la tabla…" → "Creando la tabla…"); `progressHeadline` con más verbos de resúmenes (modifica, edita,
   define…) y el idioma de la interfaz decide los verbos de los dos idiomas ("reduce").
+- **Agente de seguridad — S5 (prevención) HECHO EN CÓDIGO, pendiente CHECK:**
+  - Reglas de la IA (promptRules.ts): `supabase.auth` YA NO está prohibido — se usa sólo cuando el pedido necesita
+    identidad; funciona sólo publicado; la página sigue completa en el preview (nunca `if (!session) return
+    null`); nunca abrir datos "para que funcione sin sesión"; nunca marcar pública una tabla con datos personales
+    (usar una vista sin esas columnas). BACKEND RULES 7–8: Edge Functions sólo con imports `npm:`/`jsr:`, y toda
+    función con service_role verifica a quien llama (getUser + rol) antes de nada.
+  - Guardia determinista `piiPublicGuard.js` (+3 tests) en el pipeline: en migraciones NUEVAS quita la marca
+    `wyrd:read=public` y las políticas SELECT abiertas de tablas con columnas personales (el INSERT de un
+    formulario sigue). Consola: `lectura pública quitada (datos personales) en …`.
+  - Chequeo: nuevo aviso `edge_bad_import` (deno.land/x, skypack, esm.sh) con su instrucción de arreglo (+1 test).
+  - Publicar: `configureAuthSiteUrl` (server/authSiteUrl.js, +2 tests) fija `site_url` de Supabase Auth al dominio
+    publicado y lo AÑADE a `uri_allow_list` sin quitar los existentes. Render: `[deploy] Supabase Auth: dominio
+    del sitio configurado (…)`. No bloquea si falla.
 - **Hallazgo de Samuel (2026-10-01) — PENDIENTE, sin diagnóstico:** las fuentes y el acomodo de los objetos
   del sitio PUBLICADO no son iguales a los del preview (estilos y quizá HTML). Sospechas a revisar: el preview
   compila con esbuild + Tailwind del servidor y Vercel con `vite build` del proyecto (otra versión/config de

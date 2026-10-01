@@ -36,6 +36,8 @@ export function findingInstruction(f) {
       return `- File ${f.path} writes roles in table ${q(f.table)} from the browser. Remove that write; role changes must go through an Edge Function that verifies the caller is an admin.`;
     case 'edge_no_caller_check':
       return `- Edge Function ${f.path} uses the service role without verifying who calls it. Read the Authorization header, verify the user with supabase.auth.getUser(token), check their role in the roles table, and reply 401/403 otherwise.`;
+    case 'edge_bad_import':
+      return `- Edge Function ${f.path} imports from a URL Supabase rejects (deno.land/x, skypack or esm.sh), so it is never deployed. Rewrite its imports with npm: or jsr: specifiers (e.g. npm:@supabase/supabase-js@2).`;
     default:
       return `- ${f.kind}: ${f.table ?? f.path ?? ''}`;
   }
