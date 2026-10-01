@@ -5,14 +5,15 @@ import { useEffect, useState } from 'react';
  * Samuel): las líneas de progreso y las respuestas del modal ya no aparecen de
  * golpe.
  *
- * - Rápido: ~70 caracteres por segundo, y NUNCA más de 2 s por texto.
+ * - ~35 caracteres por segundo (Samuel lo pidió más lento que la primera
+ *   versión, 70), y NUNCA más de 3.5 s por texto.
  * - Cada texto se anima UNA vez por sesión: una vez escrito completo, si
  *   vuelve a montarse (peek, reabrir el modal, cambio de estado de una línea)
  *   sale completo.
  * - Sin animación con "reducir movimiento" o sin matchMedia (tests/SSR).
  */
-const CHARS_PER_SECOND = 70;
-const MAX_MS = 2000;
+const CHARS_PER_SECOND = 35;
+const MAX_MS = 3500;
 const TICK_MS = 16;
 const alreadyTyped = new Set<string>();
 

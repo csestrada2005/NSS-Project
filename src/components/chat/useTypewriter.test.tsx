@@ -23,7 +23,7 @@ describe('TypewriterText', () => {
     delete window.matchMedia;
   });
 
-  it('se escribe poco a poco y termina con el texto completo en ≤ 2 s', () => {
+  it('se escribe poco a poco y termina con el texto completo en ≤ 3.5 s', () => {
     mockMotion(false);
     const text = 'Agrega la columna nombre a la tabla de suscriptores del newsletter.';
     const { container } = render(<TypewriterText text={text} />);
@@ -33,15 +33,17 @@ describe('TypewriterText', () => {
     expect(partial.length).toBeGreaterThan(0);
     expect(partial.length).toBeLessThan(text.length);
     expect(text.startsWith(partial)).toBe(true);
-    act(() => { vi.advanceTimersByTime(2000); });
+    act(() => { vi.advanceTimersByTime(3500); });
     expect(container.textContent).toBe(text);
   });
 
-  it('un texto largo nunca tarda más de 2 s', () => {
+  it('un texto largo nunca tarda más de 3.5 s', () => {
     mockMotion(false);
     const text = 'x'.repeat(5000);
     const { container } = render(<TypewriterText text={text} />);
-    act(() => { vi.advanceTimersByTime(2100); });
+    act(() => { vi.advanceTimersByTime(3000); });
+    expect((container.textContent ?? '').length).toBeLessThan(text.length);
+    act(() => { vi.advanceTimersByTime(600); });
     expect(container.textContent).toBe(text);
   });
 
@@ -49,7 +51,7 @@ describe('TypewriterText', () => {
     mockMotion(false);
     const text = 'Respuesta ya mostrada';
     const first = render(<TypewriterText text={text} />);
-    act(() => { vi.advanceTimersByTime(2100); });
+    act(() => { vi.advanceTimersByTime(3600); });
     first.unmount();
     const { container } = render(<TypewriterText text={text} />);
     expect(container.textContent).toBe(text);

@@ -36,6 +36,7 @@ import { useForgeLang } from '@/i18n/forge/useForgeLang';
 import { t as tNow, tn as tnNow } from '@/i18n/forge/lang';
 import type { TypeIssue } from '../services/PlatformService';
 import { changedNames } from '../utils/changedNames';
+import { progressHeadline } from '../utils/progressHeadline.js';
 
 // Re-exportados desde ./chat/types — ver ese archivo para el porqué (evita un
 // ciclo de módulos con las tarjetas, que también necesitan estos tipos). El
@@ -274,7 +275,11 @@ export function ChatInterface({
     startTimeRef.current = Date.now();
     // "Planeando…" sólo en modo Plan; en Automático no se planea nada visible.
     setProgressLines([{
-      text: tNow(mode === 'plan' ? 'chat.progress.planning' : 'chat.progress.working'),
+      // Automático: la línea dice QUÉ está haciendo ("Cambiando el título…"),
+      // no "Trabajando en tu pedido" (2026-10-01, Samuel).
+      text: mode === 'plan'
+        ? tNow('chat.progress.planning')
+        : progressHeadline(userMessage) ?? tNow('chat.progress.working'),
       status: 'pending',
       kind: 'planning',
     }]);

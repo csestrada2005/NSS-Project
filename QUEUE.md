@@ -1634,6 +1634,11 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   (src/components/chat/useTypewriter.tsx, +4 tests): las líneas de progreso (ProcessCard) y las respuestas
   (RespuestaCard, markdown sobre lo ya escrito) se escriben a ~70 caracteres/s, máximo 2 s por texto; cada
   texto se anima una sola vez por sesión; sin animación con "reducir movimiento".
+  **CHECK (Samuel, 2026-10-01): OK**, con dos ajustes pedidos (verificados por tests, sin check manual a
+  pedido de Samuel): animación más lenta (35 caracteres/s, máx. 3.5 s) y la primera línea en Automático dice
+  qué hace en vez de "Trabajando en tu pedido" — `progressHeadline` (src/utils/progressHeadline.js, +3
+  tests): verbo del pedido en imperativo → gerundio ("Cambia el título…" → "Cambiando el título…"); preguntas
+  o verbos desconocidos → el texto genérico.
 - **(HECHO EN CÓDIGO, pendiente CHECK MANUAL — desbloquea ítem 4) El código generado no pasaba `tsc -b`.**
   Evidencia: Build Logs de Vercel sobre Vertigo, 12 errores (ver ítem 4). Decisiones de Samuel (2026-09-29):
   revisión en el SERVIDOR con copia exacta de las librerías; arreglo automático + IA + aviso con botón
