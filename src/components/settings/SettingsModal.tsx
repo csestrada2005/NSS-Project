@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Lock, Github, Rocket, Database, Globe, Mail, BarChart3 } from 'lucide-react';
+import { X, Lock, Github, Rocket, Database, Globe, Mail, BarChart3, ShieldCheck } from 'lucide-react';
 import { DeployManager } from '../deploy/DeployManager';
 import { gitHubService } from '../../services/GitHubService';
 import type { FileSystemTree } from '@webcontainer/api';
@@ -15,6 +15,7 @@ import { LighthousePanel } from './analytics/LighthousePanel';
 import { TopPagesTable } from './analytics/TopPagesTable';
 import { DomainsPanel } from './DomainsPanel';
 import { EmailPanel } from './EmailPanel';
+import { SecurityPanel } from './SecurityPanel';
 import LoadingSquares from '../brand/LoadingSquares';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
 import { t as tNow } from '@/i18n/forge/lang';
@@ -31,7 +32,7 @@ interface SettingsModalProps {
   onFixTypeErrors?: React.ComponentProps<typeof DeployManager>['onFixTypeErrors'];
 }
 
-export type MainTab = 'secrets' | 'github' | 'deploy' | 'domains' | 'database' | 'email' | 'analytics';
+export type MainTab = 'secrets' | 'github' | 'deploy' | 'security' | 'domains' | 'database' | 'email' | 'analytics';
 type DbSubTab = 'overview' | 'schema' | 'sql' | 'secrets' | 'edge-functions' | 'logs' | 'usage';
 
 // Panel Cloud (bucket 5, ítem 1): overview/edge-functions/logs/usage/users
@@ -118,6 +119,7 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
           {TAB_BUTTON('secrets', t('settings.tab.secrets'), Lock)}
           {TAB_BUTTON('github', 'GitHub', Github)}
           {TAB_BUTTON('deploy', t('settings.tab.deploy'), Rocket)}
+          {TAB_BUTTON('security', t('settings.tab.security'), ShieldCheck)}
           {TAB_BUTTON('domains', t('hub.tab.domains'), Globe)}
           {TAB_BUTTON('database', t('hub.tab.database'), Database)}
           {TAB_BUTTON('email', t('hub.tab.email'), Mail)}
@@ -175,6 +177,11 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
           {/* Deploy tab */}
           {activeTab === 'deploy' && (
             <DeployManager files={files} projectId={projectId} onFixTypeErrors={onFixTypeErrors} />
+          )}
+
+          {/* Security tab — agente de seguridad (S1) */}
+          {activeTab === 'security' && (
+            <SecurityPanel projectId={projectId} />
           )}
 
           {/* Domains tab */}

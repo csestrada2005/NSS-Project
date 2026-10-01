@@ -316,6 +316,15 @@ Mundos pre-registrados:
   **Hallazgo para el agente de seguridad:** el formulario publicado inserta en `recomendaciones` con
   `status: "approved"` desde el navegador — se salta la moderación (la política de INSERT lo permite).
   **Nota de Samuel:** quitar "Ver el log de Vercel" en Publicar (sólo el admin tiene Vercel) — HECHO.
+- **Agente de seguridad — S1 HECHO EN CÓDIGO, pendiente CHECK.** `server/securityCheck.js` (+6 tests): UNA
+  consulta SELECT vía Management API (tablas con su RLS, `pg_policies`, columnas de `public`) + reglas fijas:
+  RLS apagado → grave; UPDATE/DELETE/ALL públicos sin condición → grave; SELECT público sin condición en
+  tabla con datos personales (email, teléfono, dirección, contraseña, token…) → grave; INSERT público en
+  tabla con columnas de estado/rol → aviso; código: llave secreta en `src/` y escritura de roles desde el
+  navegador (clientCodeGuard) → grave; Edge Function con service_role que no verifica a quien llama →
+  aviso. `POST /api/projects/:id/security-check` (Render: `[security] <id> · base: checked|none|error ·
+  N graves · M avisos`). Ajustes → pestaña "Seguridad / Security" (`SecurityPanel`, +3 tests). Siguen: S2
+  "Arreglar", S3 bloqueo en Publicar, S4 Deep scan, S5 prevención.
 
 **Actualización 2026-09-29 — desbloqueo de Vercel y nuevo bloqueo:**
 - Samuel compró Vercel Pro (cuenta = Team) y configuró en Render `NEBU_STUDIO_VERCEL_TOKEN` y `VERCEL_TEAM_ID`.

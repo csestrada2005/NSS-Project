@@ -20,6 +20,7 @@ import { compileCacheKey, createCompileCache } from './server/compileCache.js';
 import { describeLogFetch, fetchVercelTypeErrors } from './server/vercelBuildLog.js';
 import { pickProjectUrl } from './server/vercelDeployUrl.js';
 import { createAuthCache } from './server/authCache.js';
+import { fetchSecurityReport, runSecurityCheck } from './server/securityCheck.js';
 import {
   validateProjectRefRequest,
   validateLogsRequest,
@@ -2151,6 +2152,40 @@ app.get('/api/projects/:projectId/logs', async (req, res) => {
     const status = err.status && err.status < 500 ? err.status : 502;
     return res.status(status).json({ error: 'Failed to fetch logs', code: 'LOGS_FAILED' });
   }
+});
+
+// Agente de seguridad — S1 (2026-10-01): revisa la BASE REAL del proyecto (una
+// consulta SELECT vía Management API) y su código, con reglas fijas. Sólo lee.
+app.post('/api/projects/:projectId/security-check', async (req, res) => {
+  const { projectId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Database not configured' });
+
+  const [{ data: project }, { data: fileRows }] = await Promise.all([
+    supabaseAdmin.from('forge_projects').select('supabase_project_ref').eq('id', projectId).single(),
+    supabaseAdmin.from('forge_files').select('path, content').eq('project_id', projectId),
+  ]);
+
+  let database = 'none';
+  let report = null;
+  const ref = project?.supabase_project_ref;
+  if (ref) {
+    if (!SUPABASE_MANAGEMENT_TOKEN) {
+      database = 'unavailable';
+    } else {
+      try {
+        report = await fetchSecurityReport(ref, SUPABASE_MANAGEMENT_TOKEN);
+        database = 'checked';
+      } catch (err) {
+        database = 'error';
+        console.warn(`[security] ${projectId} · no se pudo leer la base:`, err?.message ?? err);
+      }
+    }
+  }
+  const findings = runSecurityCheck({ report, files: fileRows ?? [] });
+  const graves = findings.filter((f) => f.severity === 'grave').length;
+  console.log(`[security] ${projectId} · base: ${database} · ${graves} graves · ${findings.length - graves} avisos`);
+  res.json({ database, findings, checkedAt: new Date().toISOString() });
 });
 
 app.get('/api/projects/:projectId/usage', async (req, res) => {

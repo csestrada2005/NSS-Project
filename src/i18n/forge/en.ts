@@ -629,6 +629,36 @@ export const en = {
 
   // Chat: no aplicar la migración del último pedido (2026-10-01)
   'chat.ddl.reject': "Don't apply",
+
+  // Seguridad: agente de seguridad, S1 (2026-10-01)
+  'settings.tab.security': 'Security',
+  'security.title': 'Security check',
+  'security.intro': "Checks your project's real database and its code for data anyone could read, change or delete, and for secrets exposed in the browser. It only reads; it changes nothing.",
+  'security.check': 'Run security check',
+  'security.recheck': 'Check again',
+  'security.checking': 'Checking…',
+  'security.failed': "The check couldn't run: {message}",
+  'security.db.none': 'This project has no database: only the code was checked.',
+  'security.db.unreadable': "The project's database couldn't be read; only the code was checked.",
+  'security.clean': 'No threats found.',
+  'security.summary': '{graves} serious · {avisos} warnings. Serious issues will block publishing.',
+  'security.checkedAt': 'Checked at {when}',
+  'security.grave': 'Serious',
+  'security.aviso': 'Warning',
+  'security.kind.rls_off': 'Table "{table}" has no protection (RLS off)',
+  'security.kind.rls_off.why': 'Anyone with the public key can read, change or delete all of its rows.',
+  'security.kind.public_write': 'Anyone can change or delete rows in "{table}"',
+  'security.kind.public_write.why': 'A visitor could wipe or alter this data from the browser console.',
+  'security.kind.public_pii_read': 'Anyone can read personal data in "{table}" ({columns})',
+  'security.kind.public_pii_read.why': 'Emails, phones or similar are visible to any visitor, not only to the site.',
+  'security.kind.public_insert_privileged': 'Anyone can insert into "{table}" choosing {columns}',
+  'security.kind.public_insert_privileged.why': 'A visitor could skip moderation or give themselves a role (for example, saving a row as already approved).',
+  'security.kind.client_secret': 'Secret key in browser code ({path})',
+  'security.kind.client_secret.why': 'Anything in the browser is public: that key would let anyone act with full permissions.',
+  'security.kind.client_role_write': 'The browser writes roles in "{table}" ({path})',
+  'security.kind.client_role_write.why': 'Roles must only change on the server; otherwise anyone can make themselves admin.',
+  'security.kind.edge_no_caller_check': "Server function doesn't check who calls it ({path})",
+  'security.kind.edge_no_caller_check.why': 'It uses full database permissions without checking the session, so anyone could use it.',
 } as const;
 
 export type ForgeKey = keyof typeof en;

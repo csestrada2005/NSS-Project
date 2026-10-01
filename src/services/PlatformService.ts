@@ -40,6 +40,25 @@ export type TypecheckResult =
       durationMs: number;
     };
 
+/** Un hallazgo del chequeo de seguridad (server/securityCheck.js). */
+export interface SecurityFinding {
+  severity: 'grave' | 'aviso';
+  kind: string;
+  table?: string;
+  policy?: string;
+  cmd?: string;
+  columns?: string[];
+  path?: string;
+  identifier?: string | null;
+}
+
+export interface SecurityCheckResult {
+  /** 'checked' | 'none' (sin base) | 'unavailable' | 'error' */
+  database: string;
+  findings: SecurityFinding[];
+  checkedAt: string;
+}
+
 class PlatformService {
   // ---------------------------------------------------------------------------
   // Intent correlation (CIRUGÍA: cobro dentro del pipeline servido). One user
@@ -363,6 +382,18 @@ class PlatformService {
       console.warn('[PlatformService] deductCredits failed:', err);
       return null;
     }
+  }
+
+  /** Agente de seguridad (S1): chequeo con reglas fijas contra la base real y el código. */
+  async securityCheck(projectId: string): Promise<SecurityCheckResult> {
+    const headers = await this.getHeaders();
+    const response = await fetch(`/api/projects/${projectId}/security-check`, { method: 'POST', headers });
+    this.handleAuthError(response);
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body?.error || `HTTP ${response.status}`);
+    }
+    return response.json();
   }
 
   /** Get deployment status for a project. */
