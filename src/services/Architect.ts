@@ -83,7 +83,11 @@ export class Architect {
     // parámetro propio y NO concatenada al `prompt`, que es lo que dijo el
     // usuario y no debe llevar texto del sistema. Último de la lista y con
     // default vacío: ninguna llamada existente cambia.
-    repairNote: string = ''
+    repairNote: string = '',
+    // Migración pendiente (src/utils/migrationContext.js, 2026-10-01): si el
+    // pedido toca la base, se modifica ESA en vez de crear otra. User message,
+    // no system: cambia por intent y el system está cacheado.
+    migrationNote: string = ''
   ): Promise<{
     steps: BuildStep[];
     wasTrimmed: boolean;
@@ -215,6 +219,9 @@ OUTPUT FORMAT — return ONLY a valid JSON object with exactly these two keys, n
       const repairSection = repairNote.trim().length > 0
         ? `${repairNote.trim()}\n\n`
         : '';
+      const migrationSection = migrationNote.trim().length > 0
+        ? `${migrationNote.trim()}\n\n`
+        : '';
       const userMessage =
         `${memoryFormatted}\n\n` +
         importGraphSection +
@@ -230,6 +237,7 @@ OUTPUT FORMAT — return ONLY a valid JSON object with exactly these two keys, n
             `- This logic MUST live in a Supabase Edge Function under supabase/functions/<slug>/index.ts, NOT in a file under src/. The browser code may only call the function.\n`
           : '') +
         `\n` +
+        migrationSection +
         repairSection +
         // i18n (ítem 5.4): el idioma del `summary` va en el user message, no en
         // el system (cacheado): así el prefijo no se parte por idioma.

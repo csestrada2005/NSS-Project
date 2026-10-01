@@ -59,6 +59,7 @@ import { DesignBriefService } from './DesignBriefService';
 import { isAbortError } from '../utils/abort';
 import { canEnterFastLane, isSimpleEditIntent, planModeRequiresPlanLane, isTypeFixRequest } from '../utils/laneRouting.js';
 import { createStageTimer, type StageTimer } from '../utils/stageTimer.js';
+import { buildPendingMigrationNote, checkMigrationPlan } from '../utils/migrationContext.js';
 import { applyEditBlocks, describeFailures, parseEditBlocks, wantsFullRewrite } from '../utils/searchReplace.js';
 import { extractQuotedTexts, orderPageSeeds, resolveHintedTarget, snippetForTargeting } from '../utils/targetHints.js';
 import { KNOWN_DEP_VERSIONS } from '../utils/knownDepVersions';
@@ -1192,7 +1193,11 @@ export class AIOrchestrator {
     // puede quedarse esperando una aprobación que nadie va a dar: no existe UI
     // que la pida en ese camino.
     onPlanDecision?: (steps: BuildStep[]) => Promise<'approved' | 'rejected'>,
-    planModeEnabled: boolean = false
+    planModeEnabled: boolean = false,
+    // Paths de la migración propuesta y aún NO aplicada (la ejecutable del
+    // historial del chat completo, no sólo de los últimos 10 mensajes que
+    // recibe `chatHistory`). Ver src/utils/migrationContext.js.
+    pendingMigrationPaths: string[] | null = null
   ): Promise<OrchestratorResult> {
     this.retryCount = 0;
     const startTime = Date.now();
@@ -1525,6 +1530,9 @@ export class AIOrchestrator {
     // navbar, "App Name" is gone and this flag is false for every later edit.
     const headerContent = files.get('src/components/layout/Header.tsx') ?? '';
     const isInitialBuild = headerContent.includes('App Name');
+    // Fase 2a (2026-10-01): con una migración pendiente, el Architect la
+    // modifica en vez de crear otra (una sola migración con todo).
+    const migrationNote = buildPendingMigrationNote(pendingMigrationPaths, files);
     // `let` y no `const`: la guardia estructural de más abajo puede sustituir
     // el payload entero por el del reintento. Los cinco campos viajan juntos
     // porque describen UN plan: adoptar los steps de un replan y conservar los
@@ -1539,7 +1547,9 @@ export class AIOrchestrator {
       blueprint,
       importedByBlock,
       isInitialBuild,
-      signal
+      signal,
+      '',
+      migrationNote
     );
     timer.mark('architect');
 
@@ -1610,7 +1620,8 @@ export class AIOrchestrator {
           importedByBlock,
           isInitialBuild,
           signal,
-          buildPlanRepairNote(missing)
+          buildPlanRepairNote(missing),
+          migrationNote
         );
         // Un abort DURANTE el reintento no puede caer al camino del plan vacío:
         // ahí se interpretaría como "el Architect no devolvió nada" y arrancaría
@@ -1657,6 +1668,23 @@ export class AIOrchestrator {
     // decisión de CUÁNDO parar vive entera en planGate.js; aquí sólo se
     // ejecuta la pausa.
     // ------------------------------------------------------------------
+    // Revisión de la regla de migraciones (sólo diagnóstico, en consola).
+    {
+      const migrationCheck = checkMigrationPlan(steps, pendingMigrationPaths, files);
+      if (migrationCheck.notMerged.length > 0) {
+        console.warn('[AIOrchestrator] migración no fusionada: el plan crea', migrationCheck.notMerged,
+          'habiendo una pendiente', pendingMigrationPaths);
+      }
+      if (migrationCheck.touchesApplied.length > 0) {
+        console.warn('[AIOrchestrator] el plan modifica una migración que NO está pendiente (¿ya aplicada?):',
+          migrationCheck.touchesApplied);
+      }
+      if (migrationNote && migrationCheck.notMerged.length === 0 &&
+          steps.some(s => pendingMigrationPaths?.includes(s.file_path))) {
+        console.log('[AIOrchestrator] migración fusionada en', pendingMigrationPaths);
+      }
+    }
+
     if (onPlanDecision && shouldGatePlan(steps, planModeEnabled)) {
       let decision: 'approved' | 'rejected';
       try {

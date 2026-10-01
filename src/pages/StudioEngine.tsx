@@ -24,7 +24,7 @@ import type { TypeIssue } from '../services/PlatformService';
 import { SupabaseService } from '../services/SupabaseService';
 import { compileWithMeta, classifyCompileResult, isPreviewError, type OidMap } from '../services/BrowserCompiler';
 import { isAbortError } from '../utils/abort';
-import { ddlProposedMark } from '../utils/ddlProposalState.js';
+import { ddlProposedMark, findExecutableProposal } from '../utils/ddlProposalState.js';
 import { appendModeMark } from '../utils/chatModeMark.js';
 import { updateCode, type TargetElement } from '../utils/ast';
 import { fileSystemTreeToMap, mapToFileSystemTree } from '../utils/context';
@@ -1688,7 +1688,10 @@ export function StudioEngine() {
         allowPlanGate
           ? steps => requestPlanDecision(steps, abortController.signal)
           : undefined,
-        planModeEnabled
+        planModeEnabled,
+        // La migración pendiente se busca en el historial completo (el mismo
+        // que usa el modal), no en los 10 mensajes que recibe el modelo.
+        findExecutableProposal(chatHistory)?.paths ?? null
       );
       if (result.modifiedFiles.length > 0) {
         const promptLabel = truncateLabel(message, 80);
