@@ -682,4 +682,7 @@ export const es: Record<ForgeKey, string> = {
   'security.kind.auth_pii_read.why': 'Con sesión también entran tus clientes: un cliente podría leer los datos de todos los demás. Sólo deben leerlos los admins (con una función de servidor) o el dueño de cada fila.',
   'security.kind.auth_write': 'Cualquier usuario con sesión puede cambiar o borrar todas las filas de "{table}"',
   'security.kind.auth_write.why': 'Con sesión también entran tus clientes: un cliente podría alterar o borrar los datos de todos.',
+
+  // Guardia de coherencia (2026-10-05)
+  'orch.piiCodeReverted': 'Tampoco cambié estos archivos ({files}): leían esos datos directo y habrían dejado de funcionar. Los admins los siguen viendo con la función de servidor.',
 };

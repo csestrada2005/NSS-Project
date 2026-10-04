@@ -117,3 +117,18 @@ test('quita la lectura de datos personales para cualquier usuario con sesión, n
   assert.doesNotMatch(out.sql, /authenticated_select_newsletter_subscribers/);
   assert.match(out.sql, /own_row/);
 });
+
+// 2026-10-05 — check de Samuel: la IA reescribió el panel de admin para leer
+// newsletter_subscribers directo, contando con la política que la guardia quitó.
+test('codeReadingTables: detecta el código que lee directo una tabla cerrada por la guardia', async () => {
+  const { codeReadingTables } = await import('../src/utils/piiPublicGuard.js');
+  const changed = [
+    { path: 'src/components/sections/AdminSubscribersTable.tsx', content: "const { data } = await supabase.from('newsletter_subscribers').select('id, email');" },
+    { path: 'src/pages/AdminSubscribersPage.tsx', content: "import { AdminSubscribersTable } from '...';" },
+    { path: 'src/lib/viaEdge.ts', content: "await fetch(`${base}/get-subscribers`)" },
+    { path: 'supabase/functions/x/index.ts', content: "admin.from('newsletter_subscribers')" },
+  ];
+  assert.deepEqual(codeReadingTables(changed, ['newsletter_subscribers']), ['src/components/sections/AdminSubscribersTable.tsx']);
+  assert.deepEqual(codeReadingTables(changed, []), []);
+  assert.deepEqual(codeReadingTables(changed, ['otra_tabla']), []);
+});

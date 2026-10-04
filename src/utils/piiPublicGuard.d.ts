@@ -9,3 +9,4 @@ export function stripPiiPublicRead(
   sql: string,
   knownPii?: Map<string, string[]>
 ): { sql: string; tables: string[]; details: { table: string; columns: string[] }[] };
+export function codeReadingTables(changed: { path: string; content: string }[], tables: string[]): string[];

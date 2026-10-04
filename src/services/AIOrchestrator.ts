@@ -60,7 +60,7 @@ import { isAbortError } from '../utils/abort';
 import { canEnterFastLane, isSimpleEditIntent, planModeRequiresPlanLane, isTypeFixRequest } from '../utils/laneRouting.js';
 import { withTypeErrorContext } from '../utils/typeErrorContext.js';
 import { isSecurityFixRequest } from '../utils/securityFix.js';
-import { piiTablesInProject, stripPiiPublicRead } from '../utils/piiPublicGuard.js';
+import { codeReadingTables, piiTablesInProject, stripPiiPublicRead } from '../utils/piiPublicGuard.js';
 
 // Pedidos de los botones "Arreglar ahora" (tipos, Publicar) y "Arreglar"
 // (Seguridad, S2 2026-10-01): hay que cambiar código; nunca se contestan como
@@ -2191,6 +2191,7 @@ export class AIOrchestrator {
       // por la nueva (una migración que re-abría una tabla ya creada pasaba).
       const knownPii = piiTablesInProject(files, isMigrationPath);
       const piiWarnings: string[] = [];
+      const strippedTables: string[] = [];
       for (const [target, source] of rlsSourceByTarget) {
         const current = finalFiles.get(source) ?? files.get(source);
         if (typeof current !== 'string') continue;
@@ -2201,6 +2202,36 @@ export class AIOrchestrator {
         console.warn('[AIOrchestrator] lectura pública quitada (datos personales) en', target, ':', guarded.tables.join(', '));
         for (const d of guarded.details) {
           piiWarnings.push(tr('orch.piiPublicRemoved', { table: d.table, columns: d.columns.join(', ') }));
+          if (!strippedTables.includes(d.table)) strippedTables.push(d.table);
+        }
+      }
+      // Guardia de COHERENCIA (2026-10-05, check de Samuel): si el código de
+      // este turno lee DIRECTO una tabla a la que se le acaba de quitar la
+      // lectura abierta, se escribió contando con esa política y quedaría roto
+      // (el panel de admin vacío). Se descartan TODOS los cambios de src/ del
+      // turno — no uno solo, para no dejar páginas a medias — y se avisa.
+      if (strippedTables.length > 0) {
+        const changedSrc = persistedPaths.filter((p) => p.startsWith('src/'));
+        const readers = codeReadingTables(
+          changedSrc.map((p) => ({ path: p, content: finalFiles.get(p) ?? '' })),
+          strippedTables
+        );
+        if (readers.length > 0) {
+          for (const p of changedSrc) {
+            const before = files.get(p);
+            if (typeof before === 'string') {
+              finalFiles.set(p, before);
+              this.notifyFileUpdate(p, before);
+            } else {
+              finalFiles.delete(p);
+              this.notifyFileDelete(p);
+            }
+            persistedPaths.splice(persistedPaths.indexOf(p), 1);
+          }
+          console.warn('[AIOrchestrator] coherencia: descartados los cambios de código del turno (leían', strippedTables.join(', '), 'directo):', readers);
+          piiWarnings.push(tr('orch.piiCodeReverted', {
+            files: changedSrc.map((p) => p.split('/').pop()).join(', '),
+          }));
         }
       }
       const rlsPolicyBlockedMark = rlsPolicyBlockedTelemetry(rlsVerdict.findings);

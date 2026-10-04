@@ -687,6 +687,9 @@ export const en = {
   'security.kind.auth_pii_read.why': "Logged-in users include your clients: one client could read every other client's data. Only admins (through a server function) or each row's owner should.",
   'security.kind.auth_write': 'Any logged-in user can change or delete every row of "{table}"',
   'security.kind.auth_write.why': "Logged-in users include your clients: one client could alter or wipe everyone's data.",
+
+  // Guardia de coherencia (2026-10-05)
+  'orch.piiCodeReverted': 'I also kept these files as they were ({files}): they read that data directly and would have stopped working. Admins keep seeing it through the server function.',
 } as const;
 
 export type ForgeKey = keyof typeof en;

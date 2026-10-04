@@ -95,3 +95,23 @@ export function stripPiiPublicRead(sql, knownPii = new Map()) {
   }
   return { sql: out, tables: details.map((d) => d.table), details };
 }
+
+/**
+ * Guardia de COHERENCIA (2026-10-05): si la guardia quitó la lectura abierta de
+ * una tabla con datos personales, ¿algún archivo cambiado en el turno la lee
+ * DIRECTO (`.from('tabla')`)? Ese código se escribió contando con la política
+ * quitada y quedaría roto (p. ej. el panel de admin vacío). Devuelve los paths
+ * que la leen; el orquestador descarta entonces los cambios de src/ del turno.
+ *
+ * @param {{ path: string, content: string }[]} changed archivos cambiados en el turno
+ * @param {string[]} tables tablas a las que la guardia les quitó la lectura abierta
+ */
+export function codeReadingTables(changed, tables) {
+  if (!tables?.length) return [];
+  const names = tables.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const direct = new RegExp(`\\.from\\(\\s*['"\`](?:public\\.)?(?:${names})['"\`]\\s*\\)`, 'i');
+  return (changed ?? [])
+    .filter((f) => typeof f?.path === 'string' && f.path.startsWith('src/') && typeof f.content === 'string')
+    .filter((f) => direct.test(f.content))
+    .map((f) => f.path);
+}
