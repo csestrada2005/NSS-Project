@@ -60,7 +60,7 @@ import { isAbortError } from '../utils/abort';
 import { canEnterFastLane, isSimpleEditIntent, planModeRequiresPlanLane, isTypeFixRequest } from '../utils/laneRouting.js';
 import { withTypeErrorContext } from '../utils/typeErrorContext.js';
 import { isSecurityFixRequest } from '../utils/securityFix.js';
-import { stripPiiPublicRead } from '../utils/piiPublicGuard.js';
+import { piiTablesInProject, stripPiiPublicRead } from '../utils/piiPublicGuard.js';
 
 // Pedidos de los botones "Arreglar ahora" (tipos, Publicar) y "Arreglar"
 // (Seguridad, S2 2026-10-01): hay que cambiar código; nunca se contestan como
@@ -2186,15 +2186,22 @@ export class AIOrchestrator {
         }
       }
       // S5 (2026-10-01): una tabla con datos personales nunca queda legible
-      // para cualquiera, diga lo que diga la IA (piiPublicGuard.js).
+      // para cualquiera, diga lo que diga la IA (piiPublicGuard.js). Las
+      // columnas se conocen por TODAS las migraciones del proyecto, no sólo
+      // por la nueva (una migración que re-abría una tabla ya creada pasaba).
+      const knownPii = piiTablesInProject(files, isMigrationPath);
+      const piiWarnings: string[] = [];
       for (const [target, source] of rlsSourceByTarget) {
         const current = finalFiles.get(source) ?? files.get(source);
         if (typeof current !== 'string') continue;
-        const guarded = stripPiiPublicRead(current);
+        const guarded = stripPiiPublicRead(current, knownPii);
         if (guarded.tables.length === 0) continue;
         finalFiles.set(source, guarded.sql);
         this.notifyFileUpdate(target, guarded.sql);
         console.warn('[AIOrchestrator] lectura pública quitada (datos personales) en', target, ':', guarded.tables.join(', '));
+        for (const d of guarded.details) {
+          piiWarnings.push(tr('orch.piiPublicRemoved', { table: d.table, columns: d.columns.join(', ') }));
+        }
       }
       const rlsPolicyBlockedMark = rlsPolicyBlockedTelemetry(rlsVerdict.findings);
       const rlsEnabledMark = rlsEnabledTelemetry(rlsVerdict.findings);
@@ -2203,7 +2210,7 @@ export class AIOrchestrator {
       // tomada, no se retira el botón de aprobación), pero ahora queda
       // marcada en el log y avisada en el chat.
       const rlsUnreadableMark = rlsUnreadableTelemetry(rlsVerdict.findings);
-      const rlsWarnings = rlsPolicyWarnings(rlsVerdict.findings, getForgeLang());
+      const rlsWarnings = [...rlsPolicyWarnings(rlsVerdict.findings, getForgeLang()), ...piiWarnings];
 
       // ----------------------------------------------------------------
       // G-6 — clientCodeGuard: el Verifier compila y repara, nunca inspecciona

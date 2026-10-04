@@ -370,6 +370,18 @@ Mundos pre-registrados:
   - Publicar: `configureAuthSiteUrl` (server/authSiteUrl.js, +2 tests) fija `site_url` de Supabase Auth al dominio
     publicado y lo AÑADE a `uri_allow_list` sin quitar los existentes. Render: `[deploy] Supabase Auth: dominio
     del sitio configurado (…)`. No bloquea si falla.
+  **CHECK S5 (Samuel, 2026-10-04):** (2) /admin ✓ — `supabase.auth.signInWithPassword`, formulario visible en el
+  preview ("La sesión sólo persiste en el sitio publicado"), Edge Function `get-subscribers` con `npm:`,
+  `auth.getUser(token)` + rol `admin` en `app_users` (401/403). Detalle de calidad: textos de la tabla en inglés en
+  un sitio en español. (3) `[deploy] Supabase Auth: dominio del sitio configurado (…)` ✓, publicado a la 1ª.
+  (4) chequeo bien. (1) **MUNDO INESPERADO:** "que cualquiera pueda verlos" generó una migración que RE-ABRÍA
+  `newsletter_subscribers` (creada en otra migración): comment `wyrd:read=public` + política SELECT anon
+  `using (true)` + `grant select … to anon`. La guardia sólo conocía columnas de tablas creadas en el MISMO SQL.
+  Samuel la descartó. **Arreglo — HECHO EN CÓDIGO, pendiente CHECK:** `piiTablesInProject` (columnas personales
+  según TODAS las migraciones del proyecto, incluido `alter table … add column`), la guardia también quita
+  `grant select … to anon` (deja authenticated), y avisa en el chat: "No hice pública la tabla "X" porque tiene
+  datos personales (…). Si el sitio necesita mostrar algo de ella, pídeme una vista sin esas columnas." +2 tests
+  con la migración real.
 - **Hallazgo de Samuel (2026-10-01) — PENDIENTE, sin diagnóstico:** las fuentes y el acomodo de los objetos
   del sitio PUBLICADO no son iguales a los del preview (estilos y quizá HTML). Sospechas a revisar: el preview
   compila con esbuild + Tailwind del servidor y Vercel con `vite build` del proyecto (otra versión/config de

@@ -28,25 +28,61 @@ export function piiTablesInSql(sql) {
   return out;
 }
 
+const ADD_COLUMN = /alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?(?:"?public"?\.)?"?([A-Za-z_]\w*)"?\s+add\s+(?:column\s+)?(?:if\s+not\s+exists\s+)?"?([A-Za-z_]\w*)"?/gi;
+
+/**
+ * Tablas con columnas personales según TODAS las migraciones del proyecto
+ * (2026-10-01: una migración que sólo re-abría `newsletter_subscribers`, creada
+ * en otra migración, pasaba sin que la guardia supiera que tiene `email`).
+ *
+ * @param {Map<string, string> | Iterable<[string, string]>} files
+ * @param {(path: string) => boolean} isMigration
+ */
+export function piiTablesInProject(files, isMigration) {
+  const out = new Map();
+  const add = (table, cols) => {
+    const list = out.get(table) ?? [];
+    for (const c of cols) if (!list.includes(c)) list.push(c);
+    out.set(table, list);
+  };
+  for (const [path, sql] of files ?? []) {
+    if (!isMigration(path) || typeof sql !== 'string') continue;
+    for (const [table, cols] of piiTablesInSql(sql)) add(table, cols);
+    for (const m of sql.matchAll(ADD_COLUMN)) {
+      if (PII_COLUMN.test(m[2])) add(m[1].toLowerCase(), [m[2]]);
+    }
+  }
+  return out;
+}
+
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * @param {string} sql
- * @returns {{ sql: string, tables: string[] }} SQL sin lectura pública en tablas con datos personales
+ * @param {Map<string, string[]>} [knownPii] tablas personales ya conocidas del proyecto
+ * @returns {{ sql: string, tables: string[], details: { table: string, columns: string[] }[] }}
+ *   SQL sin lectura pública en tablas con datos personales
  */
-export function stripPiiPublicRead(sql) {
+export function stripPiiPublicRead(sql, knownPii = new Map()) {
   let out = String(sql ?? '');
-  const touched = [];
-  for (const table of piiTablesInSql(out).keys()) {
+  const pii = new Map([...knownPii, ...piiTablesInSql(out)]);
+  const details = [];
+  for (const [table, columns] of pii) {
     const name = `(?:"?public"?\\.)?"?${escape(table)}"?`;
     const marker = new RegExp(`^[ \\t]*comment\\s+on\\s+table\\s+${name}\\s+is\\s+'[^']*wyrd:read=public[^']*'\\s*;[ \\t]*\\r?\\n?`, 'gim');
     const openSelect = new RegExp(
       `^[ \\t]*create\\s+policy\\s+(?:"[^"]*"|\\w+)\\s+on\\s+${name}\\s+for\\s+select\\s+(?:to\\s+(?:public|anon)(?:\\s*,\\s*\\w+)*\\s+)?using\\s*\\(\\s*true\\s*\\)\\s*;[ \\t]*\\r?\\n?`,
       'gim'
     );
-    const next = out.replace(marker, '').replace(openSelect, '');
-    if (next !== out) touched.push(table);
+    // "grant select … to anon[, authenticated]": se quita sólo anon.
+    const grantAnon = new RegExp(`^([ \\t]*grant\\s+select\\s+on\\s+(?:table\\s+)?${name}\\s+to\\s+)([^;]*);[ \\t]*\\r?\\n?`, 'gim');
+    let next = out.replace(marker, '').replace(openSelect, '');
+    next = next.replace(grantAnon, (whole, head, roles) => {
+      const kept = roles.split(',').map((r) => r.trim()).filter((r) => r && !/^(anon|public)$/i.test(r));
+      return kept.length === roles.split(',').length ? whole : kept.length ? `${head}${kept.join(', ')};\n` : '';
+    });
+    if (next !== out) details.push({ table, columns });
     out = next;
   }
-  return { sql: out, tables: touched };
+  return { sql: out, tables: details.map((d) => d.table), details };
 }

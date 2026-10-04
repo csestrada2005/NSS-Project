@@ -673,4 +673,7 @@ export const es: Record<ForgeKey, string> = {
   // Seguridad: imports no permitidos en funciones de servidor, S5 (2026-10-01)
   'security.kind.edge_bad_import': 'Una función de servidor no se va a instalar ({path})',
   'security.kind.edge_bad_import.why': 'Importa una librería de un sitio que Supabase ya no permite, así que nunca queda viva.',
+
+  // Guardia de datos personales: aviso en el chat (2026-10-01)
+  'orch.piiPublicRemoved': 'No hice pública la tabla "{table}" porque tiene datos personales ({columns}). Si el sitio necesita mostrar algo de ella, pídeme una vista sin esas columnas.',
 };

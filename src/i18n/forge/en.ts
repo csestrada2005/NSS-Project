@@ -678,6 +678,9 @@ export const en = {
   // Seguridad: imports no permitidos en funciones de servidor, S5 (2026-10-01)
   'security.kind.edge_bad_import': "Server function won't install ({path})",
   'security.kind.edge_bad_import.why': 'It imports a library from a site Supabase no longer allows, so it never goes live.',
+
+  // Guardia de datos personales: aviso en el chat (2026-10-01)
+  'orch.piiPublicRemoved': "I didn't make \"{table}\" readable by anyone because it has personal data ({columns}). If the site must show part of it, ask me for a view without those columns.",
 } as const;
 
 export type ForgeKey = keyof typeof en;
