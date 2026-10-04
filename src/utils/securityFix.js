@@ -36,6 +36,10 @@ export function findingInstruction(f) {
       return `- File ${f.path} writes roles in table ${q(f.table)} from the browser. Remove that write; role changes must go through an Edge Function that verifies the caller is an admin.`;
     case 'edge_no_caller_check':
       return `- Edge Function ${f.path} uses the service role without verifying who calls it. Read the Authorization header, verify the user with supabase.auth.getUser(token), check their role in the roles table, and reply 401/403 otherwise.`;
+    case 'auth_pii_read':
+      return `- Table ${q(f.table)}: policy ${q(f.policy)} lets ANY logged-in user (clients included) read personal columns (${cols}) of every row. In a NEW migration, drop it. Admins read this data through an Edge Function that verifies their role; each user may read only their own rows with a policy like using (auth.uid() = user_id).`;
+    case 'auth_write':
+      return `- Table ${q(f.table)}: policy ${q(f.policy)} lets ANY logged-in user (clients included) ${f.cmd ?? 'change'} every row. In a NEW migration, drop it; allow it only on the user's own rows (using (auth.uid() = user_id)) or move it to an Edge Function that verifies the admin role.`;
     case 'edge_bad_import':
       return `- Edge Function ${f.path} imports from a URL Supabase rejects (deno.land/x, skypack or esm.sh), so it is never deployed. Rewrite its imports with npm: or jsr: specifiers (e.g. npm:@supabase/supabase-js@2).`;
     default:

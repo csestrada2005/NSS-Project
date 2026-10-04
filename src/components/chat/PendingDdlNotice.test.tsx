@@ -95,4 +95,10 @@ describe('DDLCard + PendingDdlActions', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Sí, descartar' }));
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
+
+  it('el aviso del turno (guardia de datos personales) se ve en la tarjeta', () => {
+    setForgeLang('es');
+    render(<DDLCard {...base} warning='No dejé abiertos los datos personales de "newsletter_subscribers" (email).' />);
+    expect(screen.getByText(/No dejé abiertos los datos personales de "newsletter_subscribers"/)).toBeInTheDocument();
+  });
 });

@@ -544,6 +544,7 @@ export function ChatInterface({
             return ddlReviewOpen ? (
               <DDLCard
                 bodyText={proposalMessage ? stripDdlMarks(proposalMessage.content) : ''}
+                warning={proposalMessage?.warning}
                 proposal={olderPendingProposal}
                 projectId={projectId}
                 isReadOnly={isReadOnly}
@@ -597,6 +598,7 @@ export function ChatInterface({
             {executableProposal && proposalIsLatest ? (
               <DDLCard
                 bodyText={proposalMessage ? stripDdlMarks(proposalMessage.content) : ''}
+                warning={proposalMessage?.warning}
                 proposal={executableProposal}
                 projectId={projectId}
                 isReadOnly={isReadOnly}

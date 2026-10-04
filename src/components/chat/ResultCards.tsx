@@ -219,7 +219,10 @@ export function DDLCard({
   onOpenHistory,
   extraActions,
   hideHistory,
+  warning,
 }: StepsProps & {
+  /** Aviso del turno (p. ej. la guardia de datos personales): visible aquí, no sólo en el historial. */
+  warning?: string;
   /** "No aplicar" (último pedido) u Ocultar / Descartar (Revisar de un turno anterior). */
   extraActions?: React.ReactNode;
   /** En "Revisar" el historial no cabe en la fila: se quita. */
@@ -245,6 +248,12 @@ export function DDLCard({
         <span className="fc-pieza-titulo">{t('chat.card.ddl.title')}</span>
       </div>
       <p className="fc-accion-cuerpo">{bodyText} {t('chat.card.ddl.body')}</p>
+      {warning && (
+        <p className="fc-accion-cuerpo" style={{ display: 'flex', gap: 8, alignItems: 'flex-start', color: 'rgba(245, 190, 90, .95)' }}>
+          <AlertTriangle size={14} style={{ flex: '0 0 auto', marginTop: 3 }} />
+          <span>{warning}</span>
+        </p>
+      )}
       <div className="fc-accion-fila">
         <DDLApprovalButton
           proposal={proposal}

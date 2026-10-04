@@ -680,7 +680,13 @@ export const en = {
   'security.kind.edge_bad_import.why': 'It imports a library from a site Supabase no longer allows, so it never goes live.',
 
   // Guardia de datos personales: aviso en el chat (2026-10-01)
-  'orch.piiPublicRemoved': "I didn't make \"{table}\" readable by anyone because it has personal data ({columns}). If the site must show part of it, ask me for a view without those columns.",
+  'orch.piiPublicRemoved': "I didn't leave the personal data in \"{table}\" ({columns}) open: only admins (through a server function that verifies their role) or each row's owner can read it. If the site must show part of it, ask me for a view without those columns.",
+
+  // Seguridad: con sesión incluye clientes (arquitectura de Nebu, 2026-10-04)
+  'security.kind.auth_pii_read': 'Any logged-in user can read personal data in "{table}" ({columns})',
+  'security.kind.auth_pii_read.why': "Logged-in users include your clients: one client could read every other client's data. Only admins (through a server function) or each row's owner should.",
+  'security.kind.auth_write': 'Any logged-in user can change or delete every row of "{table}"',
+  'security.kind.auth_write.why': "Logged-in users include your clients: one client could alter or wipe everyone's data.",
 } as const;
 
 export type ForgeKey = keyof typeof en;

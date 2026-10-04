@@ -29,7 +29,7 @@ test('isSecurityFixRequest: los dos idiomas, sólo al inicio', () => {
 });
 
 test('cada tipo de hallazgo tiene su instrucción', () => {
-  for (const kind of ['public_pii_read', 'public_write', 'rls_off', 'public_insert_privileged', 'client_secret', 'client_role_write', 'edge_no_caller_check', 'edge_bad_import']) {
+  for (const kind of ['public_pii_read', 'public_write', 'rls_off', 'public_insert_privileged', 'client_secret', 'client_role_write', 'edge_no_caller_check', 'edge_bad_import', 'auth_pii_read', 'auth_write']) {
     assert.doesNotMatch(findingInstruction({ kind, table: 't', path: 'p', policy: 'x', columns: ['c'] }), new RegExp(`^- ${kind}:`), kind);
   }
 });

@@ -50,6 +50,14 @@ export async function fetchSecurityReport(ref, managementToken, fetchImpl = fetc
 // Columnas que deciden privilegios o estado: insertar "para cualquiera" se salta controles.
 const PRIVILEGED_COLUMN = /^(status|estado|role|rol|roles|is_admin|admin|approved|aprobad[oa]|is_active|activo|verified|verificad[oa]|moderated_at)$/i;
 const PUBLIC_ROLES = new Set(['public', 'anon']);
+// Nebu (2026-10-04): panel de admin con sesión siempre, panel de cliente a
+// veces → "authenticated" incluye clientes; abierto a todos ellos es grave.
+const rolesOf = (roles) => (Array.isArray(roles) ? roles : String(roles ?? '').replace(/[{}]/g, '').split(','))
+  .map((r) => String(r).trim().toLowerCase());
+const isAuthenticatedOnly = (roles) => {
+  const list = rolesOf(roles);
+  return list.includes('authenticated') && !list.some((r) => PUBLIC_ROLES.has(r));
+};
 const OPEN_EXPR = /^\(?\s*true\s*\)?$/i;
 
 const isPublic = (roles) => (Array.isArray(roles) ? roles : String(roles ?? '').replace(/[{}]/g, '').split(','))
@@ -72,6 +80,19 @@ export function evaluateDatabase(report) {
     if (t.rls === false) findings.push({ severity: 'grave', kind: 'rls_off', table: t.name });
   }
   for (const p of report?.policies ?? []) {
+    if (isAuthenticatedOnly(p.roles)) {
+      const cmd = String(p.cmd ?? '').toUpperCase();
+      const cols = columnsOf.get(p.table) ?? [];
+      if (['UPDATE', 'DELETE', 'ALL'].includes(cmd) && isOpen(p.qual)) {
+        findings.push({ severity: 'grave', kind: 'auth_write', table: p.table, policy: p.name, cmd });
+        continue;
+      }
+      if (cmd === 'SELECT' && isOpen(p.qual)) {
+        const pii = cols.filter((c) => PII_COLUMN.test(c));
+        if (pii.length > 0) findings.push({ severity: 'grave', kind: 'auth_pii_read', table: p.table, policy: p.name, columns: pii });
+      }
+      continue;
+    }
     if (!isPublic(p.roles)) continue;
     const cmd = String(p.cmd ?? '').toUpperCase();
     const cols = columnsOf.get(p.table) ?? [];

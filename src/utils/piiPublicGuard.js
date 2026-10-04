@@ -74,9 +74,18 @@ export function stripPiiPublicRead(sql, knownPii = new Map()) {
       `^[ \\t]*create\\s+policy\\s+(?:"[^"]*"|\\w+)\\s+on\\s+${name}\\s+for\\s+select\\s+(?:to\\s+(?:public|anon)(?:\\s*,\\s*\\w+)*\\s+)?using\\s*\\(\\s*true\\s*\\)\\s*;[ \\t]*\\r?\\n?`,
       'gim'
     );
+    // Arquitectura de Nebu (Samuel, 2026-10-04): todo proyecto tiene panel de
+    // admin con sesión y a veces panel de cliente con sesión, así que "cualquiera
+    // con cuenta" incluye a los clientes. Leer TODOS los datos personales con
+    // sólo tener sesión es una fuga: admins leen vía Edge Function que verifica
+    // su rol; cada cliente, sus propias filas (auth.uid() = …), que no se tocan.
+    const authOpenRead = new RegExp(
+      `^[ \\t]*create\\s+policy\\s+(?:"[^"]*"|\\w+)\\s+on\\s+${name}\\s+for\\s+(?:select|all)\\s+to\\s+authenticated\\s+using\\s*\\(\\s*true\\s*\\)(?:\\s+with\\s+check\\s*\\(\\s*true\\s*\\))?\\s*;[ \\t]*\\r?\\n?`,
+      'gim'
+    );
     // "grant select … to anon[, authenticated]": se quita sólo anon.
     const grantAnon = new RegExp(`^([ \\t]*grant\\s+select\\s+on\\s+(?:table\\s+)?${name}\\s+to\\s+)([^;]*);[ \\t]*\\r?\\n?`, 'gim');
-    let next = out.replace(marker, '').replace(openSelect, '');
+    let next = out.replace(marker, '').replace(openSelect, '').replace(authOpenRead, '');
     next = next.replace(grantAnon, (whole, head, roles) => {
       const kept = roles.split(',').map((r) => r.trim()).filter((r) => r && !/^(anon|public)$/i.test(r));
       return kept.length === roles.split(',').length ? whole : kept.length ? `${head}${kept.join(', ')};\n` : '';

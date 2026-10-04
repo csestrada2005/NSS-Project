@@ -17,8 +17,11 @@ const report = {
     // Emails legibles por cualquiera.
     { table: 'newsletter_subscribers', name: 'allow_public_select', cmd: 'SELECT', roles: ['public'], qual: 'true', check: null },
     { table: 'resenas', name: 'anyone deletes', cmd: 'DELETE', roles: '{anon}', qual: '(true)', check: null },
-    // Restringida a usuarios con sesión: no es hallazgo.
+    // Nebu (2026-10-04): "con sesión" incluye clientes → editar TODO con sólo
+    // tener sesión es grave. Una política del dueño (auth.uid()) no lo es.
     { table: 'resenas', name: 'auth update', cmd: 'UPDATE', roles: ['authenticated'], qual: 'true', check: null },
+    { table: 'resenas', name: 'own update', cmd: 'UPDATE', roles: ['authenticated'], qual: '(auth.uid() = user_id)', check: null },
+    { table: 'newsletter_subscribers', name: 'authenticated_select_newsletter_subscribers', cmd: 'SELECT', roles: ['authenticated'], qual: 'true', check: null },
     // Pública pero con condición: no es "para cualquiera".
     { table: 'resenas', name: 'own rows', cmd: 'UPDATE', roles: ['public'], qual: '(auth.uid() = user_id)', check: null },
   ],
@@ -35,6 +38,8 @@ test('base: RLS apagado, escritura pública, emails públicos y el insert que se
   const kinds = f.map((x) => `${x.severity}:${x.kind}:${x.table}`).sort();
   assert.deepEqual(kinds, [
     'aviso:public_insert_privileged:recomendaciones',
+    'grave:auth_pii_read:newsletter_subscribers',
+    'grave:auth_write:resenas',
     'grave:public_pii_read:newsletter_subscribers',
     'grave:public_write:resenas',
     'grave:rls_off:productos',

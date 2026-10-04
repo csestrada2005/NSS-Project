@@ -97,3 +97,23 @@ test('grant a anon y authenticated en una sola línea: se quita sólo anon', () 
   const { sql } = stripPiiPublicRead('grant select on public.newsletter_subscribers to anon, authenticated;\n', known);
   assert.equal(sql, 'grant select on public.newsletter_subscribers to authenticated;\n');
 });
+
+// 2026-10-04 (Samuel: panel de admin con sesión siempre, de cliente a veces):
+// "cualquiera con cuenta" incluye clientes → leer TODOS los datos personales con
+// sólo tener sesión también se quita. La política del dueño se queda.
+test('quita la lectura de datos personales para cualquier usuario con sesión, no la del dueño', () => {
+  const known = new Map([['newsletter_subscribers', ['email']]]);
+  const sql = [
+    'create policy "authenticated_select_newsletter_subscribers"',
+    '  on public.newsletter_subscribers',
+    '  for select',
+    '  to authenticated',
+    '  using (true);',
+    'create policy "own_row" on public.newsletter_subscribers for select to authenticated using (auth.uid() = user_id);',
+    '',
+  ].join('\n');
+  const out = stripPiiPublicRead(sql, known);
+  assert.deepEqual(out.tables, ['newsletter_subscribers']);
+  assert.doesNotMatch(out.sql, /authenticated_select_newsletter_subscribers/);
+  assert.match(out.sql, /own_row/);
+});

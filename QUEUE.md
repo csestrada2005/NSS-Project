@@ -382,6 +382,15 @@ Mundos pre-registrados:
   `grant select … to anon` (deja authenticated), y avisa en el chat: "No hice pública la tabla "X" porque tiene
   datos personales (…). Si el sitio necesita mostrar algo de ella, pídeme una vista sin esas columnas." +2 tests
   con la migración real.
+  **CHECK de la guardia (Samuel, 2026-10-04):** el SQL ya NO tiene comment público, política anon ni grant a anon ✓.
+  Dos fallos: (a) el aviso no se veía en la tarjeta de migración (DDLCard sólo mostraba el texto principal); (b) la
+  IA dejó `for select to authenticated using (true)` (y borraba la vista segura). **Contexto de Samuel:** todo
+  proyecto de Nebu = sitio + panel de ADMIN con sesión SIEMPRE + a veces panel de CLIENTE con sesión → "con
+  sesión" incluye clientes: leer/editar TODO con sólo tener sesión es una fuga. **HECHO EN CÓDIGO:** la guardia
+  también quita `for select|all to authenticated using (true)` en tablas con datos personales (la política del
+  dueño `auth.uid() = …` se queda); el chequeo marca GRAVE `auth_pii_read` y `auth_write`; regla 9 de BACKEND
+  RULES con la arquitectura de Nebu (admins vía Edge Function que verifica el rol; clientes sólo sus filas); la
+  tarjeta de migración muestra el aviso del turno. +4 tests.
 - **Hallazgo de Samuel (2026-10-01) — PENDIENTE, sin diagnóstico:** las fuentes y el acomodo de los objetos
   del sitio PUBLICADO no son iguales a los del preview (estilos y quizá HTML). Sospechas a revisar: el preview
   compila con esbuild + Tailwind del servidor y Vercel con `vite build` del proyecto (otra versión/config de
@@ -2558,6 +2567,9 @@ buenos resultados la primera vez que se usó en este ítem (ver Bloque 1, "Halla
 - Render en plan **Starter** (decisión de Samuel, 2026-09-29) y medir la revisión de tipos ahí (ver
   "Chequeo después de arreglar el modal", paso 1). `NODE_VERSION=22.12.0` en Render: verificar en el log de
   build `Using Node.js version 22.12.0` sin la advertencia de Vite.
+- **Subir documentos y fotos (Samuel, 2026-10-04):** botón en el chat (hoy "Adjuntar" = "Próximamente") y lo
+  mismo en la pestaña de Código, para subirlos sin gastar créditos (son relevantes para las páginas).
+- **Cambiar el favicon desde Publicar (Samuel, 2026-10-04):** "crucial".
 - Quitar los botones "Próximamente" que no hacen nada (chat: Adjuntar, Dictar, Editar el plan; créditos:
   Comprar créditos). Decisión de Samuel (2026-09-29): se quedan mientras él sea el único usuario, porque le
   sirven como recordatorio de lo que falta.

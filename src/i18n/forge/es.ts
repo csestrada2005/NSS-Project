@@ -675,5 +675,11 @@ export const es: Record<ForgeKey, string> = {
   'security.kind.edge_bad_import.why': 'Importa una librería de un sitio que Supabase ya no permite, así que nunca queda viva.',
 
   // Guardia de datos personales: aviso en el chat (2026-10-01)
-  'orch.piiPublicRemoved': 'No hice pública la tabla "{table}" porque tiene datos personales ({columns}). Si el sitio necesita mostrar algo de ella, pídeme una vista sin esas columnas.',
+  'orch.piiPublicRemoved': 'No dejé abiertos los datos personales de "{table}" ({columns}): sólo los admins (con una función de servidor que verifica su rol) o el dueño de cada fila pueden leerlos. Si el sitio necesita mostrar algo, pídeme una vista sin esas columnas.',
+
+  // Seguridad: con sesión incluye clientes (arquitectura de Nebu, 2026-10-04)
+  'security.kind.auth_pii_read': 'Cualquier usuario con sesión puede leer datos personales de "{table}" ({columns})',
+  'security.kind.auth_pii_read.why': 'Con sesión también entran tus clientes: un cliente podría leer los datos de todos los demás. Sólo deben leerlos los admins (con una función de servidor) o el dueño de cada fila.',
+  'security.kind.auth_write': 'Cualquier usuario con sesión puede cambiar o borrar todas las filas de "{table}"',
+  'security.kind.auth_write.why': 'Con sesión también entran tus clientes: un cliente podría alterar o borrar los datos de todos.',
 };
