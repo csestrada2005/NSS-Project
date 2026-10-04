@@ -128,9 +128,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// 2. Security headers (required for WebContainers)
+// 2. Security headers. Cross-Origin-Embedder-Policy (require-corp) se quitó el
+// 2026-10-05 con permiso de Samuel: era para WebContainers (ya no existen) y
+// bloqueaba las fotos del almacén del proyecto en el preview y en Archivos.
 app.use((req, res, next) => {
-  res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
   next();
 });

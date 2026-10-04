@@ -1586,6 +1586,8 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   búsqueda realmente sólo encuentra eso? Y `DesignContextService.getContext(input, …)` usa el pedido
   ENTERO como `product_type` en sus consultas (`colors`, `ui_reasoning`, `styles`…) → casi siempre cae
   a la fila por defecto.
+  **Recordatorio (Samuel, 2026-10-05):** sigue viendo siempre "4 patrones y algo más" en Render con una
+  base de datos de diseño grande → sospecha de error. Entra en la evaluación de calidad de la IA.
 - Catálogo de componentes, con auditoría de licencia por componente.
 - B-restos: transparencia de plan en generación inicial, persistencia del bloque de plan al recargar (incluye el aviso que no persiste, de G-4), espaciado.
 - B4: edición de plan. Confirmado por Samuel (2026-09-30): el botón "Editar el plan" de la tarjeta "Plan listo"
@@ -1607,6 +1609,21 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   revisa, en teoría (contra las reglas y la arquitectura de Nebu: sitio + panel de admin con sesión + panel de
   cliente opcional), si la IA los cumpliría; (2) corrida completa con un proyecto NUEVO y un "señor" prompt
   (pedido completo y exigente) para comparar el resultado contra el proyecto real. Diseño en frío propio.
+- **Cumplimiento legal "imposibles de demandar" (Samuel, 2026-10-05).** Los sitios generados deben cumplir:
+  aviso de privacidad (Privacy Policy) · declarar que se recogen datos · "usamos IA" si el sitio usa IA ·
+  declarar terceros que recogen datos (analytics, pixels, Stripe…) · que el usuario pueda borrar lo que subió ·
+  buckets de almacenamiento NO públicos para datos de usuarios · nada de testimonios falsos · cancelar no más
+  difícil que suscribirse · nada de renovación automática sin aviso previo · IA del sitio con respuesta ante
+  autolesiones. Añadidos en el análisis (2026-10-05): términos y condiciones · aviso de cookies/consentimiento
+  · aviso de privacidad mexicano con derechos ARCO (ley de datos personales de 2025) e identidad/contacto del
+  negocio (PROFECO: precios finales con IVA) · borrar la CUENTA completa, no sólo lo subido · accesibilidad
+  (WCAG 2.1 AA; las demandas por accesibilidad son las más comunes contra sitios en EE.UU.) · baja en cada
+  correo de newsletter (CAN-SPAM) · menores de 13 (COPPA) si aplica · licencias de fotos y fuentes · avisos
+  por giro (salud, finanzas). Ninguna lista hace un sitio "imposible" de demandar: el objetivo es quitar las
+  causas comunes; las plantillas legales las revisa un abogado UNA vez. Pendiente de diseño en frío: qué se
+  genera solo, qué revisa el agente de seguridad y qué bloquea publicar.
+  Nota: el bucket `project-assets` de Wyrd es público a propósito (fotos del sitio). Los PDFs/documentos del
+  usuario NO deben vivir ahí → decidir en el bloque 3 (adjuntos) un bucket privado para documentos.
 - **La IA no encuentra archivos que existen.** Prueba 2026-09-30 (332f31d3, modo Plan): "Cambia el color de
   fondo del footer a negro" → respondió "¿Quieres cambiar el fondo de un componente Footer que no veo en los
   archivos proporcionados…?" aunque `src/components/layout/Footer.tsx` existe. El targeting del simple lane
@@ -2617,6 +2634,10 @@ buenos resultados la primera vez que se usó en este ítem (ver Bloque 1, "Halla
     (log `[assets] …`), pestaña "Archivos" en el modal de Código (`AssetsPanel.tsx`, +1 test), y la IA
     recibe la lista con las direcciones exactas (`src/utils/assetsNote.js`, +1 test) en el carril simple
     y en el Architect. `fakeFetch` responde `[]` a esa lectura.
+    Check de Samuel (2026-10-05): pasos 1-5 y 7 correctos; la IA usó la dirección exacta. Mundo inesperado:
+    las fotos no se veían en el preview ni en las miniaturas (sí en pestaña nueva). Causa: cabecera vieja
+    `Cross-Origin-Embedder-Policy: require-corp` (de WebContainers) + el almacén no manda permiso
+    cross-origin. Quitada con permiso de Samuel (server.js + vite.config.ts). Espera re-check.
   - Bloque 2 — favicon en Publicar (generar 32px y 180px). Pendiente.
   - Bloque 3 — adjuntos en el chat (fotos por dirección; PDFs leídos por la IA, gasta créditos). Pendiente.
 - **Cambiar el favicon desde Publicar (Samuel, 2026-10-04):** "crucial".
@@ -2625,6 +2646,18 @@ buenos resultados la primera vez que se usó en este ítem (ver Bloque 1, "Halla
   sirven como recordatorio de lo que falta.
 - **Dominios dentro de Wyrd** (ver bucket 15): aplicar una vez que Wyrd sea público para todos, no sólo
   para uso interno de Nebu.
+
+## 16. BUCKET Plugins/skills a considerar para Wyrd (Samuel, 2026-10-05) — tenerlos a la vista, no instalar aún
+- **Taste Skill:** reglas de "buen gusto" de diseño (evitar el look genérico de IA). Se cruza con UI/UX Pro
+  Max: probarla con un A/B dentro de la evaluación de calidad de la IA, no instalarla a ciegas.
+- **Web design guidelines (Vercel):** lista de revisión de interfaz (accesibilidad, foco, formularios,
+  contraste). SÍ vale: como chequeo antes de publicar, junto al agente de seguridad; cubre la parte de
+  accesibilidad del cumplimiento legal.
+- **Awesome Design:** colección de DESIGN.md de sitios conocidos. UI/UX Pro Max ya da estilos y paletas;
+  esto sólo sirve como catálogo de puntos de partida para la opción C (tipo de negocio al crear). Baja prioridad.
+- **Image to Code:** no hace falta un plugin: el modelo ya entiende imágenes. Se hace dentro del bloque 3
+  (adjuntos en el chat) como "haz algo como esta captura". Riesgo legal: copiar un sitio ajeno tal cual →
+  la IA se inspira, no clona.
 
 ## 14. BUCKET Agentes de revisión y protección contra regresiones (pedido de Samuel, 2026-09-30)
 
