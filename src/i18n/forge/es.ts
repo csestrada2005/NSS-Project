@@ -386,12 +386,12 @@ export const es: Record<ForgeKey, string> = {
 
   // Ajustes: publicar (DeployManager)
   'deploy.stage.packaging': 'Empaquetando archivos...',
-  'deploy.stage.uploading': 'Subiendo a Vercel...',
+  'deploy.stage.uploading': 'Subiendo...',
   'deploy.stage.building': 'Construyendo...',
   'deploy.stage.live': '¡En vivo!',
   'deploy.noProject': 'No encontré el proyecto. Guárdalo primero.',
   'deploy.failed': 'La publicación falló',
-  'deploy.title': 'Publicar en Vercel',
+  'deploy.title': 'Publicar',
   'deploy.intro': 'Publicación en un clic, administrada por la plataforma. No necesitas ningún token.',
   'deploy.success': '¡Publicado correctamente!',
   'deploy.openSite': 'Abrir sitio',
@@ -413,7 +413,7 @@ export const es: Record<ForgeKey, string> = {
   'domains.loading': 'Cargando dominios...',
   'domains.empty': 'Todavía no hay dominios conectados.',
   'domains.remove': 'Quitar dominio',
-  'domains.howTo': 'Cómo apuntar tu dominio (si no usas Cloudflare)',
+  'domains.howTo': 'Cómo apuntar tu dominio',
   'domains.cname': 'Agrega un registro CNAME que apunte a tu sitio publicado:',
   'domains.copyHost': 'Copiar hostname',
 
@@ -577,7 +577,7 @@ export const es: Record<ForgeKey, string> = {
 
   // Chat: aún no se puede publicar (errores de tipos, bucket 6)
   'chat.types.tag': 'Aún no se puede publicar',
-  'chat.types.title': 'Funciona en el editor, pero Vercel no podría construirlo',
+  'chat.types.title': 'Funciona en el editor, pero aún no se puede publicar',
   'chat.types.body_one': 'Hay {count} error de tipos que impediría publicar.',
   'chat.types.body_other': 'Hay {count} errores de tipos que impedirían publicar.',
   'chat.types.fix': 'Arreglar ahora',
@@ -604,8 +604,7 @@ export const es: Record<ForgeKey, string> = {
   'deploy.fixFailed': 'La IA no pudo arreglar estos errores automáticamente. Inténtalo de nuevo o pídelo en el chat.',
 
   // Publicar: mensaje de errores de tipos del build (2026-09-30)
-  'deploy.typecheckFailedVercel': 'Vercel no pudo construir este proyecto por errores de tipos, así que no se publicó nada. "Arreglar ahora" los arregla aquí mismo y vuelve a publicar:',
-
+  'deploy.typecheckFailedVercel': 'El proyecto no se pudo construir para publicarlo por errores de tipos, así que no se publicó nada. "Arreglar ahora" los arregla aquí mismo y vuelve a publicar:',
   // Publicar: Actualizar un sitio ya publicado (2026-09-30)
   'deploy.update': 'Actualizar',
   'deploy.lastDeployed': 'Última publicación: {when}',
@@ -672,8 +671,7 @@ export const es: Record<ForgeKey, string> = {
 
   // Seguridad: imports no permitidos en funciones de servidor, S5 (2026-10-01)
   'security.kind.edge_bad_import': 'Una función de servidor no se va a instalar ({path})',
-  'security.kind.edge_bad_import.why': 'Importa una librería de un sitio que Supabase ya no permite, así que nunca queda viva.',
-
+  'security.kind.edge_bad_import.why': 'Importa una librería de un sitio que el servidor de funciones ya no permite, así que nunca queda viva.',
   // Guardia de datos personales: aviso en el chat (2026-10-01)
   'orch.piiPublicRemoved': 'No dejé abiertos los datos personales de "{table}" ({columns}): sólo los admins (con una función de servidor que verifica su rol) o el dueño de cada fila pueden leerlos. Si el sitio necesita mostrar algo, pídeme una vista sin esas columnas.',
 
@@ -685,4 +683,13 @@ export const es: Record<ForgeKey, string> = {
 
   // Guardia de coherencia (2026-10-05)
   'orch.piiCodeReverted': 'Tampoco cambié estos archivos ({files}): leían esos datos directo y habrían dejado de funcionar. Los admins los siguen viendo con la función de servidor.',
+
+  // Ajustes sin marcas de infraestructura (2026-10-05)
+  'platform.ai': 'Asistente de IA',
+  'platform.speed': 'Análisis de velocidad',
+  'platform.domains': 'Dominios',
+  'platform.publish': 'Publicación',
+  'platform.email': 'Correo',
+  'platform.db': 'Base de datos de la plataforma',
+  'domains.confirmRemove': '¿Quitar este dominio? Se borrará su registro DNS.',
 };

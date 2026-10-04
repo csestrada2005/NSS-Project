@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import type { ForgeKey } from '@/i18n/forge/en';
 import { Eye, EyeOff, Plus, Trash2, Save, Cloud, CheckCircle, Circle } from 'lucide-react';
 import { SupabaseService } from '@/services/SupabaseService';
 import { platformService } from '@/services/PlatformService';
@@ -27,13 +28,15 @@ const PLATFORM_MANAGED_KEYS = new Set([
   'SUPABASE_SERVICE_ROLE_KEY',
 ]);
 
-const PLATFORM_LABELS: Record<string, string> = {
-  anthropic: 'Anthropic (Claude AI)',
-  googlePsi: 'Google PageSpeed',
-  cloudflare: 'Cloudflare',
-  vercel: 'Vercel',
-  resend: 'Resend (Email)',
-  supabase: 'Supabase (Platform DB)',
+// Sin marcas de infraestructura (Samuel, 2026-10-05): sólo se nombra al
+// proveedor cuando el usuario conecta SU propia cuenta (GitHub, Stripe).
+const PLATFORM_LABELS: Record<string, ForgeKey> = {
+  anthropic: 'platform.ai',
+  googlePsi: 'platform.speed',
+  cloudflare: 'platform.domains',
+  vercel: 'platform.publish',
+  resend: 'platform.email',
+  supabase: 'platform.db',
 };
 
 export function SecretsPanel({ projectId }: SecretsPanelProps) {
@@ -154,7 +157,7 @@ export function SecretsPanel({ projectId }: SecretsPanelProps) {
                   {connected
                     ? <CheckCircle size={12} className="text-emerald-500 shrink-0" />
                     : <Circle size={12} className="text-muted-foreground/40 shrink-0" />}
-                  <span className={connected ? 'text-foreground' : 'text-muted-foreground'}>{label}</span>
+                  <span className={connected ? 'text-foreground' : 'text-muted-foreground'}>{t(label)}</span>
                 </div>
               );
             })}

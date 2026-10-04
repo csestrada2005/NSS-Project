@@ -391,12 +391,12 @@ export const en = {
 
   // Ajustes: publicar (DeployManager)
   'deploy.stage.packaging': 'Packaging files...',
-  'deploy.stage.uploading': 'Uploading to Vercel...',
+  'deploy.stage.uploading': 'Uploading...',
   'deploy.stage.building': 'Building...',
   'deploy.stage.live': 'Live!',
   'deploy.noProject': 'No project ID found. Save your project first.',
   'deploy.failed': 'Deployment failed',
-  'deploy.title': 'Deploy to Vercel',
+  'deploy.title': 'Publish',
   'deploy.intro': 'One-click deployment managed by the platform. No token required.',
   'deploy.success': 'Deployed successfully!',
   'deploy.openSite': 'Open Site',
@@ -418,7 +418,7 @@ export const en = {
   'domains.loading': 'Loading domains...',
   'domains.empty': 'No domains connected yet.',
   'domains.remove': 'Remove domain',
-  'domains.howTo': 'How to point your domain (if not using Cloudflare)',
+  'domains.howTo': 'How to point your domain',
   'domains.cname': 'Add a CNAME record pointing to your deployment:',
   'domains.copyHost': 'Copy hostname',
 
@@ -582,7 +582,7 @@ export const en = {
 
   // Chat: aún no se puede publicar (errores de tipos, bucket 6)
   'chat.types.tag': 'Not publishable yet',
-  'chat.types.title': 'It works in the editor, but Vercel could not build it',
+  'chat.types.title': 'It works in the editor, but it can\'t be published yet',
   'chat.types.body_one': 'There is {count} type error that would block publishing.',
   'chat.types.body_other': 'There are {count} type errors that would block publishing.',
   'chat.types.fix': 'Fix now',
@@ -609,8 +609,7 @@ export const en = {
   'deploy.fixFailed': "The AI couldn't fix these errors automatically. Try again, or ask for it in the chat.",
 
   // Publicar: mensaje de errores de tipos del build (2026-09-30)
-  'deploy.typecheckFailedVercel': 'Vercel could not build this project because of type errors, so nothing was published. "Fix now" fixes them here and publishes again:',
-
+  'deploy.typecheckFailedVercel': 'The project could not be built for publishing because of type errors, so nothing was published. "Fix now" fixes them here and publishes again:',
   // Publicar: Actualizar un sitio ya publicado (2026-09-30)
   'deploy.update': 'Update',
   'deploy.lastDeployed': 'Last published {when}',
@@ -677,8 +676,7 @@ export const en = {
 
   // Seguridad: imports no permitidos en funciones de servidor, S5 (2026-10-01)
   'security.kind.edge_bad_import': "Server function won't install ({path})",
-  'security.kind.edge_bad_import.why': 'It imports a library from a site Supabase no longer allows, so it never goes live.',
-
+  'security.kind.edge_bad_import.why': 'It imports a library from a site the server-function host no longer allows, so it never goes live.',
   // Guardia de datos personales: aviso en el chat (2026-10-01)
   'orch.piiPublicRemoved': "I didn't leave the personal data in \"{table}\" ({columns}) open: only admins (through a server function that verifies their role) or each row's owner can read it. If the site must show part of it, ask me for a view without those columns.",
 
@@ -690,6 +688,15 @@ export const en = {
 
   // Guardia de coherencia (2026-10-05)
   'orch.piiCodeReverted': 'I also kept these files as they were ({files}): they read that data directly and would have stopped working. Admins keep seeing it through the server function.',
+
+  // Ajustes sin marcas de infraestructura (2026-10-05)
+  'platform.ai': 'AI assistant',
+  'platform.speed': 'Speed analysis',
+  'platform.domains': 'Domains',
+  'platform.publish': 'Publishing',
+  'platform.email': 'Email',
+  'platform.db': 'Platform database',
+  'domains.confirmRemove': 'Remove this domain? Its DNS record will be deleted.',
 } as const;
 
 export type ForgeKey = keyof typeof en;

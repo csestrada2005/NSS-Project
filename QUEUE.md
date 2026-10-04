@@ -397,6 +397,18 @@ Mundos pre-registrados:
   quedado vacío (Samuel lo descartó). **Ajuste — HECHO:** regla 9 + "si el usuario pide EXPLÍCITAMENTE abrir datos
   personales, no lo hagas ni reescribas las páginas sobre eso; mantén el acceso de admins vía la Edge Function y
   explica por qué en el resumen". Pendiente CHECK con el mismo pedido.
+  **CHECK (Samuel, 2026-10-05): la regla 9 NO bastó** — la IA volvió a reescribir AdminSubscribersPage/Table para leer
+  la tabla directo (la guardia quitó la política; Samuel no la aplicó). **Guardia de coherencia — HECHO EN CÓDIGO,
+  pendiente CHECK:** `codeReadingTables` (+1 test): si la guardia quitó la lectura abierta de una tabla con datos
+  personales y algún archivo de src/ cambiado en el turno la lee directo (`.from('tabla')`), se descartan TODOS los
+  cambios de src/ del turno (no uno, para no dejar páginas a medias) y se avisa: "Tampoco cambié estos archivos
+  (…): leían esos datos directo y habrían dejado de funcionar…".
+- **Preview = publicado: CHECK CONFIRMADO (Samuel, 2026-10-05)** — "todo correcto en la publicación".
+- **Ajustes sin marcas de infraestructura (Samuel, 2026-10-05) — HECHO:** regla: se nombra al proveedor SÓLO cuando el
+  usuario conecta SU propia cuenta (GitHub, Stripe); lo que es infraestructura de Nebu va sin marca. "Publicar en
+  Vercel" → "Publicar", "Subiendo a Vercel" → "Subiendo…", sin "Cloudflare" en Dominios, estados de servicios de la
+  plataforma con nombres genéricos (Asistente de IA, Publicación, Correo, Base de datos de la plataforma…). Quedan,
+  por ser identificadores técnicos: el nombre de variable `SUPABASE_SERVICE_ROLE_KEY` y la carpeta `supabase/migrations/`.
 - **Hallazgo de Samuel (2026-10-01) — PENDIENTE, sin diagnóstico:** las fuentes y el acomodo de los objetos
   del sitio PUBLICADO no son iguales a los del preview (estilos y quizá HTML). Sospechas a revisar: el preview
   compila con esbuild + Tailwind del servidor y Vercel con `vite build` del proyecto (otra versión/config de
@@ -1584,6 +1596,9 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   como están o hay una decisión de producto pendiente ahí?
 
 ## 6. BUCKET Calidad del modelo
+- **Llaves "como Lovable" (Samuel, 2026-10-05):** cuando la IA necesita una llave (p. ej. Stripe), abre un formulario
+  seguro (no el chat) y la guarda donde va (secretos de las funciones de servidor del proyecto). Wyrd ya tiene el
+  panel de secretos; falta que la IA lo pida y lo llene.
 - **Plan de evaluación de la calidad de la IA (Samuel, 2026-10-05):** (1) Samuel pasa proyectos REALES de Nebu y se
   revisa, en teoría (contra las reglas y la arquitectura de Nebu: sitio + panel de admin con sesión + panel de
   cliente opcional), si la IA los cumpliría; (2) corrida completa con un proyecto NUEVO y un "señor" prompt

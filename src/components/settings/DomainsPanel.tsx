@@ -97,7 +97,7 @@ export function DomainsPanel({ projectId }: DomainsPanelProps) {
   };
 
   const deleteDomain = async (domainId: string) => {
-    if (!window.confirm('Remove this domain? This will delete the DNS record from Cloudflare.')) return;
+    if (!window.confirm(t('domains.confirmRemove'))) return;
     try {
       const headers = await getAuthHeader();
       await fetch(`/api/domains/${domainId}`, { method: 'DELETE', headers });
