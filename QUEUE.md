@@ -403,6 +403,10 @@ Mundos pre-registrados:
   personales y algún archivo de src/ cambiado en el turno la lee directo (`.from('tabla')`), se descartan TODOS los
   cambios de src/ del turno (no uno, para no dejar páginas a medias) y se avisa: "Tampoco cambié estos archivos
   (…): leían esos datos directo y habrían dejado de funcionar…".
+  **CHECK (Samuel, 2026-10-05): OK** — la IA ya no tocó las páginas ("Cambié 1 archivo", sólo la migración, que la
+  guardia dejó sin política abierta); aviso visible; panel de admin intacto con `get-subscribers`. La guardia de
+  coherencia no tuvo que actuar en esta corrida (sin cambios de páginas → sin segundo aviso, correcto); queda como red
+  cubierta por su test. Ajustes sin marcas: CONFIRMADO.
 - **Preview = publicado: CHECK CONFIRMADO (Samuel, 2026-10-05)** — "todo correcto en la publicación".
 - **Ajustes sin marcas de infraestructura (Samuel, 2026-10-05) — HECHO:** regla: se nombra al proveedor SÓLO cuando el
   usuario conecta SU propia cuenta (GitHub, Stripe); lo que es infraestructura de Nebu va sin marca. "Publicar en
