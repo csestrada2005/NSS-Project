@@ -391,6 +391,12 @@ Mundos pre-registrados:
   dueño `auth.uid() = …` se queda); el chequeo marca GRAVE `auth_pii_read` y `auth_write`; regla 9 de BACKEND
   RULES con la arquitectura de Nebu (admins vía Edge Function que verifica el rol; clientes sólo sus filas); la
   tarjeta de migración muestra el aviso del turno. +4 tests.
+  **CHECK (Samuel, 2026-10-05):** aviso visible en la tarjeta ✓; SQL sin `to authenticated using (true)` ✓. Efecto
+  secundario: la IA obedeció el pedido explícito ("cualquier usuario con sesión") y reescribió
+  AdminSubscribersPage/Table para leer la tabla directo — con la política quitada por la guardia, el panel habría
+  quedado vacío (Samuel lo descartó). **Ajuste — HECHO:** regla 9 + "si el usuario pide EXPLÍCITAMENTE abrir datos
+  personales, no lo hagas ni reescribas las páginas sobre eso; mantén el acceso de admins vía la Edge Function y
+  explica por qué en el resumen". Pendiente CHECK con el mismo pedido.
 - **Hallazgo de Samuel (2026-10-01) — PENDIENTE, sin diagnóstico:** las fuentes y el acomodo de los objetos
   del sitio PUBLICADO no son iguales a los del preview (estilos y quizá HTML). Sospechas a revisar: el preview
   compila con esbuild + Tailwind del servidor y Vercel con `vite build` del proyecto (otra versión/config de
@@ -1568,6 +1574,10 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   como están o hay una decisión de producto pendiente ahí?
 
 ## 6. BUCKET Calidad del modelo
+- **Plan de evaluación de la calidad de la IA (Samuel, 2026-10-05):** (1) Samuel pasa proyectos REALES de Nebu y se
+  revisa, en teoría (contra las reglas y la arquitectura de Nebu: sitio + panel de admin con sesión + panel de
+  cliente opcional), si la IA los cumpliría; (2) corrida completa con un proyecto NUEVO y un "señor" prompt
+  (pedido completo y exigente) para comparar el resultado contra el proyecto real. Diseño en frío propio.
 - **La IA no encuentra archivos que existen.** Prueba 2026-09-30 (332f31d3, modo Plan): "Cambia el color de
   fondo del footer a negro" → respondió "¿Quieres cambiar el fondo de un componente Footer que no veo en los
   archivos proporcionados…?" aunque `src/components/layout/Footer.tsx` existe. El targeting del simple lane
