@@ -1,4 +1,6 @@
-import { Download } from 'lucide-react';
+import { useState } from 'react';
+import { Download, Images } from 'lucide-react';
+import { AssetsPanel } from './AssetsPanel';
 import { FileExplorer } from '../FileExplorer';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
 
@@ -28,6 +30,8 @@ interface CodePanelProps {
    * so users never export a half-generated intermediate state.
    */
   isGenerating: boolean;
+  /** Para el panel de Archivos (fotos y documentos del proyecto). */
+  projectId?: string | null;
 }
 
 export function CodePanel({
@@ -40,8 +44,11 @@ export function CodePanel({
   isSaving,
   onDownloadZip,
   isGenerating,
+  projectId,
 }: CodePanelProps) {
   const { t } = useForgeLang();
+  // Archivos (2026-10-05): subir fotos/documentos sin IA, sin créditos.
+  const [showAssets, setShowAssets] = useState(false);
   return (
     <div className="flex w-full h-full bg-background">
       <div className="w-56 border-r border-border h-full overflow-hidden shrink-0">
@@ -54,6 +61,14 @@ export function CodePanel({
         <div className="h-10 border-b border-border flex items-center justify-between px-4 bg-card shrink-0">
           <span className="text-sm text-muted-foreground truncate">{selectedFilePath || t('code.noFile')}</span>
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowAssets((v) => !v)}
+              className={`flex items-center gap-1.5 px-3 py-1 text-xs rounded ${showAssets ? 'bg-primary text-white' : 'bg-secondary hover:bg-secondary/80 text-secondary-foreground'}`}
+            >
+              <Images size={13} />
+              {showAssets ? t('assets.backToCode') : t('assets.title')}
+            </button>
             <button
               onClick={onDownloadZip}
               disabled={isGenerating}
@@ -72,13 +87,13 @@ export function CodePanel({
             </button>
           </div>
         </div>
-        <textarea
+        {showAssets ? <AssetsPanel projectId={projectId} /> : <textarea
           value={selectedFileContent}
           onChange={(e) => onCodeEdit(e.target.value)}
           className="flex-1 w-full bg-background text-foreground p-4 font-mono text-sm resize-none focus:outline-none"
           spellCheck={false}
           disabled={!selectedFilePath}
-        />
+        />}
       </div>
     </div>
   );

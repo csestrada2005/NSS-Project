@@ -90,6 +90,12 @@ export function installFakeFetch(): FakeFetchControl {
       return jsonResponse(TYPECHECK_CLEAN_FIXTURE);
     }
 
+    // --- GET /api/projects/:id/assets — lista de archivos subidos (2026-10-05):
+    // una LECTURA que el orquestador hace en paralelo; proyecto sin archivos. ---
+    if ((init?.method ?? 'GET').toUpperCase() === 'GET' && /\/api\/projects\/[^/]+\/assets$/.test(url)) {
+      return jsonResponse([]);
+    }
+
     // --- /api/embed-and-search — PatternRetriever, vector search vacía ---
     if (url.includes('/api/embed-and-search')) {
       return jsonResponse(EMBED_SEARCH_FIXTURE);

@@ -58,6 +58,7 @@
     "react-router-dom": "^7.13.1",
     "react-selecto": "^1.26.3",
     "recharts": "^3.8.0",
+    "sharp": "^0.34.5",
     "shiki": "^4.4.3",
     "sonner": "^2.0.7",
     "stripe": "^20.4.1",

@@ -67,6 +67,7 @@ import { codeReadingTables, piiTablesInProject, stripPiiPublicRead } from '../ut
 // pregunta ni caen en el atajo "compila, no hay nada que arreglar".
 const isFixButtonRequest = (input: string) => isTypeFixRequest(input) || isSecurityFixRequest(input);
 import { createStageTimer, type StageTimer } from '../utils/stageTimer.js';
+import { buildAssetsNote } from '../utils/assetsNote.js';
 import { buildMigrationObjectsNote, buildPendingMigrationNote, checkMigrationPlan } from '../utils/migrationContext.js';
 import { applyEditBlocks, describeFailures, parseEditBlocks, wantsFullRewrite } from '../utils/searchReplace.js';
 import { extractQuotedTexts, orderPageSeeds, resolveHintedTarget, snippetForTargeting } from '../utils/targetHints.js';
@@ -1255,6 +1256,10 @@ export class AIOrchestrator {
     // Construirla (buildFromFiles) sí puede, así que eso sigue esperando a
     // que los créditos alcancen.
     const memoryRead = projectId ? ProjectMemoryService.get(projectId) : Promise.resolve(null);
+    // Archivos subidos por el usuario (2026-10-05): en paralelo; si falla, sin lista.
+    const assetsNotePending: Promise<string> = projectId
+      ? platformService.listAssets(projectId).then(buildAssetsNote).catch(() => '')
+      : Promise.resolve('');
     // Si los créditos cortan antes de esperarla, que su fallo no quede suelto;
     // quien la espera abajo sigue recibiendo el error como antes.
     memoryRead.catch(() => {});
@@ -1480,7 +1485,7 @@ export class AIOrchestrator {
     const isSimpleEdit = isSimpleEditIntent(intent, input);
 
     if (!forcePlanLane && isSimpleEdit && files.size > 0) {
-      const result = await this.runSimpleLane(input, files, selectedElement, intent, projectId, signal, previousClarifyQuestion, timer);
+      const result = await this.runSimpleLane(input, files, selectedElement, intent, projectId, signal, previousClarifyQuestion, timer, await assetsNotePending);
       if (result.outcome === 'success' && creditUserId) {
         await this.settleCredits(intent.type, result.tokensInput ?? 0, result.tokensOutput ?? 0, projectId);
       }
@@ -1556,6 +1561,7 @@ export class AIOrchestrator {
     // se definió en qué migración" y la regla de no editar las aplicadas.
     const touchesDatabase = intent.type === 'database_change' || intent.needs_server === true;
     const migrationNote = [
+      await assetsNotePending,
       buildPendingMigrationNote(pendingMigrationPaths, files),
       touchesDatabase
         ? buildMigrationObjectsNote(files, [...(pendingMigrationPaths ?? []), ...unappliedMigrationPaths])
@@ -2746,7 +2752,9 @@ export class AIOrchestrator {
     projectId?: string,
     signal?: AbortSignal,
     previousClarifyQuestion?: string | null,
-    timer?: StageTimer
+    timer?: StageTimer,
+    // Archivos subidos por el usuario (assetsNote.js, 2026-10-05).
+    assetsNote: string = ''
   ): Promise<OrchestratorResult> {
     // El contexto de diseño no depende del archivo elegido: se pide en paralelo
     // con el targeting (bucket 6, 2026-09-30: iban en serie, ~9 s).
@@ -2820,7 +2828,7 @@ export class AIOrchestrator {
       'enough lines that it matches exactly ONE place; use several blocks for changes in several ' +
       'places; an empty REPLACE deletes the lines; change only what the request needs. No explanation.' +
       siteBlock;
-    const taskMessage = `FILE: ${target.path}\n\nCONTENT:\n${target.content}\n\nCHANGE REQUESTED: ${input}`;
+    const taskMessage = `FILE: ${target.path}\n\nCONTENT:\n${target.content}\n\n${assetsNote ? `${assetsNote}\n\n` : ''}CHANGE REQUESTED: ${input}`;
     const MAX_PATCH_ATTEMPTS = 3;
 
     try {

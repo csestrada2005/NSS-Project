@@ -40,6 +40,20 @@ export type TypecheckResult =
       durationMs: number;
     };
 
+/** Un archivo del proyecto (foto o documento) en el almacén de Wyrd. */
+export interface ProjectAsset {
+  id: string;
+  kind: 'image' | 'document' | 'favicon';
+  public_url: string;
+  mime_type: string;
+  size_bytes: number;
+  original_size: number | null;
+  original_name: string;
+  width: number | null;
+  height: number | null;
+  created_at: string;
+}
+
 /** Un hallazgo del chequeo de seguridad (server/securityCheck.js). */
 export interface SecurityFinding {
   severity: 'grave' | 'aviso';
@@ -386,6 +400,31 @@ class PlatformService {
       console.warn('[PlatformService] deductCredits failed:', err);
       return null;
     }
+  }
+
+  /** Archivos del proyecto (fotos/documentos). Subir no usa IA: no gasta créditos. */
+  async listAssets(projectId: string): Promise<ProjectAsset[]> {
+    const headers = await this.getHeaders();
+    const response = await fetch(`/api/projects/${projectId}/assets`, { headers });
+    this.handleAuthError(response);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+  }
+
+  async uploadAsset(projectId: string, file: { name: string; type: string; data: string }): Promise<ProjectAsset> {
+    const headers = await this.getHeaders();
+    const response = await fetch(`/api/projects/${projectId}/assets`, { method: 'POST', headers, body: JSON.stringify(file) });
+    this.handleAuthError(response);
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body?.error || `HTTP ${response.status}`);
+    return body as ProjectAsset;
+  }
+
+  async deleteAsset(projectId: string, assetId: string): Promise<void> {
+    const headers = await this.getHeaders();
+    const response = await fetch(`/api/projects/${projectId}/assets/${assetId}`, { method: 'DELETE', headers });
+    this.handleAuthError(response);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
   }
 
   /** Agente de seguridad (S1): chequeo con reglas fijas contra la base real y el código. */

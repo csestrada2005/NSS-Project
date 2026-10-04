@@ -2159,6 +2159,7 @@ export function StudioEngine() {
                       isSaving={isSaving}
                       onDownloadZip={downloadProject}
                       isGenerating={isGenerating}
+                      projectId={projectId ?? null}
                     />
                   ) : panelMode === 'settings' ? (
                     <SettingsModal

@@ -23,6 +23,7 @@ import { pickProjectUrl } from './server/vercelDeployUrl.js';
 import { createAuthCache } from './server/authCache.js';
 import { fetchSecurityReport, runSecurityCheck } from './server/securityCheck.js';
 import { configureAuthSiteUrl } from './server/authSiteUrl.js';
+import { ASSET_BUCKET, assetStoragePath, processUpload } from './server/assets.js';
 import {
   validateProjectRefRequest,
   validateLogsRequest,
@@ -2229,6 +2230,87 @@ app.post('/api/projects/:projectId/security-check', async (req, res) => {
   if (!supabaseAdmin) return res.status(503).json({ error: 'Database not configured' });
   const { database, findings, checkedAt } = await runProjectSecurityCheck(projectId);
   res.json({ database, findings, checkedAt });
+});
+
+// ---------------------------------------------------------------------------
+// Archivos del proyecto (bloque 1, 2026-10-05): fotos y documentos en el
+// almacén de Wyrd (bucket project-assets + tabla forge_assets, sin políticas:
+// sólo el servidor). Las fotos se convierten a WebP (server/assets.js).
+// Subir no usa IA: no gasta créditos.
+// ---------------------------------------------------------------------------
+const ASSET_COLUMNS = 'id, kind, public_url, mime_type, size_bytes, original_size, original_name, width, height, created_at';
+
+app.post('/api/projects/:projectId/assets', async (req, res) => {
+  const { projectId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Storage not configured' });
+  const { name, type, data } = req.body ?? {};
+  if (typeof name !== 'string' || typeof type !== 'string' || typeof data !== 'string') {
+    return res.status(400).json({ error: 'name, type and data (base64) are required' });
+  }
+  let processed;
+  try {
+    processed = await processUpload({ name, type, buffer: Buffer.from(data, 'base64') });
+  } catch (err) {
+    return res.status(err.status ?? 400).json({ error: err.message, code: err.code ?? 'BAD_FILE' });
+  }
+  const storagePath = assetStoragePath(projectId, name, processed.ext);
+  const { error: uploadError } = await supabaseAdmin.storage
+    .from(ASSET_BUCKET)
+    .upload(storagePath, processed.buffer, { contentType: processed.mime, upsert: false, cacheControl: '31536000' });
+  if (uploadError) {
+    console.error('[assets] upload failed:', uploadError.message);
+    return res.status(502).json({ error: 'No se pudo guardar el archivo', code: 'UPLOAD_FAILED' });
+  }
+  const { data: urlData } = supabaseAdmin.storage.from(ASSET_BUCKET).getPublicUrl(storagePath);
+  const { data: row, error: insertError } = await supabaseAdmin
+    .from('forge_assets')
+    .insert({
+      project_id: projectId,
+      kind: processed.kind,
+      storage_path: storagePath,
+      public_url: urlData.publicUrl,
+      mime_type: processed.mime,
+      size_bytes: processed.buffer.length,
+      original_size: processed.originalSize,
+      original_name: name.slice(0, 200),
+      width: processed.width ?? null,
+      height: processed.height ?? null,
+      created_by: req.userId ?? null,
+    })
+    .select(ASSET_COLUMNS)
+    .single();
+  if (insertError) {
+    await supabaseAdmin.storage.from(ASSET_BUCKET).remove([storagePath]).catch(() => {});
+    console.error('[assets] insert failed:', insertError.message);
+    return res.status(500).json({ error: 'No se pudo registrar el archivo', code: 'INSERT_FAILED' });
+  }
+  console.log(`[assets] ${projectId} · ${processed.kind} · ${name} · ${processed.originalSize} → ${processed.buffer.length} bytes`);
+  res.json(row);
+});
+
+app.get('/api/projects/:projectId/assets', async (req, res) => {
+  const { projectId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
+  if (!supabaseAdmin) return res.json([]);
+  const { data, error } = await supabaseAdmin
+    .from('forge_assets').select(ASSET_COLUMNS)
+    .eq('project_id', projectId).order('created_at', { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data ?? []);
+});
+
+app.delete('/api/projects/:projectId/assets/:assetId', async (req, res) => {
+  const { projectId, assetId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Storage not configured' });
+  const { data: row } = await supabaseAdmin
+    .from('forge_assets').select('storage_path')
+    .eq('id', assetId).eq('project_id', projectId).single();
+  if (!row) return res.status(404).json({ error: 'Not found' });
+  await supabaseAdmin.storage.from(ASSET_BUCKET).remove([row.storage_path]);
+  await supabaseAdmin.from('forge_assets').delete().eq('id', assetId).eq('project_id', projectId);
+  res.json({ ok: true });
 });
 
 app.get('/api/projects/:projectId/usage', async (req, res) => {

@@ -692,4 +692,18 @@ export const es: Record<ForgeKey, string> = {
   'platform.email': 'Correo',
   'platform.db': 'Base de datos de la plataforma',
   'domains.confirmRemove': '¿Quitar este dominio? Se borrará su registro DNS.',
+
+  // Archivos del proyecto: fotos y documentos, bloque 1 (2026-10-05)
+  'assets.title': 'Archivos',
+  'assets.backToCode': 'Volver al código',
+  'assets.intro': 'Fotos y documentos del proyecto. JPG y PNG se convierten a WebP (más ligeras, misma calidad). Subir no usa IA ni gasta créditos.',
+  'assets.upload': 'Subir archivos',
+  'assets.uploading': 'Subiendo…',
+  'assets.uploadFailed': 'No se pudo subir: {message}',
+  'assets.empty': 'Todavía no hay archivos.',
+  'assets.saved': '{from} → {to} (−{pct}%)',
+  'assets.copyUrl': 'Copiar dirección',
+  'assets.copied': 'Copiada',
+  'assets.delete': 'Borrar',
+  'assets.confirmDelete': '¿Borrar "{name}"? Las páginas que la usen dejarán de mostrarla.',
 };

@@ -2608,6 +2608,17 @@ buenos resultados la primera vez que se usó en este ítem (ver Bloque 1, "Halla
   build `Using Node.js version 22.12.0` sin la advertencia de Vite.
 - **Subir documentos y fotos (Samuel, 2026-10-04):** botón en el chat (hoy "Adjuntar" = "Próximamente") y lo
   mismo en la pestaña de Código, para subirlos sin gastar créditos (son relevantes para las páginas).
+  Diseño acordado (2026-10-05): almacén de Wyrd (bucket público `project-assets` + tabla `forge_assets`
+  con RLS sin políticas, sólo el servidor), NO el de cada proyecto (Wyrd no guarda su llave service_role y
+  los proyectos sin base no tienen almacén). JPG/PNG → WebP máx. 2560px (sharp); WebP y SVG seguro se
+  quedan. Límites 10 MB foto / 20 MB PDF. Puede subir quien pueda editar el proyecto.
+  - **Bloque 1 — HECHO, ESPERA CHECK DE SAMUEL (2026-10-05):** `server/assets.js` (transformador, +5
+    tests), endpoints `GET/POST /api/projects/:id/assets` y `DELETE …/assets/:assetId` en `server.js`
+    (log `[assets] …`), pestaña "Archivos" en el modal de Código (`AssetsPanel.tsx`, +1 test), y la IA
+    recibe la lista con las direcciones exactas (`src/utils/assetsNote.js`, +1 test) en el carril simple
+    y en el Architect. `fakeFetch` responde `[]` a esa lectura.
+  - Bloque 2 — favicon en Publicar (generar 32px y 180px). Pendiente.
+  - Bloque 3 — adjuntos en el chat (fotos por dirección; PDFs leídos por la IA, gasta créditos). Pendiente.
 - **Cambiar el favicon desde Publicar (Samuel, 2026-10-04):** "crucial".
 - Quitar los botones "Próximamente" que no hacen nada (chat: Adjuntar, Dictar, Editar el plan; créditos:
   Comprar créditos). Decisión de Samuel (2026-09-29): se quedan mientras él sea el único usuario, porque le

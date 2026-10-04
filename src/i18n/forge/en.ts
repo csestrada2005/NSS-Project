@@ -697,6 +697,20 @@ export const en = {
   'platform.email': 'Email',
   'platform.db': 'Platform database',
   'domains.confirmRemove': 'Remove this domain? Its DNS record will be deleted.',
+
+  // Archivos del proyecto: fotos y documentos, bloque 1 (2026-10-05)
+  'assets.title': 'Files',
+  'assets.backToCode': 'Back to code',
+  'assets.intro': 'Photos and documents for this project. JPG and PNG are converted to WebP (lighter, same quality). Uploading uses no AI and costs no credits.',
+  'assets.upload': 'Upload files',
+  'assets.uploading': 'Uploading…',
+  'assets.uploadFailed': "Couldn't upload: {message}",
+  'assets.empty': 'No files yet.',
+  'assets.saved': '{from} → {to} (−{pct}%)',
+  'assets.copyUrl': 'Copy URL',
+  'assets.copied': 'Copied',
+  'assets.delete': 'Delete',
+  'assets.confirmDelete': 'Delete "{name}"? Pages that use it will stop showing it.',
 } as const;
 
 export type ForgeKey = keyof typeof en;
