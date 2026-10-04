@@ -14,6 +14,7 @@ import { createIntentAccumulator } from './server/intentAccumulator.js';
 import { bootstrapProject } from './server/bootstrapProject.js';
 import { deployEdgeFunctionViaManagement, validateEdgeFunctionDeployRequest } from './server/edgeFunctionDeploy.js';
 import { applyProductionSupabaseClient, withProductionSupabaseEnv } from './src/utils/deploySupabaseClient.js';
+import { withPreviewTailwindBuild } from './src/utils/deployTailwind.js';
 import { isPlatformAdmin, planRoleDecision } from './server/roleDecision.js';
 import { runTypecheck } from './server/typecheckPool.js';
 import { compileCacheKey, createCompileCache } from './server/compileCache.js';
@@ -1469,7 +1470,12 @@ app.post('/api/deploy/:projectId', async (req, res) => {
     // ANON de su Supabase (en el preview las inyecta el compilador). Sin esto
     // arrancaba con supabase = null y nada con datos funcionaba publicado.
     const dbCredentials = supabaseAdmin ? await getDbCredentialsForProject(projectId) : null;
-    const deployFiles = withProductionSupabaseEnv(applyProductionSupabaseClient(files), dbCredentials);
+    // 2026-10-05 (Samuel): el publicado se construye con el mismo motor de
+    // estilos que el preview (Tailwind 4, sin tailwind.config) — ver
+    // src/utils/deployTailwind.js.
+    const deployFiles = withPreviewTailwindBuild(
+      withProductionSupabaseEnv(applyProductionSupabaseClient(files), dbCredentials)
+    );
     console.log(`[deploy] credenciales de Supabase en el sitio: ${deployFiles['.env.production'] ? 'incluidas' : 'no (proyecto sin base)'}`);
 
     // Bucket 6 — revisión de tipos ANTES de publicar: Vercel corre `tsc -b` y

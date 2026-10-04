@@ -1,5 +1,6 @@
 import * as esbuild from 'esbuild';
 import path from 'path';
+import { fontLinksFromIndexHtml } from '../src/utils/deployTailwind.js';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import * as babelParser from '@babel/parser';
@@ -937,7 +938,7 @@ function escapeHtml(str) {
   }[c]));
 }
 
-function generateHTML(bundleCode, cssCode) {
+function generateHTML(bundleCode, cssCode, fontLinks = '') {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -951,6 +952,9 @@ ${PREVIEW_ERROR_CAPTURE_SCRIPT}
   </script>
   <link rel="stylesheet" href="/vendor/tailwind-base.css">
   <script src="/vendor/tailwindcss-browser.js"></script>
+  <!-- 2026-10-05: las fuentes del DESIGN.md (los <link> del index.html del
+       proyecto). Antes el preview no las cargaba y el publicado sí. -->
+  ${fontLinks}
   <style>body{margin:0;}#root{min-height:100vh;}${cssCode || ''}</style>
 </head>
 <body>
@@ -1060,7 +1064,7 @@ export async function compileFiles(filesObj, dbCredentials = null) {
       }
     }
 
-    const html = generateHTML(bundleJs, bundleCss);
+    const html = generateHTML(bundleJs, bundleCss, fontLinksFromIndexHtml(filesObj['index.html']));
     const totalMs = Date.now() - startTotal;
     console.log(`[compile] TIMING: esbuild=${esbuildMs}ms total=${totalMs}ms (files: ${fileCount})`);
     return { html, oidMap };

@@ -402,6 +402,16 @@ Mundos pre-registrados:
   compila con esbuild + Tailwind del servidor y Vercel con `vite build` del proyecto (otra versión/config de
   Tailwind, fuentes de Google cargadas distinto, `index.css`/`tailwind.config` del proyecto vs. los del
   compilador del preview).
+  **Diagnóstico (2026-10-05):** preview = Tailwind 4 (hoja precompilada 4.2.2 + motor 4.3.3 en el navegador), SIN
+  `tailwind.config.js`, `index.css` tal cual (el navegador ignora `@tailwind`/`@apply`) y SIN las fuentes de Google
+  del `index.html`; publicado = Tailwind 3.4 de la plantilla + config + postcss + fuentes. **Decisión de Samuel:** lo
+  correcto es el PREVIEW (le gusta cómo se ve Vertigo), pero con las fuentes del DESIGN.md en los dos ("DESIGN.md es la
+  base de nuestros proyectos"). **HECHO EN CÓDIGO, pendiente CHECK:** `withPreviewTailwindBuild`
+  (src/utils/deployTailwind.js, +6 tests) ajusta SÓLO el paquete que va a Vercel: tailwindcss + @tailwindcss/postcss
+  4.3.3, postcss.config del plugin v4, `index.css` con `@import "tailwindcss"` y sin `@tailwind`/`@apply`. Build real
+  con Vite verificado en local (25 módulos, CSS con `font-['Bebas_Neue']` y `hsl(var(--brand-…))`). El preview ahora
+  incluye los `<link>` de fuentes del `index.html` (`fontLinksFromIndexHtml`). Consecuencia aceptada: los sitios ya
+  publicados cambian a verse como su preview la próxima vez que se actualicen.
 - **CRM sin datos tras un redeploy (Samuel, 2026-10-01) — PENDIENTE, sin diagnóstico:** al entrar al CRM
   después de un deploy de Render todo sale en 0 y en Network no hay llamadas a Supabase; recargar NO lo
   arregla; entrar a Wyrd (sesión presente, sidebar "Samuel Estrada · Admin") y volver al CRM sí carga.
