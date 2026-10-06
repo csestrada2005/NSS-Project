@@ -711,7 +711,7 @@ export const es: Record<ForgeKey, string> = {
   'favicon.auto': 'Automático: la inicial de la marca sobre su color.',
   'favicon.custom': 'Tu ícono: {name}',
   'favicon.hint': 'PNG, JPG, WebP o SVG. Mejor cuadrado y de 180 px o más; si no es cuadrado se encaja sin recortar.',
-  'favicon.nextPublish': 'Se verá en tu sitio la próxima vez que pulses Publicar / Actualizar.',
+  'favicon.nextPublish': 'Se verá en tu sitio la próxima vez que pulses Publicar / Actualizar. Si sigue apareciendo el ícono antiguo, borra la caché de la página y vuelve a verificar.',
   'favicon.change': 'Cambiar ícono',
   'favicon.uploading': 'Subiendo…',
   'favicon.reset': 'Volver al automático',

@@ -2646,7 +2646,8 @@ buenos resultados la primera vez que se usó en este ítem (ver Bloque 1, "Halla
     las fotos no se veían en el preview ni en las miniaturas (sí en pestaña nueva). Causa: cabecera vieja
     `Cross-Origin-Embedder-Policy: require-corp` (de WebContainers) + el almacén no manda permiso
     cross-origin. Quitada con permiso de Samuel (server.js + vite.config.ts), `0fd2cc9`. Re-check OK.
-  - **Bloque 2 — favicon en Publicar: HECHO, ESPERA CHECK DE SAMUEL (2026-10-06).** Decisiones de Samuel:
+  - **Bloque 2 — favicon en Publicar: HECHO Y CONFIRMADO (check de Samuel 2026-10-06, mundo A; después se
+    añadió al aviso "si sigue apareciendo el ícono antiguo, borra la caché…", pedido de Samuel).** Decisiones de Samuel:
     se aplica AL PUBLICAR (opción A: el código del proyecto no se toca, hay que pulsar Actualizar) y una
     imagen no cuadrada se ENCAJA sin recortar (fondo transparente). Samuel confirmó en information_schema que
     `forge_assets.kind` (text) tiene un CHECK que admite `favicon`. `server/assets.js` (`processFavicon` → PNG

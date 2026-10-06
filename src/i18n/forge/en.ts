@@ -716,7 +716,7 @@ export const en = {
   'favicon.auto': 'Automatic: the brand initial over its color.',
   'favicon.custom': 'Your icon: {name}',
   'favicon.hint': 'PNG, JPG, WebP or SVG. Square and 180 px or larger works best; non-square images are fitted without cropping.',
-  'favicon.nextPublish': 'It will show on your site the next time you press Publish / Update.',
+  'favicon.nextPublish': 'It will show on your site the next time you press Publish / Update. If the old icon still shows, clear the page cache and check again.',
   'favicon.change': 'Change icon',
   'favicon.uploading': 'Uploading…',
   'favicon.reset': 'Back to automatic',
