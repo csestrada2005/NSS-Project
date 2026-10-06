@@ -34,7 +34,9 @@ import type { ChatPlanStep, Message } from './chat/types';
 import './chat/forgeChat.css';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
 import { t as tNow, tn as tnNow } from '@/i18n/forge/lang';
-import type { TypeIssue } from '../services/PlatformService';
+import { platformService, type TypeIssue, type ProjectAsset } from '../services/PlatformService';
+import { readAsBase64 } from './studio/AssetsPanel';
+import type { AttachmentChip } from './chat/Typebar';
 import { changedNames } from '../utils/changedNames';
 import { progressHeadline } from '../utils/progressHeadline.js';
 
@@ -71,7 +73,9 @@ interface ChatInterfaceProps {
     message: string,
     onProgress?: (step: number, total: number, file: string, description?: string) => void,
     onRetry?: (attempt: number, error: string) => void,
-    onPlanReady?: (steps: ChatPlanStep[]) => void
+    onPlanReady?: (steps: ChatPlanStep[]) => void,
+    /** Bloque 3: fotos/PDFs adjuntos a este mensaje (ya subidos al almacén). */
+    attachments?: ProjectAsset[]
   ) => Promise<{
     success: boolean;
     modifiedFiles: string[];
@@ -151,6 +155,9 @@ export function ChatInterface({
   const hasPendingPlan = !!pendingPlanSteps && pendingPlanSteps.length > 0;
 
   const [progressLines, setProgressLines] = useState<ProgressLine[]>([]);
+  // Adjuntos del mensaje en curso (bloque 3): se suben al elegirlos (gratis);
+  // la lectura con IA ocurre al enviar.
+  const [attachments, setAttachments] = useState<AttachmentChip[]>([]);
   // Espejo síncrono de `progressLines`, leído al cerrar un turno para congelar
   // el snapshot de pasos de la tarjeta de resultado (Bloque 3) — el closure de
   // `sendMessage` sólo ve el valor de cuando arrancó el turno, no el último.
@@ -236,6 +243,9 @@ export function ChatInterface({
     typeErrors?: TypeIssue[];
   }): { content: string; warning?: string; errorType?: 'insufficient_credits' | 'compile_error' | 'generic'; errorDetail?: string; suggestedAction?: string; planSteps?: ChatPlanStep[]; typeErrors?: TypeIssue[] } => {
     if (!result.success) {
+      if (result.error === 'ATTACHMENT_READ_FAILED') {
+        return { content: tNow('chat.error.attachmentRead', { name: result.errorReason ?? '' }), errorType: 'generic' };
+      }
       if (result.error === 'INSUFFICIENT_CREDITS') {
         const freePromptSpent = result.errorReason === 'FREE_PROMPT_SPENT';
         return {
@@ -261,8 +271,9 @@ export function ChatInterface({
     return { content: tNow('chat.done.none'), warning: result.warning, suggestedAction: result.suggestedAction, planSteps: result.planSteps, typeErrors: result.typeErrors };
   };
 
-  const sendMessage = async (text: string) => {
+  const sendMessage = async (text: string, sentChips: AttachmentChip[] = []) => {
     if (!text.trim() || isLoading || hasPendingPlan) return;
+    const sentAssets = sentChips.flatMap((c) => (c.asset ? [c.asset] : []));
 
     const userMessage = text.trim();
     // La marca de modo va en el ECO local (y por eso también en lo persistido
@@ -336,8 +347,15 @@ export function ChatInterface({
               : `${actionVerb(step.action)} ${progressLabel(step.description, step.file_path)}`,
             status: 'pending' as const,
           })));
-        }
+        },
+        sentAssets
       );
+
+      // 3A: no se pudo leer un adjunto — vuelven los adjuntos y el texto para reintentar.
+      if (result.error === 'ATTACHMENT_READ_FAILED') {
+        setAttachments((prev) => [...sentChips, ...prev]);
+        setInput((prev) => (prev.trim() ? prev : userMessage));
+      }
 
       planLineIndexRef.current = new Map();
       isRetryingRef.current = false;
@@ -413,10 +431,34 @@ export function ChatInterface({
       return;
     }
     if (!input.trim() || hasPendingPlan) return;
+    // Bloque 3: no se envía con un adjunto a medio subir.
+    if (attachments.some((a) => a.status === 'uploading')) return;
     const text = input;
+    const chips = attachments.filter((a) => a.status === 'ready');
     setInput('');
+    setAttachments([]);
     try { sessionStorage.removeItem('forge_chat_input'); } catch { /* ignore */ }
-    sendMessage(text);
+    sendMessage(text, chips);
+  };
+
+  const handleAttach = async (files: FileList | null) => {
+    if (!projectId || !files || files.length === 0) return;
+    for (const file of Array.from(files)) {
+      const key = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const kind: AttachmentChip['kind'] = file.type === 'application/pdf' ? 'document' : 'image';
+      setAttachments((prev) => [...prev, { key, name: file.name, kind, mime: file.type, status: 'uploading' }]);
+      try {
+        const asset = await platformService.uploadAsset(projectId, { name: file.name, type: file.type, data: await readAsBase64(file) });
+        setAttachments((prev) => prev.map((a) => (a.key === key ? { ...a, status: 'ready', asset, mime: asset.mime_type } : a)));
+      } catch (e) {
+        const error = e instanceof Error ? e.message : String(e);
+        setAttachments((prev) => prev.map((a) => (a.key === key ? { ...a, status: 'error', error } : a)));
+      }
+    }
+  };
+
+  const handleRemoveAttachment = (key: string) => {
+    setAttachments((prev) => prev.filter((a) => a.key !== key));
   };
 
   const handleInputChange = (v: string) => {
@@ -687,6 +729,9 @@ export function ChatInterface({
           mode={mode}
           onModeChange={handleModeChange}
           inputRef={inputRef}
+          attachments={attachments}
+          onAttach={projectId && !isReadOnly ? handleAttach : undefined}
+          onRemoveAttachment={handleRemoveAttachment}
         />
       </div>
 

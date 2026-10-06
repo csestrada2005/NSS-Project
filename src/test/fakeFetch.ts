@@ -1,6 +1,10 @@
 export interface FakeFetchControl {
   denied: string[];
   calls: string[];
+  /** Cuerpos de cada /api/chat-forge, en orden (bloque 3: qué recibió cada pieza). */
+  forgeBodies: Record<string, unknown>[];
+  /** Bloque 3: el lector de adjuntos responde con error (mundo 3A). */
+  failAttachmentReads: boolean;
   restore: () => void;
 }
 
@@ -73,6 +77,8 @@ export function installFakeFetch(): FakeFetchControl {
   const originalFetch = globalThis.fetch;
   const denied: string[] = [];
   const calls: string[] = [];
+  const forgeBodies: Record<string, unknown>[] = [];
+  const control = { failAttachmentReads: false };
 
   globalThis.fetch = (async (input: string | Request | URL, init?: RequestInit) => {
     const url = toUrlString(input);
@@ -115,6 +121,18 @@ export function installFakeFetch(): FakeFetchControl {
     if (url.includes('/api/chat-forge')) {
       const body = parseBody(init);
       const systemText = extractSystemText(body);
+      forgeBodies.push(body);
+
+      // Escalón 0 (bloque 3): el lector de adjuntos — foto descrita, PDF copiado
+      // (recortado por tope, para probar el aviso).
+      if (systemText.includes('You describe an image') || systemText.includes('You transcribe a document')) {
+        if (control.failAttachmentReads) {
+          return jsonResponse({ type: 'error', error: { type: 'invalid_request_error', message: 'Unable to download the file' } }, 400);
+        }
+        return systemText.includes('You describe an image')
+          ? jsonResponse(claudeTextResponse('A bakery counter with warm light.\nALT: Mostrador de la panadería'))
+          : jsonResponse({ ...claudeTextResponse('Concha | $25\nBolillo | $8'), stop_reason: 'max_tokens' });
+      }
 
       // Escalón 1: IntentClassifier clasifica el prompt del usuario.
       if (systemText.includes('intent classifier for a React web builder AI')) {
@@ -159,6 +177,9 @@ export function installFakeFetch(): FakeFetchControl {
   return {
     denied,
     calls,
+    forgeBodies,
+    get failAttachmentReads() { return control.failAttachmentReads; },
+    set failAttachmentReads(v: boolean) { control.failAttachmentReads = v; },
     restore: () => {
       globalThis.fetch = originalFetch;
     },

@@ -20,7 +20,7 @@ import { ChatInterface, type ChatPlanStep, type Message } from '../components/Ch
 import { PropertyPanel } from '../components/studio/PropertyPanel';
 import { AIOrchestrator } from '../services/AIOrchestrator';
 import { platformService } from '../services/PlatformService';
-import type { TypeIssue } from '../services/PlatformService';
+import type { TypeIssue, ProjectAsset } from '../services/PlatformService';
 import { SupabaseService } from '../services/SupabaseService';
 import { compileWithMeta, classifyCompileResult, isPreviewError, type OidMap } from '../services/BrowserCompiler';
 import { isAbortError } from '../utils/abort';
@@ -1613,7 +1613,9 @@ export function StudioEngine() {
     // viaja `undefined` y no hay gate, jamás. Ésa es la garantía por
     // construcción que sella el acta de #290, y se expresa aquí como lo que es,
     // un argumento, y no como una condición que pueda cambiar sola.
-    allowPlanGate: boolean = true
+    allowPlanGate: boolean = true,
+    // Bloque 3 (2026-10-07): fotos/PDFs adjuntos en el chat, ya subidos.
+    attachments: ProjectAsset[] = []
   ): Promise<{ success: boolean; modifiedFiles: string[]; removedFiles?: string[]; error?: string; errorReason?: string; warning?: string; chatResponse?: string; suggestedAction?: string; planSteps?: { order: number; description: string; file_path: string; action: 'create' | 'modify' | 'delete' }[]; cancelled?: boolean; typeErrors?: TypeIssue[] }> => {
     if (isReadOnly) return { success: false, modifiedFiles: [] };
 
@@ -1696,7 +1698,8 @@ export function StudioEngine() {
         // La migración pendiente se busca en el historial completo (el mismo
         // que usa el modal), no en los 10 mensajes que recibe el modelo.
         findExecutableProposal(chatHistory)?.paths ?? null,
-        unappliedMigrationPaths(chatHistory)
+        unappliedMigrationPaths(chatHistory),
+        attachments
       );
       if (result.modifiedFiles.length > 0) {
         const promptLabel = truncateLabel(message, 80);
@@ -2371,7 +2374,8 @@ export function StudioEngine() {
           <CommandModal>
             <ChatInterface
               isLoading={isGenerating}
-              onSendMessage={handleSendMessage}
+              onSendMessage={(message, onProgress, onRetry, onPlanReady, attachments) =>
+                handleSendMessage(message, onProgress, onRetry, onPlanReady, undefined, true, attachments)}
               selectedElement={selectedElement}
               chatHistory={chatHistory}
               onHistoryUpdate={(history) => setChatHistory(history.slice(-30))}

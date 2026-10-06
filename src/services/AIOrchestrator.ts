@@ -68,6 +68,9 @@ import { codeReadingTables, piiTablesInProject, stripPiiPublicRead } from '../ut
 const isFixButtonRequest = (input: string) => isTypeFixRequest(input) || isSecurityFixRequest(input);
 import { createStageTimer, type StageTimer } from '../utils/stageTimer.js';
 import { buildAssetsNote } from '../utils/assetsNote.js';
+import { compactAttachmentsNote } from '../utils/attachmentsNote.js';
+import { readAttachments } from './AttachmentReader';
+import type { ProjectAsset } from './PlatformService';
 import { buildMigrationObjectsNote, buildPendingMigrationNote, checkMigrationPlan } from '../utils/migrationContext.js';
 import { applyEditBlocks, describeFailures, parseEditBlocks, wantsFullRewrite } from '../utils/searchReplace.js';
 import { extractQuotedTexts, orderPageSeeds, resolveHintedTarget, snippetForTargeting } from '../utils/targetHints.js';
@@ -853,7 +856,8 @@ export class AIOrchestrator {
       const { error } = await supabase.from('forge_intent_log').insert({
         project_id: params.projectId,
         user_id: user.id,
-        user_prompt: params.prompt,
+        // Bloque 3: la nota de adjuntos (un PDF entero) no va al log, sólo su conteo.
+        user_prompt: compactAttachmentsNote(params.prompt),
         intent_type: params.intentType,
         intent_risk: params.intentRisk,
         // Telemetría cableada: escribimos las columnas jsonb que la app lee de
@@ -1185,7 +1189,23 @@ export class AIOrchestrator {
     };
   }
 
+  // Adjuntos del chat (bloque 3): aviso de ESTE pedido (un PDF recortado) que
+  // se suma al resultado sea cual sea el carril que termine. Estado por run,
+  // como retryCount: el navegador corre un pedido a la vez.
+  private static attachmentWarning: string | null = null;
+
   static async parseUserCommand(
+    ...args: Parameters<typeof AIOrchestrator.runUserCommand>
+  ): Promise<OrchestratorResult> {
+    this.attachmentWarning = null;
+    const result = await this.runUserCommand(...args);
+    const extra = this.attachmentWarning;
+    this.attachmentWarning = null;
+    if (!extra) return result;
+    return { ...result, warning: result.warning ? `${result.warning}\n${extra}` : extra };
+  }
+
+  private static async runUserCommand(
     input: string,
     files: Map<string, string>,
     selectedElement: { tagName: string; className?: string } | null = null,
@@ -1211,7 +1231,10 @@ export class AIOrchestrator {
     pendingMigrationPaths: string[] | null = null,
     // Migraciones propuestas y NO aplicadas según el chat (pendiente,
     // reemplazadas, descartadas…): no cuentan como historia de la base.
-    unappliedMigrationPaths: string[] = []
+    unappliedMigrationPaths: string[] = [],
+    // Bloque 3 (2026-10-07): fotos y PDFs adjuntos a ESTE mensaje (ya subidos
+    // al almacén). Al final por la misma razón que los dos de arriba.
+    attachments: ProjectAsset[] = []
   ): Promise<OrchestratorResult> {
     this.retryCount = 0;
     const startTime = Date.now();
@@ -1297,6 +1320,23 @@ export class AIOrchestrator {
       };
     }
 
+    // Bloque 3 — una lectura por adjunto (Haiku), dentro de este intent. Si
+    // una falla se detiene aquí: no se gasta en el resto del pedido (3A).
+    let attachmentsNote = '';
+    if (attachments.length > 0) {
+      const read = await readAttachments(attachments, input, signal);
+      timer.mark('attachments');
+      if (!read.ok) {
+        return { modifiedFiles: [], outcome: 'failed', error: 'ATTACHMENT_READ_FAILED', errorReason: read.failed };
+      }
+      attachmentsNote = read.note;
+      if (read.truncated.length > 0) {
+        this.attachmentWarning = tr('orch.attachmentTruncated', { names: read.truncated.join(', ') });
+      }
+    }
+    // Carriles que reciben el pedido como un solo texto (pregunta, heavy).
+    const inputWithAttachments = attachmentsNote ? `${input}\n\n${attachmentsNote}` : input;
+
     // ------------------------------------------------------------------
     // LAYER 1 — ProjectMemoryService: get or build project memory
     // ------------------------------------------------------------------
@@ -1339,7 +1379,7 @@ export class AIOrchestrator {
     // "Arreglar ahora" nunca se contesta como pregunta: hay que cambiar código.
     if (intent.type === 'question' && !isFixButtonRequest(input)) {
       const answer = await this.answerQuestion(
-        input,
+        inputWithAttachments,
         files,
         memory,
         chatHistory,
@@ -1426,6 +1466,8 @@ export class AIOrchestrator {
     const fastLaneFilePath = (selectedElement as { filePath?: string } | null)?.filePath;
     if (
       !forcePlanLane &&
+      // Con adjuntos no: el carril rápido sólo ve el archivo seleccionado.
+      attachments.length === 0 &&
       // `selectedElement &&` va delante para que TS lo estreche a no-nulo de cara
       // a runFastLane; canEnterFastLane vuelve a mirarlo vía hasSelection.
       selectedElement &&
@@ -1485,7 +1527,7 @@ export class AIOrchestrator {
     const isSimpleEdit = isSimpleEditIntent(intent, input);
 
     if (!forcePlanLane && isSimpleEdit && files.size > 0) {
-      const result = await this.runSimpleLane(input, files, selectedElement, intent, projectId, signal, previousClarifyQuestion, timer, await assetsNotePending);
+      const result = await this.runSimpleLane(input, files, selectedElement, intent, projectId, signal, previousClarifyQuestion, timer, [await assetsNotePending, attachmentsNote].filter(Boolean).join('\n\n'));
       if (result.outcome === 'success' && creditUserId) {
         await this.settleCredits(intent.type, result.tokensInput ?? 0, result.tokensOutput ?? 0, projectId);
       }
@@ -1562,6 +1604,7 @@ export class AIOrchestrator {
     const touchesDatabase = intent.type === 'database_change' || intent.needs_server === true;
     const migrationNote = [
       await assetsNotePending,
+      attachmentsNote,
       buildPendingMigrationNote(pendingMigrationPaths, files),
       touchesDatabase
         ? buildMigrationObjectsNote(files, [...(pendingMigrationPaths ?? []), ...unappliedMigrationPaths])
@@ -1598,7 +1641,7 @@ export class AIOrchestrator {
 
     if (steps.length === 0) {
       // Architect returned nothing — fall back to the legacy heavy lane
-      const result = await this.runHeavyLane(input, files, selectedElement, projectId, intent, signal);
+      const result = await this.runHeavyLane(inputWithAttachments, files, selectedElement, projectId, intent, signal);
       if (result.outcome === 'success' && creditUserId) {
         await this.settleCredits(intent.type, result.tokensInput ?? 0, result.tokensOutput ?? 0, projectId);
       }
@@ -1786,7 +1829,9 @@ export class AIOrchestrator {
       // ella el plan sólo puede borrar lo que ya estaba huérfano pre-intent.
       deletionTargets,
       // Fase 2b: no son historia de la base (no darlas como "definición actual").
-      [...(pendingMigrationPaths ?? []), ...unappliedMigrationPaths]
+      [...(pendingMigrationPaths ?? []), ...unappliedMigrationPaths],
+      // Bloque 3: cada paso ve la descripción de las fotos y el texto de los PDFs.
+      attachmentsNote
     );
     const modifiedFilesMap = implResult.files;
     const { failedSteps, skippedSteps, deletedPaths, rejectedDeletes } = implResult;

@@ -2659,9 +2659,23 @@ buenos resultados la primera vez que se usó en este ítem (ver Bloque 1, "Halla
     `favicon`. UI: recuadro "Ícono de la pestaña" en Publicar (`FaviconPicker.tsx`, +2 tests).
     Fuera del bloque (sin ítem propio salvo que Samuel lo pida): ícono Android 512 px / manifest, imagen al
     compartir el link (og:image).
-  - Bloque 3 — adjuntos en el chat (fotos por dirección; PDFs leídos por la IA, gasta créditos). Pendiente.
+  - **Bloque 3 — adjuntos en el chat: HECHO, ESPERA CHECK DE SAMUEL (2026-10-07).** Decisiones de Samuel:
+    1B reencuadrada a "lector de fotos" (una lectura con Haiku por foto que la describe por escrito — contenido,
+    colores, layout si es captura, ALT — en vez de que todo el pipeline vea la imagen en cada paso; la versión
+    "todo el proceso mira la foto" queda como mejora posible encima), 2A (PDF copiado fielmente con tope de
+    8000 tokens de salida ≈ 6,000 palabras, avisa si se recortó), 3A (si una lectura falla, se detiene antes de
+    clasificar/planear; adjuntos y texto vuelven para reintentar). Clip activo en la typebar; fichas con aviso
+    de créditos; subir = mismo almacén y endpoint del bloque 1 (queda en Archivos; la ✕ sólo lo quita del
+    mensaje). `src/utils/attachmentsNote.js` (nota entre marcas `<<ATTACHMENTS>>`, +5 tests),
+    `src/services/AttachmentReader.ts` (Haiku, fuente por URL, en paralelo, dentro del intent → se cobra con el
+    pedido), `AIOrchestrator.parseUserCommand` (nuevo último parámetro `attachments`; la nota llega al
+    Architect, a CADA paso del Implementer, al carril simple, a pregunta y a heavy; con adjuntos no hay carril
+    rápido; `forge_intent_log.user_prompt` guarda sólo `[ATTACHMENTS:images=N,documents=M]`), e2e con LLM falso
+    (+3), UI (+4). SVG no se mira (el lector no acepta vectores): va sólo su dirección.
+    Pendiente fuera del bloque: que el contenido de un PDF se recuerde en mensajes posteriores (hoy sólo viaja
+    con el mensaje donde se adjunta); dictado (micrófono).
 - **Cambiar el favicon desde Publicar (Samuel, 2026-10-04):** "crucial".
-- Quitar los botones "Próximamente" que no hacen nada (chat: Adjuntar, Dictar, Editar el plan; créditos:
+- Quitar los botones "Próximamente" que no hacen nada (chat: Dictar, Editar el plan — Adjuntar ya es real desde el bloque 3; créditos:
   Comprar créditos). Decisión de Samuel (2026-09-29): se quedan mientras él sea el único usuario, porque le
   sirven como recordatorio de lo que falta.
 - **Dominios dentro de Wyrd** (ver bucket 15): aplicar una vez que Wyrd sea público para todos, no sólo

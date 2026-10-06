@@ -253,7 +253,9 @@ export class Implementer {
     // con las huérfanas exclusivas pre-plan y nunca se toma del modelo expandida.
     deletionTargets: string[] = [],
     // Migraciones propuestas y NO aplicadas: no son "definición actual".
-    unappliedMigrations: string[] = []
+    unappliedMigrations: string[] = [],
+    // Bloque 3 (2026-10-07): adjuntos del mensaje (src/utils/attachmentsNote.js).
+    attachmentsNote: string = ''
   ): Promise<ImplementerResult> {
     const modifiedFiles = new Map<string, string>(files);
     const completed = new Set<number>();
@@ -397,7 +399,7 @@ export class Implementer {
         }));
 
         this.lastApiFailure = null;
-        const newContent = await this.executeStep(step, modifiedFiles, memory, planFiles, patternContext, designContext, signal, blueprint, unappliedMigrations);
+        const newContent = await this.executeStep(step, modifiedFiles, memory, planFiles, patternContext, designContext, signal, blueprint, unappliedMigrations, attachmentsNote);
 
         // El step en vuelo se abortó: se descarta (no se escribe un archivo a
         // medias) y NO se contabiliza como fallo del modelo. Salimos del plan.
@@ -491,7 +493,8 @@ export class Implementer {
     designContext: string = '',
     signal?: AbortSignal,
     blueprint: string = '',
-    unappliedMigrations: string[] = []
+    unappliedMigrations: string[] = [],
+    attachmentsNote: string = ''
   ): Promise<string | null> {
     console.log('[Implementer] patternContext chars:', patternContext?.length ?? 0, '| preview:', patternContext?.slice(0, 200)); // TODO: remove after RAG verification
     const rawContent      = files.get(step.file_path) ?? '';
@@ -546,6 +549,9 @@ export class Implementer {
     parts.push(`STEP ${step.order}: ${step.description}`);
     parts.push(`ACTION: ${step.action}`);
     parts.push(`FILE: ${step.file_path}`);
+    // Bloque 3: lo que el usuario adjuntó (foto descrita, PDF copiado). Va en
+    // cada paso: el que escribe la página del menú necesita los precios exactos.
+    if (attachmentsNote) parts.push(`\n${attachmentsNote}`);
 
     // Fase 2b (2026-10-01): el paso que ESCRIBE una migración nueva recibe la
     // definición actual de lo que va a cambiar (las migraciones existentes que
