@@ -427,6 +427,31 @@ class PlatformService {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
   }
 
+  /** Favicon propio (bloque 2): uno por proyecto; se aplica al publicar. null = automático. */
+  async getFavicon(projectId: string): Promise<ProjectAsset | null> {
+    const headers = await this.getHeaders();
+    const response = await fetch(`/api/projects/${projectId}/favicon`, { headers });
+    this.handleAuthError(response);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+  }
+
+  async uploadFavicon(projectId: string, file: { name: string; type: string; data: string }): Promise<ProjectAsset> {
+    const headers = await this.getHeaders();
+    const response = await fetch(`/api/projects/${projectId}/favicon`, { method: 'PUT', headers, body: JSON.stringify(file) });
+    this.handleAuthError(response);
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body?.error || `HTTP ${response.status}`);
+    return body as ProjectAsset;
+  }
+
+  async deleteFavicon(projectId: string): Promise<void> {
+    const headers = await this.getHeaders();
+    const response = await fetch(`/api/projects/${projectId}/favicon`, { method: 'DELETE', headers });
+    this.handleAuthError(response);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  }
+
   /** Agente de seguridad (S1): chequeo con reglas fijas contra la base real y el código. */
   async securityCheck(projectId: string): Promise<SecurityCheckResult> {
     const headers = await this.getHeaders();

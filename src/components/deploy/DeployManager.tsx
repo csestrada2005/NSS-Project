@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Rocket, ExternalLink, Copy, RefreshCw, CheckCircle, Wrench, ShieldAlert } from 'lucide-react';
 import { platformService } from '../../services/PlatformService';
 import LoadingSquares from '../brand/LoadingSquares';
+import { FaviconPicker } from './FaviconPicker';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
 import { formatRelativeDate } from '@/i18n/forge/format';
 import type { ForgeKey } from '@/i18n/forge/en';
@@ -331,6 +332,8 @@ export function DeployManager({ files, projectId: propProjectId, onFixTypeErrors
           )}
         </div>
       )}
+
+      {projectId && <FaviconPicker projectId={projectId} autoSvg={files?.get('public/favicon.svg')} />}
     </div>
   );
 }

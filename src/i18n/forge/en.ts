@@ -711,6 +711,16 @@ export const en = {
   'assets.copied': 'Copied',
   'assets.delete': 'Delete',
   'assets.confirmDelete': 'Delete "{name}"? Pages that use it will stop showing it.',
+  // Custom favicon from Publish, block 2 (2026-10-06)
+  'favicon.title': 'Tab icon',
+  'favicon.auto': 'Automatic: the brand initial over its color.',
+  'favicon.custom': 'Your icon: {name}',
+  'favicon.hint': 'PNG, JPG, WebP or SVG. Square and 180 px or larger works best; non-square images are fitted without cropping.',
+  'favicon.nextPublish': 'It will show on your site the next time you press Publish / Update.',
+  'favicon.change': 'Change icon',
+  'favicon.uploading': 'Uploading…',
+  'favicon.reset': 'Back to automatic',
+  'favicon.failed': 'Could not change the icon: {message}',
 } as const;
 
 export type ForgeKey = keyof typeof en;

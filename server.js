@@ -23,7 +23,8 @@ import { pickProjectUrl } from './server/vercelDeployUrl.js';
 import { createAuthCache } from './server/authCache.js';
 import { fetchSecurityReport, runSecurityCheck } from './server/securityCheck.js';
 import { configureAuthSiteUrl } from './server/authSiteUrl.js';
-import { ASSET_BUCKET, assetStoragePath, processUpload } from './server/assets.js';
+import { ASSET_BUCKET, assetStoragePath, faviconSizes, processFavicon, processUpload } from './server/assets.js';
+import { withCustomFavicon } from './src/utils/deployFavicon.js';
 import {
   validateProjectRefRequest,
   validateLogsRequest,
@@ -1508,8 +1509,14 @@ app.post('/api/deploy/:projectId', async (req, res) => {
       }
     }
 
+    // Bloque 2 (2026-10-06): el ícono propio, si lo hay, entra al publicar.
+    // Fail-open: si no se puede leer, se publica con el automático.
+    const favicon = await loadCustomFavicon(projectId);
+    const filesToShip = favicon ? withCustomFavicon(deployFiles, favicon) : deployFiles;
+    console.log(`[deploy] favicon: ${favicon ? 'propio' : 'automático'}`);
+
     // Build Vercel file list with base64 encoding
-    const vercelFiles = Object.entries(deployFiles).map(([filePath, content]) => ({
+    const vercelFiles = Object.entries(filesToShip).map(([filePath, content]) => ({
       file: filePath,
       data: Buffer.from(content).toString('base64'),
       encoding: 'base64',
@@ -2296,7 +2303,7 @@ app.get('/api/projects/:projectId/assets', async (req, res) => {
   if (!supabaseAdmin) return res.json([]);
   const { data, error } = await supabaseAdmin
     .from('forge_assets').select(ASSET_COLUMNS)
-    .eq('project_id', projectId).order('created_at', { ascending: false });
+    .eq('project_id', projectId).neq('kind', 'favicon').order('created_at', { ascending: false });
   if (error) return res.status(500).json({ error: error.message });
   res.json(data ?? []);
 });
@@ -2311,6 +2318,114 @@ app.delete('/api/projects/:projectId/assets/:assetId', async (req, res) => {
   if (!row) return res.status(404).json({ error: 'Not found' });
   await supabaseAdmin.storage.from(ASSET_BUCKET).remove([row.storage_path]);
   await supabaseAdmin.from('forge_assets').delete().eq('id', assetId).eq('project_id', projectId);
+  res.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
+// Favicon del proyecto (bloque 2, 2026-10-06): uno por proyecto, en el mismo
+// almacén. Se aplica al publicar (withCustomFavicon); el código no se toca.
+// No sale en la lista de Archivos ni en la nota de la IA.
+// ---------------------------------------------------------------------------
+async function listFaviconRows(projectId) {
+  const { data } = await supabaseAdmin
+    .from('forge_assets').select('id, storage_path, created_at')
+    .eq('project_id', projectId).eq('kind', 'favicon')
+    .order('created_at', { ascending: false });
+  return data ?? [];
+}
+
+async function removeFaviconRows(projectId, rows) {
+  if (rows.length === 0) return;
+  await supabaseAdmin.storage.from(ASSET_BUCKET).remove(rows.map((r) => r.storage_path)).catch(() => {});
+  await supabaseAdmin.from('forge_assets').delete().eq('project_id', projectId).in('id', rows.map((r) => r.id));
+}
+
+/** PNG de 32 y 180 px del ícono propio, o null (sin ícono o no se pudo leer). */
+async function loadCustomFavicon(projectId) {
+  if (!supabaseAdmin) return null;
+  try {
+    const [row] = await listFaviconRows(projectId);
+    if (!row) return null;
+    const { data, error } = await supabaseAdmin.storage.from(ASSET_BUCKET).download(row.storage_path);
+    if (error || !data) throw new Error(error?.message ?? 'sin datos');
+    return await faviconSizes(Buffer.from(await data.arrayBuffer()));
+  } catch (err) {
+    console.warn('[deploy] favicon propio no disponible, va el automático:', err?.message ?? err);
+    return null;
+  }
+}
+
+app.get('/api/projects/:projectId/favicon', async (req, res) => {
+  const { projectId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
+  if (!supabaseAdmin) return res.json(null);
+  const { data, error } = await supabaseAdmin
+    .from('forge_assets').select(ASSET_COLUMNS)
+    .eq('project_id', projectId).eq('kind', 'favicon')
+    .order('created_at', { ascending: false }).limit(1);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data?.[0] ?? null);
+});
+
+app.put('/api/projects/:projectId/favicon', async (req, res) => {
+  const { projectId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Storage not configured' });
+  const { name, type, data } = req.body ?? {};
+  if (typeof name !== 'string' || typeof type !== 'string' || typeof data !== 'string') {
+    return res.status(400).json({ error: 'name, type and data (base64) are required' });
+  }
+  let processed;
+  try {
+    processed = await processFavicon({ name, type, buffer: Buffer.from(data, 'base64') });
+  } catch (err) {
+    return res.status(err.status ?? 400).json({ error: err.message, code: err.code ?? 'BAD_FILE' });
+  }
+  const previous = await listFaviconRows(projectId);
+  const storagePath = assetStoragePath(projectId, `favicon-${name}`, processed.ext);
+  const { error: uploadError } = await supabaseAdmin.storage
+    .from(ASSET_BUCKET)
+    .upload(storagePath, processed.buffer, { contentType: processed.mime, upsert: false, cacheControl: '31536000' });
+  if (uploadError) {
+    console.error('[favicon] upload failed:', uploadError.message);
+    return res.status(502).json({ error: 'No se pudo guardar el ícono', code: 'UPLOAD_FAILED' });
+  }
+  const { data: urlData } = supabaseAdmin.storage.from(ASSET_BUCKET).getPublicUrl(storagePath);
+  const { data: row, error: insertError } = await supabaseAdmin
+    .from('forge_assets')
+    .insert({
+      project_id: projectId,
+      kind: 'favicon',
+      storage_path: storagePath,
+      public_url: urlData.publicUrl,
+      mime_type: processed.mime,
+      size_bytes: processed.buffer.length,
+      original_size: processed.originalSize,
+      original_name: name.slice(0, 200),
+      width: processed.width,
+      height: processed.height,
+      created_by: req.userId ?? null,
+    })
+    .select(ASSET_COLUMNS)
+    .single();
+  if (insertError) {
+    await supabaseAdmin.storage.from(ASSET_BUCKET).remove([storagePath]).catch(() => {});
+    console.error('[favicon] insert failed:', insertError.message);
+    return res.status(500).json({ error: 'No se pudo registrar el ícono', code: 'INSERT_FAILED' });
+  }
+  // El anterior se borra sólo cuando el nuevo ya quedó guardado.
+  await removeFaviconRows(projectId, previous);
+  console.log(`[favicon] ${projectId} · ${name} · ${processed.originalSize} → ${processed.buffer.length} bytes · reemplazó ${previous.length}`);
+  res.json(row);
+});
+
+app.delete('/api/projects/:projectId/favicon', async (req, res) => {
+  const { projectId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Storage not configured' });
+  const rows = await listFaviconRows(projectId);
+  await removeFaviconRows(projectId, rows);
+  console.log(`[favicon] ${projectId} · vuelve al automático (borrados ${rows.length})`);
   res.json({ ok: true });
 });
 

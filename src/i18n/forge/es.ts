@@ -706,4 +706,14 @@ export const es: Record<ForgeKey, string> = {
   'assets.copied': 'Copiada',
   'assets.delete': 'Borrar',
   'assets.confirmDelete': '¿Borrar "{name}"? Las páginas que la usen dejarán de mostrarla.',
+  // Favicon propio desde Publicar, bloque 2 (2026-10-06)
+  'favicon.title': 'Ícono de la pestaña',
+  'favicon.auto': 'Automático: la inicial de la marca sobre su color.',
+  'favicon.custom': 'Tu ícono: {name}',
+  'favicon.hint': 'PNG, JPG, WebP o SVG. Mejor cuadrado y de 180 px o más; si no es cuadrado se encaja sin recortar.',
+  'favicon.nextPublish': 'Se verá en tu sitio la próxima vez que pulses Publicar / Actualizar.',
+  'favicon.change': 'Cambiar ícono',
+  'favicon.uploading': 'Subiendo…',
+  'favicon.reset': 'Volver al automático',
+  'favicon.failed': 'No se pudo cambiar el ícono: {message}',
 };

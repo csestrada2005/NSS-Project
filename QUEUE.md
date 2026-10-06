@@ -2629,7 +2629,8 @@ buenos resultados la primera vez que se usó en este ítem (ver Bloque 1, "Halla
   con RLS sin políticas, sólo el servidor), NO el de cada proyecto (Wyrd no guarda su llave service_role y
   los proyectos sin base no tienen almacén). JPG/PNG → WebP máx. 2560px (sharp); WebP y SVG seguro se
   quedan. Límites 10 MB foto / 20 MB PDF. Puede subir quien pueda editar el proyecto.
-  - **Bloque 1 — HECHO, ESPERA CHECK DE SAMUEL (2026-10-05):** `server/assets.js` (transformador, +5
+  - **Bloque 1 — HECHO Y CONFIRMADO (re-check de Samuel 2026-10-06: todo correcto, fotos visibles en
+    preview y miniaturas tras `0fd2cc9`):** `server/assets.js` (transformador, +5
     tests), endpoints `GET/POST /api/projects/:id/assets` y `DELETE …/assets/:assetId` en `server.js`
     (log `[assets] …`), pestaña "Archivos" en el modal de Código (`AssetsPanel.tsx`, +1 test), y la IA
     recibe la lista con las direcciones exactas (`src/utils/assetsNote.js`, +1 test) en el carril simple
@@ -2637,8 +2638,19 @@ buenos resultados la primera vez que se usó en este ítem (ver Bloque 1, "Halla
     Check de Samuel (2026-10-05): pasos 1-5 y 7 correctos; la IA usó la dirección exacta. Mundo inesperado:
     las fotos no se veían en el preview ni en las miniaturas (sí en pestaña nueva). Causa: cabecera vieja
     `Cross-Origin-Embedder-Policy: require-corp` (de WebContainers) + el almacén no manda permiso
-    cross-origin. Quitada con permiso de Samuel (server.js + vite.config.ts). Espera re-check.
-  - Bloque 2 — favicon en Publicar (generar 32px y 180px). Pendiente.
+    cross-origin. Quitada con permiso de Samuel (server.js + vite.config.ts), `0fd2cc9`. Re-check OK.
+  - **Bloque 2 — favicon en Publicar: HECHO, ESPERA CHECK DE SAMUEL (2026-10-06).** Decisiones de Samuel:
+    se aplica AL PUBLICAR (opción A: el código del proyecto no se toca, hay que pulsar Actualizar) y una
+    imagen no cuadrada se ENCAJA sin recortar (fondo transparente). Samuel confirmó en information_schema que
+    `forge_assets.kind` (text) tiene un CHECK que admite `favicon`. `server/assets.js` (`processFavicon` → PNG
+    maestro 512 px; `faviconSizes` → 32 y 180 px, +3 tests), `src/utils/deployFavicon.js` (añade
+    `public/favicon-32.png` + `public/apple-touch-icon.png` al paquete de Vercel y cambia los `<link rel=icon>`
+    del index.html, +4 tests), endpoints `GET/PUT/DELETE /api/projects/:id/favicon` (log `[favicon] …`; uno
+    por proyecto, el anterior se borra sólo tras guardar el nuevo), en Publicar log `[deploy] favicon:
+    propio|automático` (fail-open al automático). La lista de Archivos (y por tanto la nota de la IA) excluye
+    `favicon`. UI: recuadro "Ícono de la pestaña" en Publicar (`FaviconPicker.tsx`, +2 tests).
+    Fuera del bloque (sin ítem propio salvo que Samuel lo pida): ícono Android 512 px / manifest, imagen al
+    compartir el link (og:image).
   - Bloque 3 — adjuntos en el chat (fotos por dirección; PDFs leídos por la IA, gasta créditos). Pendiente.
 - **Cambiar el favicon desde Publicar (Samuel, 2026-10-04):** "crucial".
 - Quitar los botones "Próximamente" que no hacen nada (chat: Adjuntar, Dictar, Editar el plan; créditos:

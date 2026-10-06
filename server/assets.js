@@ -68,3 +68,42 @@ export function assetStoragePath(projectId, originalName, ext) {
     .slice(0, 40) || 'archivo';
   return `${projectId}/${crypto.randomUUID().slice(0, 8)}-${base}.${ext}`;
 }
+
+// ---------------------------------------------------------------------------
+// Favicon (bloque 2, 2026-10-06, decisiones de Samuel): uno por proyecto, se
+// aplica AL PUBLICAR (el código del proyecto no se toca) y una imagen no
+// cuadrada se ENCAJA sin recortar, con fondo transparente. Se guarda un PNG
+// maestro de 512 px; al publicar salen de él los de 32 px y 180 px.
+// ---------------------------------------------------------------------------
+const FAVICON_MASTER = 512;
+const TRANSPARENT = { r: 0, g: 0, b: 0, alpha: 0 };
+
+/**
+ * Valida un ícono subido y lo convierte al PNG maestro cuadrado.
+ * @param {{ name: string, type: string, buffer: Buffer }} file
+ * @returns {Promise<{ kind: 'favicon', buffer: Buffer, mime: 'image/png', ext: 'png', width: number, height: number, originalSize: number }>}
+ */
+export async function processFavicon(file) {
+  const { type, buffer } = file;
+  const originalSize = buffer?.length ?? 0;
+  if (!buffer || originalSize === 0) throw Object.assign(new Error('archivo vacío'), { status: 400, code: 'EMPTY' });
+  if (!IMAGE_IN.has(type)) throw Object.assign(new Error(`formato no permitido: ${type}`), { status: 400, code: 'BAD_TYPE' });
+  if (originalSize > MAX_IMAGE_BYTES) throw Object.assign(new Error('imagen de más de 10 MB'), { status: 413, code: 'TOO_LARGE' });
+  const isSvg = type === 'image/svg+xml';
+  if (isSvg && !isSafeSvg(buffer.toString('utf8'))) throw Object.assign(new Error('SVG con scripts no permitido'), { status: 400, code: 'UNSAFE_SVG' });
+
+  // density: un SVG se dibuja con detalle suficiente antes de reducirlo.
+  const out = await sharp(buffer, { failOn: 'error', ...(isSvg ? { density: 300 } : {}) })
+    .rotate()
+    .resize({ width: FAVICON_MASTER, height: FAVICON_MASTER, fit: 'contain', background: TRANSPARENT })
+    .png()
+    .toBuffer();
+  return { kind: 'favicon', buffer: out, mime: 'image/png', ext: 'png', width: FAVICON_MASTER, height: FAVICON_MASTER, originalSize };
+}
+
+/** Del PNG maestro, los dos tamaños que van al sitio publicado. */
+export async function faviconSizes(master) {
+  const size = (px) => sharp(master).resize({ width: px, height: px, fit: 'contain', background: TRANSPARENT }).png().toBuffer();
+  const [png32, png180] = await Promise.all([size(32), size(180)]);
+  return { png32, png180 };
+}
