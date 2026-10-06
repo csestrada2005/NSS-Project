@@ -1602,6 +1602,13 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   como están o hay una decisión de producto pendiente ahí?
 
 ## 6. BUCKET Calidad del modelo
+- **Proyectos que NO parezcan hechos con IA ni plantilla (Samuel, 2026-10-06):** reglas para el modelo para que
+  nunca use el aspecto shadcn "clásico" por defecto (las tarjetas, botones, bordes grises y espaciado de siempre) en
+  los proyectos generados. Motivo: la gente se queja, con razón, de que el sitio con cara de plantilla shadcn se ve
+  mal y "hecho con IA"; cada proyecto debe verse diseñado a medida para su marca. No es gusto personal de Samuel.
+  Pendiente de diseño en frío: si va en `promptRules.ts`/DesignBriefService, cómo se comprueba (¿un guard que
+  detecte el look por defecto?) y cómo encaja con la Decisión de "cero plantillas genéricas" ya aplicada a la UI
+  de Wyrd.
 - **Llaves "como Lovable" (Samuel, 2026-10-05):** cuando la IA necesita una llave (p. ej. Stripe), abre un formulario
   seguro (no el chat) y la guarda donde va (secretos de las funciones de servidor del proyecto). Wyrd ya tiene el
   panel de secretos; falta que la IA lo pida y lo llene.
