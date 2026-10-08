@@ -69,6 +69,7 @@ const isFixButtonRequest = (input: string) => isTypeFixRequest(input) || isSecur
 import { createStageTimer, type StageTimer } from '../utils/stageTimer.js';
 import { buildAssetsNote } from '../utils/assetsNote.js';
 import { buildSavedReadingsNote, pickSavedReadings } from '../utils/savedReadings.js';
+import { stripEmoji } from '../utils/stripEmoji.js';
 import { compactAttachmentsNote } from '../utils/attachmentsNote.js';
 import { readAttachments } from './AttachmentReader';
 import type { ProjectAsset } from './PlatformService';
@@ -3470,7 +3471,8 @@ export class AIOrchestrator {
       const data = await response.json();
       if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
 
-      const rawText: string = (data.content?.[0]?.text ?? '').trim();
+      // Sin emojis (2026-10-08): el prompt los prohíbe y aun así llegaban.
+      const rawText: string = stripEmoji(data.content?.[0]?.text ?? '').trim();
 
       // Parse out a trailing SUGGESTED_ACTION line, if present.
       let answer = rawText;
