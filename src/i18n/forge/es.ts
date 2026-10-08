@@ -339,7 +339,7 @@ export const es: Record<ForgeKey, string> = {
   'chat.card.plan.build': 'Aceptar',
   'chat.card.plan.edit': 'Revisar',
   'chat.card.plan.reviewTitle': 'Revisar el plan',
-  'chat.card.plan.reviewHint': 'Edita lo que quieras: borra pasos, cambia palabras o escribe notas como "de las 3 opciones aplica A". La IA vuelve a armar el plan con tu versión y lo construye.',
+  'chat.card.plan.reviewHint': 'Borra pasos, cambia palabras o escribe notas. La IA vuelve a armar el plan con tu versión y lo construye.',
   'chat.card.plan.reviewSend': 'Enviar cambios',
   'chat.card.plan.reject': 'Rechazar',
   'chat.card.cancelled.tag': 'Detenido por ti',

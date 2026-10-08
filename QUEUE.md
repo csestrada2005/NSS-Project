@@ -17,7 +17,15 @@ Nada en curso. Elegir lo siguiente de las secciones 2–4.
 
 ## 2. Producto (lo que ve el usuario)
 
-- **"Revisar" el plan — HECHO, espera check (2026-10-08, R1 de Samuel).** El botón (antes "Editar el plan")
+- **"Modal que corre detrás" (Samuel, 2026-10-09):** si se cierra el modal mientras trabaja, al volver ya no
+  muestra todo lo que decía y el botón rojo animado se mueve de lugar. Debe seguir mostrando el progreso tal
+  cual (el trabajo corre detrás). Pendiente de diseño.
+- **Modo Plan: pedir un plan da plan — HECHO, espera check (2026-10-09, P2 + L1 de Samuel).** "Proponme un
+  plan…" caía en el carril de preguntas (consola: question lane). Ahora el clasificador sabe que es modo Plan,
+  y un seguro sin IA (src/utils/planModeIntent.js) nunca trata como pregunta un mensaje que pide plan/propuesta.
+  Se quitaron los atajos viejos ("plan:", "build a…", "execute next step") que escribían PLAN.md o código
+  saltándose créditos, plan y aprobación.
+- **"Revisar" el plan — HECHO Y CONFIRMADO (2026-10-09, R1 de Samuel; texto de la ventana acortado).** El botón (antes "Editar el plan")
   abre el plan como texto editable; al enviar, la IA vuelve a planear con la versión del usuario y construye
   directo (src/utils/planEdit.js, marca [PLAN_EDITED] en el pedido). Sólo pregunta otra vez si el plan nuevo
   borra algo que el anterior no borraba. Cómo debía funcionar (Samuel, 2026-10-08): un botón "Revisar" abre el plan en
@@ -74,6 +82,9 @@ Nada en curso. Elegir lo siguiente de las secciones 2–4.
 - **Reparación sin IA del nombre de exportación (2026-10-08), en observación:** no se puede provocar a voluntad.
   Si Samuel vuelve a ver una sección rota tras una reparación, revisar la consola (`[Verifier] arreglo sin IA`).
   Los demás errores siguen yendo al modelo (el "detector de destrozos" 2B no se hizo).
+- **Apóstrofo sin escapar (Vertigo, 2026-10-09):** `[compile] ERROR: Expected "}" but found "s"` en
+  src/data/expeditions.ts (casi seguro un texto con ' sin escapar). La reparación con Haiku lo arregló
+  reescribiendo el archivo (1699 tokens). Candidato a arreglo sin IA, como el nombre de exportación.
 - La IA rompe reglas: tocó `package.json` pese a la prohibición y añadió cosas que nadie pidió.
 - Detectar cuando lo pedido YA EXISTE y decirlo. Ojo: rompe las pruebas sobre fixtures ya construidos; necesita
   fixtures vírgenes.

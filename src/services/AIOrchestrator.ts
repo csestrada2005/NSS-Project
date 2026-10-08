@@ -83,6 +83,7 @@ import { promptNeedsServer } from '../utils/serverLogicSignals.js';
 import { touchesMigrations } from '../utils/migrationGate.js';
 import { shouldGatePlan, planRejectedTelemetry } from '../utils/planGate.js';
 import { addsDeletions, buildEditedPlanInput } from '../utils/planEdit.js';
+import { asksForPlan } from '../utils/planModeIntent.js';
 import { t as tr, tn as trn, getForgeLang } from '../i18n/forge/lang';
 
 // ---------------------------------------------------------------------------
@@ -691,114 +692,6 @@ export class AIOrchestrator {
   }
 
   // -------------------------------------------------------------------------
-  // Legacy plan generation
-  // -------------------------------------------------------------------------
-
-  static async generatePlan(
-    userGoal: string,
-    _files: Map<string, string>
-  ): Promise<{ modifiedFiles: string[] }> {
-    const systemPrompt =
-      'You are a Senior Technical Project Manager. Create a detailed implementation plan for the user\'s request. Output ONLY the content of a PLAN.md file. The format must be a markdown checklist.\n\n' +
-      'Example:\n' +
-      '- [ ] 1. Setup Database Schema\n' +
-      '- [ ] 2. Create API Endpoints\n' +
-      '- [ ] 3. Implement Frontend Components\n\n' +
-      'Keep steps atomic, clear, and focused on code implementation.';
-
-    const planContent = await this.callLLM(userGoal, systemPrompt);
-    this.notifyFileUpdate('PLAN.md', planContent);
-    return { modifiedFiles: ['PLAN.md'] };
-  }
-
-  // -------------------------------------------------------------------------
-  // Legacy step execution
-  // -------------------------------------------------------------------------
-
-  static async executeNextStep(
-    files: Map<string, string>,
-    projectId?: string
-  ): Promise<{ modifiedFiles: string[]; warning?: string } | null> {
-    this.retryCount = 0;
-
-    const planContent = files.get('PLAN.md');
-    if (!planContent) return null;
-
-    const lines = planContent.split('\n');
-    let nextStepIndex = -1;
-    let nextStepDescription = '';
-
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i].includes('- [ ]')) {
-        nextStepIndex = i;
-        nextStepDescription = lines[i].replace('- [ ]', '').trim();
-        break;
-      }
-    }
-
-    if (nextStepIndex === -1) return null;
-
-    const relevantFiles = selectRelevantFiles(nextStepDescription, files);
-    const blueprint = generateBlueprintFromFiles(files);
-
-    let relevantContext = '';
-    for (const f of relevantFiles) {
-      relevantContext += `--- START ${f.path} ---\n${f.content}\n--- END ${f.path} ---\n`;
-    }
-
-    // CAMBIO 1a — el system prompt queda 100% estático (reglas + contrato de
-    // formato). La tarea concreta del step (antes `Task: ${...}` en el system)
-    // vive sólo en el user message, que ya la lleva como USER REQUEST — así el
-    // prefijo del system es cacheable y no cambia por step.
-    const systemPrompt =
-      'You are an expert Senior React Engineer. Implement the following step from the plan.\n' +
-      FORMAT_INSTRUCTION + '\n' +
-      REACT_TAILWIND_RULES + '\n' +
-      BACKEND_RULES;
-
-    const userMessage =
-      `PROJECT BLUEPRINT (File Structure):\n${blueprint}\n\n` +
-      `RELEVANT FILE CONTEXT:\n${relevantContext}\n\n` +
-      `TASK (implement this step):\n${nextStepDescription}\n\n` +
-      `USER REQUEST:\n${nextStepDescription}`;
-
-    try {
-      const rawResponse = await this.callLLM(userMessage, systemPrompt);
-      const cleanJson = this.cleanJsonOutput(rawResponse);
-      const response: LLMResponse = JSON.parse(cleanJson);
-
-      const modifiedPaths: string[] = [];
-      const modifiedContents = new Map<string, string>();
-      for (const file of response.modifiedFiles) {
-        const content = this.stripCodeFences(file.newContent);
-        this.notifyFileUpdate(file.path, content);
-        modifiedPaths.push(file.path);
-        modifiedContents.set(file.path, content);
-      }
-
-      lines[nextStepIndex] = lines[nextStepIndex].replace('- [ ]', '- [x]');
-      const newPlanContent = lines.join('\n');
-      this.notifyFileUpdate('PLAN.md', newPlanContent);
-      modifiedPaths.push('PLAN.md');
-
-      this.lastModifiedFiles = modifiedPaths;
-
-      // Deploy DESPUÉS de confirmar que los archivos ya se persistieron
-      // (los notifyFileUpdate de arriba) — nunca antes.
-      const { failed } = await this.deployGeneratedFunctions(
-        modifiedPaths,
-        (p) => modifiedContents.get(p),
-        projectId
-      );
-
-      return { modifiedFiles: modifiedPaths, warning: this.functionDeployFailureWarning(failed) };
-    } catch (error) {
-      console.error('[AIOrchestrator] Error executing step:', error);
-      return null;
-    }
-  }
-
-  // -------------------------------------------------------------------------
   // Main command parser — wires the 5-layer agentic architecture
   // -------------------------------------------------------------------------
 
@@ -1286,30 +1179,10 @@ export class AIOrchestrator {
       input = withTypeErrorContext(input, files);
     }
 
-    // ------------------------------------------------------------------
-    // Legacy shortcut commands (preserved for backward compatibility)
-    // ------------------------------------------------------------------
-    // En modo Chat los atajos viejos tampoco corren: todos escriben archivos.
-    if (!chatOnly && input.toLowerCase().startsWith('plan:')) {
-      const result = await this.generatePlan(input.substring(5).trim(), files);
-      return { modifiedFiles: result.modifiedFiles };
-    }
-
-    if (!chatOnly && input.toLowerCase().startsWith('build a')) {
-      const result = await this.generatePlan(input, files);
-      return { modifiedFiles: result.modifiedFiles };
-    }
-
-    if (
-      !chatOnly &&
-      (input.toLowerCase().trim() === 'execute next step' ||
-        input.toLowerCase().trim() === 'continue plan')
-    ) {
-      const result = await this.executeNextStep(files, projectId);
-      return result
-        ? { modifiedFiles: result.modifiedFiles, warning: result.warning }
-        : { modifiedFiles: [] };
-    }
+    // Los atajos viejos ("plan:", "build a…", "execute next step") se quitaron
+    // (2026-10-09, L1 de Samuel): escribían PLAN.md o código saltándose los
+    // créditos, el plan y su aprobación; "Build a landing page…" en inglés
+    // daba un PLAN.md en vez del sitio.
 
     // ------------------------------------------------------------------
     // CREDIT CHECK — must pass before any LLM call
@@ -1425,8 +1298,8 @@ export class AIOrchestrator {
     // aplica igual aquí, en vez de fijar needs_server=false a ciegas.
     const noMemoryNeedsServer = promptNeedsServer(input);
     this.emitPhase('understanding');
-    const intent = memory
-      ? await IntentClassifier.classify(input, memory, chatHistory, signal, this.replyLanguage())
+    let intent: Intent = memory
+      ? await IntentClassifier.classify(input, memory, chatHistory, signal, this.replyLanguage(), planModeEnabled)
       : {
           type: 'modify_existing' as const,
           affected_files: [],
@@ -1437,6 +1310,12 @@ export class AIOrchestrator {
           server_reason: noMemoryNeedsServer ? 'deterministic signal' : '',
         };
     timer.mark('classify');
+    // Modo Plan (2026-10-09, P2): pedir un plan nunca es una pregunta, aunque
+    // el clasificador lo diga — seguro sin IA sobre la instrucción que ya recibe.
+    if (planModeEnabled && intent.type === 'question' && asksForPlan(input)) {
+      console.log('[AIOrchestrator] modo Plan: el mensaje pide un plan → no es pregunta');
+      intent = { ...intent, type: 'modify_existing', risk: 'medium', reasoning: 'Plan mode: the user asked for a plan.' };
+    }
     if (intent.status_line) this.emitPhase('headline', intent.status_line);
 
     // Tag the open intent with its classified type so the server records it on

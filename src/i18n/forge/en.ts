@@ -344,7 +344,7 @@ export const en = {
   'chat.card.plan.build': 'Accept',
   'chat.card.plan.edit': 'Review',
   'chat.card.plan.reviewTitle': 'Review the plan',
-  'chat.card.plan.reviewHint': 'Edit anything: remove steps, change words or write notes like "of the 3 options apply A". The AI rebuilds the plan with your version and builds it.',
+  'chat.card.plan.reviewHint': 'Remove steps, change words or write notes. The AI rebuilds the plan with your version and builds it.',
   'chat.card.plan.reviewSend': 'Send changes',
   'chat.card.plan.reject': 'Reject',
   'chat.card.cancelled.tag': 'Stopped by you',

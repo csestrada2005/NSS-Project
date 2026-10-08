@@ -73,7 +73,9 @@ export class IntentClassifier {
     chatHistory: Array<{ role: string; content: string }> = [],
     signal?: AbortSignal,
     // Idioma de la frase de progreso (status_line): el de la interfaz.
-    replyLanguage: 'Spanish' | 'English' = 'Spanish'
+    replyLanguage: 'Spanish' | 'English' = 'Spanish',
+    // Modo Plan (2026-10-09, P2): pedir un plan o una propuesta es un cambio.
+    planMode = false
   ): Promise<Intent> {
     const registrySummary = memory.component_registry
       .slice(0, 20)
@@ -133,6 +135,12 @@ Additionally output these two fields in your JSON response:
       `COMPONENT REGISTRY: ${registrySummary || 'none'}\n` +
       `ROUTES: ${routeSummary || 'none'}\n` +
       (recentHistory ? `RECENT CHAT HISTORY:\n${recentHistory}\n` : '') +
+      (planMode
+        ? 'MODE: PLAN — the user chose Plan mode: they want a plan to review and then build. Requests to ' +
+          'propose, plan, suggest or "how would you improve…" something in the project are NOT question: ' +
+          'classify them as the change they imply. Only pure information questions ("what font do we use?") ' +
+          'stay question.\n'
+        : '') +
       `USER PROMPT: ${prompt}`;
 
     try {
