@@ -68,6 +68,7 @@ import { codeReadingTables, piiTablesInProject, stripPiiPublicRead } from '../ut
 const isFixButtonRequest = (input: string) => isTypeFixRequest(input) || isSecurityFixRequest(input);
 import { createStageTimer, type StageTimer } from '../utils/stageTimer.js';
 import { buildAssetsNote } from '../utils/assetsNote.js';
+import { buildSavedReadingsNote, pickSavedReadings } from '../utils/savedReadings.js';
 import { compactAttachmentsNote } from '../utils/attachmentsNote.js';
 import { readAttachments } from './AttachmentReader';
 import type { ProjectAsset } from './PlatformService';
@@ -1286,9 +1287,10 @@ export class AIOrchestrator {
     // que los créditos alcancen.
     const memoryRead = projectId ? ProjectMemoryService.get(projectId) : Promise.resolve(null);
     // Archivos subidos por el usuario (2026-10-05): en paralelo; si falla, sin lista.
-    const assetsNotePending: Promise<string> = projectId
-      ? platformService.listAssets(projectId).then(buildAssetsNote).catch(() => '')
-      : Promise.resolve('');
+    const assetsPending: Promise<ProjectAsset[]> = projectId
+      ? platformService.listAssets(projectId).catch(() => [])
+      : Promise.resolve([]);
+    const assetsNotePending: Promise<string> = assetsPending.then(buildAssetsNote).catch(() => '');
     // Si los créditos cortan antes de esperarla, que su fallo no quede suelto;
     // quien la espera abajo sigue recibiendo el error como antes.
     memoryRead.catch(() => {});
@@ -1370,7 +1372,8 @@ export class AIOrchestrator {
       console.log('[AIOrchestrator] modo Chat: sin clasificar, directo a responder');
       const answer = await this.answerQuestion(
         inputWithAttachments, files, memory, chatHistory, projectId, creditUserId,
-        startTime, chatIntent, signal, await assetsNotePending
+        startTime, chatIntent, signal, await assetsNotePending,
+        await this.savedReadingsNote(projectId, await assetsPending, input, attachments, signal)
       );
       timer.mark('answer');
       console.log('[Timing] chat mode:', timer.summary());
@@ -1419,7 +1422,8 @@ export class AIOrchestrator {
         startTime,
         intent,
         signal,
-        await assetsNotePending
+        await assetsNotePending,
+        await this.savedReadingsNote(projectId, await assetsPending, input, attachments, signal)
       );
       timer.mark('answer');
       console.log('[Timing] question lane:', timer.summary());
@@ -3298,6 +3302,34 @@ export class AIOrchestrator {
   // Question lane — answer the user's question in chat, never touch files
   // -------------------------------------------------------------------------
 
+  /**
+   * Copias guardadas que sirven para esta pregunta (savedReadings.js). Nunca
+   * lanza: sin copias (o si el servidor falla) la respuesta sigue sin ellas.
+   */
+  private static async savedReadingsNote(
+    projectId: string | undefined,
+    assets: ProjectAsset[],
+    question: string,
+    attachments: ProjectAsset[],
+    signal?: AbortSignal
+  ): Promise<string> {
+    if (!projectId || signal?.aborted) return '';
+    const picked = pickSavedReadings(assets, question, attachments.map((a) => a.id));
+    if (picked.length === 0) return '';
+    const read = await Promise.all(picked.map(async (a) => {
+      try {
+        const r = await platformService.getAssetReading(projectId, a.id);
+        return r ? { kind: a.kind, original_name: a.original_name, text: r.text, truncated: r.truncated } : null;
+      } catch {
+        return null;
+      }
+    }));
+    const items = read.filter((x): x is NonNullable<typeof x> => x !== null);
+    console.log('[AIOrchestrator] copias guardadas usadas al responder (sin costo):',
+      items.map((i) => i.original_name).join(', ') || 'ninguna');
+    return buildSavedReadingsNote(items);
+  }
+
   private static async answerQuestion(
     input: string,
     files: Map<string, string>,
@@ -3310,7 +3342,10 @@ export class AIOrchestrator {
     signal?: AbortSignal,
     // Archivos del proyecto (2026-10-08): sin la lista, la IA decía "no tengo
     // acceso a archivos subidos" y mandaba a Google Drive.
-    assetsNote: string = ''
+    assetsNote: string = '',
+    // Copias guardadas de archivos ya leídos que la pregunta menciona
+    // (savedReadings.js, 2026-10-08): sin adjuntarlos, sin volver a pagar.
+    savedReadingsNote: string = ''
   ): Promise<OrchestratorResult> {
     const blueprint = generateBlueprintFromFiles(files);
     const memorySummary = memory
@@ -3343,11 +3378,19 @@ export class AIOrchestrator {
       '  access uploaded files, and never ask for a Google Drive/Dropbox/Instagram link.\n' +
       '  If a photo is missing, tell the user to attach it with the paperclip in the\n' +
       '  chat bar or pick it from Files; if it is already in PROJECT FILES, name it.\n' +
+      '  SAVED READINGS (when present) are the real content of those files: use them.\n' +
+      "  If the user asks about a file's content and it is NOT in SAVED READINGS or\n" +
+      '  attached, say you have not read it yet and ask them to attach it with the\n' +
+      '  paperclip (or pick it from Files) so you can read it.\n' +
       '  Stock photos (Unsplash) remain a valid option.\n' +
       '- Packages resolve automatically in the preview; NEVER tell the user to run\n' +
       '  npm install or any terminal command.\n' +
       '- Never end with a question offering to implement something; the\n' +
-      '  SUGGESTED_ACTION line is the only call to action.\n\n' +
+      '  SUGGESTED_ACTION line is the only call to action.\n' +
+      '- This reply CANNOT change files or run anything. Never promise or announce an\n' +
+      '  action ("give me a moment", "I will check/update…", "dame un momento", "voy a\n' +
+      '  revisar…"). Answer with what you know now; if a change would help, describe it\n' +
+      '  and put it in the SUGGESTED_ACTION line.\n\n' +
       'After your answer, if the question implies something that could be built or ' +
       'changed, end with one final line in this exact format:\n' +
       'SUGGESTED_ACTION: <a short imperative prompt in the REPLY LANGUAGE that ' +
@@ -3358,6 +3401,7 @@ export class AIOrchestrator {
       `PROJECT STRUCTURE:\n${blueprint}\n\n` +
       (memorySummary ? `PROJECT MEMORY:\n${memorySummary}\n\n` : '') +
       (assetsNote ? `${assetsNote}\n\n` : 'PROJECT FILES: none uploaded yet.\n\n') +
+      (savedReadingsNote ? `${savedReadingsNote}\n\n` : '') +
       (fileContext ? `RELEVANT FILES:\n${fileContext}\n\n` : '') +
       `USER QUESTION:\n${input}\n\n` +
       // i18n de Wyrd (ítem 5.4): la IA responde en el idioma de la interfaz,

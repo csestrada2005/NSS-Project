@@ -53,8 +53,12 @@ siempre que se pueda.
 - **Modo "Chat" — HECHO Y CONFIRMADO (check de Samuel 2026-10-08: pedido de construir en Chat → sólo respuesta,
   una línea de Sonnet sin clasificador; sugerencia → Automático y construyó; el modo se recuerda).**
   Detalle visto en el check: en Chat la IA dijo "Dame un momento — voy a revisar el archivo…", una promesa que
-  en ese modo no puede cumplir. Arreglo pendiente: decirle en Chat que no prometa acciones (la sugerencia ya
-  cubre eso). Tercera opción del menú (Automático / Plan / Chat): la IA
+  en ese modo no puede cumplir. Arreglado (espera check): las respuestas ya no prometen acciones.
+- **Respuestas que usan lo ya leído — HECHO, espera check (2026-10-08, decisión A de Samuel).** Al contestar
+  (Chat y preguntas en Automático), si la pregunta nombra un archivo o habla de "el PDF" / "la foto", la IA
+  recibe la copia guardada de lo que ya leyó, sin adjuntarlo y sin volver a pagar la lectura
+  (src/utils/savedReadings.js; tope 20.000 caracteres por archivo y 40.000 en total). Si nunca lo leyó, pide
+  adjuntarlo con el clip. Siguiente paso posible: lo mismo cuando construye. Tercera opción del menú (Automático / Plan / Chat): la IA
   SÓLO responde. Ni se clasifica el pedido: va directo al carril de preguntas, que no escribe archivos (tampoco
   corren los atajos viejos "build a…", "plan:"). Los botones de arreglo siguen arreglando. Decisión B1 de Samuel:
   en modo Chat, el botón de la sugerencia de la IA cambia a Automático y la construye. El modo se recuerda en

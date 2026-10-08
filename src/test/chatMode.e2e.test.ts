@@ -44,6 +44,31 @@ describe('Modo Chat — sólo responde (e2e con LLM falso)', () => {
     expect(control.forgeBodies.some((b) => systemOf(b).includes("Wyrd Forge's AI assistant"))).toBe(true);
   });
 
+  it('pregunta por "el PDF" sin adjuntarlo: usa la copia guardada, sin lector', async () => {
+    control.assets = [{
+      id: 'b', kind: 'document', public_url: '', mime_type: 'application/pdf', size_bytes: 1, original_size: 1,
+      original_name: 'menu_vertigo.pdf', width: null, height: null, created_at: '2026-10-08', has_reading: true,
+    }];
+    control.readings.set('b', { text: 'Rafting | $850\nRapel | $600', truncated: false });
+    await run('¿Están bien los precios con el PDF?', true);
+    const answer = control.forgeBodies.find((b) => systemOf(b).includes("Wyrd Forge's AI assistant"))!;
+    const text = JSON.stringify(answer.messages);
+    expect(text).toContain('SAVED READINGS');
+    expect(text).toContain('Rafting | $850');
+    expect(control.forgeBodies.some((b) => /You describe an image|You transcribe a document/.test(systemOf(b)))).toBe(false);
+    // Regla: la respuesta no promete acciones.
+    expect(systemOf(answer)).toContain('This reply CANNOT change files or run anything');
+  });
+
+  it('pregunta que no habla de archivos: no se piden copias', async () => {
+    control.assets = [{
+      id: 'b', kind: 'document', public_url: '', mime_type: 'application/pdf', size_bytes: 1, original_size: 1,
+      original_name: 'menu_vertigo.pdf', width: null, height: null, created_at: '2026-10-08', has_reading: true,
+    }];
+    await run('¿Cómo cambio el color del botón?', true);
+    expect(control.calls.some((u) => u.includes('/reading'))).toBe(false);
+  });
+
   it('el mismo pedido en Automático sí pasa por el clasificador y construye', async () => {
     const result = await run('Agrega una sección de testimonios con 3 tarjetas', false);
     expect(result.outcome).toBe('success');
