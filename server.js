@@ -25,6 +25,7 @@ import { fetchSecurityReport, runSecurityCheck } from './server/securityCheck.js
 import { configureAuthSiteUrl } from './server/authSiteUrl.js';
 import { ASSET_BUCKET, assetStoragePath, faviconSizes, processFavicon, processUpload } from './server/assets.js';
 import { withCustomFavicon } from './src/utils/deployFavicon.js';
+import { deleteServerSecret, isValidSecretName, isValidSecretValue, listServerSecretNames, requiredSecretsFromFiles, secretsStatus, setServerSecret } from './server/projectSecrets.js';
 import {
   validateProjectRefRequest,
   validateLogsRequest,
@@ -2426,6 +2427,74 @@ app.delete('/api/projects/:projectId/favicon', async (req, res) => {
   const rows = await listFaviconRows(projectId);
   await removeFaviconRows(projectId, rows);
   console.log(`[favicon] ${projectId} · vuelve al automático (borrados ${rows.length})`);
+  res.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
+// Llaves del proyecto "como Lovable" (2026-10-08): viven SÓLO en los secretos
+// del servidor del proyecto (server/projectSecrets.js). El valor entra y nunca
+// sale: no se devuelve, no se loguea, no se guarda en Wyrd.
+// ---------------------------------------------------------------------------
+async function projectSecretsContext(projectId) {
+  const [{ data: project }, { data: fileRows }] = await Promise.all([
+    supabaseAdmin.from('forge_projects').select('supabase_project_ref').eq('id', projectId).single(),
+    supabaseAdmin.from('forge_files').select('path, content').eq('project_id', projectId).like('path', 'supabase/functions/%'),
+  ]);
+  return { ref: project?.supabase_project_ref ?? null, required: requiredSecretsFromFiles(fileRows ?? []) };
+}
+
+app.get('/api/projects/:projectId/secrets', async (req, res) => {
+  const { projectId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Database not configured' });
+  const { ref, required } = await projectSecretsContext(projectId);
+  // Sin base no hay servidor: lo que pidan las funciones "falta" y no se puede guardar.
+  if (!ref) return res.json({ server: 'none', secrets: secretsStatus(required, []) });
+  // El chat sólo pregunta qué falta: sin funciones que pidan llaves no hace falta ir al servidor.
+  if (req.query.only === 'missing' && required.size === 0) return res.json({ server: 'ready', secrets: [] });
+  if (!SUPABASE_MANAGEMENT_TOKEN) return res.json({ server: 'unavailable', secrets: secretsStatus(required, []) });
+  try {
+    const names = await listServerSecretNames(ref, SUPABASE_MANAGEMENT_TOKEN);
+    res.json({ server: 'ready', secrets: secretsStatus(required, names) });
+  } catch (err) {
+    console.warn(`[secrets] ${projectId} · no se pudo leer el servidor:`, err?.message ?? err);
+    res.json({ server: 'error', secrets: secretsStatus(required, []) });
+  }
+});
+
+app.put('/api/projects/:projectId/secrets', async (req, res) => {
+  const { projectId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
+  if (!supabaseAdmin || !SUPABASE_MANAGEMENT_TOKEN) return res.status(503).json({ error: 'Secrets not configured', code: 'UNAVAILABLE' });
+  const { name, value } = req.body ?? {};
+  if (!isValidSecretName(name)) return res.status(400).json({ error: 'invalid name', code: 'BAD_NAME' });
+  if (!isValidSecretValue(value)) return res.status(400).json({ error: 'invalid value', code: 'BAD_VALUE' });
+  const { ref } = await projectSecretsContext(projectId);
+  if (!ref) return res.status(409).json({ error: 'project has no database', code: 'NO_SERVER' });
+  try {
+    await setServerSecret(ref, SUPABASE_MANAGEMENT_TOKEN, name, value.trim());
+  } catch (err) {
+    console.error(`[secrets] ${projectId} · ${name} · no se pudo guardar:`, err?.message ?? err);
+    return res.status(502).json({ error: 'No se pudo guardar la llave', code: 'SAVE_FAILED' });
+  }
+  console.log(`[secrets] ${projectId} · ${name} · guardada`);
+  res.json({ ok: true });
+});
+
+app.delete('/api/projects/:projectId/secrets/:name', async (req, res) => {
+  const { projectId, name } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
+  if (!supabaseAdmin || !SUPABASE_MANAGEMENT_TOKEN) return res.status(503).json({ error: 'Secrets not configured', code: 'UNAVAILABLE' });
+  if (!isValidSecretName(name)) return res.status(400).json({ error: 'invalid name', code: 'BAD_NAME' });
+  const { ref } = await projectSecretsContext(projectId);
+  if (!ref) return res.status(409).json({ error: 'project has no database', code: 'NO_SERVER' });
+  try {
+    await deleteServerSecret(ref, SUPABASE_MANAGEMENT_TOKEN, name);
+  } catch (err) {
+    console.error(`[secrets] ${projectId} · ${name} · no se pudo borrar:`, err?.message ?? err);
+    return res.status(502).json({ error: 'No se pudo borrar la llave', code: 'DELETE_FAILED' });
+  }
+  console.log(`[secrets] ${projectId} · ${name} · borrada`);
   res.json({ ok: true });
 });
 

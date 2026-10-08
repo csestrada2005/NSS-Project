@@ -54,6 +54,20 @@ export interface ProjectAsset {
   created_at: string;
 }
 
+/** Una llave del proyecto (server/projectSecrets.js): sólo nombre y estado. */
+export interface ProjectSecret {
+  name: string;
+  /** missing = una función la pide y el servidor no la tiene; unused = está y nadie la pide. */
+  status: 'missing' | 'set' | 'unused';
+  usedBy: string[];
+}
+
+export interface ProjectSecretsResult {
+  /** ready | none (sin base: no hay servidor) | unavailable | error */
+  server: 'ready' | 'none' | 'unavailable' | 'error';
+  secrets: ProjectSecret[];
+}
+
 /** Un hallazgo del chequeo de seguridad (server/securityCheck.js). */
 export interface SecurityFinding {
   severity: 'grave' | 'aviso';
@@ -448,6 +462,30 @@ class PlatformService {
   async deleteFavicon(projectId: string): Promise<void> {
     const headers = await this.getHeaders();
     const response = await fetch(`/api/projects/${projectId}/favicon`, { method: 'DELETE', headers });
+    this.handleAuthError(response);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  }
+
+  /** Llaves del proyecto (2026-10-08): nombres y estado; el valor nunca vuelve. */
+  async listProjectSecrets(projectId: string, opts: { missingOnly?: boolean } = {}): Promise<ProjectSecretsResult> {
+    const headers = await this.getHeaders();
+    const response = await fetch(`/api/projects/${projectId}/secrets${opts.missingOnly ? '?only=missing' : ''}`, { headers });
+    this.handleAuthError(response);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+  }
+
+  async setProjectSecret(projectId: string, name: string, value: string): Promise<void> {
+    const headers = await this.getHeaders();
+    const response = await fetch(`/api/projects/${projectId}/secrets`, { method: 'PUT', headers, body: JSON.stringify({ name, value }) });
+    this.handleAuthError(response);
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw Object.assign(new Error(body?.error || `HTTP ${response.status}`), { code: body?.code });
+  }
+
+  async deleteProjectSecret(projectId: string, name: string): Promise<void> {
+    const headers = await this.getHeaders();
+    const response = await fetch(`/api/projects/${projectId}/secrets/${encodeURIComponent(name)}`, { method: 'DELETE', headers });
     this.handleAuthError(response);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
   }

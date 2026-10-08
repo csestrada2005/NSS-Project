@@ -1,32 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { ForgeKey } from '@/i18n/forge/en';
-import { Eye, EyeOff, Plus, Trash2, Save, Cloud, CheckCircle, Circle } from 'lucide-react';
-import { SupabaseService } from '@/services/SupabaseService';
-import { platformService } from '@/services/PlatformService';
+import { Plus, Trash2, Cloud, CheckCircle, Circle } from 'lucide-react';
+import { platformService, type ProjectSecretsResult } from '@/services/PlatformService';
 import { wyrdToast as toast } from '@/utils/wyrdToast';
 import LoadingSquares from '../../brand/LoadingSquares';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
-
-interface Secret {
-  key: string;
-  value: string;
-}
+import { SecretValueForm } from './SecretValueForm';
 
 interface SecretsPanelProps {
   projectId: string | null | undefined;
 }
 
-const PLATFORM_MANAGED_KEYS = new Set([
-  'ANTHROPIC_API_KEY',
-  'GOOGLE_API_KEY',
-  'GOOGLE_PSI_KEY',
-  'VERCEL_TOKEN',
-  'NEBU_STUDIO_VERCEL_TOKEN',
-  'VERCEL_TEAM_ID',
-  'CLOUDFLARE_API_KEY',
-  'RESEND_API_KEY',
-  'SUPABASE_SERVICE_ROLE_KEY',
-]);
+/**
+ * Llaves "como Lovable" (2026-10-08, decisiones de Samuel): viven SÓLO en el
+ * servidor del proyecto. Qué llaves faltan lo dice el código de sus funciones
+ * (server/projectSecrets.js), no una lista fija. Nunca se muestra un valor:
+ * se guarda, se reemplaza o se borra. La tabla vieja forge_secrets ya no se
+ * usa (estaba vacía: 0 llaves, consulta de Samuel 2026-10-08).
+ */
+const NAME_RE = /^[A-Z][A-Z0-9_]{0,99}$/;
 
 // Sin marcas de infraestructura (Samuel, 2026-10-05): sólo se nombra al
 // proveedor cuando el usuario conecta SU propia cuenta (GitHub, Stripe).
@@ -39,100 +31,69 @@ const PLATFORM_LABELS: Record<string, ForgeKey> = {
   supabase: 'platform.db',
 };
 
+const STATUS_STYLE: Record<string, string> = {
+  missing: 'text-amber-300 border-amber-700/50 bg-amber-900/20',
+  set: 'text-emerald-300 border-emerald-800/50 bg-emerald-950/40',
+  unused: 'text-muted-foreground border-border bg-muted',
+};
+
 export function SecretsPanel({ projectId }: SecretsPanelProps) {
-  const [secrets, setSecrets] = useState<Secret[]>([]);
   const { t } = useForgeLang();
-  const [newKey, setNewKey] = useState('');
-  const [newValue, setNewValue] = useState('');
-  const [showValues, setShowValues] = useState<Record<number, boolean>>({});
-  const [isSaving, setIsSaving] = useState(false);
+  const [result, setResult] = useState<ProjectSecretsResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [newName, setNewName] = useState('');
   const [platformServices, setPlatformServices] = useState<Record<string, boolean> | null>(null);
   const [loadingPlatform, setLoadingPlatform] = useState(true);
 
+  const load = useCallback(async () => {
+    if (!projectId) { setResult(null); return; }
+    setLoading(true);
+    try {
+      setResult(await platformService.listProjectSecrets(projectId));
+    } catch {
+      setResult({ server: 'error', secrets: [] });
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId]);
+
   useEffect(() => {
-    loadSecrets();
+    void load();
     platformService.checkPlatformServices()
       .then(setPlatformServices)
       .catch(() => setPlatformServices({}))
       .finally(() => setLoadingPlatform(false));
-  }, [projectId]);
+  }, [load]);
 
-  const loadSecrets = async () => {
-    if (!projectId) {
-      setSecrets([]);
-      return;
-    }
+  const save = async (name: string, value: string) => {
+    if (!projectId) return;
     try {
-      const supabase = SupabaseService.getInstance().client;
-      const { data } = await supabase
-        .from('forge_secrets')
-        .select('key, value')
-        .eq('project_id', projectId)
-        .order('key');
-      if (data) {
-        setSecrets(data.filter((s: Secret) => !PLATFORM_MANAGED_KEYS.has(s.key)));
-      }
+      await platformService.setProjectSecret(projectId, name, value);
+      toast.success(t('secrets.saved', { key: name }));
+      await load();
     } catch (e) {
-      console.error('[SecretsPanel] load error:', e);
+      toast.error(t('secrets.saveFailed', { key: name }));
+      throw e;
     }
   };
 
-  const saveSecrets = async () => {
-    if (!projectId) {
-      toast.error(t('secrets.needProject'));
-      return;
-    }
-    setIsSaving(true);
+  const remove = async (name: string) => {
+    if (!projectId || !window.confirm(t('secrets.confirmRemove', { key: name }))) return;
     try {
-      const supabase = SupabaseService.getInstance().client;
-      for (const s of secrets) {
-        await supabase.from('forge_secrets').upsert(
-          { project_id: projectId, key: s.key, value: s.value },
-          { onConflict: 'project_id,key' }
-        );
-      }
-      toast.success(t('secrets.saved'));
-    } catch (e) {
-      console.error('[SecretsPanel] save error:', e);
-      toast.error(t('secrets.saveFailed'));
-    } finally {
-      setIsSaving(false);
+      await platformService.deleteProjectSecret(projectId, name);
+      toast.success(t('secrets.deleted', { key: name }));
+      await load();
+    } catch {
+      toast.error(t('secrets.deleteFailed', { key: name }));
     }
   };
 
-  const addSecret = () => {
-    if (!newKey.trim()) return;
-    if (PLATFORM_MANAGED_KEYS.has(newKey.trim())) {
-      alert(t('secrets.platformKey', { key: newKey.trim() }));
-      return;
-    }
-    setSecrets(prev => [...prev, { key: newKey.trim(), value: newValue }]);
-    setNewKey('');
-    setNewValue('');
-  };
-
-  const removeSecret = async (index: number) => {
-    const toRemove = secrets[index];
-    const newSecrets = secrets.filter((_, i) => i !== index);
-    setSecrets(newSecrets);
-
-    if (projectId && toRemove) {
-      try {
-        const supabase = SupabaseService.getInstance().client;
-        await supabase
-          .from('forge_secrets')
-          .delete()
-          .eq('project_id', projectId)
-          .eq('key', toRemove.key);
-      } catch (e) {
-        console.error('[SecretsPanel] delete error:', e);
-      }
-    }
-  };
+  const nameTrimmed = newName.trim();
+  const nameInvalid = nameTrimmed.length > 0 && (!NAME_RE.test(nameTrimmed) || nameTrimmed.startsWith('SUPABASE_'));
+  const canWrite = result?.server === 'ready';
 
   return (
     <div className="space-y-6">
-      {/* Banner when no project is open */}
       {!projectId && (
         <div className="bg-amber-900/20 border border-amber-700/40 rounded-xl p-4 text-sm text-amber-300 flex items-center gap-2">
           <Cloud size={16} />
@@ -166,78 +127,83 @@ export function SecretsPanel({ projectId }: SecretsPanelProps) {
         <p className="text-xs text-muted-foreground mt-3">{t('secrets.platformNote')}</p>
       </div>
 
-      {/* User-managed secrets */}
-      <div className="bg-background/50 rounded-lg p-4 border border-border border-l-4 border-l-primary">
-        <p className="text-sm text-muted-foreground mb-1">
-          {t('secrets.projectIntro')}
-        </p>
-        <div className="flex gap-2 mb-4 mt-4">
-          <input
-            type="text"
-            placeholder={t('secrets.keyPlaceholder')}
-            value={newKey}
-            onChange={(e) => setNewKey(e.target.value)}
-            className="flex-1 bg-muted border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
-          />
-          <input
-            type="password"
-            placeholder={t('secrets.valuePlaceholder')}
-            value={newValue}
-            onChange={(e) => setNewValue(e.target.value)}
-            className="flex-1 bg-muted border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
-          />
-          <button
-            onClick={addSecret}
-            disabled={!newKey.trim()}
-            className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
-          >
-            <Plus size={16} />
-            {t('secrets.add')}
-          </button>
-        </div>
-      </div>
+      {/* Llaves del proyecto: viven en el servidor del proyecto */}
+      {projectId && (
+        <div className="bg-background/50 rounded-lg p-4 border border-border border-l-4 border-l-primary space-y-4">
+          <p className="text-sm text-muted-foreground">{t('secrets.projectIntro')}</p>
 
-      <div className="space-y-2">
-        {secrets.length === 0 ? (
-          <div className="text-center text-neutral-500 py-4">{t('secrets.empty')}</div>
-        ) : (
-          secrets.map((secret, index) => (
-            <div key={index} className="flex items-center gap-2 bg-neutral-800/50 p-3 rounded border border-neutral-800 group hover:border-neutral-700 transition-colors">
-              <div className="flex-1 font-mono text-sm text-foreground truncate" title={secret.key}>
-                {secret.key}
+          {result?.server === 'none' && (
+            <p className="text-xs text-amber-300">{t('secrets.noServer')}</p>
+          )}
+          {(result?.server === 'unavailable' || result?.server === 'error') && (
+            <p className="text-xs text-red-300">{t('secrets.unavailable')}</p>
+          )}
+
+          {loading && !result ? (
+            <LoadingSquares size={16} />
+          ) : (result?.secrets.length ?? 0) === 0 ? (
+            <p className="text-sm text-muted-foreground">{t('secrets.empty')}</p>
+          ) : (
+            <ul className="space-y-2">
+              {result!.secrets.map((s) => (
+                <li key={s.name} className="p-3 rounded border border-border bg-muted/40 space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono text-sm text-foreground break-all">{s.name}</span>
+                    <span className={`text-[11px] px-2 py-0.5 rounded border ${STATUS_STYLE[s.status]}`}>
+                      {t(`secrets.status.${s.status}` as ForgeKey)}
+                    </span>
+                    {s.usedBy.length > 0 && (
+                      <span className="text-xs text-muted-foreground">{t('secrets.usedBy', { names: s.usedBy.join(', ') })}</span>
+                    )}
+                    {s.status !== 'missing' && canWrite && (
+                      <button
+                        type="button"
+                        onClick={() => remove(s.name)}
+                        className="ml-auto p-1.5 text-muted-foreground hover:text-red-400"
+                        aria-label={t('secrets.remove', { key: s.name })}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                  {canWrite && (
+                    <SecretValueForm
+                      compact
+                      label={s.name}
+                      submitLabel={s.status === 'missing' ? t('secrets.setValue') : t('secrets.replace')}
+                      onSave={(value) => save(s.name, value)}
+                    />
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {canWrite && (
+            <div className="space-y-2 pt-2 border-t border-border">
+              <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Plus size={12} />{t('secrets.add')}</p>
+              <div className="flex gap-2 flex-wrap">
+                <input
+                  type="text"
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-label={t('secrets.keyPlaceholder')}
+                  placeholder={t('secrets.keyPlaceholder')}
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value.toUpperCase())}
+                  className="flex-1 min-w-[12rem] bg-muted border border-border rounded px-3 py-2 text-sm text-foreground font-mono focus:border-primary focus:outline-none"
+                />
+                <SecretValueForm
+                  label={nameTrimmed || t('secrets.valuePlaceholder')}
+                  disabled={!nameTrimmed || nameInvalid}
+                  onSave={async (value) => { await save(nameTrimmed, value); setNewName(''); }}
+                />
               </div>
-              <div className="flex items-center gap-2 bg-neutral-900 px-2 py-1 rounded border border-neutral-800 max-w-[200px]">
-                <span className="font-mono text-xs text-neutral-300 truncate">
-                  {showValues[index] ? secret.value : '••••••••••••••••'}
-                </span>
-                <button
-                  onClick={() => setShowValues(prev => ({ ...prev, [index]: !prev[index] }))}
-                  className="text-neutral-500 hover:text-white transition-colors"
-                  aria-label={showValues[index] ? t('secrets.hide') : t('secrets.show')}
-                >
-                  {showValues[index] ? <EyeOff size={12} /> : <Eye size={12} />}
-                </button>
-              </div>
-              <button
-                onClick={() => removeSecret(index)}
-                className="p-2 text-neutral-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-                aria-label={t('secrets.remove', { key: secret.key })}
-              >
-                <Trash2 size={16} />
-              </button>
+              {nameInvalid && <p className="text-xs text-red-300">{t('secrets.badName')}</p>}
             </div>
-          ))
-        )}
-      </div>
-
-      <button
-        onClick={saveSecrets}
-        disabled={isSaving}
-        className="nebu-cta flex items-center gap-2 px-6 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors"
-      >
-        <Save size={16} />
-        {isSaving ? t('common.saving') : t('secrets.save')}
-      </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

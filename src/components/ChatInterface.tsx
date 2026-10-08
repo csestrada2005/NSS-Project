@@ -37,6 +37,7 @@ import { t as tNow, tn as tnNow } from '@/i18n/forge/lang';
 import { platformService, type TypeIssue, type ProjectAsset } from '../services/PlatformService';
 import { readAsBase64 } from './studio/AssetsPanel';
 import type { AttachmentChip } from './chat/Typebar';
+import { MissingSecretsCard } from './chat/MissingSecretsCard';
 import { changedNames } from '../utils/changedNames';
 import { progressHeadline } from '../utils/progressHeadline.js';
 
@@ -158,6 +159,8 @@ export function ChatInterface({
   // Adjuntos del mensaje en curso (bloque 3): se suben al elegirlos (gratis);
   // la lectura con IA ocurre al enviar.
   const [attachments, setAttachments] = useState<AttachmentChip[]>([]);
+  // Llaves (2026-10-08): sube tras cada pedido para que la tarjeta vuelva a revisar.
+  const [secretsCheck, setSecretsCheck] = useState(0);
   // Espejo síncrono de `progressLines`, leído al cerrar un turno para congelar
   // el snapshot de pasos de la tarjeta de resultado (Bloque 3) — el closure de
   // `sendMessage` sólo ve el valor de cuando arrancó el turno, no el último.
@@ -359,6 +362,7 @@ export function ChatInterface({
 
       planLineIndexRef.current = new Map();
       isRetryingRef.current = false;
+      setSecretsCheck((n) => n + 1);
 
       // Instantánea de los pasos de ESTE turno para el colapsable de la
       // tarjeta de resultado (Bloque 3) — mismas líneas que se vieron en vivo
@@ -617,6 +621,10 @@ export function ChatInterface({
               />
             );
           })()}
+
+          {projectId && !isReadOnly && !hasPendingPlan && estado !== 'pensando' && (
+            <MissingSecretsCard projectId={projectId} checkKey={secretsCheck} disabled={isLoading} />
+          )}
 
           {hasPendingPlan ? (
             <PlanCard

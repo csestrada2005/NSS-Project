@@ -1604,6 +1604,20 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
 - **Llaves "como Lovable" (Samuel, 2026-10-05):** cuando la IA necesita una llave (p. ej. Stripe), abre un formulario
   seguro (no el chat) y la guarda donde va (secretos de las funciones de servidor del proyecto). Wyrd ya tiene el
   panel de secretos; falta que la IA lo pida y lo llene.
+  **HECHO, ESPERA CHECK DE SAMUEL (2026-10-08).** Reencuadre con evidencia: el panel de secretos NO funcionaba —
+  guardaba en `forge_secrets` (DB principal) desde el navegador, volvía a mostrar el valor, y nada leía esa tabla
+  ni la mandaba al servidor del proyecto (una función recibía la llave vacía). `forge_secrets` sin llaves de
+  usuario (consulta de Samuel: 0 llaves / 0 proyectos) → ya no se usa (sin DDL; la tabla se queda).
+  Decisiones de Samuel, todas A: (1) la llave vive SÓLO en los secretos del servidor del proyecto (Supabase del
+  proyecto vía Management API, `SUPABASE_MANAGEMENT_TOKEN`); Wyrd no guarda copia y nunca devuelve el valor;
+  proyecto sin base = sin servidor → se avisa. (2) Detección automática sin IA: las llaves que "faltan" salen del
+  CÓDIGO de las funciones (`Deno.env.get('NOMBRE')` en `supabase/functions/*`), no de una lista fija — sirve para
+  Stripe, Perplexity, Banxico o cualquiera; las `SUPABASE_*` se ocultan (las pone Supabase). (3) Nada que migrar.
+  Código: `server/projectSecrets.js` (+5 tests), `GET/PUT /api/projects/:id/secrets` y `DELETE …/secrets/:name`
+  (log `[secrets] <proyecto> · <NOMBRE> · guardada|borrada`, nunca el valor), regla 10 de BACKEND_RULES (nombres
+  estándar, nunca en el código ni pedidas por chat), tarjeta del chat `MissingSecretsCard` (tras cada pedido y al
+  abrir; "Ahora no" la oculta hasta el siguiente pedido), Ajustes → Secretos rehecho (Falta / Configurada /
+  Configurada · sin usar; Guardar / Reemplazar / Borrar / Agregar a mano) con `SecretValueForm` (+4 tests UI).
 - **Plan de evaluación de la calidad de la IA (Samuel, 2026-10-05):** (1) Samuel pasa proyectos REALES de Nebu y se
   revisa, en teoría (contra las reglas y la arquitectura de Nebu: sitio + panel de admin con sesión + panel de
   cliente opcional), si la IA los cumpliría; (2) corrida completa con un proyecto NUEVO y un "señor" prompt
