@@ -91,6 +91,35 @@
 .fc-adjunto-quitar:disabled { opacity: .4; cursor: not-allowed; }
 .fc-adjunto-quitar:focus-visible { outline: 2px solid var(--linea-fuerte); outline-offset: 1px; }
 
+/* ---------- elegir de Archivos + menú del clip (2026-10-08) ---------- */
+.fc-pill:disabled { opacity: .45; cursor: not-allowed; }
+.fc-pill-primario { color: #fff; background: var(--rojo); border-color: var(--rojo); }
+.fc-pill-primario:hover:not(:disabled) { color: #fff; background: #b81f1f; border-color: #b81f1f; }
+.fc-picker { padding: 12px 14px; }
+.fc-picker .fc-pieza-head { margin-bottom: 8px; }
+.fc-picker-vacio { font-size: 12px; color: var(--fc-texto-3); }
+.fc-picker-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; }
+.fc-picker-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; font: inherit; cursor: pointer;
+  padding: 6px 8px; border-radius: 4px; border: 2px solid transparent; background: none; color: var(--fc-texto-2);
+  transition: background .18s, border-color .18s;
+}
+.fc-picker-item:hover { background: rgba(245, 240, 235, .05); }
+.fc-picker-item.fc-elegido { border-color: rgba(214, 40, 40, .55); background: rgba(214, 40, 40, .08); }
+.fc-picker-item:focus-visible { outline: 2px solid var(--linea-fuerte); outline-offset: 1px; }
+.fc-picker-mini {
+  width: 36px; height: 36px; flex: 0 0 auto; display: grid; place-items: center; overflow: hidden;
+  border-radius: 3px; background: rgba(245, 240, 235, .05); color: var(--fc-texto-3);
+}
+.fc-picker-mini img { width: 100%; height: 100%; object-fit: cover; }
+.fc-picker-texto { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.fc-picker-nombre { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--fc-texto); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fc-picker-nota { font-size: 11px; color: var(--fc-texto-3); }
+.fc-picker-check { width: 16px; flex: 0 0 auto; color: var(--rojo); }
+.fc-picker-pie { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.fc-clip { position: relative; flex: 0 0 auto; }
+.fc-clip .fc-modo-menu { left: auto; right: 0; width: 230px; transform-origin: bottom right; }
+
 /* ---------- typebar ---------- */
 .typebar {
   position: relative; display: flex; align-items: center; gap: 8px;

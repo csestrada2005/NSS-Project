@@ -23,7 +23,7 @@ import { pickProjectUrl } from './server/vercelDeployUrl.js';
 import { createAuthCache } from './server/authCache.js';
 import { fetchSecurityReport, runSecurityCheck } from './server/securityCheck.js';
 import { configureAuthSiteUrl } from './server/authSiteUrl.js';
-import { ASSET_BUCKET, DOCUMENT_BUCKET, MAX_DOCUMENT_BYTES, SIGNED_URL_SECONDS, assetStoragePath, bucketFor, faviconSizes, isPrivateDocument, processFavicon, processUpload } from './server/assets.js';
+import { ASSET_BUCKET, DOCUMENT_BUCKET, MAX_DOCUMENT_BYTES, READING_MIME, SIGNED_URL_SECONDS, assetStoragePath, bucketFor, faviconSizes, isPrivateDocument, isValidReading, processFavicon, processUpload, readingFolder, readingPath } from './server/assets.js';
 import { withCustomFavicon } from './src/utils/deployFavicon.js';
 import { deleteServerSecret, isValidSecretName, isValidSecretValue, listServerSecretNames, requiredSecretsFromFiles, secretsStatus, setServerSecret } from './server/projectSecrets.js';
 import {
@@ -2309,13 +2309,19 @@ let documentBucketReady = null;
 function ensureDocumentBucket() {
   if (!documentBucketReady) {
     documentBucketReady = (async () => {
+      // PDFs + las lecturas guardadas (JSON). Un almacén creado antes sólo
+      // aceptaba PDF: se le añade JSON sin hacerlo público.
+      const options = { public: false, fileSizeLimit: MAX_DOCUMENT_BYTES, allowedMimeTypes: ['application/pdf', READING_MIME] };
       const { data } = await supabaseAdmin.storage.getBucket(DOCUMENT_BUCKET);
-      if (data) return true;
-      const { error } = await supabaseAdmin.storage.createBucket(DOCUMENT_BUCKET, {
-        public: false,
-        fileSizeLimit: MAX_DOCUMENT_BYTES,
-        allowedMimeTypes: ['application/pdf'],
-      });
+      if (data) {
+        if (!(data.allowed_mime_types ?? []).includes(READING_MIME)) {
+          const { error: updateError } = await supabaseAdmin.storage.updateBucket(DOCUMENT_BUCKET, options);
+          if (updateError) throw updateError;
+          console.log(`[assets] almacén privado ${DOCUMENT_BUCKET} ahora acepta lecturas guardadas`);
+        }
+        return true;
+      }
+      const { error } = await supabaseAdmin.storage.createBucket(DOCUMENT_BUCKET, options);
       if (error && !/already exists/i.test(error.message)) throw error;
       console.log(`[assets] almacén privado ${DOCUMENT_BUCKET} listo`);
       return true;
@@ -2400,11 +2406,53 @@ app.get('/api/projects/:projectId/assets', async (req, res) => {
   const { projectId } = req.params;
   if (!(await requireProjectOwnership(req, res, projectId))) return;
   if (!supabaseAdmin) return res.json([]);
-  const { data, error } = await supabaseAdmin
-    .from('forge_assets').select(ASSET_COLUMNS)
-    .eq('project_id', projectId).neq('kind', 'favicon').order('created_at', { ascending: false });
+  const [{ data, error }, readings] = await Promise.all([
+    supabaseAdmin
+      .from('forge_assets').select(ASSET_COLUMNS)
+      .eq('project_id', projectId).neq('kind', 'favicon').order('created_at', { ascending: false }),
+    // Qué archivos ya tienen lectura guardada (reusarlos no gasta créditos).
+    supabaseAdmin.storage.from(DOCUMENT_BUCKET).list(readingFolder(projectId), { limit: 1000 })
+      .then(({ data: files }) => new Set((files ?? []).map((f) => f.name)))
+      .catch(() => new Set()),
+  ]);
   if (error) return res.status(500).json({ error: error.message });
-  res.json(data ?? []);
+  res.json((data ?? []).map((row) => ({ ...row, has_reading: readings.has(`${row.id}.json`) })));
+});
+
+// Lectura guardada de un archivo (lo que la IA entendió la primera vez).
+app.get('/api/projects/:projectId/assets/:assetId/reading', async (req, res) => {
+  const { projectId, assetId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Storage not configured' });
+  if (!(await readAssetRow(projectId, assetId))) return res.status(404).json({ error: 'Not found' });
+  const { data: blob, error } = await supabaseAdmin.storage.from(DOCUMENT_BUCKET).download(readingPath(projectId, assetId));
+  if (error || !blob) return res.status(404).json({ error: 'No reading', code: 'NO_READING' });
+  try {
+    const body = JSON.parse(await blob.text());
+    if (!isValidReading(body)) throw new Error('lectura inválida');
+    res.json({ text: body.text, truncated: Boolean(body.truncated) });
+  } catch {
+    res.status(404).json({ error: 'No reading', code: 'NO_READING' });
+  }
+});
+
+app.put('/api/projects/:projectId/assets/:assetId/reading', async (req, res) => {
+  const { projectId, assetId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Storage not configured' });
+  if (!isValidReading(req.body)) return res.status(400).json({ error: 'invalid reading', code: 'BAD_READING' });
+  const row = await readAssetRow(projectId, assetId);
+  if (!row) return res.status(404).json({ error: 'Not found' });
+  if (!(await ensureDocumentBucket())) return res.status(503).json({ error: 'No se pudo preparar el almacén privado' });
+  const payload = JSON.stringify({ text: req.body.text, truncated: Boolean(req.body.truncated), savedAt: new Date().toISOString() });
+  const { error } = await supabaseAdmin.storage.from(DOCUMENT_BUCKET)
+    .upload(readingPath(projectId, assetId), Buffer.from(payload), { contentType: READING_MIME, upsert: true });
+  if (error) {
+    console.error('[assets] no se pudo guardar la lectura:', error.message);
+    return res.status(502).json({ error: 'No se pudo guardar la lectura', code: 'SAVE_FAILED' });
+  }
+  console.log(`[assets] ${projectId} · ${row.original_name} · lectura guardada (${req.body.text.length} caracteres)`);
+  res.json({ ok: true });
 });
 
 app.delete('/api/projects/:projectId/assets/:assetId', async (req, res) => {
@@ -2414,6 +2462,8 @@ app.delete('/api/projects/:projectId/assets/:assetId', async (req, res) => {
   const row = await readAssetRow(projectId, assetId);
   if (!row) return res.status(404).json({ error: 'Not found' });
   await supabaseAdmin.storage.from(bucketFor(row)).remove([row.storage_path]);
+  // Su lectura guardada se va con él.
+  await supabaseAdmin.storage.from(DOCUMENT_BUCKET).remove([readingPath(projectId, assetId)]).catch(() => {});
   await supabaseAdmin.from('forge_assets').delete().eq('id', assetId).eq('project_id', projectId);
   res.json({ ok: true });
 });

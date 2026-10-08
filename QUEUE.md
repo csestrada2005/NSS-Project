@@ -19,8 +19,12 @@ siempre que se pueda.
    que caduca en 10 minutos y nunca recibe un enlace para ponerlo en el sitio. En Archivos: "Privado · sólo la IA
    lo lee" con "Ver", y "Hacer público" / "Hacer privado" (mueve el archivo de almacén, con confirmación). No había
    PDFs viejos que mover (Samuel borró el único).
-2. **La IA recuerda el contenido de un PDF.** Hoy el texto de un PDF sólo viaja con el mensaje donde se
-   adjuntó; en los siguientes la IA sabe que existe pero no qué dice. Va justo después del punto 1 (misma pieza).
+2. **Reusar archivos ya leídos — HECHO, espera check (2026-10-08).** Decisiones de Samuel: 1A elegir de
+   Archivos al adjuntar + 2A copia guardada en el almacén privado + bonus (también fotos). El clip ofrece "Subir
+   archivo nuevo" o "Elegir de Archivos". La primera vez que la IA lee un PDF o mira una foto, guarda lo que
+   entendió en `project-documents/readings/<proyecto>/<archivo>.json` (siempre privado, aunque el archivo sea
+   público; se borra junto con el archivo). Si eliges de Archivos algo ya leído, la ficha dice "Ya leído · no gasta
+   créditos" y no se vuelve a leer. El almacén privado ahora acepta también esas copias (JSON).
 
 ## 2. Producto (lo que ve el usuario)
 

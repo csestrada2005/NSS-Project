@@ -127,3 +127,29 @@ export function isPrivateDocument(row) {
 export function bucketFor(row) {
   return isPrivateDocument(row) ? DOCUMENT_BUCKET : ASSET_BUCKET;
 }
+
+// ---------------------------------------------------------------------------
+// Lecturas guardadas (2026-10-08, decisiones de Samuel: 1A elegir de Archivos
+// + 2A copia en el almacén privado). La primera vez que la IA lee un PDF (o
+// mira una foto) se guarda lo que entendió; al volver a adjuntarlo desde
+// Archivos se reusa sin pagar otra lectura. Siempre en el almacén PRIVADO,
+// aunque el archivo sea público: el texto puede traer datos sensibles.
+// ---------------------------------------------------------------------------
+export const MAX_READING_CHARS = 200_000;
+export const READING_MIME = 'application/json';
+
+export function readingFolder(projectId) {
+  return `readings/${projectId}`;
+}
+
+export function readingPath(projectId, assetId) {
+  return `${readingFolder(projectId)}/${assetId}.json`;
+}
+
+/** Una lectura válida: texto no vacío y razonable, y si se recortó. */
+export function isValidReading(body) {
+  return typeof body?.text === 'string'
+    && body.text.trim().length > 0
+    && body.text.length <= MAX_READING_CHARS
+    && (body.truncated === undefined || typeof body.truncated === 'boolean');
+}

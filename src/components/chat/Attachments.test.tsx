@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ChatInterface } from '../ChatInterface';
 import { platformService, type ProjectAsset } from '../../services/PlatformService';
@@ -66,6 +66,35 @@ describe('Adjuntos del chat', () => {
     await userEvent.type(screen.getByPlaceholderText(/.+/), 'hola{Enter}');
     await waitFor(() => expect(onSend).toHaveBeenCalled());
     expect(onSend.mock.calls[0][4]).toEqual([]);
+  });
+
+  it('elegir de Archivos: lo ya leído dice que no gasta créditos y se manda con el mensaje', async () => {
+    setForgeLang('es');
+    const leido = { ...pdf, id: 'r1', original_name: 'menu-viejo.pdf', public_url: '', has_reading: true };
+    const foto: ProjectAsset = {
+      id: 'f1', kind: 'image', public_url: 'https://cdn/p/hero.webp', mime_type: 'image/webp', size_bytes: 10,
+      original_size: 10, original_name: 'hero.jpg', width: 800, height: 600, created_at: '2026-10-08',
+    };
+    vi.spyOn(platformService, 'listAssets').mockResolvedValue([leido, foto]);
+    const onSend = vi.fn().mockResolvedValue({ success: true, modifiedFiles: [] });
+    render(<ChatInterface isLoading={false} onSendMessage={onSend} selectedElement={null} projectId="p" />);
+
+    await userEvent.click(screen.getByLabelText('Adjuntar'));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Elegir de Archivos' }));
+    const picker = await screen.findByRole('dialog', { name: 'Elegir de Archivos' });
+    await within(picker).findByText('menu-viejo.pdf');
+    within(picker).getByText('Ya leído · no gasta créditos');
+    within(picker).getByText('La IA la mirará · gasta créditos');
+    expect(within(picker).getByRole('button', { name: 'Adjuntar (0)' })).toHaveProperty('disabled', true);
+
+    await userEvent.click(within(picker).getByRole('button', { name: /menu-viejo\.pdf/ }));
+    await userEvent.click(within(picker).getByRole('button', { name: 'Adjuntar (1)' }));
+    expect(screen.queryByRole('dialog', { name: 'Elegir de Archivos' })).toBeNull();
+    screen.getByText('Ya leído · no gasta créditos');
+
+    await userEvent.type(screen.getByPlaceholderText(/.+/), 'Agrega los postres{Enter}');
+    await waitFor(() => expect(onSend).toHaveBeenCalled());
+    expect(onSend.mock.calls[0][4]).toEqual([leido]);
   });
 
   it('sin proyecto el clip queda inerte', () => {

@@ -5,6 +5,8 @@ export interface FakeFetchControl {
   forgeBodies: Record<string, unknown>[];
   /** Bloque 3: el lector de adjuntos responde con error (mundo 3A). */
   failAttachmentReads: boolean;
+  /** Lecturas guardadas por id de archivo (2026-10-08): GET las devuelve, PUT las guarda. */
+  readings: Map<string, { text: string; truncated: boolean }>;
   restore: () => void;
 }
 
@@ -78,6 +80,7 @@ export function installFakeFetch(): FakeFetchControl {
   const denied: string[] = [];
   const calls: string[] = [];
   const forgeBodies: Record<string, unknown>[] = [];
+  const readings = new Map<string, { text: string; truncated: boolean }>();
   const control = { failAttachmentReads: false };
 
   globalThis.fetch = (async (input: string | Request | URL, init?: RequestInit) => {
@@ -104,6 +107,17 @@ export function installFakeFetch(): FakeFetchControl {
 
     // --- GET /api/projects/:id/assets/:assetId/url — dirección temporal de un
     // documento privado (2026-10-08). ---
+    // --- /api/projects/:id/assets/:assetId/reading — lectura guardada. ---
+    const reading = /\/api\/projects\/[^/]+\/assets\/([^/]+)\/reading$/.exec(url);
+    if (reading) {
+      if ((init?.method ?? 'GET').toUpperCase() === 'PUT') {
+        readings.set(reading[1], parseBody(init) as { text: string; truncated: boolean });
+        return jsonResponse({ ok: true });
+      }
+      const saved = readings.get(reading[1]);
+      return saved ? jsonResponse(saved) : jsonResponse({ error: 'No reading' }, 404);
+    }
+
     const signed = /\/api\/projects\/[^/]+\/assets\/([^/]+)\/url$/.exec(url);
     if (signed) {
       return jsonResponse({ url: `https://signed.example/${signed[1]}.pdf?token=temporal`, expiresIn: 600 });
@@ -185,6 +199,7 @@ export function installFakeFetch(): FakeFetchControl {
     denied,
     calls,
     forgeBodies,
+    readings,
     get failAttachmentReads() { return control.failAttachmentReads; },
     set failAttachmentReads(v: boolean) { control.failAttachmentReads = v; },
     restore: () => {

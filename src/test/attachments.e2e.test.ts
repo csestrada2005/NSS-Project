@@ -79,6 +79,24 @@ describe('Bloque 3 — adjuntos del chat (e2e con LLM falso)', () => {
     expect(control.forgeBodies.some((b) => systemOf(b).includes('intent classifier'))).toBe(false);
   });
 
+  it('la primera lectura se guarda; elegido de Archivos con lectura guardada, se reusa sin llamar al lector', async () => {
+    const first = await run([pdf]);
+    expect(first.outcome).toBe('success');
+    expect(control.readings.get('b')).toEqual({ text: 'Concha | $25\nBolillo | $8', truncated: true });
+
+    // Segundo mensaje: el mismo PDF elegido de Archivos (ya leído).
+    control.forgeBodies.length = 0;
+    control.readings.set('b', { text: 'Concha | $30\nBolillo | $9', truncated: false });
+    const second = await run([{ ...pdf, has_reading: true }]);
+    expect(second.outcome).toBe('success');
+    const readers = control.forgeBodies.filter((b) => /You describe an image|You transcribe a document/.test(systemOf(b)));
+    expect(readers).toHaveLength(0);
+    const architect = control.forgeBodies.find((b) => systemOf(b).includes('software architect'))!;
+    expect(userText(architect)).toContain('Concha | $30');
+    // Lectura guardada completa: sin aviso de recorte.
+    expect(second.warning ?? '').not.toMatch(/primera parte/);
+  });
+
   it('sin adjuntos no hay lectura ni nota', async () => {
     const result = await run([]);
     expect(result.outcome).toBe('success');

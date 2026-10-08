@@ -81,3 +81,16 @@ test('documento sin dirección pública vive en el almacén privado; fotos y doc
   assert.equal(bucketFor({ kind: 'image', public_url: 'https://x/a.webp' }), ASSET_BUCKET);
   assert.notEqual(DOCUMENT_BUCKET, ASSET_BUCKET);
 });
+
+// Lecturas guardadas (2026-10-08).
+test('la lectura guardada vive en una carpeta por proyecto y se valida', async () => {
+  const { readingPath, readingFolder, isValidReading, MAX_READING_CHARS } = await import('./assets.js');
+  assert.equal(readingPath('p1', 'a1'), 'readings/p1/a1.json');
+  assert.ok(readingPath('p1', 'a1').startsWith(readingFolder('p1') + '/'));
+  assert.equal(isValidReading({ text: 'Concha | $25', truncated: false }), true);
+  assert.equal(isValidReading({ text: 'x' }), true);
+  assert.equal(isValidReading({ text: '   ' }), false);
+  assert.equal(isValidReading({ text: 'x'.repeat(MAX_READING_CHARS + 1) }), false);
+  assert.equal(isValidReading({ text: 'x', truncated: 'sí' }), false);
+  assert.equal(isValidReading(null), false);
+});

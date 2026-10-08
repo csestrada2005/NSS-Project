@@ -52,6 +52,8 @@ export interface ProjectAsset {
   width: number | null;
   height: number | null;
   created_at: string;
+  /** Ya hay una lectura guardada (adjuntarlo de nuevo no gasta créditos). */
+  has_reading?: boolean;
 }
 
 /** Una llave del proyecto (server/projectSecrets.js): sólo nombre y estado. */
@@ -442,6 +444,23 @@ class PlatformService {
     const body = await response.json().catch(() => ({}));
     if (!response.ok || typeof body?.url !== 'string') throw new Error(body?.error || `HTTP ${response.status}`);
     return body.url;
+  }
+
+  /** Lectura guardada de un archivo (lo que la IA entendió la primera vez), o null. */
+  async getAssetReading(projectId: string, assetId: string): Promise<{ text: string; truncated: boolean } | null> {
+    const headers = await this.getHeaders();
+    const response = await fetch(`/api/projects/${projectId}/assets/${assetId}/reading`, { headers });
+    this.handleAuthError(response);
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+  }
+
+  async saveAssetReading(projectId: string, assetId: string, reading: { text: string; truncated: boolean }): Promise<void> {
+    const headers = await this.getHeaders();
+    const response = await fetch(`/api/projects/${projectId}/assets/${assetId}/reading`, { method: 'PUT', headers, body: JSON.stringify(reading) });
+    this.handleAuthError(response);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
   }
 
   /** Documentos: privado (sólo la IA lo lee) ↔ público (el sitio puede ofrecerlo). */

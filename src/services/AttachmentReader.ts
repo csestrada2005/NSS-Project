@@ -19,7 +19,25 @@ export type AttachmentReadResult =
   | { ok: true; note: string; truncated: string[] }
   | { ok: false; failed: string };
 
-async function readOne(asset: ProjectAsset, userText: string, projectId: string | undefined, signal?: AbortSignal): Promise<{ text: string; truncated: boolean }> {
+/**
+ * Lecturas guardadas (2026-10-08): si el archivo ya se leyó antes (elegido de
+ * Archivos), se reusa sin llamar a la IA. Si no, se lee y se guarda para la
+ * próxima. Guardar es un extra: si falla, el pedido sigue igual.
+ */
+async function readOne(asset: ProjectAsset, userText: string, projectId: string | undefined, signal?: AbortSignal): Promise<{ text: string; truncated: boolean; reused: boolean }> {
+  if (projectId && asset.has_reading) {
+    const saved = await platformService.getAssetReading(projectId, asset.id).catch(() => null);
+    if (saved) return { ...saved, reused: true };
+  }
+  const fresh = await readFresh(asset, userText, projectId, signal);
+  if (projectId) {
+    await platformService.saveAssetReading(projectId, asset.id, fresh)
+      .catch((err) => console.warn('[AttachmentReader] no se pudo guardar la lectura de', asset.original_name, err));
+  }
+  return { ...fresh, reused: false };
+}
+
+async function readFresh(asset: ProjectAsset, userText: string, projectId: string | undefined, signal?: AbortSignal): Promise<{ text: string; truncated: boolean }> {
   const isDocument = asset.kind === 'document';
   // Documento privado (2026-10-08): la IA lo lee con una dirección que caduca.
   const url = asset.public_url || (projectId ? await platformService.getAssetUrl(projectId, asset.id) : '');
@@ -73,6 +91,7 @@ export async function readAttachments(
     if (r.value?.truncated) truncated.push(a.original_name);
     items.push({ ...a, text: r.value?.text, truncated: r.value?.truncated });
   }
-  console.log('[AttachmentReader] leídos:', attachments.length, '| truncados:', truncated.length);
+  const reused = reads.filter((r) => r.status === 'fulfilled' && r.value?.reused).length;
+  console.log('[AttachmentReader] leídos:', attachments.length, '| reusados (sin costo):', reused, '| truncados:', truncated.length);
   return { ok: true, note: buildAttachmentsNote(items), truncated };
 }

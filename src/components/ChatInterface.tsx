@@ -38,6 +38,7 @@ import { platformService, type TypeIssue, type ProjectAsset } from '../services/
 import { readAsBase64 } from './studio/AssetsPanel';
 import type { AttachmentChip } from './chat/Typebar';
 import { MissingSecretsCard } from './chat/MissingSecretsCard';
+import { AssetPicker } from './chat/AssetPicker';
 import { changedNames } from '../utils/changedNames';
 import { progressHeadline } from '../utils/progressHeadline.js';
 
@@ -161,6 +162,7 @@ export function ChatInterface({
   const [attachments, setAttachments] = useState<AttachmentChip[]>([]);
   // Llaves (2026-10-08): sube tras cada pedido para que la tarjeta vuelva a revisar.
   const [secretsCheck, setSecretsCheck] = useState(0);
+  const [pickerOpen, setPickerOpen] = useState(false);
   // Espejo síncrono de `progressLines`, leído al cerrar un turno para congelar
   // el snapshot de pasos de la tarjeta de resultado (Bloque 3) — el closure de
   // `sendMessage` sólo ve el valor de cuando arrancó el turno, no el último.
@@ -461,6 +463,23 @@ export function ChatInterface({
     }
   };
 
+  // Elegir de Archivos (2026-10-08): ya están subidos, así que entran listos.
+  const handlePickExisting = (assets: ProjectAsset[]) => {
+    setPickerOpen(false);
+    setAttachments((prev) => [
+      ...prev,
+      ...assets.map((asset) => ({
+        key: `asset-${asset.id}`,
+        name: asset.original_name,
+        kind: (asset.kind === 'document' ? 'document' : 'image') as AttachmentChip['kind'],
+        mime: asset.mime_type,
+        status: 'ready' as const,
+        asset,
+      })),
+    ]);
+    inputRef.current?.focus();
+  };
+
   const handleRemoveAttachment = (key: string) => {
     setAttachments((prev) => prev.filter((a) => a.key !== key));
   };
@@ -728,6 +747,17 @@ export function ChatInterface({
           ) : null}
         </div>
 
+        {pickerOpen && projectId && (
+          <div className="fc-stack">
+            <AssetPicker
+              projectId={projectId}
+              excludeIds={attachments.flatMap((a) => (a.asset ? [a.asset.id] : []))}
+              onPick={handlePickExisting}
+              onClose={() => setPickerOpen(false)}
+            />
+          </div>
+        )}
+
         <Typebar
           value={input}
           onChange={handleInputChange}
@@ -740,6 +770,7 @@ export function ChatInterface({
           attachments={attachments}
           onAttach={projectId && !isReadOnly ? handleAttach : undefined}
           onRemoveAttachment={handleRemoveAttachment}
+          onPickExisting={projectId && !isReadOnly ? () => setPickerOpen(true) : undefined}
         />
       </div>
 

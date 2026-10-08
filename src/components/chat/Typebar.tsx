@@ -1,5 +1,5 @@
-import { useRef } from 'react';
-import { Paperclip, Mic, ArrowUp, Square, X, FileText, Image as ImageIcon } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Paperclip, Mic, ArrowUp, Square, X, FileText, Image as ImageIcon, Upload, FolderOpen } from 'lucide-react';
 import type { ProjectAsset } from '@/services/PlatformService';
 import LoadingSquares from '../brand/LoadingSquares';
 import { LiveNode } from './LiveNode';
@@ -47,6 +47,7 @@ export function Typebar({
   attachments = [],
   onAttach,
   onRemoveAttachment,
+  onPickExisting,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -61,12 +62,28 @@ export function Typebar({
   /** Sin él (sin proyecto o sólo lectura) el clip queda inerte. */
   onAttach?: (files: FileList | null) => void;
   onRemoveAttachment?: (key: string) => void;
+  /** Abre "Elegir de Archivos" (reusar lo ya subido). */
+  onPickExisting?: () => void;
 }) {
   const { t } = useForgeLang();
   const fileRef = useRef<HTMLInputElement>(null);
+  const clipRef = useRef<HTMLDivElement>(null);
+  const [clipOpen, setClipOpen] = useState(false);
+
+  useEffect(() => {
+    if (!clipOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (!clipRef.current?.contains(e.target as Node)) setClipOpen(false);
+    };
+    document.addEventListener('click', onDocClick);
+    return () => document.removeEventListener('click', onDocClick);
+  }, [clipOpen]);
+
   const chipNote = (a: AttachmentChip) => {
     if (a.status === 'uploading') return t('chat.attach.uploading');
     if (a.status === 'error') return t('chat.attach.failed', { message: a.error ?? '' });
+    // Elegido de Archivos y ya leído antes: no se vuelve a pagar la lectura.
+    if (a.asset?.has_reading) return t('chat.attach.reused');
     if (a.kind === 'document') return t('chat.attach.willRead');
     return a.mime === 'image/svg+xml' ? t('chat.attach.urlOnly') : t('chat.attach.willSee');
   };
@@ -123,16 +140,51 @@ export function Typebar({
             e.target.value = '';
           }}
         />
-        <button
-          type="button"
-          className="fc-icon-btn"
-          aria-label={t('chat.input.attach')}
-          title={onAttach ? t('chat.input.attach') : t('common.comingSoon')}
-          disabled={!onAttach || isBusy}
-          onClick={() => fileRef.current?.click()}
-        >
-          <Paperclip size={14} />
-        </button>
+        {/* Clip (2026-10-08): subir nuevo o elegir de Archivos. Sin
+            onPickExisting abre directo el selector de archivos. */}
+        <div className="fc-clip" ref={clipRef}>
+          <button
+            type="button"
+            className="fc-icon-btn"
+            aria-label={t('chat.input.attach')}
+            aria-haspopup={onPickExisting ? 'true' : undefined}
+            aria-expanded={onPickExisting ? clipOpen : undefined}
+            title={onAttach ? t('chat.input.attach') : t('common.comingSoon')}
+            disabled={!onAttach || isBusy}
+            onClick={(e) => {
+              if (!onPickExisting) { fileRef.current?.click(); return; }
+              e.stopPropagation();
+              setClipOpen((v) => !v);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape' && clipOpen) { e.stopPropagation(); setClipOpen(false); }
+            }}
+          >
+            <Paperclip size={14} />
+          </button>
+          {onPickExisting && (
+            <div className={`fc-modo-menu ${clipOpen ? 'fc-abierto' : ''}`} role="menu">
+              <button
+                type="button"
+                role="menuitem"
+                className="fc-modo-opt"
+                onClick={() => { setClipOpen(false); fileRef.current?.click(); }}
+              >
+                <Upload size={13} />
+                <span><strong>{t('chat.attach.menuUpload')}</strong></span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="fc-modo-opt"
+                onClick={() => { setClipOpen(false); onPickExisting(); }}
+              >
+                <FolderOpen size={13} />
+                <span><strong>{t('chat.attach.menuPick')}</strong></span>
+              </button>
+            </div>
+          )}
+        </div>
         <button type="button" className="fc-icon-btn" aria-label={t('chat.input.dictate')} disabled title={t('common.comingSoon')}>
           <Mic size={14} />
         </button>
