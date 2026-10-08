@@ -2664,8 +2664,7 @@ buenos resultados la primera vez que se usó en este ítem (ver Bloque 1, "Halla
     captura). Log de Render: lecturas con `claude-haiku-4-5-20251001 status=200` (PDF de prueba 1896 in / 179 out,
     captura 563 in / 443 out; otra captura 1701 in / 413 out) antes de clasificar.** Decisiones de Samuel:
     1B reencuadrada a "lector de fotos" (una lectura con Haiku por foto que la describe por escrito — contenido,
-    colores, layout si es captura, ALT — en vez de que todo el pipeline vea la imagen en cada paso; la versión
-    "todo el proceso mira la foto" queda como mejora posible encima), 2A (PDF copiado fielmente con tope de
+    colores, layout si es captura, ALT — en vez de que todo el pipeline vea la imagen en cada paso; Samuel 2026-10-08: la versión "todo el proceso mira la foto" NO se necesita — el lector quedó fiel), 2A (PDF copiado fielmente con tope de
     8000 tokens de salida ≈ 6,000 palabras, avisa si se recortó), 3A (si una lectura falla, se detiene antes de
     clasificar/planear; adjuntos y texto vuelven para reintentar). Clip activo en la typebar; fichas con aviso
     de créditos; subir = mismo almacén y endpoint del bloque 1 (queda en Archivos; la ✕ sólo lo quita del
@@ -2677,7 +2676,7 @@ buenos resultados la primera vez que se usó en este ítem (ver Bloque 1, "Halla
     (+3), UI (+4). SVG no se mira (el lector no acepta vectores): va sólo su dirección.
     Pendiente fuera del bloque: que el contenido de un PDF se recuerde en mensajes posteriores (hoy sólo viaja
     con el mensaje donde se adjunta); dictado (micrófono).
-- **Cambiar el favicon desde Publicar (Samuel, 2026-10-04):** "crucial".
+- **Cambiar el favicon desde Publicar (Samuel, 2026-10-04):** "crucial" — HECHO, es el Bloque 2 de arriba.
 - Quitar los botones "Próximamente" que no hacen nada (chat: Dictar, Editar el plan — Adjuntar ya es real desde el bloque 3; créditos:
   Comprar créditos). Decisión de Samuel (2026-09-29): se quedan mientras él sea el único usuario, porque le
   sirven como recordatorio de lo que falta.
