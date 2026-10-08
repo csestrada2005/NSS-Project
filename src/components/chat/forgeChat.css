@@ -71,6 +71,10 @@
   max-height: calc(88vh - 96px); overflow-y: auto; overscroll-behavior: contain;
   scrollbar-width: thin; scrollbar-color: var(--linea-fuerte) transparent;
 }
+/* 2026-10-08 (Samuel): la columna de la barra NO se desplaza. Con el overflow
+   de arriba recortaba los menús que abren hacia arriba (clip y Automático/Plan)
+   y no se veían. */
+.fc-stack.fc-stack-barra { max-height: none; overflow: visible; }
 
 /* ---------- adjuntos (bloque 3) ---------- */
 .fc-adjuntos { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }

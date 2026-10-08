@@ -88,7 +88,7 @@ export function Typebar({
     return a.mime === 'image/svg+xml' ? t('chat.attach.urlOnly') : t('chat.attach.willSee');
   };
   return (
-    <div className="fc-stack">
+    <div className="fc-stack fc-stack-barra">
       {attachments.length > 0 && (
         <ul className="fc-adjuntos" aria-label={t('chat.input.attach')}>
           {attachments.map((a) => (

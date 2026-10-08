@@ -29,7 +29,9 @@ siempre que se pueda.
 ## 2. Producto (lo que ve el usuario)
 
 - **"Editar el plan"**: el botón de la tarjeta "Plan listo" sigue en "Próximamente". Samuel lo quiere
-  funcional; sin prioridad fija.
+  funcional; sin prioridad fija. Cómo debe funcionar (Samuel, 2026-10-08): un botón "Revisar" abre el plan en
+  grande y **editable con el teclado**. Ejemplo: el plan dice "propongo 3 formas de hacerlo", Samuel escribe
+  "de las 3 opciones aplica A" y da enviar; la IA vuelve a leer el plan con esa edición y construye según eso.
 - **Dictado por micrófono** en el chat (hoy "Próximamente").
 - Mientras la IA piensa una PREGUNTA, la tarjeta dice "Planeando"; debería decir "Pensando…".
 - **Plan más claro:** mostrar el plan también en la primera generación, que el bloque del plan no se pierda al
