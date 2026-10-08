@@ -53,8 +53,12 @@ siempre que se pueda.
 - **Modo "Chat" — HECHO Y CONFIRMADO (check de Samuel 2026-10-08: pedido de construir en Chat → sólo respuesta,
   una línea de Sonnet sin clasificador; sugerencia → Automático y construyó; el modo se recuerda).**
   Detalle visto en el check: en Chat la IA dijo "Dame un momento — voy a revisar el archivo…", una promesa que
-  en ese modo no puede cumplir. Arreglado (espera check): las respuestas ya no prometen acciones.
-- **Respuestas que usan lo ya leído — HECHO, espera check (2026-10-08, decisión A de Samuel).** Al contestar
+  en ese modo no puede cumplir. Arreglado y CONFIRMADO: las respuestas ya no prometen acciones.
+- **Respuestas que usan lo ya leído — HECHO Y CONFIRMADO (check de Samuel 2026-10-08: en Chat y en Automático
+  dio los 9 precios reales del PDF sin adjuntarlo).** Detalle visto: dijo "para confirmar si src/data/pricing.ts
+  tiene estos valores, dime si ves alguna diferencia": la respuesta sólo recibe los 2 archivos que parecen más
+  relevantes y pricing.ts no entró, así que no pudo comparar sola. Mejora posible: cuando la pregunta compara
+  con un archivo de datos, incluirlo. Al contestar
   (Chat y preguntas en Automático), si la pregunta nombra un archivo o habla de "el PDF" / "la foto", la IA
   recibe la copia guardada de lo que ya leyó, sin adjuntarlo y sin volver a pagar la lectura
   (src/utils/savedReadings.js; tope 20.000 caracteres por archivo y 40.000 en total). Si nunca lo leyó, pide
@@ -72,7 +76,9 @@ siempre que se pueda.
 - **Progreso más reactivo (Samuel, 2026-10-08):** la tarjeta dice casi siempre "Trabajando en tu pedido". Debe
   decir qué hace según el pedido, p. ej. "Analizando si la foto sirve para la página". Samuel todavía no está
   contento con cómo se muestra el proceso.
-- Mientras la IA piensa una PREGUNTA, la tarjeta dice "Planeando"; debería decir "Pensando…".
+- Mientras la IA piensa una PREGUNTA, la tarjeta dice "Planeando" (modo Plan) o "Trabajando en tu pedido"
+  (Automático, visto otra vez en el check del 2026-10-08); debería decir "Pensando…" en cuanto se sabe que es
+  pregunta. En modo Chat ya dice "Pensando la respuesta".
 - **Plan más claro:** mostrar el plan también en la primera generación, que el bloque del plan no se pierda al
   recargar la página, y que muestre el nombre final de la migración (no el que dijo el modelo).
 - **Aviso del guard de código en lenguaje simple:** hoy dice "mueve esto a una función de servidor", algo que un
