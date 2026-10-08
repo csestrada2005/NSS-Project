@@ -3,6 +3,7 @@ import { Upload, Copy, Check, Trash2, FileText } from 'lucide-react';
 import { platformService, type ProjectAsset } from '../../services/PlatformService';
 import LoadingSquares from '../brand/LoadingSquares';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
+import { wyrdConfirm } from '@/components/ui/wyrdDialog';
 
 /**
  * Archivos del proyecto en la pestaña de Código (bloque 1, 2026-10-05): subir
@@ -72,7 +73,7 @@ export function AssetsPanel({ projectId }: { projectId?: string | null }) {
   };
 
   const remove = async (asset: ProjectAsset) => {
-    if (!projectId || !window.confirm(t('assets.confirmDelete', { name: asset.original_name }))) return;
+    if (!projectId || !(await wyrdConfirm({ message: t('assets.confirmDelete', { name: asset.original_name }), confirmLabel: t('dialog.erase'), danger: true }))) return;
     await platformService.deleteAsset(projectId, asset.id);
     setAssets((prev) => prev.filter((a) => a.id !== asset.id));
   };

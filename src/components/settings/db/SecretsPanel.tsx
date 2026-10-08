@@ -6,6 +6,7 @@ import { wyrdToast as toast } from '@/utils/wyrdToast';
 import LoadingSquares from '../../brand/LoadingSquares';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
 import { SecretValueForm } from './SecretValueForm';
+import { wyrdConfirm } from '@/components/ui/wyrdDialog';
 
 interface SecretsPanelProps {
   projectId: string | null | undefined;
@@ -78,7 +79,7 @@ export function SecretsPanel({ projectId }: SecretsPanelProps) {
   };
 
   const remove = async (name: string) => {
-    if (!projectId || !window.confirm(t('secrets.confirmRemove', { key: name }))) return;
+    if (!projectId || !(await wyrdConfirm({ message: t('secrets.confirmRemove', { key: name }), confirmLabel: t('dialog.erase'), danger: true }))) return;
     try {
       await platformService.deleteProjectSecret(projectId, name);
       toast.success(t('secrets.deleted', { key: name }));

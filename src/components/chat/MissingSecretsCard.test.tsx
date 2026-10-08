@@ -82,6 +82,7 @@ describe('Ajustes → Secretos', () => {
     });
     const set = vi.spyOn(platformService, 'setProjectSecret').mockResolvedValue();
     const del = vi.spyOn(platformService, 'deleteProjectSecret').mockResolvedValue();
+    // El aviso del navegador ya no debe usarse nunca.
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(<SecretsPanel projectId="p" />);
 
@@ -100,16 +101,23 @@ describe('Ajustes → Secretos', () => {
     expect(stripe.placeholder).toMatch(/^•+$/);
     expect(screen.getAllByRole('button', { name: 'Reemplazar' })).toHaveLength(2);
 
-    // Reemplazar abre el campo; al guardar pide confirmación. Si dice que no, no se toca nada.
+    // Reemplazar abre el campo; al guardar pide confirmación en la ventana de
+    // Wyrd (no la del navegador). Si dice que no, no se toca nada.
     await userEvent.click(screen.getAllByRole('button', { name: 'Reemplazar' })[0]);
     expect(stripe.readOnly).toBe(false);
     await userEvent.type(stripe, 'sk-nueva');
-    confirm.mockReturnValueOnce(false);
     await userEvent.click(within(stripe.closest('form')!).getByRole('button', { name: 'Guardar' }));
-    expect(confirm).toHaveBeenLastCalledWith(expect.stringMatching(/^¿Seguro que quieres reemplazar STRIPE_SECRET_KEY\?[\s\S]*\(pagos\)/));
+    let dialog = await screen.findByRole('alertdialog');
+    within(dialog).getByRole('heading', { name: '¿Seguro que quieres reemplazar STRIPE_SECRET_KEY?' });
+    within(dialog).getByText(/\(pagos\)/);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     expect(set).not.toHaveBeenCalled();
     await userEvent.click(within(stripe.closest('form')!).getByRole('button', { name: 'Guardar' }));
+    dialog = await screen.findByRole('alertdialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Reemplazar' }));
     await waitFor(() => expect(set).toHaveBeenCalledWith('p', 'STRIPE_SECRET_KEY', 'sk-nueva'));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
 
     // Cancelar vuelve a los puntitos sin guardar.
     await userEvent.click(screen.getAllByRole('button', { name: 'Reemplazar' })[1]);
@@ -117,7 +125,10 @@ describe('Ajustes → Secretos', () => {
     expect((screen.getByLabelText('OLD_KEY') as HTMLInputElement).readOnly).toBe(true);
 
     await userEvent.click(screen.getByLabelText('Borrar OLD_KEY'));
+    dialog = await screen.findByRole('alertdialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Borrar' }));
     await waitFor(() => expect(del).toHaveBeenCalledWith('p', 'OLD_KEY'));
+    expect(confirm).not.toHaveBeenCalled();
 
     await userEvent.type(screen.getByLabelText('NOMBRE (p. ej. STRIPE_SECRET_KEY)'), 'supabase_url');
     screen.getByText(/no puede empezar con SUPABASE_/);

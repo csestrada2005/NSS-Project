@@ -16,6 +16,12 @@ export const en = {
   // Comunes
   'common.retry': 'Retry',
   'common.cancel': 'Cancel',
+  // Ventanas de confirmación propias de Wyrd (2026-10-08)
+  'dialog.ok': 'OK',
+  'dialog.delete': 'Delete',
+  'dialog.remove': 'Remove',
+  'dialog.erase': 'Delete',
+  'dialog.install': 'Install',
   'common.close': 'Close',
   'common.save': 'Save',
   'common.back': 'Back',

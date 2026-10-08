@@ -3,6 +3,7 @@ import { Mail, Plus, Trash2, CheckCircle, Clock, Send, Save, Edit2, X } from 'lu
 import { SupabaseService } from '@/services/SupabaseService';
 import LoadingSquares from '../brand/LoadingSquares';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
+import { wyrdConfirm } from '@/components/ui/wyrdDialog';
 
 interface EmailConfig {
   status: 'pending' | 'verified' | null;
@@ -135,7 +136,7 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
   };
 
   const deleteTemplate = async (templateId: string) => {
-    if (!window.confirm(t('email.deleteConfirm'))) return;
+    if (!(await wyrdConfirm({ message: t('email.deleteConfirm'), confirmLabel: t('dialog.delete'), danger: true }))) return;
     const headers = await getAuthHeader();
     await fetch(`/api/email/${projectId}/templates/${templateId}`, { method: 'DELETE', headers });
     await loadTemplates();

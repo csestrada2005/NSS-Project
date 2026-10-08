@@ -4,6 +4,7 @@ import { SupabaseService } from '@/services/SupabaseService';
 import NebuLoader from '../brand/NebuLoader';
 import LoadingSquares from '../brand/LoadingSquares';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
+import { wyrdConfirm } from '@/components/ui/wyrdDialog';
 
 interface Domain {
   id: string;
@@ -97,7 +98,7 @@ export function DomainsPanel({ projectId }: DomainsPanelProps) {
   };
 
   const deleteDomain = async (domainId: string) => {
-    if (!window.confirm(t('domains.confirmRemove'))) return;
+    if (!(await wyrdConfirm({ message: t('domains.confirmRemove'), confirmLabel: t('dialog.remove'), danger: true }))) return;
     try {
       const headers = await getAuthHeader();
       await fetch(`/api/domains/${domainId}`, { method: 'DELETE', headers });

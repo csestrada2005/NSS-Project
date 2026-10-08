@@ -11,6 +11,12 @@ export const es: Record<ForgeKey, string> = {
   // Comunes
   'common.retry': 'Reintentar',
   'common.cancel': 'Cancelar',
+  // Ventanas de confirmación propias de Wyrd (2026-10-08)
+  'dialog.ok': 'Aceptar',
+  'dialog.delete': 'Eliminar',
+  'dialog.remove': 'Quitar',
+  'dialog.erase': 'Borrar',
+  'dialog.install': 'Instalar',
   'common.close': 'Cerrar',
   'common.save': 'Guardar',
   'common.back': 'Atrás',

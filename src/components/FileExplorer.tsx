@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { File, Folder, ChevronRight, ChevronDown, Plus } from 'lucide-react';
 import { t } from '@/i18n/forge/lang';
+import { wyrdPrompt } from '@/components/ui/wyrdDialog';
 
 interface FileExplorerProps {
   files: Map<string, string>;
@@ -154,9 +155,9 @@ const TreeNodeItem: React.FC<TreeNodeProps> = ({ node, depth, onSelect }) => {
 // ---------------------------------------------------------------------------
 
 export const FileExplorer: React.FC<FileExplorerProps> = ({ files, onSelect, onAddPackage }) => {
-  const handleAddPackage = (e: React.MouseEvent) => {
+  const handleAddPackage = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const pkg = window.prompt(t('code.installPrompt'));
+    const pkg = await wyrdPrompt({ title: t('code.install'), message: t('code.installPrompt'), placeholder: 'framer-motion', confirmLabel: t('dialog.install') });
     if (pkg && onAddPackage) {
       onAddPackage(pkg);
     }

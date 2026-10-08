@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { KeyRound, Pencil } from 'lucide-react';
 import LoadingSquares from '../../brand/LoadingSquares';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
+import { wyrdConfirm } from '@/components/ui/wyrdDialog';
 
 const MASK = '••••••••••••••••';
 
@@ -41,7 +42,7 @@ export function SecretValueForm({
 
   const submit = async () => {
     if (!value.trim() || busy) return;
-    if (locked && confirmMessage && !window.confirm(confirmMessage)) return;
+    if (locked && confirmMessage && !(await wyrdConfirm({ message: confirmMessage, confirmLabel: t('secrets.replace'), danger: true }))) return;
     setBusy(true);
     try {
       await onSave(value);

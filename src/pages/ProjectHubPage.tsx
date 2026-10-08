@@ -19,6 +19,7 @@ import LoadingSquares from '../components/brand/LoadingSquares';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
 import { formatRelativeDate } from '@/i18n/forge/format';
 import type { ForgeKey } from '@/i18n/forge/en';
+import { wyrdConfirm } from '@/components/ui/wyrdDialog';
 
 interface ForgeProject {
   id: string;
@@ -95,7 +96,7 @@ export default function ProjectHubPage() {
   };
 
   const handleDeleteProject = async () => {
-    if (!projectId || !window.confirm(t('hub.deleteConfirm', { name: project?.name ?? '' }))) return;
+    if (!projectId || !(await wyrdConfirm({ message: t('hub.deleteConfirm', { name: project?.name ?? '' }), confirmLabel: t('dialog.delete'), danger: true }))) return;
     setIsDeleting(true);
     try {
       const supabase = SupabaseService.getInstance().client;

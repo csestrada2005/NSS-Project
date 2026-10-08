@@ -1625,7 +1625,14 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   texto; ejemplo de nombre `STRIPE_SECRET_KEY`; una llave guardada se ve con puntitos + "Reemplazar" → abre el campo
   (+ Cancelar) → al guardar pide confirmación ("¿Seguro que quieres reemplazar…? La anterior se borra para siempre…").
   Duda de Samuel respondida: las `SUPABASE_*` de la base de Vertigo se ocultan a propósito (las pone Supabase solo,
-  no se pueden escribir y reemplazarlas rompería el panel); opción ofrecida: una línea de sólo lectura.
+  no se pueden escribir y reemplazarlas rompería el panel); Samuel eligió la línea de sólo lectura → HECHA
+  ("Llaves de la base de datos: las administra el servidor solo", sólo con base). **Re-check (Samuel, 2026-10-08):
+  todo bien** (puntitos + Reemplazar + confirmación + ejemplo STRIPE_SECRET_KEY). Bloque CONFIRMADO.
+- **Ventanas propias en vez de los avisos del navegador (Samuel, 2026-10-08) — HECHO, espera check:** los 8
+  `window.confirm`/`window.prompt` de Wyrd (borrar proyecto ×2, archivo, llave, reemplazar llave, dominio,
+  plantilla de correo, instalar paquete) → `wyrdConfirm`/`wyrdPrompt` (`src/components/ui/wyrdDialog.tsx`, mismo
+  fondo y animación que los modales; lo destructivo con botón rojo y foco en Cancelar; Escape/clic fuera = cancelar).
+  Guardia `server/noNativeDialogs.test.js`: ningún archivo de `src/` puede volver a usarlos. El CRM no tenía ninguno.
 - **Plan de evaluación de la calidad de la IA (Samuel, 2026-10-05):** (1) Samuel pasa proyectos REALES de Nebu y se
   revisa, en teoría (contra las reglas y la arquitectura de Nebu: sitio + panel de admin con sesión + panel de
   cliente opcional), si la IA los cumpliría; (2) corrida completa con un proyecto NUEVO y un "señor" prompt

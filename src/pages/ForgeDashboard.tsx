@@ -17,6 +17,7 @@ import { useForgeLang } from "@/i18n/forge/useForgeLang";
 import { t as tNow } from "@/i18n/forge/lang";
 import { formatRelativeDate } from "@/i18n/forge/format";
 import { useIsPhone } from "@/hooks/useIsPhone";
+import { wyrdConfirm } from '@/components/ui/wyrdDialog';
 
 interface ForgeProject {
   id: string;
@@ -109,7 +110,7 @@ const ForgeDashboard = () => {
 
   const deleteProject = async (e: React.MouseEvent, projectId: string) => {
     e.stopPropagation();
-    if (!window.confirm(t('dashboard.deleteConfirm'))) return;
+    if (!(await wyrdConfirm({ message: t('dashboard.deleteConfirm'), confirmLabel: t('dialog.delete'), danger: true }))) return;
     const { error } = await supabase
       .from("forge_projects")
       .delete()
