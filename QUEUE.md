@@ -13,21 +13,7 @@ siempre que se pueda.
 
 ## 1. AHORA
 
-1. **PDFs fuera del almacén público — HECHO Y CONFIRMADO (check de Samuel 2026-10-08: subir privado, Ver, hacer público/privado y lectura de la IA con dirección temporal, todo OK).** Decisión de Samuel: privado por
-   defecto, con opción de hacerlo público. Los PDFs nuevos van al almacén privado `project-documents` (el
-   servidor lo crea solo la primera vez); un PDF privado tiene `public_url` vacío. La IA lo lee con una dirección
-   que caduca en 10 minutos y nunca recibe un enlace para ponerlo en el sitio. En Archivos: "Privado · sólo la IA
-   lo lee" con "Ver", y "Hacer público" / "Hacer privado" (mueve el archivo de almacén, con confirmación). No había
-   PDFs viejos que mover (Samuel borró el único).
-2. **Reusar archivos ya leídos — HECHO Y CONFIRMADO (check de Samuel 2026-10-08: PDF nuevo → "lectura guardada",
-   elegido de Archivos → "Ya leído" y `reusados (sin costo): 1` sin lector de Haiku, foto vieja leída y guardada).
-   Arreglo de paso: los menús de la barra (clip y Automático/Plan) no se veían desde el 2026-10-01 porque la
-   columna de la barra recortaba; ya no recorta (confirmado).** Decisiones de Samuel: 1A elegir de
-   Archivos al adjuntar + 2A copia guardada en el almacén privado + bonus (también fotos). El clip ofrece "Subir
-   archivo nuevo" o "Elegir de Archivos". La primera vez que la IA lee un PDF o mira una foto, guarda lo que
-   entendió en `project-documents/readings/<proyecto>/<archivo>.json` (siempre privado, aunque el archivo sea
-   público; se borra junto con el archivo). Si eliges de Archivos algo ya leído, la ficha dice "Ya leído · no gasta
-   créditos" y no se vuelve a leer. El almacén privado ahora acepta también esas copias (JSON).
+Nada en curso. Elegir lo siguiente de las secciones 2–4.
 
 ## 2. Producto (lo que ve el usuario)
 
@@ -50,52 +36,6 @@ siempre que se pueda.
   Pendientes viejos del mismo tema: reserva de imagen del hero, guard anti-duplicado y créditos en el footer
   (rama `claude/keen-mccarthy-oknmc8`), y precisión al atribuir las imágenes (sección 10).
 - **Dictado por micrófono** en el chat (hoy "Próximamente").
-- **Modo "Chat" — HECHO Y CONFIRMADO (check de Samuel 2026-10-08: pedido de construir en Chat → sólo respuesta,
-  una línea de Sonnet sin clasificador; sugerencia → Automático y construyó; el modo se recuerda).**
-  Detalle visto en el check: en Chat la IA dijo "Dame un momento — voy a revisar el archivo…", una promesa que
-  en ese modo no puede cumplir. Arreglado y CONFIRMADO: las respuestas ya no prometen acciones.
-- **Respuestas que usan lo ya leído — HECHO Y CONFIRMADO (check de Samuel 2026-10-08: en Chat y en Automático
-  dio los 9 precios reales del PDF sin adjuntarlo).** Detalle visto: dijo "para confirmar si src/data/pricing.ts
-  tiene estos valores, dime si ves alguna diferencia": la respuesta sólo recibe los 2 archivos que parecen más
-  relevantes y pricing.ts no entró, así que no pudo comparar sola. Movido a sección 3. Al contestar
-  (Chat y preguntas en Automático), si la pregunta nombra un archivo o habla de "el PDF" / "la foto", la IA
-  recibe la copia guardada de lo que ya leyó, sin adjuntarlo y sin volver a pagar la lectura
-  (src/utils/savedReadings.js; tope 20.000 caracteres por archivo y 40.000 en total). Si nunca lo leyó, pide
-  adjuntarlo con el clip. Siguiente paso posible: lo mismo cuando construye. Tercera opción del menú (Automático / Plan / Chat): la IA
-  SÓLO responde. Ni se clasifica el pedido: va directo al carril de preguntas, que no escribe archivos (tampoco
-  corren los atajos viejos "build a…", "plan:"). Los botones de arreglo siguen arreglando. Decisión B1 de Samuel:
-  en modo Chat, el botón de la sugerencia de la IA cambia a Automático y la construye. El modo se recuerda en
-  la pestaña (`forge_send_mode`; migra el viejo `forge_plan_mode`) y el historial marca "chat".
-- **Barra que crece — HECHO Y CONFIRMADO (2026-10-08).** Caja de varias líneas, crece hasta ~8 líneas (5 en
-  móvil) y luego se desplaza por dentro; Enter envía, Shift+Enter salto de línea. Pedido original: si el texto es largo, la barra del chat crece (como en
-  otras IAs) hasta un tope, para poder revisar y editar textos largos antes de enviarlos.
-- **Botón "Chat" con cambios pendientes — HECHO Y CONFIRMADO (2026-10-08).** Hallazgo del check: los demás
-  botones (pestañas de Ajustes, Código, Editor, Preview, Publicar…) NO miran el registro, así que publicar o
-  revisar seguridad y luego cambiar de pestaña corta el proceso; lo mismo con código sin guardar. HECHO Y
-  CONFIRMADO (5/5 en el check de Samuel). Tras el check: botón "Descartar cambios" en Código (sólo con cambios
-  sin guardar, con confirmación; CONFIRMADO 2026-10-08): decisión de Samuel, opción 1 (bloquear) en TODO: pestañas y subpestañas de Ajustes, X de Ajustes,
-  Preview/Editor/Código/Ajustes/Publicar, Inicio e Historial de versiones del menú, y el navegador pregunta al
-  cerrar/recargar. Descartado "que siga detrás y avise": mejor que nadie haga cambios mientras publica o revisa. Desde Código/Ajustes, "Chat"
-  vuelve al preview y abre el chat; si algo está a medias avisa (src/utils/busyRegistry.ts: código sin guardar,
-  publicación, revisión de seguridad, función desplegándose, consulta SQL, llave escrita sin guardar, subida de
-  archivo/favicon, correo, GitHub, medición de velocidad). Pedido original: desde Código o Ajustes, "Chat" vuelve al preview.
-  Pero si hay algo a medias, no cambia y sale el aviso de abajo a la derecha según el caso: "aplica o descarta
-  los cambios de código primero", "espera a que la publicación termine", "espera a que el chequeo de seguridad
-  termine", etc. (revisar todos los casos).
-- **Progreso más reactivo — HECHO, espera check (2026-10-08, P2 de Samuel).** La tarjeta sigue las etapas
-  reales: "Leyendo menu.pdf…" → "Entendiendo tu pedido…" → la frase que escribe el clasificador en la misma
-  llamada ("Analizando si la foto sirve para la página…", campo status_line) → título "Pensando la respuesta" si
-  es pregunta / pasos del plan si es cambio → "Revisando que todo funcione…". Ya no aparece "Trabajando en tu
-  pedido". Incluye el viejo pendiente "Planeando"/"Trabajando" mientras piensa una PREGUNTA.
-  Check de Samuel 2026-10-08: frases y etapas OK en las 4 pruebas. Arreglado tras el check: (a) la IA copiaba
-  literalmente los ejemplos de la instrucción ("Analizando si la foto sirve para la página"); ahora los ejemplos
-  son de otros temas y debe nombrar lo concreto del pedido; (b) la tarjeta pequeña en reposo mostraba el markdown
-  en crudo (**, tablas): ahora muestra texto limpio (src/utils/markdownPreview.js). Check 2026-10-08: el título pasa de
-  "Trabajando" a "Pensando la respuesta" (CONFIRMADO) y la frase ya es propia ("Analizando la coherencia visual de
-  la imagen del hero…", "Mostrando los precios del PDF en formato tabla…"). Tablas (T1 de Samuel) — HECHO Y
-  CONFIRMADO (check 2026-10-08). Tras el check: las respuestas ya no llevan emojis (el prompt los prohibía y
-  la IA ponía 🏔 💧 🪂; ahora se quitan en src/utils/stripEmoji.js, decisión delegada por Samuel; CONFIRMADO 2026-10-08). MiniMarkdown ahora dibuja tablas de verdad en la tarjeta de respuesta y en el historial (desplazables de
-  lado en móvil).
 - **Plan más claro:** mostrar el plan también en la primera generación, que el bloque del plan no se pierda al
   recargar la página, y que muestre el nombre final de la migración (no el que dijo el modelo).
 - **Aviso del guard de código en lenguaje simple:** hoy dice "mueve esto a una función de servidor", algo que un
@@ -127,20 +67,11 @@ siempre que se pueda.
   PDF?" la respuesta dio los precios del PDF pero pidió a Samuel comparar con src/data/pricing.ts: la respuesta
   sólo recibe los 2 archivos que parecen más relevantes y pricing.ts no entró. Cuando la pregunta compara con
   datos del sitio, incluir ese archivo para que conteste sí/no sola.
-- **La IA dice que no puede ver archivos (2026-10-08) — HECHO Y CONFIRMADO (Samuel: responde "sí puedo ver tus fotos", nombra las de
-  Archivos, ofrece clip y Unsplash):** las respuestas ahora reciben la
-  lista de Archivos y la regla "sí ves las fotos y PDFs; si falta una, adjúntala con el clip o elígela de
-  Archivos" (Unsplash sigue siendo opción válida). Antes: a "Sube la foto correcta…" respondió "No tengo acceso
-  a archivos subidos… comparte un enlace de Google Drive o busco en Unsplash". Falso: Wyrd sí le da las fotos y
-  PDFs del proyecto (Archivos y adjuntos). Debe saberlo y ofrecerlo ("adjúntala con el clip o elígela de Archivos").
-- **Reparación que deja la sección rota (Vertigo, 2026-10-08) — HECHO (2A); sin check manual (no se puede provocar a
-  voluntad): Samuel avisa si vuelve a ver una sección rota tras reparar:** este error ahora se
-  arregla sin IA, con una línea al final del archivo (`src/utils/exportShapeFix.js`, consola
-  `[Verifier] arreglo sin IA: …`). Los demás errores siguen yendo al modelo (2B "detector de destrozos" no se
-  hizo). Antes: al cambiar la sección de precios, el Verifier
-  dio `No matching export in PricingSection.tsx for import "PricingSection"` (exportación con otro nombre); la
-  reparación de Haiku reescribió PricingSection y compiló, pero la sección quedó sin estilos y se ve rota. La
-  reparación debe arreglar el nombre de la exportación, no reescribir el archivo.
+- **Copias guardadas también al construir:** hoy las respuestas usan sola la copia de un PDF/foto ya leído
+  (savedReadings.js); al construir todavía hay que adjuntarlo.
+- **Reparación sin IA del nombre de exportación (2026-10-08), en observación:** no se puede provocar a voluntad.
+  Si Samuel vuelve a ver una sección rota tras una reparación, revisar la consola (`[Verifier] arreglo sin IA`).
+  Los demás errores siguen yendo al modelo (el "detector de destrozos" 2B no se hizo).
 - La IA rompe reglas: tocó `package.json` pese a la prohibición y añadió cosas que nadie pidió.
 - Detectar cuando lo pedido YA EXISTE y decirlo. Ojo: rompe las pruebas sobre fixtures ya construidos; necesita
   fixtures vírgenes.
@@ -260,6 +191,16 @@ siempre que se pueda.
 
 ## Hecho recientemente (una línea cada uno; el detalle está en git)
 
+- 2026-10-08: nada corta un proceso a medias: todos los botones que cambian de pantalla avisan (busyRegistry),
+  el navegador pregunta al cerrar, y botón "Descartar cambios" en Código.
+- 2026-10-08: barra del chat de varias líneas (Enter envía, Shift+Enter salto); "Chat" desde Código/Ajustes
+  vuelve al preview.
+- 2026-10-08: tarjeta de progreso por etapas reales con frase propia del pedido; tablas de verdad, texto limpio en
+  la tarjeta pequeña y respuestas sin emojis.
+- 2026-10-08: modo Chat (sólo responde); las respuestas usan las copias guardadas y no prometen acciones.
+- 2026-10-08: la IA sabe que ve las fotos y PDFs del proyecto; Unsplash "download" sólo por fotos usadas.
+- 2026-10-08: reusar archivos ya leídos (Elegir de Archivos, sin volver a pagar); menús de la barra visibles.
+- 2026-10-08: PDFs privados por defecto (la IA los lee con dirección temporal).
 - 2026-10-08: ventanas de confirmación propias en vez de los avisos del navegador.
 - 2026-10-08: llaves "como Lovable" (tarjeta en el chat + Ajustes → Secretos rehecho; el panel viejo nunca
   mandaba las llaves al proyecto).
