@@ -20,7 +20,8 @@ import LoadingSquares from '../brand/LoadingSquares';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
 import { t as tNow } from '@/i18n/forge/lang';
 import type { ForgeKey } from '@/i18n/forge/en';
-import { useBusy } from '@/utils/busyRegistry';
+import { firstBusy, useBusy } from '@/utils/busyRegistry';
+import { wyrdToast } from '@/utils/wyrdToast';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -95,9 +96,20 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
     }
   };
 
+  // Cambiar de pestaña cierra la anterior: con algo a medias (publicando,
+  // revisando seguridad…) se avisa en vez de cortarlo (2026-10-08, Samuel).
+  const guardedSwitch = (change: () => void) => {
+    const busy = firstBusy();
+    if (busy) {
+      wyrdToast.message(t(`studio.busy.${busy}`));
+      return;
+    }
+    change();
+  };
+
   const TAB_BUTTON = (id: MainTab, label: string, Icon: React.ComponentType<any>) => (
     <button
-      onClick={() => setActiveTab(id)}
+      onClick={() => { if (id !== activeTab) guardedSwitch(() => setActiveTab(id)); }}
       className={`px-3 py-2 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 ${activeTab === id ? 'bg-accent text-foreground border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'}`}
     >
       <Icon size={15} />
@@ -250,7 +262,7 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
                 {DB_SUB_TABS.map((tab) => (
                   <button
                     key={tab.id}
-                    onClick={() => setDbSubTab(tab.id)}
+                    onClick={() => { if (tab.id !== dbSubTab) guardedSwitch(() => setDbSubTab(tab.id)); }}
                     className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${dbSubTab === tab.id ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
                   >
                     {t(tab.label)}

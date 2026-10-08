@@ -996,6 +996,32 @@ export function StudioEngine() {
   // CIERRA del todo (pedido explícito de Samuel, 2026-09-23: sin botón X
   // dentro del modal ni cierre al hacer click fuera — sólo Ctrl+Espacio o
   // este botón).
+  // Algo a medias (busyRegistry): ningún botón cambia de pantalla hasta que
+  // termine (2026-10-08, Samuel: publicar y luego irse a Seguridad cortaba la
+  // publicación; con código sin guardar, ir a Ajustes lo perdía).
+  const guardBusy = useCallback((proceed: () => void) => {
+    const busy = firstBusy();
+    if (busy) {
+      toast.message(t(`studio.busy.${busy}`));
+      return;
+    }
+    proceed();
+  }, []);
+  /** Ir a otro panel; quedarse en el mismo no corta nada y no se bloquea. */
+  const guardLeave = (target: PanelMode, action: () => void) =>
+    panelMode === target ? action() : guardBusy(action);
+
+  // Cerrar o recargar la pestaña con algo a medias: el navegador pregunta.
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!firstBusy()) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, []);
+
   const handleOpenChat = useCallback(() => {
     if (isCommandModalOpen) {
       setIsCommandModalOpen(false);
@@ -2105,14 +2131,14 @@ export function StudioEngine() {
                 {/* Navigation items */}
                 <div className="flex flex-col py-2">
                   <button
-                    onClick={() => guardUnsaved(() => { setIsMenuPanelOpen(false); navigate('/'); })}
+                    onClick={() => guardBusy(() => guardUnsaved(() => { setIsMenuPanelOpen(false); navigate('/'); }))}
                     className="w-full flex items-center gap-3 px-5 py-3 text-sm text-foreground hover:bg-primary/10 hover:text-primary transition-colors"
                   >
                     <ChevronLeft size={16} />
                     {t('dashboard.backToNebu')}
                   </button>
                   <button
-                    onClick={() => { setIsMenuPanelOpen(false); setIsHistoryOpen(true); }}
+                    onClick={() => guardBusy(() => { setIsMenuPanelOpen(false); setIsHistoryOpen(true); })}
                     className="w-full flex items-center gap-3 px-5 py-3 text-sm text-foreground hover:bg-primary/10 hover:text-primary transition-colors"
                   >
                     <Clock size={16} />
@@ -2169,8 +2195,8 @@ export function StudioEngine() {
                   <PreviewNavbar
                     onOpenMenu={() => setIsMenuPanelOpen(true)}
                     editMode={editMode}
-                    onPreview={() => { setPanelMode('preview'); guardUnsaved(() => setEditMode('interaction')); }}
-                    onVisual={() => { setPanelMode('preview'); setEditMode('visual'); }}
+                    onPreview={() => guardLeave('preview', () => { setPanelMode('preview'); guardUnsaved(() => setEditMode('interaction')); })}
+                    onVisual={() => guardLeave('preview', () => { setPanelMode('preview'); setEditMode('visual'); })}
                     viewportMode={viewportMode}
                     onViewportChange={handleViewportChange}
                     files={files}
@@ -2179,10 +2205,10 @@ export function StudioEngine() {
                     setActiveRoute={setActiveRoute}
                     beforeNavigate={guardUnsaved}
                     panelMode={panelMode}
-                    onOpenCode={() => { setIsCommandModalOpen(false); setPanelMode('code'); }}
-                    onOpenSettings={() => { setIsCommandModalOpen(false); setSettingsInitialTab('secrets'); setPanelMode('settings'); }}
+                    onOpenCode={() => guardLeave('code', () => { setIsCommandModalOpen(false); setPanelMode('code'); })}
+                    onOpenSettings={() => guardLeave('settings', () => { setIsCommandModalOpen(false); setSettingsInitialTab('secrets'); setPanelMode('settings'); })}
                     onOpenChat={handleOpenChat}
-                    onPublish={() => { setIsCommandModalOpen(false); setSettingsInitialTab('deploy'); setPanelMode('settings'); }}
+                    onPublish={() => guardLeave('settings', () => { setIsCommandModalOpen(false); setSettingsInitialTab('deploy'); setPanelMode('settings'); })}
                   />
                   <div className={`relative flex-1 min-h-0 w-full ${panelMode === 'preview' && viewportMode !== 'desktop' ? 'bg-neutral-900 flex items-start justify-center' : ''}`}>
                   {panelMode === 'code' ? (
@@ -2200,7 +2226,7 @@ export function StudioEngine() {
                     />
                   ) : panelMode === 'settings' ? (
                     <SettingsModal
-                      onClose={() => setPanelMode('preview')}
+                      onClose={() => guardBusy(() => setPanelMode('preview'))}
                       fileTree={fileTree}
                       files={files}
                       projectId={projectId ?? null}
