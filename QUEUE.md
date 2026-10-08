@@ -477,9 +477,8 @@ chat esté trabado. Cuando se arregle el modal (ver 5.0 abajo), repetir en este 
    **Hipótesis más fuerte (sin medir):** el hilo no muere solo — lo mata el timeout de 60 s de
    `server/typecheckPool.js` (`terminate()` da exactamente `exit code 1` sin evento `error`). En la CPU del
    plan free una revisión en frío puede pasar de 60 s, y al matarlo pierde la caché: nunca "calienta".
-   **Decisiones de Samuel (2026-09-29):** (1) comprar Render **Starter** al terminar lo pendiente y medir
-   ahí; (2) cambiar `NODE_VERSION` a `22.12.0` en Render (lo hace Samuel). **Pendiente de diseño tras medir
-   en Starter:** calentar el hilo al arrancar el servidor y/o alargar el límite, para que un timeout no
+   **Decisiones de Samuel (2026-09-29):** (1) ~~comprar Render Starter~~ (DESCARTADO por Samuel 2026-10-08: se
+   queda el cómputo pagado; la revisión de tipos ya la hace Vercel); (2) cambiar `NODE_VERSION` a `22.12.0` en Render (lo hace Samuel). **Sin Starter (2026-10-08) queda sin objeto:** calentar el hilo al arrancar el servidor y/o alargar el límite, para que un timeout no
    borre la caché — sin tocar código hasta tener la medición.
 2. **Segunda puerta de tipos en el chat (bucket 6 B2/B3):** pedir un cambio chico → si quedan errores,
    tarjeta "Aún no se puede publicar"; "Arreglar ahora" → la lista baja o desaparece.
@@ -1602,13 +1601,6 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   como están o hay una decisión de producto pendiente ahí?
 
 ## 6. BUCKET Calidad del modelo
-- **Proyectos que NO parezcan hechos con IA ni plantilla (Samuel, 2026-10-06):** reglas para el modelo para que
-  nunca use el aspecto shadcn "clásico" por defecto (las tarjetas, botones, bordes grises y espaciado de siempre) en
-  los proyectos generados. Motivo: la gente se queja, con razón, de que el sitio con cara de plantilla shadcn se ve
-  mal y "hecho con IA"; cada proyecto debe verse diseñado a medida para su marca. No es gusto personal de Samuel.
-  Pendiente de diseño en frío: si va en `promptRules.ts`/DesignBriefService, cómo se comprueba (¿un guard que
-  detecte el look por defecto?) y cómo encaja con la Decisión de "cero plantillas genéricas" ya aplicada a la UI
-  de Wyrd.
 - **Llaves "como Lovable" (Samuel, 2026-10-05):** cuando la IA necesita una llave (p. ej. Stripe), abre un formulario
   seguro (no el chat) y la guarda donde va (secretos de las funciones de servidor del proyecto). Wyrd ya tiene el
   panel de secretos; falta que la IA lo pida y lo llene.
@@ -1616,21 +1608,6 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   revisa, en teoría (contra las reglas y la arquitectura de Nebu: sitio + panel de admin con sesión + panel de
   cliente opcional), si la IA los cumpliría; (2) corrida completa con un proyecto NUEVO y un "señor" prompt
   (pedido completo y exigente) para comparar el resultado contra el proyecto real. Diseño en frío propio.
-- **Cumplimiento legal "imposibles de demandar" (Samuel, 2026-10-05).** Los sitios generados deben cumplir:
-  aviso de privacidad (Privacy Policy) · declarar que se recogen datos · "usamos IA" si el sitio usa IA ·
-  declarar terceros que recogen datos (analytics, pixels, Stripe…) · que el usuario pueda borrar lo que subió ·
-  buckets de almacenamiento NO públicos para datos de usuarios · nada de testimonios falsos · cancelar no más
-  difícil que suscribirse · nada de renovación automática sin aviso previo · IA del sitio con respuesta ante
-  autolesiones. Añadidos en el análisis (2026-10-05): términos y condiciones · aviso de cookies/consentimiento
-  · aviso de privacidad mexicano con derechos ARCO (ley de datos personales de 2025) e identidad/contacto del
-  negocio (PROFECO: precios finales con IVA) · borrar la CUENTA completa, no sólo lo subido · accesibilidad
-  (WCAG 2.1 AA; las demandas por accesibilidad son las más comunes contra sitios en EE.UU.) · baja en cada
-  correo de newsletter (CAN-SPAM) · menores de 13 (COPPA) si aplica · licencias de fotos y fuentes · avisos
-  por giro (salud, finanzas). Ninguna lista hace un sitio "imposible" de demandar: el objetivo es quitar las
-  causas comunes; las plantillas legales las revisa un abogado UNA vez. Pendiente de diseño en frío: qué se
-  genera solo, qué revisa el agente de seguridad y qué bloquea publicar.
-  Nota: el bucket `project-assets` de Wyrd es público a propósito (fotos del sitio). Los PDFs/documentos del
-  usuario NO deben vivir ahí → decidir en el bloque 3 (adjuntos) un bucket privado para documentos.
 - **La IA no encuentra archivos que existen.** Prueba 2026-09-30 (332f31d3, modo Plan): "Cambia el color de
   fondo del footer a negro" → respondió "¿Quieres cambiar el fondo de un componente Footer que no veo en los
   archivos proporcionados…?" aunque `src/components/layout/Footer.tsx` existe. El targeting del simple lane
@@ -2627,9 +2604,9 @@ resolver con `ui-ux-pro-max` qué encaja mejor para portar el estilo brutalista 
 buenos resultados la primera vez que se usó en este ítem (ver Bloque 1, "Hallazgo del skill, con matiz").
 
 ## ANTES DE LANZAR (público)
-- Render en plan **Starter** (decisión de Samuel, 2026-09-29) y medir la revisión de tipos ahí (ver
-  "Chequeo después de arreglar el modal", paso 1). `NODE_VERSION=22.12.0` en Render: verificar en el log de
-  build `Using Node.js version 22.12.0` sin la advertencia de Vite.
+- ~~Render en plan Starter~~ — **DESCARTADO (Samuel, 2026-10-08):** nos quedamos con el cómputo ya pagado.
+  La revisión de tipos antes de publicar ya la hace Vercel (`55424bf`), así que no depende de Render.
+  `NODE_VERSION=22.12.0` en Render: verificar en el log de build `Using Node.js version 22.12.0` sin la advertencia de Vite.
 - **Subir documentos y fotos (Samuel, 2026-10-04):** botón en el chat (hoy "Adjuntar" = "Próximamente") y lo
   mismo en la pestaña de Código, para subirlos sin gastar créditos (son relevantes para las páginas).
   Diseño acordado (2026-10-05): almacén de Wyrd (bucket público `project-assets` + tabla `forge_assets`
@@ -2674,6 +2651,9 @@ buenos resultados la primera vez que se usó en este ítem (ver Bloque 1, "Halla
     Architect, a CADA paso del Implementer, al carril simple, a pregunta y a heavy; con adjuntos no hay carril
     rápido; `forge_intent_log.user_prompt` guarda sólo `[ATTACHMENTS:images=N,documents=M]`), e2e con LLM falso
     (+3), UI (+4). SVG no se mira (el lector no acepta vectores): va sólo su dirección.
+    **HUECO DETECTADO (2026-10-08), no resuelto en el bloque:** los PDFs adjuntos quedan en el bucket PÚBLICO
+    `project-assets`, igual que las fotos; la nota legal pedía decidir aquí un bucket privado para documentos.
+    Pendiente de decisión de Samuel (un bucket privado obliga a leerlos con direcciones firmadas temporales).
     Pendiente fuera del bloque: que el contenido de un PDF se recuerde en mensajes posteriores (hoy sólo viaja
     con el mensaje donde se adjunta); dictado (micrófono).
 - **Cambiar el favicon desde Publicar (Samuel, 2026-10-04):** "crucial" — HECHO, es el Bloque 2 de arriba.
@@ -2751,3 +2731,30 @@ sin datos sensibles y el mensaje que hoy se le manda a Claude externo.
 
 ## Decisión de arquitectura permanente
 - **D-1 (preview)**: el endgame es la Opción C (sandboxes server-side efímeros, estilo Lovable). Se ejecuta sólo cuando el software esté casi completo. Hoy: vendoring curado (Opción A).
+
+## 17. AL FINAL DE LA COLA — Calidad de los sitios generados: diseño a medida + cumplimiento legal (Samuel, 2026-10-08)
+
+Samuel unió estas dos (antes en bucket 6) y las mandó al final de la cola. Diseño en frío propio cuando toque.
+
+- **Proyectos que NO parezcan hechos con IA ni plantilla (Samuel, 2026-10-06):** reglas para el modelo para que
+  nunca use el aspecto shadcn "clásico" por defecto (las tarjetas, botones, bordes grises y espaciado de siempre) en
+  los proyectos generados. Motivo: la gente se queja, con razón, de que el sitio con cara de plantilla shadcn se ve
+  mal y "hecho con IA"; cada proyecto debe verse diseñado a medida para su marca. No es gusto personal de Samuel.
+  Pendiente de diseño en frío: si va en `promptRules.ts`/DesignBriefService, cómo se comprueba (¿un guard que
+  detecte el look por defecto?) y cómo encaja con la Decisión de "cero plantillas genéricas" ya aplicada a la UI
+  de Wyrd.
+- **Cumplimiento legal "imposibles de demandar" (Samuel, 2026-10-05).** Los sitios generados deben cumplir:
+  aviso de privacidad (Privacy Policy) · declarar que se recogen datos · "usamos IA" si el sitio usa IA ·
+  declarar terceros que recogen datos (analytics, pixels, Stripe…) · que el usuario pueda borrar lo que subió ·
+  buckets de almacenamiento NO públicos para datos de usuarios · nada de testimonios falsos · cancelar no más
+  difícil que suscribirse · nada de renovación automática sin aviso previo · IA del sitio con respuesta ante
+  autolesiones. Añadidos en el análisis (2026-10-05): términos y condiciones · aviso de cookies/consentimiento
+  · aviso de privacidad mexicano con derechos ARCO (ley de datos personales de 2025) e identidad/contacto del
+  negocio (PROFECO: precios finales con IVA) · borrar la CUENTA completa, no sólo lo subido · accesibilidad
+  (WCAG 2.1 AA; las demandas por accesibilidad son las más comunes contra sitios en EE.UU.) · baja en cada
+  correo de newsletter (CAN-SPAM) · menores de 13 (COPPA) si aplica · licencias de fotos y fuentes · avisos
+  por giro (salud, finanzas). Ninguna lista hace un sitio "imposible" de demandar: el objetivo es quitar las
+  causas comunes; las plantillas legales las revisa un abogado UNA vez. Pendiente de diseño en frío: qué se
+  genera solo, qué revisa el agente de seguridad y qué bloquea publicar.
+  Nota: el bucket `project-assets` de Wyrd es público a propósito (fotos del sitio). Los PDFs/documentos del
+  usuario NO deben vivir ahí → decidir en el bloque 3 (adjuntos) un bucket privado para documentos.
