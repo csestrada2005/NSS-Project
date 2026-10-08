@@ -66,10 +66,12 @@ siempre que se pueda.
   corren los atajos viejos "build a…", "plan:"). Los botones de arreglo siguen arreglando. Decisión B1 de Samuel:
   en modo Chat, el botón de la sugerencia de la IA cambia a Automático y la construye. El modo se recuerda en
   la pestaña (`forge_send_mode`; migra el viejo `forge_plan_mode`) y el historial marca "chat".
-- **Barra que crece — HECHO, espera check (2026-10-08).** Caja de varias líneas, crece hasta ~8 líneas (5 en
+- **Barra que crece — HECHO Y CONFIRMADO (2026-10-08).** Caja de varias líneas, crece hasta ~8 líneas (5 en
   móvil) y luego se desplaza por dentro; Enter envía, Shift+Enter salto de línea. Pedido original: si el texto es largo, la barra del chat crece (como en
   otras IAs) hasta un tope, para poder revisar y editar textos largos antes de enviarlos.
-- **Botón "Chat" con cambios pendientes — HECHO, espera check (2026-10-08).** Desde Código/Ajustes, "Chat"
+- **Botón "Chat" con cambios pendientes — HECHO Y CONFIRMADO (2026-10-08).** Hallazgo del check: los demás
+  botones (pestañas de Ajustes, Código, Editor, Preview, Publicar…) NO miran el registro, así que publicar o
+  revisar seguridad y luego cambiar de pestaña corta el proceso; lo mismo con código sin guardar. En diseño. Desde Código/Ajustes, "Chat"
   vuelve al preview y abre el chat; si algo está a medias avisa (src/utils/busyRegistry.ts: código sin guardar,
   publicación, revisión de seguridad, función desplegándose, consulta SQL, llave escrita sin guardar, subida de
   archivo/favicon, correo, GitHub, medición de velocidad). Pedido original: desde Código o Ajustes, "Chat" vuelve al preview.
