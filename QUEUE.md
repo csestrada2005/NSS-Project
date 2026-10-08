@@ -84,7 +84,7 @@ siempre que se pueda.
   "Trabajando" a "Pensando la respuesta" (CONFIRMADO) y la frase ya es propia ("Analizando la coherencia visual de
   la imagen del hero…", "Mostrando los precios del PDF en formato tabla…"). Tablas (T1 de Samuel) — HECHO Y
   CONFIRMADO (check 2026-10-08). Tras el check: las respuestas ya no llevan emojis (el prompt los prohibía y
-  la IA ponía 🏔 💧 🪂; ahora se quitan en src/utils/stripEmoji.js, decisión delegada por Samuel; espera check). MiniMarkdown ahora dibuja tablas de verdad en la tarjeta de respuesta y en el historial (desplazables de
+  la IA ponía 🏔 💧 🪂; ahora se quitan en src/utils/stripEmoji.js, decisión delegada por Samuel; CONFIRMADO 2026-10-08). MiniMarkdown ahora dibuja tablas de verdad en la tarjeta de respuesta y en el historial (desplazables de
   lado en móvil).
 - **Plan más claro:** mostrar el plan también en la primera generación, que el bloque del plan no se pierda al
   recargar la página, y que muestre el nombre final de la migración (no el que dijo el modelo).
