@@ -57,8 +57,7 @@ siempre que se pueda.
 - **Respuestas que usan lo ya leído — HECHO Y CONFIRMADO (check de Samuel 2026-10-08: en Chat y en Automático
   dio los 9 precios reales del PDF sin adjuntarlo).** Detalle visto: dijo "para confirmar si src/data/pricing.ts
   tiene estos valores, dime si ves alguna diferencia": la respuesta sólo recibe los 2 archivos que parecen más
-  relevantes y pricing.ts no entró, así que no pudo comparar sola. Mejora posible: cuando la pregunta compara
-  con un archivo de datos, incluirlo. Al contestar
+  relevantes y pricing.ts no entró, así que no pudo comparar sola. Movido a sección 3. Al contestar
   (Chat y preguntas en Automático), si la pregunta nombra un archivo o habla de "el PDF" / "la foto", la IA
   recibe la copia guardada de lo que ya leyó, sin adjuntarlo y sin volver a pagar la lectura
   (src/utils/savedReadings.js; tope 20.000 caracteres por archivo y 40.000 en total). Si nunca lo leyó, pide
@@ -73,12 +72,11 @@ siempre que se pueda.
   Pero si hay algo a medias, no cambia y sale el aviso de abajo a la derecha según el caso: "aplica o descarta
   los cambios de código primero", "espera a que la publicación termine", "espera a que el chequeo de seguridad
   termine", etc. (revisar todos los casos).
-- **Progreso más reactivo (Samuel, 2026-10-08):** la tarjeta dice casi siempre "Trabajando en tu pedido". Debe
-  decir qué hace según el pedido, p. ej. "Analizando si la foto sirve para la página". Samuel todavía no está
-  contento con cómo se muestra el proceso.
-- Mientras la IA piensa una PREGUNTA, la tarjeta dice "Planeando" (modo Plan) o "Trabajando en tu pedido"
-  (Automático, visto otra vez en el check del 2026-10-08); debería decir "Pensando…" en cuanto se sabe que es
-  pregunta. En modo Chat ya dice "Pensando la respuesta".
+- **Progreso más reactivo — HECHO, espera check (2026-10-08, P2 de Samuel).** La tarjeta sigue las etapas
+  reales: "Leyendo menu.pdf…" → "Entendiendo tu pedido…" → la frase que escribe el clasificador en la misma
+  llamada ("Analizando si la foto sirve para la página…", campo status_line) → título "Pensando la respuesta" si
+  es pregunta / pasos del plan si es cambio → "Revisando que todo funcione…". Ya no aparece "Trabajando en tu
+  pedido". Incluye el viejo pendiente "Planeando"/"Trabajando" mientras piensa una PREGUNTA.
 - **Plan más claro:** mostrar el plan también en la primera generación, que el bloque del plan no se pierda al
   recargar la página, y que muestre el nombre final de la migración (no el que dijo el modelo).
 - **Aviso del guard de código en lenguaje simple:** hoy dice "mueve esto a una función de servidor", algo que un
@@ -106,6 +104,10 @@ siempre que se pueda.
   de diseño lo lea de ahí en vez de adivinarlo en cada pedido. Junto con esto: la búsqueda de patrones de diseño
   siempre trae "1 directo + 4 parecidos" aunque la base es grande (¿tope fijo en el código?), y los pedidos en
   español contra una base en inglés.
+- **Respuestas que comparan con los archivos de datos (Samuel, 2026-10-08):** a "¿están bien los precios con el
+  PDF?" la respuesta dio los precios del PDF pero pidió a Samuel comparar con src/data/pricing.ts: la respuesta
+  sólo recibe los 2 archivos que parecen más relevantes y pricing.ts no entró. Cuando la pregunta compara con
+  datos del sitio, incluir ese archivo para que conteste sí/no sola.
 - **La IA dice que no puede ver archivos (2026-10-08) — HECHO Y CONFIRMADO (Samuel: responde "sí puedo ver tus fotos", nombra las de
   Archivos, ofrece clip y Unsplash):** las respuestas ahora reciben la
   lista de Archivos y la regla "sí ves las fotos y PDFs; si falta una, adjúntala con el clip o elígela de

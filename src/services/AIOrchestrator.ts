@@ -98,6 +98,10 @@ interface LLMResponse {
   error?: string;
 }
 
+/** Etapas que ve la tarjeta de progreso (2026-10-08, P2). */
+export type ForgePhase = 'reading' | 'understanding' | 'headline' | 'answering' | 'planning' | 'checking';
+export type PhaseCallback = (phase: ForgePhase, detail?: string) => void;
+
 export interface OrchestratorResult {
   modifiedFiles: string[];
   steps?: BuildStep[];
@@ -1195,11 +1199,33 @@ export class AIOrchestrator {
   // como retryCount: el navegador corre un pedido a la vez.
   private static attachmentWarning: string | null = null;
 
+  /**
+   * Etapas para la tarjeta de progreso (2026-10-08, P2): quien llama recibe
+   * "leyendo adjuntos", "entendiendo", la frase del clasificador, "pensando la
+   * respuesta", "armando el plan", "revisando". Estático (como
+   * attachmentWarning) para no pasarlo por cada carril.
+   */
+  private static phaseCallback: PhaseCallback | null = null;
+
+  private static emitPhase(phase: ForgePhase, detail?: string): void {
+    try {
+      this.phaseCallback?.(phase, detail);
+    } catch {
+      // La tarjeta nunca rompe un pedido.
+    }
+  }
+
   static async parseUserCommand(
     ...args: Parameters<typeof AIOrchestrator.runUserCommand>
   ): Promise<OrchestratorResult> {
     this.attachmentWarning = null;
-    const result = await this.runUserCommand(...args);
+    this.phaseCallback = args[15] ?? null;
+    let result: OrchestratorResult;
+    try {
+      result = await this.runUserCommand(...args);
+    } finally {
+      this.phaseCallback = null;
+    }
     const extra = this.attachmentWarning;
     this.attachmentWarning = null;
     if (!extra) return result;
@@ -1239,7 +1265,10 @@ export class AIOrchestrator {
     // Modo Chat (2026-10-08): la IA SÓLO responde. Ni se clasifica el pedido:
     // va directo al carril de preguntas, que no escribe archivos. Al final por
     // la misma razón que los de arriba (callers posicionales).
-    chatOnly: boolean = false
+    chatOnly: boolean = false,
+    // Etapas para la tarjeta de progreso (2026-10-08). Lo lee parseUserCommand
+    // (args[15]) y lo deja en `phaseCallback`; aquí sólo fija la posición.
+    _onPhase?: PhaseCallback
   ): Promise<OrchestratorResult> {
     this.retryCount = 0;
     const startTime = Date.now();
@@ -1332,6 +1361,7 @@ export class AIOrchestrator {
     // una falla se detiene aquí: no se gasta en el resto del pedido (3A).
     let attachmentsNote = '';
     if (attachments.length > 0) {
+      this.emitPhase('reading', attachments.map((a) => a.original_name).join(', '));
       const read = await readAttachments(attachments, input, signal, projectId);
       timer.mark('attachments');
       if (!read.ok) {
@@ -1370,6 +1400,7 @@ export class AIOrchestrator {
       };
       platformService.setIntentType('question');
       console.log('[AIOrchestrator] modo Chat: sin clasificar, directo a responder');
+      this.emitPhase('answering');
       const answer = await this.answerQuestion(
         inputWithAttachments, files, memory, chatHistory, projectId, creditUserId,
         startTime, chatIntent, signal, await assetsNotePending,
@@ -1389,8 +1420,9 @@ export class AIOrchestrator {
     // determinista que respalda a classify() cuando Haiku falla (Cambio 2)
     // aplica igual aquí, en vez de fijar needs_server=false a ciegas.
     const noMemoryNeedsServer = promptNeedsServer(input);
+    this.emitPhase('understanding');
     const intent = memory
-      ? await IntentClassifier.classify(input, memory, chatHistory, signal)
+      ? await IntentClassifier.classify(input, memory, chatHistory, signal, this.replyLanguage())
       : {
           type: 'modify_existing' as const,
           affected_files: [],
@@ -1401,6 +1433,7 @@ export class AIOrchestrator {
           server_reason: noMemoryNeedsServer ? 'deterministic signal' : '',
         };
     timer.mark('classify');
+    if (intent.status_line) this.emitPhase('headline', intent.status_line);
 
     // Tag the open intent with its classified type so the server records it on
     // the credit transaction (audit metadata only — billing derives userId and
@@ -1412,6 +1445,7 @@ export class AIOrchestrator {
     // ------------------------------------------------------------------
     // "Arreglar ahora" nunca se contesta como pregunta: hay que cambiar código.
     if (intent.type === 'question' && !isFixButtonRequest(input)) {
+      this.emitPhase('answering');
       const answer = await this.answerQuestion(
         inputWithAttachments,
         files,
@@ -1652,6 +1686,7 @@ export class AIOrchestrator {
     // deletionTargets del anterior mediría los borrados nuevos contra una
     // autorización que no es la suya, y conservar los conteos del anterior
     // marcaría `[TRIMMED:N→M]` con el recorte de un plan que ya no existe.
+    this.emitPhase('planning');
     let { steps, wasTrimmed, originalCount, trimmedCount, deletionTargets } = await Architect.plan(
       input,
       memoryFormatted,
@@ -1965,6 +2000,7 @@ export class AIOrchestrator {
     let verifyResult;
     timer.mark('implement');
     try {
+      this.emitPhase('checking');
       verifyResult = await Verifier.verify(modifiedFilesMap, files, onRetry, signal, 3, designContext, blueprint, deletedPaths);
       timer.mark('verify');
     } catch (e) {
@@ -2980,6 +3016,7 @@ export class AIOrchestrator {
       // puntual sólo amerita una ronda de reparación por lotes. compile_attempts
       // y error_message se pueblan igual que en el plan lane.
       // ----------------------------------------------------------------
+      this.emitPhase('checking');
       const verifyResult = await Verifier.verify(
         new Map([[target.path, newContent]]),
         files,

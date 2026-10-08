@@ -18,7 +18,7 @@ import { useProjectFiles } from '../hooks/useProjectFiles';
 import '../App.css';
 import { ChatInterface, type ChatPlanStep, type Message } from '../components/ChatInterface';
 import { PropertyPanel } from '../components/studio/PropertyPanel';
-import { AIOrchestrator } from '../services/AIOrchestrator';
+import { AIOrchestrator, type PhaseCallback } from '../services/AIOrchestrator';
 import { platformService } from '../services/PlatformService';
 import type { TypeIssue, ProjectAsset } from '../services/PlatformService';
 import { SupabaseService } from '../services/SupabaseService';
@@ -1631,7 +1631,9 @@ export function StudioEngine() {
     // un argumento, y no como una condición que pueda cambiar sola.
     allowPlanGate: boolean = true,
     // Bloque 3 (2026-10-07): fotos/PDFs adjuntos en el chat, ya subidos.
-    attachments: ProjectAsset[] = []
+    attachments: ProjectAsset[] = [],
+    // Etapas para la tarjeta de progreso (2026-10-08, P2).
+    onPhase?: PhaseCallback
   ): Promise<{ success: boolean; modifiedFiles: string[]; removedFiles?: string[]; error?: string; errorReason?: string; warning?: string; chatResponse?: string; suggestedAction?: string; planSteps?: { order: number; description: string; file_path: string; action: 'create' | 'modify' | 'delete' }[]; cancelled?: boolean; typeErrors?: TypeIssue[] }> => {
     if (isReadOnly) return { success: false, modifiedFiles: [] };
 
@@ -1717,7 +1719,8 @@ export function StudioEngine() {
         findExecutableProposal(chatHistory)?.paths ?? null,
         unappliedMigrationPaths(chatHistory),
         attachments,
-        modeAtSend === 'chat'
+        modeAtSend === 'chat',
+        onPhase
       );
       if (result.modifiedFiles.length > 0) {
         const promptLabel = truncateLabel(message, 80);
@@ -2392,8 +2395,8 @@ export function StudioEngine() {
           <CommandModal>
             <ChatInterface
               isLoading={isGenerating}
-              onSendMessage={(message, onProgress, onRetry, onPlanReady, attachments) =>
-                handleSendMessage(message, onProgress, onRetry, onPlanReady, undefined, true, attachments)}
+              onSendMessage={(message, onProgress, onRetry, onPlanReady, attachments, onPhase) =>
+                handleSendMessage(message, onProgress, onRetry, onPlanReady, undefined, true, attachments, onPhase)}
               selectedElement={selectedElement}
               chatHistory={chatHistory}
               onHistoryUpdate={(history) => setChatHistory(history.slice(-30))}

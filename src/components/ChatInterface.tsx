@@ -9,7 +9,7 @@ import {
   ddlOutcomeMark,
   OUTCOME_DISMISSED,
 } from '@/utils/ddlProposalState.js';
-import { AIOrchestrator } from '../services/AIOrchestrator';
+import { AIOrchestrator, type ForgePhase } from '../services/AIOrchestrator';
 import { getForgeLang } from '@/i18n/forge/lang';
 import { appendModeMark, type ChatSendMode } from '@/utils/chatModeMark.js';
 import type { ProgressLine } from './chat/progressSummary';
@@ -77,7 +77,9 @@ interface ChatInterfaceProps {
     onRetry?: (attempt: number, error: string) => void,
     onPlanReady?: (steps: ChatPlanStep[]) => void,
     /** Bloque 3: fotos/PDFs adjuntos a este mensaje (ya subidos al almacén). */
-    attachments?: ProjectAsset[]
+    attachments?: ProjectAsset[],
+    /** Etapas para la tarjeta de progreso (2026-10-08, P2). */
+    onPhase?: (phase: ForgePhase, detail?: string) => void
   ) => Promise<{
     success: boolean;
     modifiedFiles: string[];
@@ -174,6 +176,9 @@ export function ChatInterface({
   const startTimeRef = useRef<number | null>(null);
   // Último prompt enviado — el "eco" de la tarjeta de proceso (fc-prompt-eco).
   const [lastSentText, setLastSentText] = useState('');
+  // Título de la tarjeta según la etapa real (2026-10-08): una pregunta en
+  // Automático pasa a "Pensando la respuesta" en cuanto se sabe.
+  const [phaseTitle, setPhaseTitle] = useState<string | null>(null);
 
   // Rediseño (2026-09-20), consolidado (2026-09-21): `mode` NO es estado
   // propio — es `sendMode` (antes `planModeEnabled`) derivado. El dato real que le importa al
@@ -299,10 +304,47 @@ export function ChatInterface({
         ? tNow('chat.progress.planning')
         : sentMode === 'chat'
         ? tNow('chat.progress.thinking')
-        : progressHeadline(userMessage, getForgeLang()) ?? tNow('chat.progress.working'),
+        : progressHeadline(userMessage, getForgeLang()) ?? tNow('chat.progress.understanding'),
       status: 'pending',
       kind: 'planning',
     }]);
+    setPhaseTitle(null);
+
+    // Etapas reales del pedido (2026-10-08, P2). La línea de arriba cambia
+    // según la etapa ("Leyendo menu.pdf…" → la frase del clasificador →
+    // "Pensando…"); la revisión final se agrega como una línea más.
+    const generic = new Set([
+      tNow('chat.progress.understanding'), tNow('chat.progress.planning'), tNow('chat.progress.working'),
+    ]);
+    let baseText: string | null = null;
+    const onPhase = (phase: ForgePhase, detail?: string) => {
+      if (phase === 'answering') setPhaseTitle(tNow('chat.process.chat'));
+      setProgressLines(prev => {
+        const next = prev.map(l => ({ ...l }));
+        const top = next.find(l => l.kind === 'planning');
+        if (top && baseText === null) baseText = top.text;
+        switch (phase) {
+          case 'reading':
+            if (top && detail) top.text = tNow('chat.progress.reading', { names: detail });
+            break;
+          case 'understanding':
+          case 'planning':
+            if (top && baseText !== null) top.text = baseText;
+            break;
+          case 'headline':
+            if (top && detail) top.text = baseText = detail;
+            break;
+          case 'answering':
+            if (top && baseText !== null) top.text = generic.has(baseText) ? tNow('chat.progress.thinking') : baseText;
+            break;
+          case 'checking':
+            for (const l of next) if (l.status === 'pending') l.status = 'done';
+            next.push({ text: tNow('chat.progress.checking'), status: 'pending', kind: 'phase' });
+            break;
+        }
+        return next;
+      });
+    };
 
     try {
       const result = await onSendMessage(
@@ -357,7 +399,8 @@ export function ChatInterface({
             status: 'pending' as const,
           })));
         },
-        sentAssets
+        sentAssets,
+        onPhase
       );
 
       // 3A: no se pudo leer un adjunto — vuelven los adjuntos y el texto para reintentar.
@@ -376,7 +419,8 @@ export function ChatInterface({
       // La línea inicial "Planeando..." sólo existe mientras se decide qué
       // hacer; no es un paso del turno (en un cambio chico era la única línea
       // y la tarjeta final la listaba como "1 paso completado").
-      const finalLines = progressLinesSnapshotRef.current.filter(l => l.kind !== 'planning');
+      // Las líneas de etapa ("Revisando que todo funcione…") tampoco son pasos.
+      const finalLines = progressLinesSnapshotRef.current.filter(l => l.kind !== 'planning' && l.kind !== 'phase');
       const stepsSnapshot = finalLines.map(l => l.text);
       const stepsCompletedSnapshot = result.success
         ? finalLines.length
@@ -583,7 +627,7 @@ export function ChatInterface({
 
   const isBusy = isLoading;
   const { t } = useForgeLang();
-  const processTitle = t(`chat.process.${mode}`);
+  const processTitle = phaseTitle ?? t(`chat.process.${mode}`);
 
   // Esc — prioridad: historial abierto > cancelar un run en curso. El menú de
   // modo se cierra solo (ModeSelector detiene la propagación de su propio Esc).

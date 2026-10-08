@@ -1,6 +1,6 @@
 // `kind: 'planning'` marca la línea inicial sin depender de su texto (que
 // ahora sale traducido). `text === 'Planning...'` se conserva por compatibilidad.
-export type ProgressLine = { text: string; status: 'pending' | 'done' | 'error'; kind?: 'planning' };
+export type ProgressLine = { text: string; status: 'pending' | 'done' | 'error'; kind?: 'planning' | 'phase' };
 
 export const isLastDone = (lines: ProgressLine[]): boolean =>
   lines.length > 0 && lines[lines.length - 1].status === 'done';

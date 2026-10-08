@@ -2,6 +2,7 @@ import { platformService } from './PlatformService';
 import type { ProjectMemory } from './ProjectMemoryService';
 import { PATTERN_SUMMARY } from './patterns/registry';
 import { promptNeedsServer } from '../utils/serverLogicSignals.js';
+import { cleanStatusLine } from '../utils/statusLine.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -21,6 +22,12 @@ export interface Intent {
   needs_new_files: boolean;
   risk: 'low' | 'medium' | 'high';
   reasoning: string;
+  /**
+   * Frase corta para la tarjeta de progreso (2026-10-08, P2 de Samuel):
+   * "Analizando si la foto sirve para la página". Opcional: sin ella la
+   * tarjeta muestra la etapa genérica.
+   */
+  status_line?: string;
   requiredPatternIds?: string[];
   domain?: 'auth' | 'payments' | 'realtime' | 'forms' | 'data' | 'ui' | 'general';
   /**
@@ -64,7 +71,9 @@ export class IntentClassifier {
     prompt: string,
     memory: ProjectMemory,
     chatHistory: Array<{ role: string; content: string }> = [],
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    // Idioma de la frase de progreso (status_line): el de la interfaz.
+    replyLanguage: 'Spanish' | 'English' = 'Spanish'
   ): Promise<Intent> {
     const registrySummary = memory.component_registry
       .slice(0, 20)
@@ -117,7 +126,8 @@ AVAILABLE ARCHITECTURE PATTERNS: ${PATTERN_SUMMARY}
 
 Additionally output these two fields in your JSON response:
 * requiredPatternIds: string[] — select at most 3 pattern IDs from the list above that are most relevant to the user's request. If none apply, return an empty array. Only use IDs exactly as listed above. Do not invent IDs.
-* domain: one of 'auth' | 'payments' | 'realtime' | 'forms' | 'data' | 'ui' | 'general'`;
+* domain: one of 'auth' | 'payments' | 'realtime' | 'forms' | 'data' | 'ui' | 'general'
+* status_line: string — a short progress phrase (max 8 words) in ${replyLanguage} saying what Wyrd is doing with THIS request, as a gerund, shown to the user while it works. Examples: "Analizando si la foto sirve para la página", "Agregando la sección de testimonios", "Revisando los precios contra el PDF". No quotes, no trailing punctuation, no file names.`;
 
     const userMessage =
       `COMPONENT REGISTRY: ${registrySummary || 'none'}\n` +
@@ -161,6 +171,7 @@ Additionally output these two fields in your JSON response:
         needs_new_files: parsed.needs_new_files ?? false,
         risk: parsed.risk,
         reasoning: parsed.reasoning ?? '',
+        status_line: cleanStatusLine(parsed.status_line),
         requiredPatternIds: Array.isArray(parsed.requiredPatternIds) ? parsed.requiredPatternIds : [],
         domain: parsed.domain ?? 'general',
         needs_server: parsed.needs_server === true,

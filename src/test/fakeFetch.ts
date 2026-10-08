@@ -169,6 +169,7 @@ export function installFakeFetch(): FakeFetchControl {
               needs_new_files: true,
               risk: 'medium',
               reasoning: 'fakeFetch fixture — clasificación determinista para el e2e.',
+              status_line: 'agregando las secciones de demostración',
               requiredPatternIds: [],
               domain: 'ui',
             })
