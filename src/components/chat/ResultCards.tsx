@@ -11,6 +11,7 @@ import type { TypeIssue } from '../../services/PlatformService';
 import { t as tNow } from '@/i18n/forge/lang';
 import { MiniMarkdown } from './MiniMarkdown';
 import { useTypewriter } from './useTypewriter';
+import { markdownPreview } from '../../utils/markdownPreview.js';
 
 /** La respuesta de la IA se escribe sola (2026-10-01); el formato se aplica sobre lo ya escrito. */
 function TypedMarkdown({ text }: { text: string }) {
@@ -89,9 +90,11 @@ export function UltimoMensajeCard({ text, onOpenHistory }: { text: string; onOpe
       <div className="fc-resumen">
         <div
           className="fc-resumen-texto"
-          style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+          style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', whiteSpace: 'pre-line' }}
         >
-          {text}
+          {/* Texto limpio, sin markdown en crudo (2026-10-08); el formato
+              completo está en el historial. */}
+          {markdownPreview(text)}
         </div>
         <button type="button" className="fc-pill" onClick={onOpenHistory}>{t('chat.card.fullHistory')}</button>
       </div>

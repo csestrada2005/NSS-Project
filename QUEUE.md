@@ -77,6 +77,11 @@ siempre que se pueda.
   llamada ("Analizando si la foto sirve para la página…", campo status_line) → título "Pensando la respuesta" si
   es pregunta / pasos del plan si es cambio → "Revisando que todo funcione…". Ya no aparece "Trabajando en tu
   pedido". Incluye el viejo pendiente "Planeando"/"Trabajando" mientras piensa una PREGUNTA.
+  Check de Samuel 2026-10-08: frases y etapas OK en las 4 pruebas. Arreglado tras el check: (a) la IA copiaba
+  literalmente los ejemplos de la instrucción ("Analizando si la foto sirve para la página"); ahora los ejemplos
+  son de otros temas y debe nombrar lo concreto del pedido; (b) la tarjeta pequeña en reposo mostraba el markdown
+  en crudo (**, tablas): ahora muestra texto limpio (src/utils/markdownPreview.js). PENDIENTE de la próxima
+  ronda: confirmar que en una pregunta en Automático el título pasa de "Trabajando" a "Pensando la respuesta".
 - **Plan más claro:** mostrar el plan también en la primera generación, que el bloque del plan no se pierda al
   recargar la página, y que muestre el nombre final de la migración (no el que dijo el modelo).
 - **Aviso del guard de código en lenguaje simple:** hoy dice "mueve esto a una función de servidor", algo que un

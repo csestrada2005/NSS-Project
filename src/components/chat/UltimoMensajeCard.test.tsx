@@ -18,4 +18,16 @@ describe('UltimoMensajeCard', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Ver historial completo' }));
     expect(onOpenHistory).toHaveBeenCalledTimes(1);
   });
+
+  it('una respuesta con markdown se ve limpia, sin asteriscos ni barras (2026-10-08)', () => {
+    setForgeLang('es');
+    const { container } = render(
+      <UltimoMensajeCard
+        text={'**MONTAÑA**\n| Expedición | Precio |\n|---|---|\n| Ascenso Pico de Orizaba | $8,900 MXN |'}
+        onOpenHistory={() => {}}
+      />
+    );
+    expect(container.textContent).toContain('Ascenso Pico de Orizaba · $8,900 MXN');
+    expect(container.textContent).not.toMatch(/\*\*|\||---/);
+  });
 });

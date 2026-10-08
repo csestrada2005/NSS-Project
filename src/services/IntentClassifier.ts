@@ -127,7 +127,7 @@ AVAILABLE ARCHITECTURE PATTERNS: ${PATTERN_SUMMARY}
 Additionally output these two fields in your JSON response:
 * requiredPatternIds: string[] — select at most 3 pattern IDs from the list above that are most relevant to the user's request. If none apply, return an empty array. Only use IDs exactly as listed above. Do not invent IDs.
 * domain: one of 'auth' | 'payments' | 'realtime' | 'forms' | 'data' | 'ui' | 'general'
-* status_line: string — a short progress phrase (max 8 words) in ${replyLanguage} saying what Wyrd is doing with THIS request, as a gerund, shown to the user while it works. Examples: "Analizando si la foto sirve para la página", "Agregando la sección de testimonios", "Revisando los precios contra el PDF". No quotes, no trailing punctuation, no file names.`;
+* status_line: string — a short progress phrase (max 9 words) in ${replyLanguage} saying what Wyrd is doing with THIS request, starting with a gerund, shown to the user while it works. It MUST name the concrete subject of the request (which section, which photo, which data, which theme) using the user's own words. Write your own phrase — never reuse the format examples. Format examples only (unrelated topics): "Comparando los horarios del gimnasio con el calendario", "Quitando el banner de rebajas del encabezado". No quotes, no trailing punctuation, no file names.`;
 
     const userMessage =
       `COMPONENT REGISTRY: ${registrySummary || 'none'}\n` +
