@@ -2659,7 +2659,10 @@ buenos resultados la primera vez que se usó en este ítem (ver Bloque 1, "Halla
     `favicon`. UI: recuadro "Ícono de la pestaña" en Publicar (`FaviconPicker.tsx`, +2 tests).
     Fuera del bloque (sin ítem propio salvo que Samuel lo pida): ícono Android 512 px / manifest, imagen al
     compartir el link (og:image).
-  - **Bloque 3 — adjuntos en el chat: HECHO, ESPERA CHECK DE SAMUEL (2026-10-07).** Decisiones de Samuel:
+  - **Bloque 3 — adjuntos en el chat: HECHO Y CONFIRMADO (check de Samuel 2026-10-08, mundo A en las dos
+    pruebas, sobre Bakery `510afe69`: precios exactos del PDF + foto en el hero; portada "bastante parecida" a una
+    captura). Log de Render: lecturas con `claude-haiku-4-5-20251001 status=200` (PDF de prueba 1896 in / 179 out,
+    captura 563 in / 443 out; otra captura 1701 in / 413 out) antes de clasificar.** Decisiones de Samuel:
     1B reencuadrada a "lector de fotos" (una lectura con Haiku por foto que la describe por escrito — contenido,
     colores, layout si es captura, ALT — en vez de que todo el pipeline vea la imagen en cada paso; la versión
     "todo el proceso mira la foto" queda como mejora posible encima), 2A (PDF copiado fielmente con tope de
