@@ -90,6 +90,9 @@ describe('Ajustes → Secretos', () => {
     screen.getByText('Configurada');
     screen.getByText('Configurada · ninguna función la usa');
     expect(list).toHaveBeenCalledWith('p');
+    // Con base: una línea de sólo lectura, sin nombres SUPABASE_* ni botones.
+    screen.getByText('Llaves de la base de datos: las administra el servidor solo');
+    expect(document.body.textContent).not.toMatch(/SUPABASE_[A-Z]/);
 
     // Guardada: se ve como secreto (puntitos, sin poder escribir) con "Reemplazar".
     const stripe = screen.getByLabelText('STRIPE_SECRET_KEY') as HTMLInputElement;

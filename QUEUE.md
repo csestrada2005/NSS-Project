@@ -2719,8 +2719,20 @@ el admin tiene acceso). Nada de esto se construye por ahora.
   DNS que el usuario pone en su proveedor (GoDaddy, Namecheap…) y avisa cuando queda activo. Sin dinero.
 - **Fase 2 — comprar un dominio:** buscador + precio + compra. El cargo va a la tarjeta de Vercel del admin
   → requiere ANTES el cobro al usuario (créditos / pagos, hoy "Próximamente").
+- **Set up para COMPRAR dominios (Samuel, 2026-10-08):** dejar listo lo necesario para la fase 2 (cuenta de
+  Vercel con método de pago para dominios, cobro al usuario antes de comprar, buscador + precio). Diseño en frío
+  propio; sigue sujeto a la decisión de aplicarlo cuando Wyrd sea público.
 - Al empezar la fase 1: quitar el código de Cloudflare (`server.js` /api/domains, `DomainsPanel.tsx`), que
   sólo sirve si el dominio vive en la cuenta de Cloudflare del admin.
+
+## 18. IDEA SIN DISEÑO — Correos con la marca del sitio (Samuel, 2026-10-08)
+
+Feature de correos para los proyectos generados: por ejemplo, cuando alguien se registra o inicia sesión en el
+sitio, le llega un correo (confirmación, bienvenida, recuperar contraseña…) con el DISEÑO DE LA MARCA, sacado
+de la propia página (colores, fuentes, logo del DESIGN.md / favicon). Hoy los correos de Supabase Auth salen con la
+plantilla genérica de Supabase; Wyrd ya configura el dominio del sitio en Supabase Auth al publicar (S5) y la
+plataforma tiene servicio de correo (Resend). Pendiente de diseño en frío: plantillas de Supabase Auth generadas
+con la marca vs. envío propio desde una función; remitente/dominio de envío; qué correos entran en la primera fase.
 
 ## 16. IDEA SIN DISEÑO — "Prompt refiner": del PDF del proyecto a prompts dentro de Wyrd (Samuel, 2026-09-30)
 

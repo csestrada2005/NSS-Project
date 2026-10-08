@@ -717,6 +717,7 @@ export const en = {
   'secrets.status.missing': 'Missing',
   'secrets.status.set': 'Set',
   'secrets.status.unused': 'Set · no function uses it',
+  'secrets.databaseKeys': 'Database keys: managed by the server automatically',
   'secrets.noServer': 'This project has no database, so it has no server to store keys. Connect a database first.',
   'secrets.unavailable': 'Could not read the project\'s server. Try again in a moment.',
   'secrets.badName': 'Use UPPER_CASE_WITH_UNDERSCORES; it cannot start with SUPABASE_.',

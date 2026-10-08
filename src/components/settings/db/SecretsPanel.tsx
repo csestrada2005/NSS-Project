@@ -132,6 +132,15 @@ export function SecretsPanel({ projectId }: SecretsPanelProps) {
         <div className="bg-background/50 rounded-lg p-4 border border-border border-l-4 border-l-primary space-y-4">
           <p className="text-sm text-muted-foreground">{t('secrets.projectIntro')}</p>
 
+          {/* Las SUPABASE_* se ocultan a propósito (las pone Supabase solo y
+              reemplazarlas rompería el proyecto): sólo esta línea, sin nombres
+              ni botones (Samuel, 2026-10-08). */}
+          {result?.server === 'ready' && (
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <CheckCircle size={12} className="text-emerald-500 shrink-0" />
+              {t('secrets.databaseKeys')}
+            </p>
+          )}
           {result?.server === 'none' && (
             <p className="text-xs text-amber-300">{t('secrets.noServer')}</p>
           )}

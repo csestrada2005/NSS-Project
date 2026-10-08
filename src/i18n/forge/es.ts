@@ -712,6 +712,7 @@ export const es: Record<ForgeKey, string> = {
   'secrets.status.missing': 'Falta',
   'secrets.status.set': 'Configurada',
   'secrets.status.unused': 'Configurada · ninguna función la usa',
+  'secrets.databaseKeys': 'Llaves de la base de datos: las administra el servidor solo',
   'secrets.noServer': 'Este proyecto no tiene base de datos, así que no tiene servidor donde guardar llaves. Conecta una base primero.',
   'secrets.unavailable': 'No se pudo leer el servidor del proyecto. Inténtalo de nuevo en un momento.',
   'secrets.badName': 'El nombre va en MAYÚSCULAS_CON_GUIONES_BAJOS y no puede empezar con SUPABASE_.',
