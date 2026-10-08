@@ -83,12 +83,14 @@ siempre que se pueda.
   de diseño lo lea de ahí en vez de adivinarlo en cada pedido. Junto con esto: la búsqueda de patrones de diseño
   siempre trae "1 directo + 4 parecidos" aunque la base es grande (¿tope fijo en el código?), y los pedidos en
   español contra una base en inglés.
-- **La IA dice que no puede ver archivos (2026-10-08) — HECHO, espera check:** las respuestas ahora reciben la
+- **La IA dice que no puede ver archivos (2026-10-08) — HECHO Y CONFIRMADO (Samuel: responde "sí puedo ver tus fotos", nombra las de
+  Archivos, ofrece clip y Unsplash):** las respuestas ahora reciben la
   lista de Archivos y la regla "sí ves las fotos y PDFs; si falta una, adjúntala con el clip o elígela de
   Archivos" (Unsplash sigue siendo opción válida). Antes: a "Sube la foto correcta…" respondió "No tengo acceso
   a archivos subidos… comparte un enlace de Google Drive o busco en Unsplash". Falso: Wyrd sí le da las fotos y
   PDFs del proyecto (Archivos y adjuntos). Debe saberlo y ofrecerlo ("adjúntala con el clip o elígela de Archivos").
-- **Reparación que deja la sección rota (Vertigo, 2026-10-08) — HECHO (2A), espera check:** este error ahora se
+- **Reparación que deja la sección rota (Vertigo, 2026-10-08) — HECHO (2A); sin check manual (no se puede provocar a
+  voluntad): Samuel avisa si vuelve a ver una sección rota tras reparar:** este error ahora se
   arregla sin IA, con una línea al final del archivo (`src/utils/exportShapeFix.js`, consola
   `[Verifier] arreglo sin IA: …`). Los demás errores siguen yendo al modelo (2B "detector de destrozos" no se
   hizo). Antes: al cambiar la sección de precios, el Verifier
