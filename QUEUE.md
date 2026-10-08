@@ -50,7 +50,11 @@ siempre que se pueda.
   Pendientes viejos del mismo tema: reserva de imagen del hero, guard anti-duplicado y créditos en el footer
   (rama `claude/keen-mccarthy-oknmc8`), y precisión al atribuir las imágenes (sección 10).
 - **Dictado por micrófono** en el chat (hoy "Próximamente").
-- **Modo "Chat" — HECHO, espera check (2026-10-08).** Tercera opción del menú (Automático / Plan / Chat): la IA
+- **Modo "Chat" — HECHO Y CONFIRMADO (check de Samuel 2026-10-08: pedido de construir en Chat → sólo respuesta,
+  una línea de Sonnet sin clasificador; sugerencia → Automático y construyó; el modo se recuerda).**
+  Detalle visto en el check: en Chat la IA dijo "Dame un momento — voy a revisar el archivo…", una promesa que
+  en ese modo no puede cumplir. Arreglo pendiente: decirle en Chat que no prometa acciones (la sugerencia ya
+  cubre eso). Tercera opción del menú (Automático / Plan / Chat): la IA
   SÓLO responde. Ni se clasifica el pedido: va directo al carril de preguntas, que no escribe archivos (tampoco
   corren los atajos viejos "build a…", "plan:"). Los botones de arreglo siguen arreglando. Decisión B1 de Samuel:
   en modo Chat, el botón de la sugerencia de la IA cambia a Automático y la construye. El modo se recuerda en
