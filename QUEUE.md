@@ -19,7 +19,10 @@ siempre que se pueda.
    que caduca en 10 minutos y nunca recibe un enlace para ponerlo en el sitio. En Archivos: "Privado · sólo la IA
    lo lee" con "Ver", y "Hacer público" / "Hacer privado" (mueve el archivo de almacén, con confirmación). No había
    PDFs viejos que mover (Samuel borró el único).
-2. **Reusar archivos ya leídos — HECHO, espera check (2026-10-08).** Decisiones de Samuel: 1A elegir de
+2. **Reusar archivos ya leídos — HECHO Y CONFIRMADO (check de Samuel 2026-10-08: PDF nuevo → "lectura guardada",
+   elegido de Archivos → "Ya leído" y `reusados (sin costo): 1` sin lector de Haiku, foto vieja leída y guardada).
+   Arreglo de paso: los menús de la barra (clip y Automático/Plan) no se veían desde el 2026-10-01 porque la
+   columna de la barra recortaba; ya no recorta (confirmado).** Decisiones de Samuel: 1A elegir de
    Archivos al adjuntar + 2A copia guardada en el almacén privado + bonus (también fotos). El clip ofrece "Subir
    archivo nuevo" o "Elegir de Archivos". La primera vez que la IA lee un PDF o mira una foto, guarda lo que
    entendió en `project-documents/readings/<proyecto>/<archivo>.json` (siempre privado, aunque el archivo sea
@@ -33,6 +36,18 @@ siempre que se pueda.
   grande y **editable con el teclado**. Ejemplo: el plan dice "propongo 3 formas de hacerlo", Samuel escribe
   "de las 3 opciones aplica A" y da enviar; la IA vuelve a leer el plan con esa edición y construye según eso.
 - **Dictado por micrófono** en el chat (hoy "Próximamente").
+- **Modo "Chat" (Samuel, 2026-10-08):** un tercer modo junto a Automático/Plan en el que la IA SÓLO responde,
+  nunca cambia archivos. Seguro contra preguntas como "¿están bien los precios?" que podrían acabar en cambios.
+  En Automático ya responde preguntas; esto es el "failsafe".
+- **Barra que crece hacia abajo (Samuel, 2026-10-08):** si el texto es largo, la barra del chat crece (como en
+  otras IAs) hasta un tope, para poder revisar y editar textos largos antes de enviarlos.
+- **Botón "Chat" con cambios pendientes (Samuel, 2026-10-08):** desde Código o Ajustes, "Chat" vuelve al preview.
+  Pero si hay algo a medias, no cambia y sale el aviso de abajo a la derecha según el caso: "aplica o descarta
+  los cambios de código primero", "espera a que la publicación termine", "espera a que el chequeo de seguridad
+  termine", etc. (revisar todos los casos).
+- **Progreso más reactivo (Samuel, 2026-10-08):** la tarjeta dice casi siempre "Trabajando en tu pedido". Debe
+  decir qué hace según el pedido, p. ej. "Analizando si la foto sirve para la página". Samuel todavía no está
+  contento con cómo se muestra el proceso.
 - Mientras la IA piensa una PREGUNTA, la tarjeta dice "Planeando"; debería decir "Pensando…".
 - **Plan más claro:** mostrar el plan también en la primera generación, que el bloque del plan no se pierda al
   recargar la página, y que muestre el nombre final de la migración (no el que dijo el modelo).
@@ -56,6 +71,13 @@ siempre que se pueda.
   de diseño lo lea de ahí en vez de adivinarlo en cada pedido. Junto con esto: la búsqueda de patrones de diseño
   siempre trae "1 directo + 4 parecidos" aunque la base es grande (¿tope fijo en el código?), y los pedidos en
   español contra una base en inglés.
+- **La IA dice que no puede ver archivos (2026-10-08):** a "Sube la foto correcta…" respondió "No tengo acceso
+  a archivos subidos… comparte un enlace de Google Drive o busco en Unsplash". Falso: Wyrd sí le da las fotos y
+  PDFs del proyecto (Archivos y adjuntos). Debe saberlo y ofrecerlo ("adjúntala con el clip o elígela de Archivos").
+- **Reparación que deja la sección rota (Vertigo, 2026-10-08):** al cambiar la sección de precios, el Verifier
+  dio `No matching export in PricingSection.tsx for import "PricingSection"` (exportación con otro nombre); la
+  reparación de Haiku reescribió PricingSection y compiló, pero la sección quedó sin estilos y se ve rota. La
+  reparación debe arreglar el nombre de la exportación, no reescribir el archivo.
 - La IA rompe reglas: tocó `package.json` pese a la prohibición y añadió cosas que nadie pidió.
 - Detectar cuando lo pedido YA EXISTE y decirlo. Ojo: rompe las pruebas sobre fixtures ya construidos; necesita
   fixtures vírgenes.
