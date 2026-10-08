@@ -1618,6 +1618,14 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   estándar, nunca en el código ni pedidas por chat), tarjeta del chat `MissingSecretsCard` (tras cada pedido y al
   abrir; "Ahora no" la oculta hasta el siguiente pedido), Ajustes → Secretos rehecho (Falta / Configurada /
   Configurada · sin usar; Guardar / Reemplazar / Borrar / Agregar a mano) con `SecretValueForm` (+4 tests UI).
+  **Check 1 (Samuel, 2026-10-08): mundo A** — Bakery (sin base): `RESEND_API_KEY · Falta · la usa: send-confirmation`
+  + aviso "no tiene base de datos"; Vertigo: "Ninguna función pide llaves todavía"; pedido de Banxico → tarjeta
+  `BANXICO_TOKEN · la usa: banxico-exchange-rate` → guardada (log `[secrets] 087ddaf3… · BANXICO_TOKEN · guardada`)
+  → Ajustes "Configurada". Ajustes pedidos y HECHOS, esperan re-check: sin "(Stripe, Perplexity, Banxico…)" en el
+  texto; ejemplo de nombre `STRIPE_SECRET_KEY`; una llave guardada se ve con puntitos + "Reemplazar" → abre el campo
+  (+ Cancelar) → al guardar pide confirmación ("¿Seguro que quieres reemplazar…? La anterior se borra para siempre…").
+  Duda de Samuel respondida: las `SUPABASE_*` de la base de Vertigo se ocultan a propósito (las pone Supabase solo,
+  no se pueden escribir y reemplazarlas rompería el panel); opción ofrecida: una línea de sólo lectura.
 - **Plan de evaluación de la calidad de la IA (Samuel, 2026-10-05):** (1) Samuel pasa proyectos REALES de Nebu y se
   revisa, en teoría (contra las reglas y la arquitectura de Nebu: sitio + panel de admin con sesión + panel de
   cliente opcional), si la IA los cumpliría; (2) corrida completa con un proyecto NUEVO y un "señor" prompt

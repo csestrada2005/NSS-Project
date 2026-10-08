@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MissingSecretsCard } from './MissingSecretsCard';
 import { SecretsPanel } from '../settings/db/SecretsPanel';
@@ -82,7 +82,7 @@ describe('Ajustes → Secretos', () => {
     });
     const set = vi.spyOn(platformService, 'setProjectSecret').mockResolvedValue();
     const del = vi.spyOn(platformService, 'deleteProjectSecret').mockResolvedValue();
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(<SecretsPanel projectId="p" />);
 
     await screen.findByText('PERPLEXITY_API_KEY');
@@ -90,16 +90,33 @@ describe('Ajustes → Secretos', () => {
     screen.getByText('Configurada');
     screen.getByText('Configurada · ninguna función la usa');
     expect(list).toHaveBeenCalledWith('p');
+
+    // Guardada: se ve como secreto (puntitos, sin poder escribir) con "Reemplazar".
+    const stripe = screen.getByLabelText('STRIPE_SECRET_KEY') as HTMLInputElement;
+    expect(stripe.readOnly).toBe(true);
+    expect(stripe.placeholder).toMatch(/^•+$/);
     expect(screen.getAllByRole('button', { name: 'Reemplazar' })).toHaveLength(2);
 
-    await userEvent.type(screen.getByLabelText('STRIPE_SECRET_KEY'), 'sk-nueva');
+    // Reemplazar abre el campo; al guardar pide confirmación. Si dice que no, no se toca nada.
     await userEvent.click(screen.getAllByRole('button', { name: 'Reemplazar' })[0]);
+    expect(stripe.readOnly).toBe(false);
+    await userEvent.type(stripe, 'sk-nueva');
+    confirm.mockReturnValueOnce(false);
+    await userEvent.click(within(stripe.closest('form')!).getByRole('button', { name: 'Guardar' }));
+    expect(confirm).toHaveBeenLastCalledWith(expect.stringMatching(/^¿Seguro que quieres reemplazar STRIPE_SECRET_KEY\?[\s\S]*\(pagos\)/));
+    expect(set).not.toHaveBeenCalled();
+    await userEvent.click(within(stripe.closest('form')!).getByRole('button', { name: 'Guardar' }));
     await waitFor(() => expect(set).toHaveBeenCalledWith('p', 'STRIPE_SECRET_KEY', 'sk-nueva'));
+
+    // Cancelar vuelve a los puntitos sin guardar.
+    await userEvent.click(screen.getAllByRole('button', { name: 'Reemplazar' })[1]);
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect((screen.getByLabelText('OLD_KEY') as HTMLInputElement).readOnly).toBe(true);
 
     await userEvent.click(screen.getByLabelText('Borrar OLD_KEY'));
     await waitFor(() => expect(del).toHaveBeenCalledWith('p', 'OLD_KEY'));
 
-    await userEvent.type(screen.getByLabelText('NOMBRE (p. ej. PERPLEXITY_API_KEY)'), 'supabase_url');
+    await userEvent.type(screen.getByLabelText('NOMBRE (p. ej. STRIPE_SECRET_KEY)'), 'supabase_url');
     screen.getByText(/no puede empezar con SUPABASE_/);
   });
 });

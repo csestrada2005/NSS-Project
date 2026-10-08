@@ -170,7 +170,10 @@ export function SecretsPanel({ projectId }: SecretsPanelProps) {
                     <SecretValueForm
                       compact
                       label={s.name}
-                      submitLabel={s.status === 'missing' ? t('secrets.setValue') : t('secrets.replace')}
+                      locked={s.status !== 'missing'}
+                      confirmMessage={s.usedBy.length > 0
+                        ? t('secrets.confirmReplace', { key: s.name, names: s.usedBy.join(', ') })
+                        : t('secrets.confirmReplaceUnused', { key: s.name })}
                       onSave={(value) => save(s.name, value)}
                     />
                   )}
