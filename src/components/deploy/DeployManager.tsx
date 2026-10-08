@@ -10,6 +10,7 @@ import type { TypeIssue } from '../../services/PlatformService';
 import { buildTypeFixPrompt } from '../chat/ResultCards';
 import { saveSecurityResult } from '../settings/SecurityPanel';
 import type { SecurityFinding } from '../../services/PlatformService';
+import { useBusy } from '@/utils/busyRegistry';
 
 export interface TypeFixProgress {
   step: number;
@@ -66,6 +67,7 @@ const STAGE_MESSAGES: Partial<Record<DeployStage, ForgeKey>> = {
 
 export function DeployManager({ files, projectId: propProjectId, onFixTypeErrors, onOpenSecurity }: DeployManagerProps) {
   const [stage, setStage] = useState<DeployStage>('idle');
+  useBusy('publish', ['fixing', 'packaging', 'uploading', 'building'].includes(stage));
   const { t, lang } = useForgeLang();
   const stageMessage = STAGE_MESSAGES[stage] ? t(STAGE_MESSAGES[stage]!) : '';
   const projectId = propProjectId ?? sessionStorage.getItem('forge_project_id');

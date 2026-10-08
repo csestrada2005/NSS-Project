@@ -3,6 +3,7 @@ import { KeyRound, Pencil } from 'lucide-react';
 import LoadingSquares from '../../brand/LoadingSquares';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
 import { wyrdConfirm } from '@/components/ui/wyrdDialog';
+import { useBusy } from '@/utils/busyRegistry';
 
 const MASK = '••••••••••••••••';
 
@@ -37,6 +38,8 @@ export function SecretValueForm({
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
+  // Una llave escrita y sin guardar (o guardándose) cuenta como a medias.
+  useBusy('secret', busy || value.trim() !== '');
   const inputRef = useRef<HTMLInputElement>(null);
   const showMask = locked && !editing;
 

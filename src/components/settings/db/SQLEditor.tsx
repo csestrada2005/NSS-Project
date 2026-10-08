@@ -3,6 +3,7 @@ import Editor from '@monaco-editor/react';
 import { Play, Trash2, History } from 'lucide-react';
 import { projectDBService } from '@/services/ProjectDBService';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
+import { useBusy } from '@/utils/busyRegistry';
 
 const HISTORY_KEY = 'forge_sql_history';
 
@@ -56,6 +57,7 @@ export function SQLEditor({ projectId }: SQLEditorProps = {}) {
   const resolvedProjectId = projectId ?? sessionStorage.getItem('forge_project_id');
   const [query, setQuery] = useState('SELECT * FROM profiles LIMIT 10;');
   const [isRunning, setIsRunning] = useState(false);
+  useBusy('sql', isRunning);
   const { t, tn } = useForgeLang();
   const [results, setResults] = useState<Record<string, any>[] | null>(null);
   const [error, setError] = useState<string | null>(null);

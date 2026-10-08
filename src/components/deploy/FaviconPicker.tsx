@@ -4,6 +4,7 @@ import { platformService, type ProjectAsset } from '../../services/PlatformServi
 import { readAsBase64 } from '../studio/AssetsPanel';
 import LoadingSquares from '../brand/LoadingSquares';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
+import { useBusy } from '@/utils/busyRegistry';
 
 /**
  * Ícono de la pestaña desde Publicar (bloque 2, 2026-10-06, decisiones de
@@ -17,6 +18,7 @@ export function FaviconPicker({ projectId, autoSvg }: { projectId: string; autoS
   const [favicon, setFavicon] = useState<ProjectAsset | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  useBusy('upload', busy);
   const [error, setError] = useState<string | null>(null);
   const [changed, setChanged] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);

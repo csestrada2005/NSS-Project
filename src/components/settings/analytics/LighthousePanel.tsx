@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { SupabaseService } from '@/services/SupabaseService';
 import LoadingSquares from '../../brand/LoadingSquares';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
+import { useBusy } from '@/utils/busyRegistry';
 
 interface LighthousePanelProps {
   projectId: string | null;
@@ -83,6 +84,7 @@ export function LighthousePanel({ projectId, initialUrl }: LighthousePanelProps 
   const [deployedUrl, setDeployedUrl] = useState(initialUrl || '');
   const [strategy, setStrategy] = useState<'mobile' | 'desktop'>('mobile');
   const [isRunning, setIsRunning] = useState(false);
+  useBusy('lighthouse', isRunning);
   const [lastRun, setLastRun] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { lang, t } = useForgeLang();

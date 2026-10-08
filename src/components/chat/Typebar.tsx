@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Paperclip, Mic, ArrowUp, Square, X, FileText, Image as ImageIcon, Upload, FolderOpen } from 'lucide-react';
 import type { ProjectAsset } from '@/services/PlatformService';
 import LoadingSquares from '../brand/LoadingSquares';
@@ -57,7 +57,7 @@ export function Typebar({
   isCancelling?: boolean;
   mode: ChatSendMode;
   onModeChange: (mode: ChatSendMode) => void;
-  inputRef: React.RefObject<HTMLInputElement | null>;
+  inputRef: React.RefObject<HTMLTextAreaElement | null>;
   attachments?: AttachmentChip[];
   /** Sin él (sin proyecto o sólo lectura) el clip queda inerte. */
   onAttach?: (files: FileList | null) => void;
@@ -69,6 +69,15 @@ export function Typebar({
   const fileRef = useRef<HTMLInputElement>(null);
   const clipRef = useRef<HTMLDivElement>(null);
   const [clipOpen, setClipOpen] = useState(false);
+
+  // Alto según el texto: se mide en cada cambio; el tope lo pone el CSS
+  // (max-height) y pasado el tope la caja se desplaza por dentro.
+  useLayoutEffect(() => {
+    const box = inputRef.current;
+    if (!box) return;
+    box.style.height = 'auto';
+    box.style.height = `${box.scrollHeight}px`;
+  }, [value, inputRef]);
 
   useEffect(() => {
     if (!clipOpen) return;
@@ -114,16 +123,19 @@ export function Typebar({
       <div className="typebar">
         <LiveNode />
         <ModeSelector mode={mode} onChange={onModeChange} disabled={isBusy} />
-        <input
+        {/* Crece con el texto hasta ~8 líneas (2026-10-08, Samuel): un pedido
+            largo se puede revisar antes de enviarlo. Enter envía; Shift+Enter
+            es salto de línea. */}
+        <textarea
           ref={inputRef}
-          type="text"
+          rows={1}
           value={value}
           disabled={isBusy}
           placeholder={t('chat.input.placeholder')}
           autoComplete="off"
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
               onSend();
             }

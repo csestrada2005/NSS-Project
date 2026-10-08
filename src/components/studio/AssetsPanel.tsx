@@ -4,6 +4,7 @@ import { platformService, type ProjectAsset } from '../../services/PlatformServi
 import LoadingSquares from '../brand/LoadingSquares';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
 import { wyrdConfirm } from '@/components/ui/wyrdDialog';
+import { useBusy } from '@/utils/busyRegistry';
 
 /**
  * Archivos del proyecto en la pestaña de Código (bloque 1, 2026-10-05): subir
@@ -32,6 +33,7 @@ export function AssetsPanel({ projectId }: { projectId?: string | null }) {
   const [assets, setAssets] = useState<ProjectAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  useBusy('upload', uploading);
   const [error, setError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [changingId, setChangingId] = useState<string | null>(null);

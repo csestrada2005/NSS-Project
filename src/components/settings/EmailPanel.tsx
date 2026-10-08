@@ -4,6 +4,7 @@ import { SupabaseService } from '@/services/SupabaseService';
 import LoadingSquares from '../brand/LoadingSquares';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
 import { wyrdConfirm } from '@/components/ui/wyrdDialog';
+import { useBusy } from '@/utils/busyRegistry';
 
 interface EmailConfig {
   status: 'pending' | 'verified' | null;
@@ -44,6 +45,7 @@ export function EmailPanel({ projectId }: EmailPanelProps) {
   const [testEmail, setTestEmail] = useState('');
   const [testTemplate, setTestTemplate] = useState('');
   const [isSending, setIsSending] = useState(false);
+  useBusy('email', isSettingUp || isSending);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 

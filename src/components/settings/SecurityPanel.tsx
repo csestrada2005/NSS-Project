@@ -8,6 +8,7 @@ import type { ForgeKey } from '@/i18n/forge/en';
 import { buildSecurityFixPrompt, filesFingerprint } from '@/utils/securityFix.js';
 import type { DdlProposal, ProposalSourceMessage } from '@/utils/ddlProposalState.js';
 import type { TypeFixProgress } from '../deploy/DeployManager';
+import { useBusy } from '@/utils/busyRegistry';
 
 /**
  * Agente de seguridad (decisiones de Samuel, 2026-10-01).
@@ -60,6 +61,7 @@ export function SecurityPanel({
   const { t, lang } = useForgeLang();
   const [saved, setSaved] = useState<Saved | null>(() => loadSaved(projectId));
   const [state, setState] = useState<'idle' | 'checking' | 'fixing' | 'error'>('idle');
+  useBusy('security', state === 'checking' || state === 'fixing');
   const [error, setError] = useState<string | null>(null);
   const [fixProgress, setFixProgress] = useState<TypeFixProgress | null>(null);
   const [beforeCount, setBeforeCount] = useState<number | null>(null);

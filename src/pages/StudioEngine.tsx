@@ -14,6 +14,7 @@ import { AnimatePresence } from 'framer-motion';
 import { Panel, Group } from 'react-resizable-panels';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { wyrdToast as toast } from '@/utils/wyrdToast';
+import { firstBusy, useBusy } from '@/utils/busyRegistry';
 import { useProjectFiles } from '../hooks/useProjectFiles';
 import '../App.css';
 import { ChatInterface, type ChatPlanStep, type Message } from '../components/ChatInterface';
@@ -1001,9 +1002,15 @@ export function StudioEngine() {
       setChatPeeking(false);
       return;
     }
+    // Desde Código o Ajustes (2026-10-08, Samuel): vuelve al preview y abre el
+    // chat, salvo que algo esté a medias — entonces avisa qué falta.
     if (panelMode !== 'preview') {
-      toast.error(t('studio.toast.chatNeedsPreview'));
-      return;
+      const busy = firstBusy();
+      if (busy) {
+        toast.message(t(`studio.busy.${busy}`));
+        return;
+      }
+      setPanelMode('preview');
     }
     setChatPeeking(false);
     setIsCommandModalOpen(true);
@@ -1320,6 +1327,12 @@ export function StudioEngine() {
   const handleCodeEdit = (newContent: string) => {
     setSelectedFileContent(newContent);
   };
+  // Archivo editado en Código y sin guardar: "Chat" no se lo lleva por delante.
+  useBusy(
+    'code',
+    panelMode === 'code' && !!selectedFilePath && files.get(selectedFilePath) !== undefined &&
+      files.get(selectedFilePath) !== selectedFileContent
+  );
 
   const [isSaving, setIsSaving] = useState(false);
 

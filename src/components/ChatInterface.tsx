@@ -154,7 +154,7 @@ export function ChatInterface({
   const [input, setInput] = useState(() => {
     try { return sessionStorage.getItem('forge_chat_input') ?? ''; } catch { return ''; }
   });
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const refocusAfterRejectRef = useRef(false);
 
   const hasPendingPlan = !!pendingPlanSteps && pendingPlanSteps.length > 0;

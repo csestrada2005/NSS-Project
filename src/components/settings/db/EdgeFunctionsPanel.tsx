@@ -3,6 +3,7 @@ import { Zap, RefreshCw } from 'lucide-react';
 import { SupabaseService, type RemoteEdgeFunctionSummary } from '@/services/SupabaseService';
 import { isEdgeFunctionEntrypoint, edgeFunctionSlug } from '../../../utils/edgeFunctionPath.js';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
+import { useBusy } from '@/utils/busyRegistry';
 
 interface LocalEdgeFunction {
   slug: string;
@@ -34,6 +35,7 @@ export function EdgeFunctionsPanel({ projectId, files }: EdgeFunctionsPanelProps
   const [remoteError, setRemoteError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [deployState, setDeployState] = useState<Record<string, DeployState>>({});
+  useBusy('function', Object.values(deployState).includes('deploying'));
 
   const load = useCallback(async () => {
     if (!projectId) {

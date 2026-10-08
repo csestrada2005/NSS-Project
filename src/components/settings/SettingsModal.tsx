@@ -20,6 +20,7 @@ import LoadingSquares from '../brand/LoadingSquares';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
 import { t as tNow } from '@/i18n/forge/lang';
 import type { ForgeKey } from '@/i18n/forge/en';
+import { useBusy } from '@/utils/busyRegistry';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -78,6 +79,7 @@ export function SettingsModal({ onClose, fileTree, files, projectId: propProject
   const [branch, setBranch] = useState('main');
   const [commitMessage, setCommitMessage] = useState(() => tNow('settings.github.defaultCommit'));
   const [isPushing, setIsPushing] = useState(false);
+  useBusy('github', isPushing);
   const [pushStatus, setPushStatus] = useState<{ success: boolean; message: string } | null>(null);
 
   const handleGitHubPush = async () => {
