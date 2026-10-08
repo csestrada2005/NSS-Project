@@ -13,7 +13,7 @@ siempre que se pueda.
 
 ## 1. AHORA
 
-1. **PDFs fuera del almacén público — HECHO, espera check (2026-10-08).** Decisión de Samuel: privado por
+1. **PDFs fuera del almacén público — HECHO Y CONFIRMADO (check de Samuel 2026-10-08: subir privado, Ver, hacer público/privado y lectura de la IA con dirección temporal, todo OK).** Decisión de Samuel: privado por
    defecto, con opción de hacerlo público. Los PDFs nuevos van al almacén privado `project-documents` (el
    servidor lo crea solo la primera vez); un PDF privado tiene `public_url` vacío. La IA lo lee con una dirección
    que caduca en 10 minutos y nunca recibe un enlace para ponerlo en el sitio. En Archivos: "Privado · sólo la IA
