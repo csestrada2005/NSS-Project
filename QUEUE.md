@@ -71,8 +71,9 @@ siempre que se pueda.
   otras IAs) hasta un tope, para poder revisar y editar textos largos antes de enviarlos.
 - **Botón "Chat" con cambios pendientes — HECHO Y CONFIRMADO (2026-10-08).** Hallazgo del check: los demás
   botones (pestañas de Ajustes, Código, Editor, Preview, Publicar…) NO miran el registro, así que publicar o
-  revisar seguridad y luego cambiar de pestaña corta el proceso; lo mismo con código sin guardar. HECHO, espera
-  check: decisión de Samuel, opción 1 (bloquear) en TODO: pestañas y subpestañas de Ajustes, X de Ajustes,
+  revisar seguridad y luego cambiar de pestaña corta el proceso; lo mismo con código sin guardar. HECHO Y
+  CONFIRMADO (5/5 en el check de Samuel). Tras el check: botón "Descartar cambios" en Código (sólo con cambios
+  sin guardar, con confirmación; espera check): decisión de Samuel, opción 1 (bloquear) en TODO: pestañas y subpestañas de Ajustes, X de Ajustes,
   Preview/Editor/Código/Ajustes/Publicar, Inicio e Historial de versiones del menú, y el navegador pregunta al
   cerrar/recargar. Descartado "que siga detrás y avise": mejor que nadie haga cambios mientras publica o revisa. Desde Código/Ajustes, "Chat"
   vuelve al preview y abre el chat; si algo está a medias avisa (src/utils/busyRegistry.ts: código sin guardar,

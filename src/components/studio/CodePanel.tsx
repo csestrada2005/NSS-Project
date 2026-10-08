@@ -3,6 +3,7 @@ import { Download, Images } from 'lucide-react';
 import { AssetsPanel } from './AssetsPanel';
 import { FileExplorer } from '../FileExplorer';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
+import { wyrdConfirm } from '@/components/ui/wyrdDialog';
 
 // ---------------------------------------------------------------------------
 // CodePanel — code editor rendered inside CommandModal.
@@ -49,6 +50,18 @@ export function CodePanel({
   const { t } = useForgeLang();
   // Archivos (2026-10-05): subir fotos/documentos sin IA, sin créditos.
   const [showAssets, setShowAssets] = useState(false);
+  const saved = selectedFilePath ? files.get(selectedFilePath) : undefined;
+  const isDirty = saved !== undefined && saved !== selectedFileContent;
+  const discard = async () => {
+    if (saved === undefined) return;
+    const ok = await wyrdConfirm({
+      title: t('code.discardTitle'),
+      message: t('code.discardMessage', { file: selectedFilePath ?? '' }),
+      confirmLabel: t('code.discard'),
+      danger: true,
+    });
+    if (ok) onCodeEdit(saved);
+  };
   return (
     <div className="flex w-full h-full bg-background">
       <div className="w-56 border-r border-border h-full overflow-hidden shrink-0">
@@ -78,6 +91,17 @@ export function CodePanel({
               <Download size={13} />
               {t('code.download')}
             </button>
+            {/* Descartar (2026-10-08, Samuel): sólo con cambios sin guardar;
+                el archivo vuelve a lo guardado. */}
+            {isDirty && (
+              <button
+                onClick={discard}
+                disabled={isSaving}
+                className="px-3 py-1 bg-secondary hover:bg-secondary/80 text-secondary-foreground text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {t('code.discard')}
+              </button>
+            )}
             <button
               onClick={onSaveAndRun}
               disabled={!selectedFilePath || isSaving}
