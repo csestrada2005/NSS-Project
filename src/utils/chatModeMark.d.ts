@@ -1,4 +1,4 @@
-export type ChatSendMode = 'auto' | 'plan';
+export type ChatSendMode = 'auto' | 'plan' | 'chat';
 
 export function appendModeMark(content: string, mode: ChatSendMode): string;
 

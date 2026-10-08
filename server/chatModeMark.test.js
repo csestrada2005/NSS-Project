@@ -30,3 +30,9 @@ test('parseModeMark: rejects an unknown mode value inside the mark shape', () =>
   const bogus = 'agrega testimonios [MODE:yolo]';
   assert.deepEqual(parseModeMark(bogus), { text: bogus, mode: null });
 });
+
+test('modo Chat (2026-10-08): la marca [MODE:chat] va y vuelve', () => {
+  const marked = appendModeMark('¿están bien los precios?', 'chat');
+  assert.equal(marked, '¿están bien los precios? [MODE:chat]');
+  assert.deepEqual(parseModeMark(marked), { text: '¿están bien los precios?', mode: 'chat' });
+});

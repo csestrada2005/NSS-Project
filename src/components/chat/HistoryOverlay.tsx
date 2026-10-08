@@ -68,7 +68,7 @@ export function HistoryOverlay({
               <div key={i} className={`fc-turno ${isUser ? 'fc-usuario' : ''}`}>
                 <div className="fc-turno-quien">
                   {isUser ? t('chat.history.you') : 'Wyrd'}
-                  {mode && <span className="fc-turno-modo">{mode === 'plan' ? t('chat.mode.plan').toLowerCase() : t('chat.mode.auto').toLowerCase()}</span>}
+                  {mode && <span className="fc-turno-modo">{t(`chat.mode.${mode}`).toLowerCase()}</span>}
                 </div>
                 {isUser ? <p>{shown}</p> : <MiniMarkdown text={shown} />}
               </div>

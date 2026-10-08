@@ -13,18 +13,18 @@
  */
 
 /** @type {RegExp} Espacio + corchetes al final, igual que el resto de marcas de esta familia. */
-const MODE_MARK_RE = / \[MODE:(auto|plan)\]$/;
+const MODE_MARK_RE = / \[MODE:(auto|plan|chat)\]$/;
 
 /**
  * Añade la marca de modo al contenido de un mensaje de usuario, antes de
  * persistirlo.
  *
  * @param {string} content
- * @param {'auto' | 'plan'} mode
+ * @param {'auto' | 'plan' | 'chat'} mode  'chat' (2026-10-08): sólo responde.
  * @returns {string}
  */
 export function appendModeMark(content, mode) {
-  if (mode !== 'auto' && mode !== 'plan') return content;
+  if (mode !== 'auto' && mode !== 'plan' && mode !== 'chat') return content;
   return `${content} [MODE:${mode}]`;
 }
 
@@ -32,10 +32,10 @@ export function appendModeMark(content, mode) {
  * Separa el texto visible de la marca de modo, si la trae.
  *
  * @param {string} content
- * @returns {{ text: string, mode: 'auto' | 'plan' | null }}
+ * @returns {{ text: string, mode: 'auto' | 'plan' | 'chat' | null }}
  */
 export function parseModeMark(content) {
   const match = content.match(MODE_MARK_RE);
   if (!match) return { text: content, mode: null };
-  return { text: content.slice(0, match.index), mode: /** @type {'auto' | 'plan'} */ (match[1]) };
+  return { text: content.slice(0, match.index), mode: /** @type {'auto' | 'plan' | 'chat'} */ (match[1]) };
 }

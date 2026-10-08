@@ -242,6 +242,14 @@
 }
 .fc-modo-opt:hover { background: rgba(245, 240, 235, .05); color: var(--fc-texto); }
 .fc-modo-opt[aria-checked="true"] { background: rgba(214, 40, 40, .10); color: var(--crema); }
+/* Chat (2026-10-08): globo hueco — habla, no construye. */
+.fc-glifo.fc-chat::before {
+  content: ""; position: absolute; inset: 2px 1px 4px; border: 1.5px solid var(--rojo); border-radius: 3px;
+}
+.fc-glifo.fc-chat::after {
+  content: ""; position: absolute; left: 3px; bottom: 1px; width: 4px; height: 4px;
+  border-left: 1.5px solid var(--rojo); border-bottom: 1.5px solid var(--rojo); transform: skewY(-30deg);
+}
 .fc-modo-opt .fc-glifo { margin-top: 3px; }
 .fc-modo-opt strong { display: block; font-size: 12px; font-weight: 500; margin-bottom: 3px; }
 .fc-modo-opt span { display: block; font-size: 12px; color: var(--fc-texto-3); line-height: 1.45; }

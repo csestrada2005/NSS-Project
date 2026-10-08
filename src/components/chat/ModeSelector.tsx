@@ -55,8 +55,8 @@ export function ModeSelector({
           }
         }}
       >
-        <span className={`fc-glifo ${mode === 'plan' ? 'fc-plan' : 'fc-auto'}`} />
-        <span>{mode === 'plan' ? t('chat.mode.plan') : t('chat.mode.auto')}</span>
+        <span className={`fc-glifo fc-${mode}`} />
+        <span>{t(`chat.mode.${mode}`)}</span>
         <span className="fc-flecha">▲</span>
       </button>
       <div className={`fc-modo-menu ${open ? 'fc-abierto' : ''}`} role="menu">
@@ -84,6 +84,20 @@ export function ModeSelector({
           <span>
             <strong>{t('chat.mode.plan')}</strong>
             <span>{t('chat.mode.planHint')}</span>
+          </span>
+        </button>
+        {/* Chat (2026-10-08): la IA sólo responde; el pipeline ni clasifica. */}
+        <button
+          type="button"
+          className="fc-modo-opt"
+          role="menuitemradio"
+          aria-checked={mode === 'chat'}
+          onClick={() => select('chat')}
+        >
+          <span className="fc-glifo fc-chat" />
+          <span>
+            <strong>{t('chat.mode.chat')}</strong>
+            <span>{t('chat.mode.chatHint')}</span>
           </span>
         </button>
       </div>

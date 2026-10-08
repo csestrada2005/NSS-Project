@@ -25,7 +25,7 @@ import { SupabaseService } from '../services/SupabaseService';
 import { compileWithMeta, classifyCompileResult, isPreviewError, type OidMap } from '../services/BrowserCompiler';
 import { isAbortError } from '../utils/abort';
 import { ddlProposedMark, findExecutableProposal, unappliedMigrationPaths, nextProposalPaths } from '../utils/ddlProposalState.js';
-import { appendModeMark } from '../utils/chatModeMark.js';
+import { appendModeMark, type ChatSendMode } from '../utils/chatModeMark.js';
 import { updateCode, type TargetElement } from '../utils/ast';
 import { fileSystemTreeToMap, mapToFileSystemTree } from '../utils/context';
 import type { FileSystemTree } from '@webcontainer/api';
@@ -319,9 +319,18 @@ export function StudioEngine() {
   // toca schema, y el alcance de una sesión es exactamente el de la preferencia
   // ("en este rato quiero revisar antes de ejecutar"). Mismo arreglo que el
   // borrador del input del chat (forge_chat_input).
-  const [planModeEnabled, setPlanModeEnabled] = useState<boolean>(() => {
-    try { return sessionStorage.getItem('forge_plan_mode') === 'true'; } catch { return false; }
+  // Modo Chat (2026-10-08): el booleano de plan pasa a ser uno de tres modos.
+  // Se migra la preferencia vieja (forge_plan_mode) si no hay una nueva.
+  const [sendMode, setSendMode] = useState<ChatSendMode>(() => {
+    try {
+      const saved = sessionStorage.getItem('forge_send_mode');
+      if (saved === 'auto' || saved === 'plan' || saved === 'chat') return saved;
+      return sessionStorage.getItem('forge_plan_mode') === 'true' ? 'plan' : 'auto';
+    } catch { return 'auto'; }
   });
+  // Ref: un botón "construir" en modo Chat cambia a Automático y envía en el
+  // MISMO clic, antes de que React vuelva a pintar.
+  const sendModeRef = useRef(sendMode);
   const [editMode, setEditMode] = useState<'interaction' | 'visual'>('interaction');
   // CAMBIO 1 (sesión de edición con Guardar) — buffer de cambios visuales
   // pendientes. Los ajustes del panel aplican SOLO al DOM (optimista) y se
@@ -1536,9 +1545,10 @@ export function StudioEngine() {
   // no hay ventana en la que el estado y sessionStorage discrepen, y un fallo de
   // escritura (modo privado, cuota) no impide que el toggle funcione en esta
   // sesión — sólo que sobreviva a un refresh.
-  const handlePlanModeChange = useCallback((enabled: boolean) => {
-    setPlanModeEnabled(enabled);
-    try { sessionStorage.setItem('forge_plan_mode', String(enabled)); } catch { /* ignore */ }
+  const handleSendModeChange = useCallback((mode: ChatSendMode) => {
+    sendModeRef.current = mode;
+    setSendMode(mode);
+    try { sessionStorage.setItem('forge_send_mode', mode); } catch { /* ignore */ }
   }, []);
 
   /**
@@ -1640,7 +1650,8 @@ export function StudioEngine() {
     // sólo-UI, sin cambios de schema): va escondido en el contenido, mismo
     // truco que ddlProposedMark. Turnos de antes de este cambio no traen marca
     // y el historial simplemente no les pinta chip.
-    persistChatMessage('user', appendModeMark(message, planModeEnabled ? 'plan' : 'auto'));
+    const modeAtSend = sendModeRef.current;
+    persistChatMessage('user', appendModeMark(message, modeAtSend));
 
     setIsGenerating(true);
     setGenerationProgress(null);
@@ -1700,12 +1711,13 @@ export function StudioEngine() {
         allowPlanGate
           ? steps => requestPlanDecision(steps, abortController.signal)
           : undefined,
-        planModeEnabled,
+        modeAtSend === 'plan',
         // La migración pendiente se busca en el historial completo (el mismo
         // que usa el modal), no en los 10 mensajes que recibe el modelo.
         findExecutableProposal(chatHistory)?.paths ?? null,
         unappliedMigrationPaths(chatHistory),
-        attachments
+        attachments,
+        modeAtSend === 'chat'
       );
       if (result.modifiedFiles.length > 0) {
         const promptLabel = truncateLabel(message, 80);
@@ -2395,8 +2407,8 @@ export function StudioEngine() {
               pendingPlanSteps={pendingPlanDecision?.steps ?? null}
               onApprovePlan={handleApprovePlan}
               onRejectPlan={handleRejectPlan}
-              planModeEnabled={planModeEnabled}
-              onPlanModeChange={handlePlanModeChange}
+              sendMode={sendMode}
+              onSendModeChange={handleSendModeChange}
               projectName={currentProjectName}
               typebarHidden={chatPeeking}
             />

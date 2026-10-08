@@ -1234,7 +1234,11 @@ export class AIOrchestrator {
     unappliedMigrationPaths: string[] = [],
     // Bloque 3 (2026-10-07): fotos y PDFs adjuntos a ESTE mensaje (ya subidos
     // al almacén). Al final por la misma razón que los dos de arriba.
-    attachments: ProjectAsset[] = []
+    attachments: ProjectAsset[] = [],
+    // Modo Chat (2026-10-08): la IA SÓLO responde. Ni se clasifica el pedido:
+    // va directo al carril de preguntas, que no escribe archivos. Al final por
+    // la misma razón que los de arriba (callers posicionales).
+    chatOnly: boolean = false
   ): Promise<OrchestratorResult> {
     this.retryCount = 0;
     const startTime = Date.now();
@@ -1251,19 +1255,21 @@ export class AIOrchestrator {
     // ------------------------------------------------------------------
     // Legacy shortcut commands (preserved for backward compatibility)
     // ------------------------------------------------------------------
-    if (input.toLowerCase().startsWith('plan:')) {
+    // En modo Chat los atajos viejos tampoco corren: todos escriben archivos.
+    if (!chatOnly && input.toLowerCase().startsWith('plan:')) {
       const result = await this.generatePlan(input.substring(5).trim(), files);
       return { modifiedFiles: result.modifiedFiles };
     }
 
-    if (input.toLowerCase().startsWith('build a')) {
+    if (!chatOnly && input.toLowerCase().startsWith('build a')) {
       const result = await this.generatePlan(input, files);
       return { modifiedFiles: result.modifiedFiles };
     }
 
     if (
-      input.toLowerCase().trim() === 'execute next step' ||
-      input.toLowerCase().trim() === 'continue plan'
+      !chatOnly &&
+      (input.toLowerCase().trim() === 'execute next step' ||
+        input.toLowerCase().trim() === 'continue plan')
     ) {
       const result = await this.executeNextStep(files, projectId);
       return result
@@ -1345,6 +1351,31 @@ export class AIOrchestrator {
       memory = await ProjectMemoryService.buildFromFiles(projectId, files);
     }
     timer.mark('memory');
+
+    // ------------------------------------------------------------------
+    // MODO CHAT (2026-10-08) — sólo responde, nunca cambia archivos. Los
+    // botones de arreglo ("Arreglar ahora") sí arreglan: se pulsan para eso.
+    // ------------------------------------------------------------------
+    if (chatOnly && !isFixButtonRequest(input)) {
+      const chatIntent: Intent = {
+        type: 'question',
+        affected_files: [],
+        needs_new_files: false,
+        risk: 'low',
+        reasoning: 'Modo Chat: sólo responde.',
+        needs_server: false,
+        server_reason: '',
+      };
+      platformService.setIntentType('question');
+      console.log('[AIOrchestrator] modo Chat: sin clasificar, directo a responder');
+      const answer = await this.answerQuestion(
+        inputWithAttachments, files, memory, chatHistory, projectId, creditUserId,
+        startTime, chatIntent, signal, await assetsNotePending
+      );
+      timer.mark('answer');
+      console.log('[Timing] chat mode:', timer.summary());
+      return answer;
+    }
 
     // ------------------------------------------------------------------
     // LAYER 2 — IntentClassifier: classify the user prompt

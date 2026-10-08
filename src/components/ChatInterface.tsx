@@ -107,8 +107,9 @@ interface ChatInterfaceProps {
   pendingPlanSteps?: ChatPlanStep[] | null;
   onApprovePlan?: () => void;
   onRejectPlan?: () => void;
-  planModeEnabled?: boolean;
-  onPlanModeChange?: (enabled: boolean) => void;
+  /** Automático / Plan / Chat (2026-10-08: Chat sólo responde). */
+  sendMode?: ChatSendMode;
+  onSendModeChange?: (mode: ChatSendMode) => void;
   /** Sólo para el subtítulo del historial ("N turnos · <nombre>"). */
   projectName?: string | null;
   /**
@@ -137,8 +138,8 @@ export function ChatInterface({
   pendingPlanSteps = null,
   onApprovePlan,
   onRejectPlan,
-  planModeEnabled = false,
-  onPlanModeChange,
+  sendMode = 'auto',
+  onSendModeChange,
   projectName,
   typebarHidden = false,
 }: ChatInterfaceProps) {
@@ -175,11 +176,11 @@ export function ChatInterface({
   const [lastSentText, setLastSentText] = useState('');
 
   // Rediseño (2026-09-20), consolidado (2026-09-21): `mode` NO es estado
-  // propio — es `planModeEnabled` derivado. El dato real que le importa al
+  // propio — es `sendMode` (antes `planModeEnabled`) derivado. El dato real que le importa al
   // pipeline (shouldGatePlan, la marca [MODE:...]) vive en StudioEngine; un
   // useState local aquí era una segunda copia que podía desalinearse del
   // prop. Mismo motivo por el que pendingPlanSteps tampoco es estado local.
-  const mode: ChatSendMode = planModeEnabled ? 'plan' : 'auto';
+  const mode: ChatSendMode = sendMode;
   const [historyOpen, setHistoryOpen] = useState(false);
   // "Revisar" de una migración pendiente de un turno anterior (PendingDdlNotice).
   const [ddlReviewOpen, setDdlReviewOpen] = useState(false);
@@ -276,7 +277,8 @@ export function ChatInterface({
     return { content: tNow('chat.done.none'), warning: result.warning, suggestedAction: result.suggestedAction, planSteps: result.planSteps, typeErrors: result.typeErrors };
   };
 
-  const sendMessage = async (text: string, sentChips: AttachmentChip[] = []) => {
+  const sendMessage = async (text: string, sentChips: AttachmentChip[] = [], modeOverride?: ChatSendMode) => {
+    const sentMode = modeOverride ?? mode;
     if (!text.trim() || isLoading || hasPendingPlan) return;
     const sentAssets = sentChips.flatMap((c) => (c.asset ? [c.asset] : []));
 
@@ -285,7 +287,7 @@ export function ChatInterface({
     // vía StudioEngine, que la añade independientemente con el mismo valor de
     // modo — ver handleSendMessage) pero NUNCA en lo que recibe el pipeline:
     // `onSendMessage` de abajo sigue mandando `userMessage` pelado.
-    appendMessage({ role: 'user', content: appendModeMark(userMessage, mode) });
+    appendMessage({ role: 'user', content: appendModeMark(userMessage, sentMode) });
     setLastSentText(userMessage);
 
     startTimeRef.current = Date.now();
@@ -293,8 +295,10 @@ export function ChatInterface({
     setProgressLines([{
       // Automático: la línea dice QUÉ está haciendo ("Cambiando el título…"),
       // no "Trabajando en tu pedido" (2026-10-01, Samuel).
-      text: mode === 'plan'
+      text: sentMode === 'plan'
         ? tNow('chat.progress.planning')
+        : sentMode === 'chat'
+        ? tNow('chat.progress.thinking')
         : progressHeadline(userMessage, getForgeLang()) ?? tNow('chat.progress.working'),
       status: 'pending',
       kind: 'planning',
@@ -490,7 +494,15 @@ export function ChatInterface({
   };
 
   const handleModeChange = (next: ChatSendMode) => {
-    onPlanModeChange?.(next === 'plan');
+    onSendModeChange?.(next);
+  };
+
+  // Botones que piden CONSTRUIR (sugerencia, arreglar): en modo Chat cambian a
+  // Automático y lo construyen (B1, Samuel 2026-10-08) — pulsarlo ya es el sí.
+  const sendToBuild = (text: string) => {
+    if (mode !== 'chat') return sendMessage(text);
+    onSendModeChange?.('auto');
+    return sendMessage(text, [], 'auto');
   };
 
   const handleRejectPlanClick = () => {
@@ -571,7 +583,7 @@ export function ChatInterface({
 
   const isBusy = isLoading;
   const { t } = useForgeLang();
-  const processTitle = mode === 'plan' ? t('chat.process.plan') : t('chat.process.auto');
+  const processTitle = t(`chat.process.${mode}`);
 
   // Esc — prioridad: historial abierto > cancelar un run en curso. El menú de
   // modo se cierra solo (ModeSelector detiene la propagación de su propio Esc).
@@ -661,7 +673,7 @@ export function ChatInterface({
               <TypeErrorsCard
                 errors={lastAssistant!.typeErrors!}
                 isLoading={isLoading}
-                onFix={(prompt: string) => sendMessage(prompt)}
+                onFix={(prompt: string) => sendToBuild(prompt)}
               />
             )}
             {executableProposal && proposalIsLatest ? (
@@ -707,14 +719,14 @@ export function ChatInterface({
                 suggestedAction={lastAssistant.suggestedAction}
                 actionLabel={lastAssistant.actionLabel}
                 isLoading={isLoading}
-                onSuggestedAction={action => sendMessage(action)}
+                onSuggestedAction={action => sendToBuild(action)}
               />
             ) : lastAssistant?.reply ? (
               <RespuestaCard
                 text={lastAssistant.content}
                 suggestedAction={lastAssistant.suggestedAction}
                 isLoading={isLoading}
-                onSuggestedAction={action => sendMessage(action)}
+                onSuggestedAction={action => sendToBuild(action)}
                 onOpenHistory={() => setHistoryOpen(true)}
               />
             ) : lastAssistant?.warning ? (

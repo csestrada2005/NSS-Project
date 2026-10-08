@@ -50,9 +50,11 @@ siempre que se pueda.
   Pendientes viejos del mismo tema: reserva de imagen del hero, guard anti-duplicado y créditos en el footer
   (rama `claude/keen-mccarthy-oknmc8`), y precisión al atribuir las imágenes (sección 10).
 - **Dictado por micrófono** en el chat (hoy "Próximamente").
-- **Modo "Chat" (Samuel, 2026-10-08):** un tercer modo junto a Automático/Plan en el que la IA SÓLO responde,
-  nunca cambia archivos. Seguro contra preguntas como "¿están bien los precios?" que podrían acabar en cambios.
-  En Automático ya responde preguntas; esto es el "failsafe".
+- **Modo "Chat" — HECHO, espera check (2026-10-08).** Tercera opción del menú (Automático / Plan / Chat): la IA
+  SÓLO responde. Ni se clasifica el pedido: va directo al carril de preguntas, que no escribe archivos (tampoco
+  corren los atajos viejos "build a…", "plan:"). Los botones de arreglo siguen arreglando. Decisión B1 de Samuel:
+  en modo Chat, el botón de la sugerencia de la IA cambia a Automático y la construye. El modo se recuerda en
+  la pestaña (`forge_send_mode`; migra el viejo `forge_plan_mode`) y el historial marca "chat".
 - **Barra que crece hacia abajo (Samuel, 2026-10-08):** si el texto es largo, la barra del chat crece (como en
   otras IAs) hasta un tope, para poder revisar y editar textos largos antes de enviarlos.
 - **Botón "Chat" con cambios pendientes (Samuel, 2026-10-08):** desde Código o Ajustes, "Chat" vuelve al preview.
