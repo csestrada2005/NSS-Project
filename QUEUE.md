@@ -1628,7 +1628,7 @@ la aprueba; la cuenta entra como Developer con la notificación "Access granted"
   no se pueden escribir y reemplazarlas rompería el panel); Samuel eligió la línea de sólo lectura → HECHA
   ("Llaves de la base de datos: las administra el servidor solo", sólo con base). **Re-check (Samuel, 2026-10-08):
   todo bien** (puntitos + Reemplazar + confirmación + ejemplo STRIPE_SECRET_KEY). Bloque CONFIRMADO.
-- **Ventanas propias en vez de los avisos del navegador (Samuel, 2026-10-08) — HECHO, espera check:** los 8
+- **Ventanas propias en vez de los avisos del navegador (Samuel, 2026-10-08) — HECHO Y CONFIRMADO (check de Samuel 2026-10-08: todo bien):** los 8
   `window.confirm`/`window.prompt` de Wyrd (borrar proyecto ×2, archivo, llave, reemplazar llave, dominio,
   plantilla de correo, instalar paquete) → `wyrdConfirm`/`wyrdPrompt` (`src/components/ui/wyrdDialog.tsx`, mismo
   fondo y animación que los modales; lo destructivo con botón rojo y foco en Cancelar; Escape/clic fuera = cancelar).
