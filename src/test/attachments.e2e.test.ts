@@ -97,6 +97,37 @@ describe('Bloque 3 — adjuntos del chat (e2e con LLM falso)', () => {
     expect(second.warning ?? '').not.toMatch(/primera parte/);
   });
 
+  it('una pregunta recibe la lista de Archivos y la regla de que sí puede verlos (2026-10-08)', async () => {
+    control.intentType = 'question';
+    control.assets = [photo, pdf];
+    const result = await AIOrchestrator.parseUserCommand(
+      'Sube la foto correcta de aventura y dime en qué sección va',
+      new Map<string, string>(), null, 'attachments-test-project',
+      undefined, undefined, undefined, undefined, undefined, undefined, false, null, [], []
+    );
+    expect(result.outcome).toBe('success');
+    const answer = control.forgeBodies.find((b) => systemOf(b).includes("Wyrd Forge's AI assistant"))!;
+    expect(systemOf(answer)).toMatch(/NEVER say you cannot see or\s+access uploaded files/);
+    expect(systemOf(answer)).toContain('paperclip');
+    expect(systemOf(answer)).toContain('Unsplash) remain a valid option');
+    const text = userText(answer);
+    expect(text).toContain('PROJECT FILES uploaded by the user');
+    expect(text).toContain('https://cdn/p/hero.webp');
+    expect(text).toContain('menu.pdf');
+    // Sin fotos ni PDFs leídos: nada que leer.
+    expect(control.forgeBodies.some((b) => /You describe an image|You transcribe a document/.test(systemOf(b)))).toBe(false);
+  });
+
+  it('pregunta en un proyecto sin archivos: se le dice que no hay ninguno', async () => {
+    control.intentType = 'question';
+    await AIOrchestrator.parseUserCommand(
+      '¿Puedes ver mis fotos?', new Map<string, string>(), null, 'attachments-test-project',
+      undefined, undefined, undefined, undefined, undefined, undefined, false, null, [], []
+    );
+    const answer = control.forgeBodies.find((b) => systemOf(b).includes("Wyrd Forge's AI assistant"))!;
+    expect(userText(answer)).toContain('PROJECT FILES: none uploaded yet.');
+  });
+
   it('sin adjuntos no hay lectura ni nota', async () => {
     const result = await run([]);
     expect(result.outcome).toBe('success');

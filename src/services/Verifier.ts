@@ -10,6 +10,7 @@ import {
   mergeRepairBlocks,
   absentFilesTelemetry,
 } from '../utils/deterministicRestore';
+import { planExportShapeFix } from '../utils/exportShapeFix';
 import { findDanglingRefs, syntheticDanglingErrors } from '../utils/danglingRefs';
 import type { DanglingRef } from '../utils/danglingRefs';
 import { runTypeRepair } from '../utils/typeRepairLoop';
@@ -389,6 +390,16 @@ export class Verifier {
         // referencia— como única salida aparente. Saltamos el fix: el recompile
         // del siguiente intento es quien confirma la reparación.
         if (restore.skipModel) continue;
+
+        // EXPORT CON OTRA FORMA (2026-10-08) — "No matching export in X for
+        // import Y" con Y declarado en X (named vs default): una línea al final
+        // de X, sin modelo. Una reescritura del modelo le cambiaba el diseño.
+        const shape = planExportShapeFix(batch, currentFiles, restoredPaths);
+        if (shape) {
+          currentFiles = shape.files;
+          console.log('[Verifier] arreglo sin IA:', shape.fixes.join(' · '));
+          continue;
+        }
 
         const before = currentFiles;
         const fixed = await this.fixBatch(

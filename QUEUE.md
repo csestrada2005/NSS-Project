@@ -35,6 +35,18 @@ siempre que se pueda.
   funcional; sin prioridad fija. Cómo debe funcionar (Samuel, 2026-10-08): un botón "Revisar" abre el plan en
   grande y **editable con el teclado**. Ejemplo: el plan dice "propongo 3 formas de hacerlo", Samuel escribe
   "de las 3 opciones aplica A" y da enviar; la IA vuelve a leer el plan con esa edición y construye según eso.
+- **Aprobación de Unsplash para producción (Samuel, 2026-10-08).** Hoy en demo (50 pedidos por hora). Unsplash
+  (correo de Victor) pide dos pruebas, subidas al formulario de la aplicación, no por correo:
+  1. **Crédito con enlace UTM:** en el sitio, "Foto de <fotógrafo> en Unsplash" debe enlazar al perfil del
+     fotógrafo con `?utm_source=wyrd_forge&utm_medium=referral` (server/unsplash.js ya arma esa dirección; falta
+     confirmar que los sitios generados la usan de verdad). Prueba: captura con el cursor encima mostrando la URL
+     abajo a la izquierda, o captura del código, o video haciendo clic.
+  2. **"Download" al elegir una foto:** hoy Wyrd lo dispara para TODAS las fotos del grupo al buscarlas
+     (`/api/images/search`), no para la que se usa. Opciones: dispararlo sólo para las fotos que la IA pone en
+     el sitio, o responderle a Unsplash que las fotos las elige la IA automáticamente (no un usuario), caso en
+     que no hace falta. El contador de Downloads en Unsplash debe ser mayor que 0.
+  Pendientes viejos del mismo tema: reserva de imagen del hero, guard anti-duplicado y créditos en el footer
+  (rama `claude/keen-mccarthy-oknmc8`), y precisión al atribuir las imágenes (sección 10).
 - **Dictado por micrófono** en el chat (hoy "Próximamente").
 - **Modo "Chat" (Samuel, 2026-10-08):** un tercer modo junto a Automático/Plan en el que la IA SÓLO responde,
   nunca cambia archivos. Seguro contra preguntas como "¿están bien los precios?" que podrían acabar en cambios.
@@ -71,10 +83,15 @@ siempre que se pueda.
   de diseño lo lea de ahí en vez de adivinarlo en cada pedido. Junto con esto: la búsqueda de patrones de diseño
   siempre trae "1 directo + 4 parecidos" aunque la base es grande (¿tope fijo en el código?), y los pedidos en
   español contra una base en inglés.
-- **La IA dice que no puede ver archivos (2026-10-08):** a "Sube la foto correcta…" respondió "No tengo acceso
+- **La IA dice que no puede ver archivos (2026-10-08) — HECHO, espera check:** las respuestas ahora reciben la
+  lista de Archivos y la regla "sí ves las fotos y PDFs; si falta una, adjúntala con el clip o elígela de
+  Archivos" (Unsplash sigue siendo opción válida). Antes: a "Sube la foto correcta…" respondió "No tengo acceso
   a archivos subidos… comparte un enlace de Google Drive o busco en Unsplash". Falso: Wyrd sí le da las fotos y
   PDFs del proyecto (Archivos y adjuntos). Debe saberlo y ofrecerlo ("adjúntala con el clip o elígela de Archivos").
-- **Reparación que deja la sección rota (Vertigo, 2026-10-08):** al cambiar la sección de precios, el Verifier
+- **Reparación que deja la sección rota (Vertigo, 2026-10-08) — HECHO (2A), espera check:** este error ahora se
+  arregla sin IA, con una línea al final del archivo (`src/utils/exportShapeFix.js`, consola
+  `[Verifier] arreglo sin IA: …`). Los demás errores siguen yendo al modelo (2B "detector de destrozos" no se
+  hizo). Antes: al cambiar la sección de precios, el Verifier
   dio `No matching export in PricingSection.tsx for import "PricingSection"` (exportación con otro nombre); la
   reparación de Haiku reescribió PricingSection y compiló, pero la sección quedó sin estilos y se ve rota. La
   reparación debe arreglar el nombre de la exportación, no reescribir el archivo.
@@ -162,8 +179,6 @@ siempre que se pueda.
 
 ## 10. Sin confirmar (revisar si sigue vivo)
 
-- Unsplash: reserva de imagen del hero, guard anti-duplicado y créditos en el footer (rama
-  `claude/keen-mccarthy-oknmc8`). Aprobación de Unsplash en producción (hoy en demo, 50 pedidos por hora).
 - Ruta `/api/admin/bootstrap-db` con comentario "TEMPORAL": se decidió conservarla y quitar el comentario.
 - `graphify-out/`: ¿se commitean el caché y los `.sig`, o van a `.gitignore`? Hoy quedan sin commit en cada sesión.
 - `graphifyy` en `dependencies` de `package.json`: ¿moverlo a devDependencies o quitarlo?

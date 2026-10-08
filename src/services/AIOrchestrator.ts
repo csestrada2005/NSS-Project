@@ -1387,7 +1387,8 @@ export class AIOrchestrator {
         creditUserId,
         startTime,
         intent,
-        signal
+        signal,
+        await assetsNotePending
       );
       timer.mark('answer');
       console.log('[Timing] question lane:', timer.summary());
@@ -3275,7 +3276,10 @@ export class AIOrchestrator {
     creditUserId: string | null,
     startTime: number,
     intent: Intent,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    // Archivos del proyecto (2026-10-08): sin la lista, la IA decía "no tengo
+    // acceso a archivos subidos" y mandaba a Google Drive.
+    assetsNote: string = ''
   ): Promise<OrchestratorResult> {
     const blueprint = generateBlueprintFromFiles(files);
     const memorySummary = memory
@@ -3303,6 +3307,12 @@ export class AIOrchestrator {
       '  snippets in fences are OK when they help. Avoid headings and emojis.\n' +
       '- Be brief: maximum ~120 words of prose. This is a chat, not documentation.\n' +
       '- You can see the project files provided — never ask the user to share code.\n' +
+      "- Wyrd shows you the user's photos and PDFs: the ones attached to the message\n" +
+      '  (already read for you) and the PROJECT FILES list. NEVER say you cannot see or\n' +
+      '  access uploaded files, and never ask for a Google Drive/Dropbox/Instagram link.\n' +
+      '  If a photo is missing, tell the user to attach it with the paperclip in the\n' +
+      '  chat bar or pick it from Files; if it is already in PROJECT FILES, name it.\n' +
+      '  Stock photos (Unsplash) remain a valid option.\n' +
       '- Packages resolve automatically in the preview; NEVER tell the user to run\n' +
       '  npm install or any terminal command.\n' +
       '- Never end with a question offering to implement something; the\n' +
@@ -3316,6 +3326,7 @@ export class AIOrchestrator {
     const contextBlock =
       `PROJECT STRUCTURE:\n${blueprint}\n\n` +
       (memorySummary ? `PROJECT MEMORY:\n${memorySummary}\n\n` : '') +
+      (assetsNote ? `${assetsNote}\n\n` : 'PROJECT FILES: none uploaded yet.\n\n') +
       (fileContext ? `RELEVANT FILES:\n${fileContext}\n\n` : '') +
       `USER QUESTION:\n${input}\n\n` +
       // i18n de Wyrd (ítem 5.4): la IA responde en el idioma de la interfaz,

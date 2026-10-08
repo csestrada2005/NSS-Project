@@ -7,6 +7,10 @@ export interface FakeFetchControl {
   failAttachmentReads: boolean;
   /** Lecturas guardadas por id de archivo (2026-10-08): GET las devuelve, PUT las guarda. */
   readings: Map<string, { text: string; truncated: boolean }>;
+  /** Archivos del proyecto que devuelve GET /assets (2026-10-08). */
+  assets: unknown[];
+  /** Tipo que devuelve el clasificador (por defecto new_feature). */
+  intentType: string;
   restore: () => void;
 }
 
@@ -81,7 +85,7 @@ export function installFakeFetch(): FakeFetchControl {
   const calls: string[] = [];
   const forgeBodies: Record<string, unknown>[] = [];
   const readings = new Map<string, { text: string; truncated: boolean }>();
-  const control = { failAttachmentReads: false };
+  const control = { failAttachmentReads: false, assets: [] as unknown[], intentType: 'new_feature' };
 
   globalThis.fetch = (async (input: string | Request | URL, init?: RequestInit) => {
     const url = toUrlString(input);
@@ -102,7 +106,7 @@ export function installFakeFetch(): FakeFetchControl {
     // --- GET /api/projects/:id/assets — lista de archivos subidos (2026-10-05):
     // una LECTURA que el orquestador hace en paralelo; proyecto sin archivos. ---
     if ((init?.method ?? 'GET').toUpperCase() === 'GET' && /\/api\/projects\/[^/]+\/assets$/.test(url)) {
-      return jsonResponse([]);
+      return jsonResponse(control.assets);
     }
 
     // --- GET /api/projects/:id/assets/:assetId/url — dirección temporal de un
@@ -160,7 +164,7 @@ export function installFakeFetch(): FakeFetchControl {
         return jsonResponse(
           claudeTextResponse(
             JSON.stringify({
-              type: 'new_feature',
+              type: control.intentType,
               affected_files: [],
               needs_new_files: true,
               risk: 'medium',
@@ -170,6 +174,11 @@ export function installFakeFetch(): FakeFetchControl {
             })
           )
         );
+      }
+
+      // Pregunta (2026-10-08): la respuesta del chat.
+      if (systemText.includes("You are Wyrd Forge's AI assistant inside a web-builder IDE")) {
+        return jsonResponse(claudeTextResponse('Adjúntala con el clip o elígela de Archivos.'));
       }
 
       // Escalón 2: Architect.plan pide el plan de pasos.
@@ -202,6 +211,10 @@ export function installFakeFetch(): FakeFetchControl {
     readings,
     get failAttachmentReads() { return control.failAttachmentReads; },
     set failAttachmentReads(v: boolean) { control.failAttachmentReads = v; },
+    get assets() { return control.assets; },
+    set assets(v: unknown[]) { control.assets = v; },
+    get intentType() { return control.intentType; },
+    set intentType(v: string) { control.intentType = v; },
     restore: () => {
       globalThis.fetch = originalFetch;
     },
