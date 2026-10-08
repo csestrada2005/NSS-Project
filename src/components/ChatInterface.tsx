@@ -109,6 +109,8 @@ interface ChatInterfaceProps {
   pendingPlanSteps?: ChatPlanStep[] | null;
   onApprovePlan?: () => void;
   onRejectPlan?: () => void;
+  /** "Revisar": el plan editado por el usuario (2026-10-08). */
+  onEditPlan?: (text: string) => void;
   /** Automático / Plan / Chat (2026-10-08: Chat sólo responde). */
   sendMode?: ChatSendMode;
   onSendModeChange?: (mode: ChatSendMode) => void;
@@ -140,6 +142,7 @@ export function ChatInterface({
   pendingPlanSteps = null,
   onApprovePlan,
   onRejectPlan,
+  onEditPlan,
   sendMode = 'auto',
   onSendModeChange,
   projectName,
@@ -706,6 +709,7 @@ export function ChatInterface({
               steps={pendingPlanSteps!}
               onApprove={onApprovePlan}
               onReject={handleRejectPlanClick}
+              onEdit={onEditPlan}
               onOpenHistory={() => setHistoryOpen(true)}
             />
           ) : estado === 'pensando' ? (

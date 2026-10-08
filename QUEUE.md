@@ -17,8 +17,10 @@ Nada en curso. Elegir lo siguiente de las secciones 2–4.
 
 ## 2. Producto (lo que ve el usuario)
 
-- **"Editar el plan"**: el botón de la tarjeta "Plan listo" sigue en "Próximamente". Samuel lo quiere
-  funcional; sin prioridad fija. Cómo debe funcionar (Samuel, 2026-10-08): un botón "Revisar" abre el plan en
+- **"Revisar" el plan — HECHO, espera check (2026-10-08, R1 de Samuel).** El botón (antes "Editar el plan")
+  abre el plan como texto editable; al enviar, la IA vuelve a planear con la versión del usuario y construye
+  directo (src/utils/planEdit.js, marca [PLAN_EDITED] en el pedido). Sólo pregunta otra vez si el plan nuevo
+  borra algo que el anterior no borraba. Cómo debía funcionar (Samuel, 2026-10-08): un botón "Revisar" abre el plan en
   grande y **editable con el teclado**. Ejemplo: el plan dice "propongo 3 formas de hacerlo", Samuel escribe
   "de las 3 opciones aplica A" y da enviar; la IA vuelve a leer el plan con esa edición y construye según eso.
 - **Aprobación de Unsplash para producción — CÓDIGO HECHO (2026-10-08); check manual en la corrida completa
@@ -117,7 +119,7 @@ Nada en curso. Elegir lo siguiente de las secciones 2–4.
   - Fase 2, comprar dominios: dejar listo el set up (método de pago en Vercel, cobrar al usuario antes de comprar,
     buscador con precio).
   - Al empezar: quitar el código viejo de Cloudflare (`/api/domains`, `DomainsPanel.tsx`).
-- Quitar los botones "Próximamente" (Dictar, Editar el plan, Comprar créditos). Se quedan mientras Samuel sea
+- Quitar los botones "Próximamente" (Dictar, Comprar créditos). Se quedan mientras Samuel sea
   el único usuario: le sirven de recordatorio.
 
 ## 8. Al final de la cola

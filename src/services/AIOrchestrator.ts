@@ -82,6 +82,7 @@ import type { TypeIssue } from './PlatformService';
 import { promptNeedsServer } from '../utils/serverLogicSignals.js';
 import { touchesMigrations } from '../utils/migrationGate.js';
 import { shouldGatePlan, planRejectedTelemetry } from '../utils/planGate.js';
+import { addsDeletions, buildEditedPlanInput } from '../utils/planEdit.js';
 import { t as tr, tn as trn, getForgeLang } from '../i18n/forge/lang';
 
 // ---------------------------------------------------------------------------
@@ -102,6 +103,8 @@ interface LLMResponse {
 /** Etapas que ve la tarjeta de progreso (2026-10-08, P2). */
 export type ForgePhase = 'reading' | 'understanding' | 'headline' | 'answering' | 'planning' | 'checking';
 export type PhaseCallback = (phase: ForgePhase, detail?: string) => void;
+/** Lo que contesta el usuario al plan: construir, rechazar o su versión editada (Revisar). */
+export type PlanDecision = 'approved' | 'rejected' | { kind: 'edited'; text: string };
 
 export interface OrchestratorResult {
   modifiedFiles: string[];
@@ -1251,7 +1254,7 @@ export class AIOrchestrator {
     // de que la generación inicial (StudioEngine, que llama sin callbacks) no
     // puede quedarse esperando una aprobación que nadie va a dar: no existe UI
     // que la pida en ese camino.
-    onPlanDecision?: (steps: BuildStep[]) => Promise<'approved' | 'rejected'>,
+    onPlanDecision?: (steps: BuildStep[]) => Promise<PlanDecision>,
     planModeEnabled: boolean = false,
     // Paths de la migración propuesta y aún NO aplicada (la ejecutable del
     // historial del chat completo, no sólo de los últimos 10 mensajes que
@@ -1834,7 +1837,7 @@ export class AIOrchestrator {
     }
 
     if (onPlanDecision && shouldGatePlan(steps, planModeEnabled)) {
-      let decision: 'approved' | 'rejected';
+      let decision: PlanDecision;
       try {
         timer.mark('before-approval');
         decision = await onPlanDecision(steps);
@@ -1878,6 +1881,23 @@ export class AIOrchestrator {
         // a escribirse. El resto del resultado —outcome, modifiedFiles— se
         // respeta tal cual lo dejó finalizeCancelled.
         return { ...rejected, chatResponse: tr('orch.planRejected') };
+      }
+
+      // "Revisar" (2026-10-08, R1 de Samuel): el usuario editó el plan. Se
+      // vuelve a correr el pedido con su versión y se construye directo; sólo
+      // si el plan nuevo BORRA algo que el anterior no borraba se le vuelve a
+      // preguntar. Los adjuntos ya se leyeron y guardaron: se reusan, sin cobrar.
+      if (typeof decision === 'object' && decision.kind === 'edited') {
+        const previous = steps;
+        console.log('[AIOrchestrator] plan editado por el usuario: se vuelve a planear con su versión');
+        return await this.runUserCommand(
+          buildEditedPlanInput(input, previous, decision.text),
+          files, selectedElement, projectId, onProgress, onRetry, onPlanReady, chatHistory, signal,
+          (next) => (addsDeletions(next, previous) ? onPlanDecision(next) : Promise.resolve('approved' as const)),
+          true, pendingMigrationPaths, unappliedMigrationPaths,
+          attachments.map((a) => ({ ...a, has_reading: true })),
+          false
+        );
       }
       // 'approved' → el pipeline sigue de largo, idéntico al de siempre.
     }

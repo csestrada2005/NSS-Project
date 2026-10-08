@@ -19,7 +19,7 @@ import { useProjectFiles } from '../hooks/useProjectFiles';
 import '../App.css';
 import { ChatInterface, type ChatPlanStep, type Message } from '../components/ChatInterface';
 import { PropertyPanel } from '../components/studio/PropertyPanel';
-import { AIOrchestrator, type PhaseCallback } from '../services/AIOrchestrator';
+import { AIOrchestrator, type PhaseCallback, type PlanDecision } from '../services/AIOrchestrator';
 import { platformService } from '../services/PlatformService';
 import type { TypeIssue, ProjectAsset } from '../services/PlatformService';
 import { SupabaseService } from '../services/SupabaseService';
@@ -195,7 +195,7 @@ function summarizeVisualEdits(
  */
 type PendingPlanDecision = {
   steps: ChatPlanStep[];
-  resolve: (decision: 'approved' | 'rejected') => void;
+  resolve: (decision: PlanDecision) => void;
 };
 
 export function StudioEngine() {
@@ -1607,8 +1607,8 @@ export function StudioEngine() {
    * camino de cancelación de siempre, no por el de rechazo.
    */
   const requestPlanDecision = useCallback(
-    (steps: ChatPlanStep[], signal: AbortSignal): Promise<'approved' | 'rejected'> =>
-      new Promise<'approved' | 'rejected'>(resolve => {
+    (steps: ChatPlanStep[], signal: AbortSignal): Promise<PlanDecision> =>
+      new Promise<PlanDecision>(resolve => {
         // Cancelado antes de llegar aquí: no se pregunta lo que ya no se va a
         // ejecutar, y sobre todo no se pinta un gate que nadie va a resolver.
         if (signal.aborted) {
@@ -1618,7 +1618,7 @@ export function StudioEngine() {
 
         const entry: PendingPlanDecision = {
           steps,
-          resolve: (decision: 'approved' | 'rejected') => {
+          resolve: (decision: PlanDecision) => {
             signal.removeEventListener('abort', onAbort);
             setPendingPlanDecision(prev => (prev === entry ? null : prev));
             // Resolver dos veces una Promise es un no-op, así que un doble click
@@ -1642,6 +1642,12 @@ export function StudioEngine() {
 
   const handleRejectPlan = useCallback(() => {
     pendingPlanDecisionRef.current?.resolve('rejected');
+  }, []);
+
+  // "Revisar" (2026-10-08): el usuario editó el plan; el orquestador vuelve a
+  // planear con su versión y construye directo (R1).
+  const handleEditPlan = useCallback((text: string) => {
+    pendingPlanDecisionRef.current?.resolve({ kind: 'edited', text });
   }, []);
 
   // -------------------------------------------------------------------------
@@ -2449,6 +2455,7 @@ export function StudioEngine() {
               pendingPlanSteps={pendingPlanDecision?.steps ?? null}
               onApprovePlan={handleApprovePlan}
               onRejectPlan={handleRejectPlan}
+              onEditPlan={handleEditPlan}
               sendMode={sendMode}
               onSendModeChange={handleSendModeChange}
               projectName={currentProjectName}

@@ -31,6 +31,14 @@ export interface WyrdPromptOptions {
   placeholder?: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  /** Texto con el que empieza la caja (p. ej. el plan a revisar). */
+  defaultValue?: string;
+  /**
+   * Caja grande de varias líneas (2026-10-08, "Revisar el plan"). Enter hace
+   * salto de línea, Ctrl/Cmd+Enter envía, y un clic fuera NO cierra (no se
+   * pierde lo escrito).
+   */
+  multiline?: boolean;
 }
 
 type DialogProps =
@@ -45,12 +53,13 @@ function splitTitle(title: string | undefined, message: string): { title?: strin
 
 function WyrdDialog(props: DialogProps & { onExited: () => void }) {
   const [open, setOpen] = useState(true);
-  const [value, setValue] = useState('');
+  const [value, setValue] = useState(props.kind === 'prompt' ? props.defaultValue ?? '' : '');
+  const multiline = props.kind === 'prompt' && !!props.multiline;
   const titleId = useId();
   const bodyId = useId();
   const confirmRef = useRef<HTMLButtonElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   const danger = props.kind === 'confirm' && props.danger;
   const { title, body } = splitTitle(props.title, props.message);
 
@@ -88,7 +97,7 @@ function WyrdDialog(props: DialogProps & { onExited: () => void }) {
             key="backdrop"
             {...modalBackdropMotion}
             className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md"
-            onClick={() => finish(false)}
+            onClick={() => { if (!multiline) finish(false); }}
           />
           <div className="fixed inset-0 z-[201] flex items-center justify-center pointer-events-none p-4">
             <motion.div
@@ -99,7 +108,7 @@ function WyrdDialog(props: DialogProps & { onExited: () => void }) {
               aria-labelledby={title ? titleId : undefined}
               aria-describedby={bodyId}
               onKeyDown={onKeyDown}
-              className="nebu-modal bg-card border border-border rounded-2xl w-full max-w-md shadow-2xl pointer-events-auto"
+              className={`nebu-modal bg-card border border-border rounded-2xl w-full ${multiline ? 'max-w-2xl' : 'max-w-md'} shadow-2xl pointer-events-auto`}
             >
               <form
                 onSubmit={(e) => { e.preventDefault(); finish(true); }}
@@ -112,7 +121,22 @@ function WyrdDialog(props: DialogProps & { onExited: () => void }) {
                     <p id={bodyId} className="text-sm text-muted-foreground whitespace-pre-line">{body}</p>
                   </div>
                 </div>
-                {props.kind === 'prompt' && (
+                {multiline && (
+                  <textarea
+                    ref={inputRef}
+                    rows={14}
+                    spellCheck={false}
+                    value={value}
+                    placeholder={props.kind === 'prompt' ? props.placeholder : undefined}
+                    aria-labelledby={bodyId}
+                    onChange={(e) => setValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); finish(true); }
+                    }}
+                    className="w-full max-h-[60vh] bg-muted border border-border rounded px-3 py-2 text-sm text-foreground leading-relaxed resize-y focus:border-primary focus:outline-none"
+                  />
+                )}
+                {props.kind === 'prompt' && !multiline && (
                   <input
                     ref={inputRef}
                     type="text"

@@ -12,6 +12,8 @@ import { t as tNow } from '@/i18n/forge/lang';
 import { MiniMarkdown } from './MiniMarkdown';
 import { useTypewriter } from './useTypewriter';
 import { markdownPreview } from '../../utils/markdownPreview.js';
+import { planAsEditableText } from '../../utils/planEdit.js';
+import { wyrdPrompt } from '@/components/ui/wyrdDialog';
 
 /** La respuesta de la IA se escribe sola (2026-10-01); el formato se aplica sobre lo ya escrito. */
 function TypedMarkdown({ text }: { text: string }) {
@@ -346,11 +348,14 @@ export function PlanCard({
   steps,
   onApprove,
   onReject,
+  onEdit,
   onOpenHistory,
 }: {
   steps: ChatPlanStep[];
   onApprove?: () => void;
   onReject?: () => void;
+  /** "Revisar" (2026-10-08): abre el plan editable; lo enviado vuelve a planear y construye. */
+  onEdit?: (text: string) => void;
   onOpenHistory: () => void;
 }) {
   const ordered = [...steps].sort((a, b) => a.order - b.order);
@@ -387,7 +392,23 @@ export function PlanCard({
       )}
       <div className="fc-accion-fila">
         <button type="button" className="fc-accion-btn" onClick={onApprove}>{t('chat.card.plan.build')}</button>
-        <button type="button" className="fc-accion-btn fc-secundario" disabled title={t('common.comingSoon')}>
+        <button
+          type="button"
+          className="fc-accion-btn fc-secundario"
+          disabled={!onEdit}
+          title={onEdit ? undefined : t('common.comingSoon')}
+          onClick={async () => {
+            if (!onEdit) return;
+            const text = await wyrdPrompt({
+              title: t('chat.card.plan.reviewTitle'),
+              message: t('chat.card.plan.reviewHint'),
+              defaultValue: planAsEditableText(ordered),
+              confirmLabel: t('chat.card.plan.reviewSend'),
+              multiline: true,
+            });
+            if (text && text.trim()) onEdit(text);
+          }}
+        >
           {t('chat.card.plan.edit')}
         </button>
         <button type="button" className="fc-accion-btn fc-secundario" onClick={onOpenHistory}>

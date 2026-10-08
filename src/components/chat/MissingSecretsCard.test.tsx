@@ -130,6 +130,9 @@ describe('Ajustes → Secretos', () => {
     await waitFor(() => expect(del).toHaveBeenCalledWith('p', 'OLD_KEY'));
     expect(confirm).not.toHaveBeenCalled();
 
+    // La ventana devuelve el foco al terminar de cerrarse: si eso cae a mitad
+    // del tecleo (máquina cargada), parte del texto se va a otro sitio.
+    await waitFor(() => expect(document.querySelector('[data-wyrd-dialog]')).toBeNull());
     await userEvent.type(screen.getByLabelText('NOMBRE (p. ej. STRIPE_SECRET_KEY)'), 'supabase_url');
     screen.getByText(/no puede empezar con SUPABASE_/);
   });

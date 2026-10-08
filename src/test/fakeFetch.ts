@@ -11,6 +11,8 @@ export interface FakeFetchControl {
   assets: unknown[];
   /** Tipo que devuelve el clasificador (por defecto new_feature). */
   intentType: string;
+  /** Planes del Architect, uno por llamada (2026-10-08, Revisar); vacío → PLAN_STEPS. */
+  planQueue: unknown[][];
   restore: () => void;
 }
 
@@ -85,7 +87,7 @@ export function installFakeFetch(): FakeFetchControl {
   const calls: string[] = [];
   const forgeBodies: Record<string, unknown>[] = [];
   const readings = new Map<string, { text: string; truncated: boolean }>();
-  const control = { failAttachmentReads: false, assets: [] as unknown[], intentType: 'new_feature' };
+  const control = { failAttachmentReads: false, assets: [] as unknown[], intentType: 'new_feature', planQueue: [] as unknown[][] };
 
   globalThis.fetch = (async (input: string | Request | URL, init?: RequestInit) => {
     const url = toUrlString(input);
@@ -185,7 +187,7 @@ export function installFakeFetch(): FakeFetchControl {
       // Escalón 2: Architect.plan pide el plan de pasos.
       if (systemText.includes('software architect for a React + TypeScript + Tailwind web builder')) {
         return jsonResponse(
-          claudeTextResponse(JSON.stringify({ deletion_targets: [], steps: PLAN_STEPS }))
+          claudeTextResponse(JSON.stringify({ deletion_targets: [], steps: control.planQueue.shift() ?? PLAN_STEPS }))
         );
       }
 
@@ -215,6 +217,8 @@ export function installFakeFetch(): FakeFetchControl {
     get assets() { return control.assets; },
     set assets(v: unknown[]) { control.assets = v; },
     get intentType() { return control.intentType; },
+    get planQueue() { return control.planQueue; },
+    set planQueue(v: unknown[][]) { control.planQueue = v; },
     set intentType(v: string) { control.intentType = v; },
     restore: () => {
       globalThis.fetch = originalFetch;
