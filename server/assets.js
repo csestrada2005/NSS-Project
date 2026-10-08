@@ -107,3 +107,23 @@ export async function faviconSizes(master) {
   const [png32, png180] = await Promise.all([size(32), size(180)]);
   return { png32, png180 };
 }
+
+// ---------------------------------------------------------------------------
+// Documentos privados (2026-10-08, decisión de Samuel: privado por defecto,
+// con opción de hacerlo público). Un PDF puede traer datos sensibles: vive en
+// el almacén PRIVADO `project-documents` y la IA lo lee con una dirección que
+// caduca. "Hacer público" lo mueve al almacén público (para que el sitio lo
+// ofrezca para descargar). Un documento privado tiene `public_url` vacío.
+// ---------------------------------------------------------------------------
+export const DOCUMENT_BUCKET = 'project-documents';
+export const SIGNED_URL_SECONDS = 10 * 60;
+
+/** Documento sin dirección pública = vive en el almacén privado. */
+export function isPrivateDocument(row) {
+  return row?.kind === 'document' && !row?.public_url;
+}
+
+/** Almacén donde vive el archivo de esta fila. */
+export function bucketFor(row) {
+  return isPrivateDocument(row) ? DOCUMENT_BUCKET : ASSET_BUCKET;
+}

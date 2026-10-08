@@ -68,3 +68,16 @@ test('favicon: del maestro salen los PNG de 32 y 180 px', async () => {
   assert.deepEqual([m32.format, m32.width, m32.height], ['png', 32, 32]);
   assert.deepEqual([m180.format, m180.width, m180.height], ['png', 180, 180]);
 });
+
+// Documentos privados (2026-10-08): sin dirección pública = almacén privado.
+test('documento sin dirección pública vive en el almacén privado; fotos y documentos públicos en el público', async () => {
+  const { isPrivateDocument, bucketFor, DOCUMENT_BUCKET, ASSET_BUCKET } = await import('./assets.js');
+  assert.equal(isPrivateDocument({ kind: 'document', public_url: '' }), true);
+  assert.equal(isPrivateDocument({ kind: 'document', public_url: null }), true);
+  assert.equal(isPrivateDocument({ kind: 'document', public_url: 'https://x/menu.pdf' }), false);
+  assert.equal(isPrivateDocument({ kind: 'image', public_url: '' }), false);
+  assert.equal(bucketFor({ kind: 'document', public_url: '' }), DOCUMENT_BUCKET);
+  assert.equal(bucketFor({ kind: 'document', public_url: 'https://x/menu.pdf' }), ASSET_BUCKET);
+  assert.equal(bucketFor({ kind: 'image', public_url: 'https://x/a.webp' }), ASSET_BUCKET);
+  assert.notEqual(DOCUMENT_BUCKET, ASSET_BUCKET);
+});

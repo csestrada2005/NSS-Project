@@ -434,6 +434,26 @@ class PlatformService {
     return body as ProjectAsset;
   }
 
+  /** Dirección para abrir un archivo; la de un documento privado caduca en minutos. */
+  async getAssetUrl(projectId: string, assetId: string): Promise<string> {
+    const headers = await this.getHeaders();
+    const response = await fetch(`/api/projects/${projectId}/assets/${assetId}/url`, { headers });
+    this.handleAuthError(response);
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || typeof body?.url !== 'string') throw new Error(body?.error || `HTTP ${response.status}`);
+    return body.url;
+  }
+
+  /** Documentos: privado (sólo la IA lo lee) ↔ público (el sitio puede ofrecerlo). */
+  async setAssetVisibility(projectId: string, assetId: string, visibility: 'public' | 'private'): Promise<ProjectAsset> {
+    const headers = await this.getHeaders();
+    const response = await fetch(`/api/projects/${projectId}/assets/${assetId}`, { method: 'PATCH', headers, body: JSON.stringify({ visibility }) });
+    this.handleAuthError(response);
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body?.error || `HTTP ${response.status}`);
+    return body as ProjectAsset;
+  }
+
   async deleteAsset(projectId: string, assetId: string): Promise<void> {
     const headers = await this.getHeaders();
     const response = await fetch(`/api/projects/${projectId}/assets/${assetId}`, { method: 'DELETE', headers });

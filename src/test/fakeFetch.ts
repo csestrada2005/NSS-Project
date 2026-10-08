@@ -102,6 +102,13 @@ export function installFakeFetch(): FakeFetchControl {
       return jsonResponse([]);
     }
 
+    // --- GET /api/projects/:id/assets/:assetId/url — dirección temporal de un
+    // documento privado (2026-10-08). ---
+    const signed = /\/api\/projects\/[^/]+\/assets\/([^/]+)\/url$/.exec(url);
+    if (signed) {
+      return jsonResponse({ url: `https://signed.example/${signed[1]}.pdf?token=temporal`, expiresIn: 600 });
+    }
+
     // --- /api/embed-and-search — PatternRetriever, vector search vacía ---
     if (url.includes('/api/embed-and-search')) {
       return jsonResponse(EMBED_SEARCH_FIXTURE);

@@ -13,11 +13,12 @@ siempre que se pueda.
 
 ## 1. AHORA
 
-1. **PDFs fuera del almacén público.** Hoy los PDFs que se adjuntan en el chat quedan en el almacén público
-   `project-assets`, igual que las fotos: cualquiera con la dirección los puede abrir, y un PDF puede traer
-   datos sensibles (contratos, clientes, precios internos). Pasar los documentos a un almacén privado y que la
-   IA los lea con direcciones temporales. Las fotos se quedan públicas (se usan en el sitio). Siguiente en
-   turno; falta el diseño en frío.
+1. **PDFs fuera del almacén público — HECHO, espera check (2026-10-08).** Decisión de Samuel: privado por
+   defecto, con opción de hacerlo público. Los PDFs nuevos van al almacén privado `project-documents` (el
+   servidor lo crea solo la primera vez); un PDF privado tiene `public_url` vacío. La IA lo lee con una dirección
+   que caduca en 10 minutos y nunca recibe un enlace para ponerlo en el sitio. En Archivos: "Privado · sólo la IA
+   lo lee" con "Ver", y "Hacer público" / "Hacer privado" (mueve el archivo de almacén, con confirmación). No había
+   PDFs viejos que mover (Samuel borró el único).
 2. **La IA recuerda el contenido de un PDF.** Hoy el texto de un PDF sólo viaja con el mensaje donde se
    adjuntó; en los siguientes la IA sabe que existe pero no qué dice. Va justo después del punto 1 (misma pieza).
 

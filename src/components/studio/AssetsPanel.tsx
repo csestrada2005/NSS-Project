@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Upload, Copy, Check, Trash2, FileText } from 'lucide-react';
+import { Upload, Copy, Check, Trash2, FileText, Lock, Globe, ExternalLink } from 'lucide-react';
 import { platformService, type ProjectAsset } from '../../services/PlatformService';
 import LoadingSquares from '../brand/LoadingSquares';
 import { useForgeLang } from '@/i18n/forge/useForgeLang';
@@ -34,6 +34,7 @@ export function AssetsPanel({ projectId }: { projectId?: string | null }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [changingId, setChangingId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -70,6 +71,41 @@ export function AssetsPanel({ projectId }: { projectId?: string | null }) {
       setCopiedId(asset.id);
       setTimeout(() => setCopiedId(null), 1500);
     } catch { /* sin portapapeles: se ve la dirección igual */ }
+  };
+
+  // Documento privado (2026-10-08): se abre con una dirección que caduca. La
+  // pestaña se abre ANTES de pedirla para que el navegador no la bloquee.
+  const openPrivate = async (asset: ProjectAsset) => {
+    if (!projectId) return;
+    const tab = window.open('', '_blank');
+    try {
+      const url = await platformService.getAssetUrl(projectId, asset.id);
+      if (tab) { tab.opener = null; tab.location.href = url; }
+    } catch (e) {
+      tab?.close();
+      setError(t('assets.visibilityFailed', { message: e instanceof Error ? e.message : String(e) }));
+    }
+  };
+
+  const toggleVisibility = async (asset: ProjectAsset) => {
+    if (!projectId) return;
+    const toPublic = !asset.public_url;
+    const ok = await wyrdConfirm({
+      message: t(toPublic ? 'assets.confirmPublic' : 'assets.confirmPrivate', { name: asset.original_name }),
+      confirmLabel: t(toPublic ? 'assets.makePublic' : 'assets.makePrivate'),
+      danger: toPublic,
+    });
+    if (!ok) return;
+    setChangingId(asset.id);
+    setError(null);
+    try {
+      const updated = await platformService.setAssetVisibility(projectId, asset.id, toPublic ? 'public' : 'private');
+      setAssets((prev) => prev.map((a) => (a.id === asset.id ? updated : a)));
+    } catch (e) {
+      setError(t('assets.visibilityFailed', { message: e instanceof Error ? e.message : String(e) }));
+    } finally {
+      setChangingId(null);
+    }
   };
 
   const remove = async (asset: ProjectAsset) => {
@@ -120,11 +156,35 @@ export function AssetsPanel({ projectId }: { projectId?: string | null }) {
                         : formatBytes(a.size_bytes)}
                       {a.width && a.height ? ` · ${a.width}×${a.height}` : ''}
                     </p>
-                    <div className="flex items-center gap-2 pt-1">
-                      <button type="button" onClick={() => copy(a)} className="flex items-center gap-1 text-muted-foreground hover:text-foreground">
-                        {copiedId === a.id ? <Check size={12} /> : <Copy size={12} />}
-                        {copiedId === a.id ? t('assets.copied') : t('assets.copyUrl')}
-                      </button>
+                    {a.kind === 'document' && (
+                      <p className={`flex items-center gap-1 ${a.public_url ? 'text-amber-400' : 'text-emerald-400'}`}>
+                        {a.public_url ? <Globe size={11} /> : <Lock size={11} />}
+                        {a.public_url ? t('assets.public') : t('assets.private')}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-2 pt-1 flex-wrap">
+                      {a.kind === 'document' && !a.public_url ? (
+                        <button type="button" onClick={() => openPrivate(a)} className="flex items-center gap-1 text-muted-foreground hover:text-foreground">
+                          <ExternalLink size={12} />
+                          {t('assets.open')}
+                        </button>
+                      ) : (
+                        <button type="button" onClick={() => copy(a)} className="flex items-center gap-1 text-muted-foreground hover:text-foreground">
+                          {copiedId === a.id ? <Check size={12} /> : <Copy size={12} />}
+                          {copiedId === a.id ? t('assets.copied') : t('assets.copyUrl')}
+                        </button>
+                      )}
+                      {a.kind === 'document' && (
+                        <button
+                          type="button"
+                          onClick={() => toggleVisibility(a)}
+                          disabled={changingId === a.id}
+                          className="flex items-center gap-1 text-muted-foreground hover:text-foreground disabled:opacity-50"
+                        >
+                          {changingId === a.id && <LoadingSquares size={10} />}
+                          {a.public_url ? t('assets.makePrivate') : t('assets.makePublic')}
+                        </button>
+                      )}
                       <button type="button" onClick={() => remove(a)} aria-label={t('assets.delete')} className="ml-auto text-muted-foreground hover:text-red-400">
                         <Trash2 size={12} />
                       </button>

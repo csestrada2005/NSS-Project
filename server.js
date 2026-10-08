@@ -23,7 +23,7 @@ import { pickProjectUrl } from './server/vercelDeployUrl.js';
 import { createAuthCache } from './server/authCache.js';
 import { fetchSecurityReport, runSecurityCheck } from './server/securityCheck.js';
 import { configureAuthSiteUrl } from './server/authSiteUrl.js';
-import { ASSET_BUCKET, assetStoragePath, faviconSizes, processFavicon, processUpload } from './server/assets.js';
+import { ASSET_BUCKET, DOCUMENT_BUCKET, MAX_DOCUMENT_BYTES, SIGNED_URL_SECONDS, assetStoragePath, bucketFor, faviconSizes, isPrivateDocument, processFavicon, processUpload } from './server/assets.js';
 import { withCustomFavicon } from './src/utils/deployFavicon.js';
 import { deleteServerSecret, isValidSecretName, isValidSecretValue, listServerSecretNames, requiredSecretsFromFiles, secretsStatus, setServerSecret } from './server/projectSecrets.js';
 import {
@@ -2264,21 +2264,27 @@ app.post('/api/projects/:projectId/assets', async (req, res) => {
     return res.status(err.status ?? 400).json({ error: err.message, code: err.code ?? 'BAD_FILE' });
   }
   const storagePath = assetStoragePath(projectId, name, processed.ext);
+  // Documentos: almacén PRIVADO por defecto (2026-10-08); fotos: el público.
+  const isDocument = processed.kind === 'document';
+  const bucket = isDocument ? DOCUMENT_BUCKET : ASSET_BUCKET;
+  if (isDocument && !(await ensureDocumentBucket())) {
+    return res.status(503).json({ error: 'No se pudo preparar el almacén privado', code: 'UPLOAD_FAILED' });
+  }
   const { error: uploadError } = await supabaseAdmin.storage
-    .from(ASSET_BUCKET)
+    .from(bucket)
     .upload(storagePath, processed.buffer, { contentType: processed.mime, upsert: false, cacheControl: '31536000' });
   if (uploadError) {
     console.error('[assets] upload failed:', uploadError.message);
     return res.status(502).json({ error: 'No se pudo guardar el archivo', code: 'UPLOAD_FAILED' });
   }
-  const { data: urlData } = supabaseAdmin.storage.from(ASSET_BUCKET).getPublicUrl(storagePath);
+  const publicUrl = isDocument ? '' : supabaseAdmin.storage.from(ASSET_BUCKET).getPublicUrl(storagePath).data.publicUrl;
   const { data: row, error: insertError } = await supabaseAdmin
     .from('forge_assets')
     .insert({
       project_id: projectId,
       kind: processed.kind,
       storage_path: storagePath,
-      public_url: urlData.publicUrl,
+      public_url: publicUrl,
       mime_type: processed.mime,
       size_bytes: processed.buffer.length,
       original_size: processed.originalSize,
@@ -2290,12 +2296,104 @@ app.post('/api/projects/:projectId/assets', async (req, res) => {
     .select(ASSET_COLUMNS)
     .single();
   if (insertError) {
-    await supabaseAdmin.storage.from(ASSET_BUCKET).remove([storagePath]).catch(() => {});
+    await supabaseAdmin.storage.from(bucket).remove([storagePath]).catch(() => {});
     console.error('[assets] insert failed:', insertError.message);
     return res.status(500).json({ error: 'No se pudo registrar el archivo', code: 'INSERT_FAILED' });
   }
-  console.log(`[assets] ${projectId} · ${processed.kind} · ${name} · ${processed.originalSize} → ${processed.buffer.length} bytes`);
+  console.log(`[assets] ${projectId} · ${processed.kind}${isDocument ? ' (privado)' : ''} · ${name} · ${processed.originalSize} → ${processed.buffer.length} bytes`);
   res.json(row);
+});
+
+// El almacén privado se crea solo la primera vez (sin políticas: sólo el servidor).
+let documentBucketReady = null;
+function ensureDocumentBucket() {
+  if (!documentBucketReady) {
+    documentBucketReady = (async () => {
+      const { data } = await supabaseAdmin.storage.getBucket(DOCUMENT_BUCKET);
+      if (data) return true;
+      const { error } = await supabaseAdmin.storage.createBucket(DOCUMENT_BUCKET, {
+        public: false,
+        fileSizeLimit: MAX_DOCUMENT_BYTES,
+        allowedMimeTypes: ['application/pdf'],
+      });
+      if (error && !/already exists/i.test(error.message)) throw error;
+      console.log(`[assets] almacén privado ${DOCUMENT_BUCKET} listo`);
+      return true;
+    })().catch((err) => {
+      console.error('[assets] no se pudo crear el almacén privado:', err?.message ?? err);
+      documentBucketReady = null;
+      return false;
+    });
+  }
+  return documentBucketReady;
+}
+
+async function readAssetRow(projectId, assetId) {
+  const { data } = await supabaseAdmin
+    .from('forge_assets').select(`${ASSET_COLUMNS}, storage_path`)
+    .eq('id', assetId).eq('project_id', projectId).single();
+  return data ?? null;
+}
+
+// Dirección para abrir un archivo: la pública, o una que caduca (documento privado).
+app.get('/api/projects/:projectId/assets/:assetId/url', async (req, res) => {
+  const { projectId, assetId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Storage not configured' });
+  const row = await readAssetRow(projectId, assetId);
+  if (!row) return res.status(404).json({ error: 'Not found' });
+  if (!isPrivateDocument(row)) return res.json({ url: row.public_url, expiresIn: null });
+  const { data, error } = await supabaseAdmin.storage.from(DOCUMENT_BUCKET).createSignedUrl(row.storage_path, SIGNED_URL_SECONDS);
+  if (error || !data?.signedUrl) {
+    console.error('[assets] dirección temporal falló:', error?.message);
+    return res.status(502).json({ error: 'No se pudo abrir el documento', code: 'SIGN_FAILED' });
+  }
+  res.json({ url: data.signedUrl, expiresIn: SIGNED_URL_SECONDS });
+});
+
+// Hacer público / privado un documento: se MUEVE entre almacenes.
+app.patch('/api/projects/:projectId/assets/:assetId', async (req, res) => {
+  const { projectId, assetId } = req.params;
+  if (!(await requireProjectOwnership(req, res, projectId))) return;
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Storage not configured' });
+  const visibility = req.body?.visibility;
+  if (visibility !== 'public' && visibility !== 'private') return res.status(400).json({ error: 'visibility must be public|private' });
+  const row = await readAssetRow(projectId, assetId);
+  if (!row) return res.status(404).json({ error: 'Not found' });
+  if (row.kind !== 'document') return res.status(400).json({ error: 'Only documents change visibility', code: 'NOT_DOCUMENT' });
+  const { storage_path: storagePath, ...publicRow } = row;
+  const isPrivate = isPrivateDocument(row);
+  if ((visibility === 'private') === isPrivate) return res.json(publicRow);
+  if (visibility === 'private' && !(await ensureDocumentBucket())) {
+    return res.status(503).json({ error: 'No se pudo preparar el almacén privado', code: 'MOVE_FAILED' });
+  }
+  const from = isPrivate ? DOCUMENT_BUCKET : ASSET_BUCKET;
+  const to = isPrivate ? ASSET_BUCKET : DOCUMENT_BUCKET;
+  try {
+    const { data: blob, error: downloadError } = await supabaseAdmin.storage.from(from).download(storagePath);
+    if (downloadError || !blob) throw new Error(downloadError?.message ?? 'sin datos');
+    const { error: uploadError } = await supabaseAdmin.storage.from(to)
+      .upload(storagePath, Buffer.from(await blob.arrayBuffer()), { contentType: row.mime_type, upsert: true, cacheControl: '31536000' });
+    if (uploadError) throw new Error(uploadError.message);
+  } catch (err) {
+    console.error(`[assets] ${projectId} · no se pudo mover ${row.original_name}:`, err?.message ?? err);
+    return res.status(502).json({ error: 'No se pudo cambiar el documento', code: 'MOVE_FAILED' });
+  }
+  const newUrl = visibility === 'public' ? supabaseAdmin.storage.from(ASSET_BUCKET).getPublicUrl(storagePath).data.publicUrl : '';
+  const { data: updated, error: updateError } = await supabaseAdmin
+    .from('forge_assets').update({ public_url: newUrl })
+    .eq('id', assetId).eq('project_id', projectId)
+    .select(ASSET_COLUMNS).single();
+  if (updateError) {
+    // La fila sigue apuntando al almacén de origen: se quita la copia nueva.
+    await supabaseAdmin.storage.from(to).remove([storagePath]).catch(() => {});
+    console.error('[assets] no se pudo actualizar la fila:', updateError.message);
+    return res.status(500).json({ error: 'No se pudo cambiar el documento', code: 'MOVE_FAILED' });
+  }
+  // Sólo al final se borra el de origen: si algo falló antes, el documento sigue donde estaba.
+  await supabaseAdmin.storage.from(from).remove([storagePath]).catch(() => {});
+  console.log(`[assets] ${projectId} · ${row.original_name} · ahora ${visibility === 'public' ? 'público' : 'privado'}`);
+  res.json(updated);
 });
 
 app.get('/api/projects/:projectId/assets', async (req, res) => {
@@ -2313,11 +2411,9 @@ app.delete('/api/projects/:projectId/assets/:assetId', async (req, res) => {
   const { projectId, assetId } = req.params;
   if (!(await requireProjectOwnership(req, res, projectId))) return;
   if (!supabaseAdmin) return res.status(503).json({ error: 'Storage not configured' });
-  const { data: row } = await supabaseAdmin
-    .from('forge_assets').select('storage_path')
-    .eq('id', assetId).eq('project_id', projectId).single();
+  const row = await readAssetRow(projectId, assetId);
   if (!row) return res.status(404).json({ error: 'Not found' });
-  await supabaseAdmin.storage.from(ASSET_BUCKET).remove([row.storage_path]);
+  await supabaseAdmin.storage.from(bucketFor(row)).remove([row.storage_path]);
   await supabaseAdmin.from('forge_assets').delete().eq('id', assetId).eq('project_id', projectId);
   res.json({ ok: true });
 });

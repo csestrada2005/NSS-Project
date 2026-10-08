@@ -16,6 +16,10 @@ export function buildAssetsNote(assets) {
   const lines = list.map((a) => {
     const size = a.width && a.height ? ` (${a.width}x${a.height})` : '';
     const kind = a.kind === 'document' ? 'document' : 'image';
+    // Documento privado (2026-10-08): sin dirección, y la IA no debe enlazarlo.
+    if (kind === 'document' && !a.public_url) {
+      return `- document "${a.original_name}": PRIVATE — reference material only, never link or embed it on the site`;
+    }
     return `- ${kind} "${a.original_name}"${size}: ${a.public_url}`;
   });
   return [

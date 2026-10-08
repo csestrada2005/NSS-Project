@@ -13,3 +13,9 @@ test('la IA recibe los archivos subidos con su dirección exacta', () => {
   assert.equal(buildAssetsNote([]), '');
   assert.equal(buildAssetsNote(null), '');
 });
+
+test('un documento privado va sin dirección y con la orden de no enlazarlo', () => {
+  const note = buildAssetsNote([{ kind: 'document', public_url: '', original_name: 'contrato.pdf' }]);
+  assert.match(note, /- document "contrato\.pdf": PRIVATE — reference material only, never link or embed it on the site/);
+  assert.doesNotMatch(note, /contrato\.pdf": http/);
+});

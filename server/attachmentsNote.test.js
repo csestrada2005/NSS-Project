@@ -43,3 +43,9 @@ test('al log va el conteo, no el contenido, y las marcas de después se conserva
   assert.equal(compactAttachmentsNote(prompt), 'haz el menú [ATTACHMENTS:images=1,documents=1][DDL_PROPOSED:x.sql]');
   assert.equal(compactAttachmentsNote('sin adjuntos'), 'sin adjuntos');
 });
+
+test('PDF adjunto privado: su contenido sí, su dirección no', () => {
+  const note = buildAttachmentsNote([{ ...pdf, public_url: '' }]);
+  assert.match(note, /- document "menu\.pdf" \(PRIVATE — use its content, never link it on the site\)\n {2}Its content/);
+  assert.match(note, /Concha \| \$25/);
+});

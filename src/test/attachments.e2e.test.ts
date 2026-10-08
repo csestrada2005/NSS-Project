@@ -15,7 +15,8 @@ const asset = (over: Partial<ProjectAsset>): ProjectAsset => ({
   original_size: 1, original_name: 'hero.jpg', width: 800, height: 600, created_at: '2026-10-07', ...over,
 });
 const photo = asset({});
-const pdf = asset({ id: 'b', kind: 'document', public_url: 'https://cdn/p/menu.pdf', mime_type: 'application/pdf', original_name: 'menu.pdf', width: null, height: null });
+// Documento privado (2026-10-08): sin dirección pública.
+const pdf = asset({ id: 'b', kind: 'document', public_url: '', mime_type: 'application/pdf', original_name: 'menu.pdf', width: null, height: null });
 const svg = asset({ id: 'c', public_url: 'https://cdn/p/logo.svg', mime_type: 'image/svg+xml', original_name: 'logo.svg' });
 
 const run = (attachments: ProjectAsset[]) =>
@@ -49,6 +50,9 @@ describe('Bloque 3 — adjuntos del chat (e2e con LLM falso)', () => {
     for (const r of readers) expect(r.model).toBe('claude-haiku-4-5-20251001');
     expect(userText(readers[0])).toContain('"source":{"type":"url","url":"https://cdn/p/hero.webp"}');
     expect(userText(readers[1])).toContain('"type":"document"');
+    // El PDF privado se lee con la dirección temporal que da el servidor.
+    expect(control.calls).toContain('/api/projects/attachments-test-project/assets/b/url');
+    expect(userText(readers[1])).toContain('https://signed.example/b.pdf?token=temporal');
 
     const architect = control.forgeBodies.find((b) => systemOf(b).includes('software architect'))!;
     const steps = control.forgeBodies.filter((b) => systemOf(b).includes('implementing one specific step'));
@@ -59,6 +63,9 @@ describe('Bloque 3 — adjuntos del chat (e2e con LLM falso)', () => {
       expect(text).toContain('Concha | $25');
       expect(text).toContain('ALT: Mostrador de la panadería');
       expect(text).toContain('https://cdn/p/logo.svg');
+      // La dirección temporal nunca llega a quien escribe el sitio.
+      expect(text).not.toContain('signed.example');
+      expect(text).toContain('PRIVATE');
     }
 
     expect(result.warning).toMatch(/Sólo leí la primera parte de menu\.pdf/);

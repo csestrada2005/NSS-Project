@@ -48,7 +48,10 @@ export function buildAttachmentsNote(items) {
   const blocks = list.map((a) => {
     const size = a.width && a.height ? ` (${a.width}x${a.height})` : '';
     if (a.kind === 'document') {
-      const head = `- document "${a.original_name}": ${a.public_url}`;
+      // Privado (2026-10-08): sin dirección; su contenido sí se usa.
+      const head = a.public_url
+        ? `- document "${a.original_name}": ${a.public_url}`
+        : `- document "${a.original_name}" (PRIVATE — use its content, never link it on the site)`;
       const label = a.truncated
         ? '  Its content (faithful transcription, TRUNCATED: only the first part was read):'
         : '  Its content (faithful transcription):';

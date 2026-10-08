@@ -19,8 +19,11 @@ export type AttachmentReadResult =
   | { ok: true; note: string; truncated: string[] }
   | { ok: false; failed: string };
 
-async function readOne(asset: ProjectAsset, userText: string, signal?: AbortSignal): Promise<{ text: string; truncated: boolean }> {
+async function readOne(asset: ProjectAsset, userText: string, projectId: string | undefined, signal?: AbortSignal): Promise<{ text: string; truncated: boolean }> {
   const isDocument = asset.kind === 'document';
+  // Documento privado (2026-10-08): la IA lo lee con una dirección que caduca.
+  const url = asset.public_url || (projectId ? await platformService.getAssetUrl(projectId, asset.id) : '');
+  if (!url) throw new Error('sin dirección para leer el documento');
   const response = await platformService.callForgeChat({
     model: READER_MODEL,
     max_tokens: isDocument ? DOCUMENT_READ_MAX_TOKENS : IMAGE_READ_MAX_TOKENS,
@@ -28,7 +31,7 @@ async function readOne(asset: ProjectAsset, userText: string, signal?: AbortSign
     messages: [{
       role: 'user',
       content: [
-        { type: isDocument ? 'document' : 'image', source: { type: 'url', url: asset.public_url } },
+        { type: isDocument ? 'document' : 'image', source: { type: 'url', url } },
         { type: 'text', text: `User's request (for context and language): ${userText}` },
       ],
     }],
@@ -48,14 +51,15 @@ async function readOne(asset: ProjectAsset, userText: string, signal?: AbortSign
 export async function readAttachments(
   attachments: ProjectAsset[],
   userText: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  projectId?: string
 ): Promise<AttachmentReadResult> {
   if (attachments.length === 0) return { ok: true, note: '', truncated: [] };
   const items: Parameters<typeof buildAttachmentsNote>[0] = [];
   const truncated: string[] = [];
   // En paralelo: N adjuntos no deben tardar N veces más.
   const reads = await Promise.allSettled(
-    attachments.map((a) => (needsReading(a) ? readOne(a, userText, signal) : Promise.resolve(null)))
+    attachments.map((a) => (needsReading(a) ? readOne(a, userText, projectId, signal) : Promise.resolve(null)))
   );
   for (let i = 0; i < attachments.length; i++) {
     const a = attachments[i];

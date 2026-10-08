@@ -1324,7 +1324,7 @@ export class AIOrchestrator {
     // una falla se detiene aquí: no se gasta en el resto del pedido (3A).
     let attachmentsNote = '';
     if (attachments.length > 0) {
-      const read = await readAttachments(attachments, input, signal);
+      const read = await readAttachments(attachments, input, signal, projectId);
       timer.mark('attachments');
       if (!read.ok) {
         return { modifiedFiles: [], outcome: 'failed', error: 'ATTACHMENT_READ_FAILED', errorReason: read.failed };
