@@ -8,7 +8,7 @@ import dns from 'dns/promises';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 import { compileFiles } from './server/compiler.js';
-import { searchUnsplash, triggerUnsplashDownloads } from './server/unsplash.js';
+import { searchUnsplash, triggerUnsplashDownloads, usedDownloadLocations } from './server/unsplash.js';
 import { computeCreditsFromTokens } from './server/credits.js';
 import { createIntentAccumulator } from './server/intentAccumulator.js';
 import { bootstrapProject } from './server/bootstrapProject.js';
@@ -1112,6 +1112,28 @@ app.post('/api/credits/deduct', async (req, res) => {
 // Never 500: on a missing key or any downstream failure we answer { images: [] }
 // so the scaffold cleanly falls back to writing DESIGN.md without a pool.
 // ---------------------------------------------------------------------------
+// "Download" de Unsplash sólo por las fotos que el sitio usa (2026-10-08). El
+// cliente manda el grupo que se buscó al crear el proyecto; el servidor mira
+// en los archivos GUARDADOS cuáles quedaron de verdad y avisa sólo por ésas.
+app.post('/api/projects/:id/images/downloads', async (req, res) => {
+  try {
+    const projectId = req.params.id;
+    if (!(await requireProjectOwnership(req, res, projectId))) return;
+    if (!UNSPLASH_ACCESS_KEY) return res.json({ used: 0, triggered: 0, failed: 0 });
+    const pool = Array.isArray(req.body?.pool) ? req.body.pool.slice(0, 60) : [];
+    const { data: rows, error } = await supabaseAdmin
+      .from('forge_files').select('content').eq('project_id', projectId);
+    if (error) throw error;
+    const locations = usedDownloadLocations(pool, (rows ?? []).map((r) => r.content));
+    const { triggered, failed } = await triggerUnsplashDownloads({ downloadLocations: locations, accessKey: UNSPLASH_ACCESS_KEY });
+    console.log(`[images/downloads] ${projectId} · grupo ${pool.length} · usadas ${locations.length} · triggered=${triggered} failed=${failed}`);
+    res.json({ used: locations.length, triggered, failed });
+  } catch (err) {
+    console.error('[images/downloads] Error:', err?.message ?? err);
+    res.status(500).json({ error: 'No se pudo avisar a Unsplash' });
+  }
+});
+
 app.post('/api/images/search', async (req, res) => {
   try {
     if (!UNSPLASH_ACCESS_KEY) {
@@ -1120,20 +1142,8 @@ app.post('/api/images/search', async (req, res) => {
     const { keywords } = req.body || {};
     const result = await searchUnsplash({ keywords, accessKey: UNSPLASH_ACCESS_KEY });
     console.log(`[images/search] keywords=${Array.isArray(keywords) ? keywords.length : 0} → ${result.images.length} images`);
-
-    const downloadLocations = [
-      ...new Set(
-        (result.images || [])
-          .map((img) => img.download_location)
-          .filter((u) => typeof u === 'string' && u.trim().length > 0)
-      ),
-    ];
-    triggerUnsplashDownloads({ downloadLocations, accessKey: UNSPLASH_ACCESS_KEY })
-      .then(({ triggered, failed }) => {
-        console.log(`[images/search] download triggers: triggered=${triggered} failed=${failed}`);
-      })
-      .catch(() => {});
-
+    // El "download" ya NO se dispara aquí para todo el grupo (2026-10-08):
+    // Unsplash lo pide sólo para las fotos que se usan → /images/downloads.
     res.json(result);
   } catch (err) {
     console.error('[images/search] Error:', err);

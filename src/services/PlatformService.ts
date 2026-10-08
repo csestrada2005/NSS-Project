@@ -231,9 +231,33 @@ class PlatformService {
    * on any error or when no images are found, so the scaffold falls back to
    * writing DESIGN.md without an image pool.
    */
+  /**
+   * Avisa a Unsplash ("download") sólo por las fotos del grupo que quedaron en
+   * el sitio; el servidor lo comprueba contra los archivos guardados
+   * (2026-10-08). Nunca lanza: un fallo no afecta a la generación.
+   */
+  async reportUsedImages(
+    projectId: string,
+    pool: { url: string; download_location?: string }[]
+  ): Promise<void> {
+    try {
+      const headers = await this.getHeaders();
+      const response = await fetch(`/api/projects/${projectId}/images/downloads`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ pool: pool.map(({ url, download_location }) => ({ url, download_location })) }),
+      });
+      this.handleAuthError(response);
+      const data = await response.json().catch(() => null);
+      console.log('[PlatformService] Unsplash downloads:', data);
+    } catch (err) {
+      console.warn('[PlatformService] reportUsedImages failed:', err);
+    }
+  }
+
   async searchImages(
     keywords: string[]
-  ): Promise<{ url: string; description: string; author_name: string; author_link: string }[]> {
+  ): Promise<{ url: string; description: string; author_name: string; author_link: string; download_location?: string }[]> {
     try {
       const headers = await this.getHeaders();
       const response = await fetch('/api/images/search', {

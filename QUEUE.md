@@ -35,16 +35,18 @@ siempre que se pueda.
   funcional; sin prioridad fija. Cómo debe funcionar (Samuel, 2026-10-08): un botón "Revisar" abre el plan en
   grande y **editable con el teclado**. Ejemplo: el plan dice "propongo 3 formas de hacerlo", Samuel escribe
   "de las 3 opciones aplica A" y da enviar; la IA vuelve a leer el plan con esa edición y construye según eso.
-- **Aprobación de Unsplash para producción (Samuel, 2026-10-08).** Hoy en demo (50 pedidos por hora). Unsplash
-  (correo de Victor) pide dos pruebas, subidas al formulario de la aplicación, no por correo:
-  1. **Crédito con enlace UTM:** en el sitio, "Foto de <fotógrafo> en Unsplash" debe enlazar al perfil del
-     fotógrafo con `?utm_source=wyrd_forge&utm_medium=referral` (server/unsplash.js ya arma esa dirección; falta
-     confirmar que los sitios generados la usan de verdad). Prueba: captura con el cursor encima mostrando la URL
-     abajo a la izquierda, o captura del código, o video haciendo clic.
-  2. **"Download" al elegir una foto:** hoy Wyrd lo dispara para TODAS las fotos del grupo al buscarlas
-     (`/api/images/search`), no para la que se usa. Opciones: dispararlo sólo para las fotos que la IA pone en
-     el sitio, o responderle a Unsplash que las fotos las elige la IA automáticamente (no un usuario), caso en
-     que no hace falta. El contador de Downloads en Unsplash debe ser mayor que 0.
+- **Aprobación de Unsplash para producción — CÓDIGO HECHO (2026-10-08); check manual en la corrida completa
+  del Plan de evaluación (sección 3).** Hoy en demo (50 pedidos por hora). Victor (Unsplash) pide dos pruebas,
+  subidas al formulario de la aplicación, no por correo:
+  1. **Crédito con enlace UTM:** ya estaba en las reglas de la IA: el footer lleva "Photos via Unsplash" con
+     `?utm_source=wyrd_forge&utm_medium=referral` y el nombre de cada fotógrafo usado enlazado a su perfil con
+     los mismos UTM (server/unsplash.js). Prueba para Victor: captura con el cursor encima mostrando la URL abajo
+     a la izquierda, o captura del código, o video haciendo clic.
+  2. **"Download" sólo por las fotos usadas — HECHO:** antes se disparaba para TODO el grupo al buscar. Ahora, al
+     terminar la primera generación, el servidor mira en los archivos guardados qué fotos del grupo quedaron y
+     avisa sólo por ésas (`POST /api/projects/:id/images/downloads`, log `[images/downloads] … usadas N ·
+     triggered=…`). Límite conocido: fotos del grupo añadidas en pedidos POSTERIORES no se avisan. Prueba para
+     Victor: el contador de Downloads de la app en Unsplash mayor que 0.
   Pendientes viejos del mismo tema: reserva de imagen del hero, guard anti-duplicado y créditos en el footer
   (rama `claude/keen-mccarthy-oknmc8`), y precisión al atribuir las imágenes (sección 10).
 - **Dictado por micrófono** en el chat (hoy "Próximamente").
@@ -79,6 +81,11 @@ siempre que se pueda.
 - **Plan de evaluación** (diseño en frío propio): (1) Samuel trae proyectos REALES de Nebu y se revisa si la IA
   cumpliría las reglas y la arquitectura de Nebu; (2) una corrida completa con un proyecto nuevo y un pedido
   grande y exigente, para comparar con el proyecto real.
+  - **Check manual pendiente de Unsplash en esa corrida (2026-10-08):** (a) en el log de Render,
+    `[images/downloads] … usadas N · triggered=N failed=0` con N igual a las fotos de Unsplash del sitio, y
+    ninguna línea `download triggers` al buscar; (b) en el footer, "Photos via Unsplash" y cada fotógrafo
+    enlazan con `utm_source=wyrd_forge&utm_medium=referral` (hacer la captura/video para Victor); (c) el
+    contador de Downloads de la app en Unsplash sube. Luego responder a Victor.
 - **Tipo de negocio decidido UNA vez:** decidirlo al crear el proyecto, guardarlo en la base y que el contexto
   de diseño lo lea de ahí en vez de adivinarlo en cada pedido. Junto con esto: la búsqueda de patrones de diseño
   siempre trae "1 directo + 4 parecidos" aunque la base es grande (¿tope fijo en el código?), y los pedidos en

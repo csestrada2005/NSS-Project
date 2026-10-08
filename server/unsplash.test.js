@@ -313,3 +313,33 @@ test('triggerUnsplashDownloads: counts correctly across a mix of outcomes', asyn
 
   assert.deepEqual(result, { triggered: 2, failed: 2 });
 });
+
+// ---------------------------------------------------------------------------
+// 2026-10-08 (aprobación de Unsplash): "download" sólo por las fotos usadas.
+// ---------------------------------------------------------------------------
+import { usedDownloadLocations } from './unsplash.js';
+
+const POOL = [
+  { url: 'https://images.unsplash.com/photo-1501555088652-021faa106b9b?ixid=abc&ixlib=rb-4.0.3', download_location: 'https://api.unsplash.com/photos/AAA/download?ixid=abc' },
+  { url: 'https://images.unsplash.com/photo-1522163182402-834f871fd851?ixid=def&ixlib=rb-4.0.3', download_location: 'https://api.unsplash.com/photos/BBB/download?ixid=def' },
+  { url: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?ixid=ghi', download_location: 'https://api.unsplash.com/photos/CCC/download?ixid=ghi' },
+];
+
+test('usedDownloadLocations: sólo las fotos que aparecen en los archivos', () => {
+  const files = [
+    `<img src="${POOL[0].url}" alt="Montaña" />`,
+    // La IA a veces escribe la URL sin parámetros o con &amp;.
+    '<img src="https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1200&amp;q=80" />',
+  ];
+  assert.deepEqual(usedDownloadLocations(POOL, files), [
+    'https://api.unsplash.com/photos/AAA/download?ixid=abc',
+    'https://api.unsplash.com/photos/CCC/download?ixid=ghi',
+  ]);
+});
+
+test('usedDownloadLocations: nada usado → nada; y sólo direcciones de la API de Unsplash', () => {
+  assert.deepEqual(usedDownloadLocations(POOL, ['<h1>Sin fotos</h1>']), []);
+  const evil = [{ url: POOL[0].url, download_location: 'https://evil.example/steal' }];
+  assert.deepEqual(usedDownloadLocations(evil, [POOL[0].url]), []);
+  assert.deepEqual(usedDownloadLocations(null, null), []);
+});

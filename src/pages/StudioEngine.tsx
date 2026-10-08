@@ -810,6 +810,12 @@ export function StudioEngine() {
           const briefFiles = await applyDesignBrief(promptToRun, loadedFiles, designHints);
           // Sin gate, igual que la rama de arriba y por el mismo motivo.
           result = await handleSendMessage(promptToRun, undefined, undefined, undefined, briefFiles, false);
+          // Unsplash (2026-10-08): "download" sólo por las fotos que el sitio
+          // usa; el servidor lo comprueba en los archivos guardados.
+          const pool = DesignBriefService.takeImagePool();
+          if (result?.success && projectId && pool.length > 0) {
+            void platformService.reportUsedImages(projectId, pool);
+          }
         }
 
         // CAMBIO 5 — mensaje de cierre determinista (sin LLM). El flujo del prompt

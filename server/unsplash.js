@@ -189,3 +189,33 @@ export async function triggerUnsplashDownloads({
     return { triggered: 0, failed: 0 };
   }
 }
+
+const DOWNLOAD_PREFIX = 'https://api.unsplash.com/photos/';
+const MAX_DOWNLOADS = 30;
+
+/**
+ * "Download" sólo de las fotos que el sitio USA (2026-10-08, aprobación de
+ * Unsplash): antes se disparaba para todo el grupo al buscar. De las fotos
+ * del grupo (`pool`), devuelve el download_location de cada una cuya URL
+ * aparece en algún archivo del proyecto. Sólo direcciones de la API de
+ * Unsplash: el servidor las llama con nuestra llave, así que nada más entra.
+ *
+ * @param {{ url?: string, download_location?: string }[]} pool
+ * @param {string[]} contents  Contenido de los archivos del proyecto.
+ * @returns {string[]}
+ */
+export function usedDownloadLocations(pool, contents) {
+  if (!Array.isArray(pool) || !Array.isArray(contents)) return [];
+  const text = contents.filter((c) => typeof c === 'string').join('\n');
+  const out = new Set();
+  for (const img of pool) {
+    const url = typeof img?.url === 'string' ? img.url.trim() : '';
+    const location = typeof img?.download_location === 'string' ? img.download_location.trim() : '';
+    if (!url || !location.startsWith(DOWNLOAD_PREFIX)) continue;
+    // La IA puede escribir la URL con &amp; o quitarle los parámetros: basta la base.
+    const base = url.split('?')[0];
+    if (text.includes(url) || (base.length > 30 && text.includes(base))) out.add(location);
+    if (out.size >= MAX_DOWNLOADS) break;
+  }
+  return [...out];
+}

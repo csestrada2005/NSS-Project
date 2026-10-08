@@ -128,6 +128,8 @@ export interface PoolImage {
   description: string;
   author_name: string;
   author_link: string;
+  /** Dirección de "download" de Unsplash: se avisa sólo si la foto se usa. */
+  download_location?: string;
 }
 
 /** The 5 brand CSS variables the brief must define, in order. */
@@ -863,6 +865,19 @@ export class DesignBriefService {
    * `files` is the freshly-loaded template map — used as the base content for
    * the CSS/HTML injections.
    */
+  /**
+   * Grupo de fotos buscado en el último scaffold (2026-10-08): al terminar la
+   * primera generación se avisa a Unsplash sólo por las que el sitio usa.
+   */
+  private static lastImagePool: PoolImage[] = [];
+
+  /** Devuelve el grupo del último scaffold y lo olvida (un aviso por proyecto). */
+  static takeImagePool(): PoolImage[] {
+    const pool = this.lastImagePool;
+    this.lastImagePool = [];
+    return pool;
+  }
+
   static async scaffold(
     prompt: string,
     files: Map<string, string>,
@@ -904,6 +919,7 @@ export class DesignBriefService {
     let designMd = this.toMarkdown(brief);
     try {
       const pool = await platformService.searchImages(brief.imagery_keywords);
+      this.lastImagePool = pool;
       if (pool.length > 0) {
         designMd = this.appendImagePool(designMd, pool);
         console.log(`[DesignBriefService] image pool: added ${pool.length} verified images to DESIGN.md`);
