@@ -23,10 +23,44 @@ function inline(text: string, keyBase: string): ReactNode[] {
   return out;
 }
 
+/** Fila separadora de una tabla markdown: |---|:--:|---| */
+const TABLE_SEPARATOR = /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?$/;
+const tableCells = (line: string) =>
+  line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+
 export function MiniMarkdown({ text }: { text: string }) {
   const blocks: ReactNode[] = [];
   let list: string[] = [];
   let para: string[] = [];
+  // Tablas (2026-10-08, Samuel: "dame los precios en una tabla" salía con
+  // barras). Con fila separadora, la primera fila es el encabezado.
+  let table: string[] = [];
+  const flushTable = () => {
+    if (table.length === 0) return;
+    const k = `t${blocks.length}`;
+    const hasHeader = table.length >= 2 && TABLE_SEPARATOR.test(table[1].trim());
+    const head = hasHeader ? tableCells(table[0]) : null;
+    const body = (hasHeader ? table.slice(2) : table)
+      .filter((l) => !TABLE_SEPARATOR.test(l.trim()))
+      .map(tableCells);
+    blocks.push(
+      <div key={k} className="fc-tabla-wrap">
+        <table className="fc-tabla">
+          {head && (
+            <thead>
+              <tr>{head.map((c, i) => <th key={i}>{inline(c, `${k}-h${i}`)}</th>)}</tr>
+            </thead>
+          )}
+          <tbody>
+            {body.map((row, r) => (
+              <tr key={r}>{row.map((c, i) => <td key={i}>{inline(c, `${k}-${r}-${i}`)}</td>)}</tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+    table = [];
+  };
   const flushPara = () => {
     if (para.length === 0) return;
     const k = `p${blocks.length}`;
@@ -54,6 +88,13 @@ export function MiniMarkdown({ text }: { text: string }) {
   };
   for (const raw of text.split('\n')) {
     const line = raw.trimEnd();
+    if (line.trim().startsWith('|')) {
+      flushPara();
+      flushList();
+      table.push(line);
+      continue;
+    }
+    flushTable();
     const item = /^\s*[-*]\s+(.*)$/.exec(line);
     if (item) {
       flushPara();
@@ -68,5 +109,6 @@ export function MiniMarkdown({ text }: { text: string }) {
   }
   flushPara();
   flushList();
+  flushTable();
   return <div className="fc-markdown">{blocks}</div>;
 }

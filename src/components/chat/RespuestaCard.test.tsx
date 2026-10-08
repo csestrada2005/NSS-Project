@@ -44,6 +44,30 @@ describe('RespuestaCard (5.0)', () => {
 });
 
 describe('MiniMarkdown', () => {
+  it('dibuja una tabla de verdad, sin barras ni separadores (2026-10-08)', () => {
+    const md = 'Aquí están los precios:\n\n| Expedición | Duración | Precio |\n|---|---|---|\n' +
+      '| Ascenso Pico de Orizaba | 3 días | $8,900 MXN |\n| Parapente en Valle de Bravo | — | **$2,300 MXN** |\n\nTodos por persona.';
+    const { container } = render(<MiniMarkdown text={md} />);
+    const table = container.querySelector('table.fc-tabla')!;
+    expect(table).not.toBeNull();
+    expect([...table.querySelectorAll('th')].map((th) => th.textContent)).toEqual(['Expedición', 'Duración', 'Precio']);
+    const rows = [...table.querySelectorAll('tbody tr')].map((tr) => [...tr.querySelectorAll('td')].map((td) => td.textContent));
+    expect(rows).toEqual([
+      ['Ascenso Pico de Orizaba', '3 días', '$8,900 MXN'],
+      ['Parapente en Valle de Bravo', '—', '$2,300 MXN'],
+    ]);
+    expect(table.querySelector('strong')?.textContent).toBe('$2,300 MXN');
+    expect(container.textContent).not.toMatch(/\||---/);
+    // Lo de antes y después de la tabla sigue como párrafo.
+    expect(container.querySelectorAll('p')).toHaveLength(2);
+  });
+
+  it('una tabla sin fila separadora no tiene encabezado, pero sigue siendo tabla', () => {
+    const { container } = render(<MiniMarkdown text={'| a | b |\n| c | d |'} />);
+    expect(container.querySelector('th')).toBeNull();
+    expect(container.querySelectorAll('tbody tr')).toHaveLength(2);
+  });
+
   it('nunca interpreta HTML del modelo', () => {
     const { container } = render(<MiniMarkdown text={'<img src=x onerror=alert(1)> **ok**'} />);
     expect(container.querySelector('img')).toBeNull();

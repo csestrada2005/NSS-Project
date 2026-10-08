@@ -82,8 +82,9 @@ siempre que se pueda.
   son de otros temas y debe nombrar lo concreto del pedido; (b) la tarjeta pequeña en reposo mostraba el markdown
   en crudo (**, tablas): ahora muestra texto limpio (src/utils/markdownPreview.js). Check 2026-10-08: el título pasa de
   "Trabajando" a "Pensando la respuesta" (CONFIRMADO) y la frase ya es propia ("Analizando la coherencia visual de
-  la imagen del hero…", "Mostrando los precios del PDF en formato tabla…"). PENDIENTE: las TABLAS siguen en
-  crudo en la tarjeta de respuesta y en el historial: MiniMarkdown no sabe dibujar tablas.
+  la imagen del hero…", "Mostrando los precios del PDF en formato tabla…"). Tablas (T1 de Samuel) — HECHO, espera
+  check: MiniMarkdown ahora dibuja tablas de verdad en la tarjeta de respuesta y en el historial (desplazables de
+  lado en móvil).
 - **Plan más claro:** mostrar el plan también en la primera generación, que el bloque del plan no se pierda al
   recargar la página, y que muestre el nombre final de la migración (no el que dijo el modelo).
 - **Aviso del guard de código en lenguaje simple:** hoy dice "mueve esto a una función de servidor", algo que un
